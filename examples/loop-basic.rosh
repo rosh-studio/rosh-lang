@@ -1,0 +1,15 @@
+# Basic While Loop Example
+
+print "Counting from 1 to 5:"
+
+create number i as 1
+
+while i is below 6 then
+  print i
+
+  # Increment i (i = i + 1)
+  # Use binary operator inline
+  set i to i plus 1
+end
+
+print "Done!"

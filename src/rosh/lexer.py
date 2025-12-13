@@ -1,0 +1,488 @@
+"""
+Lexer for Rosh - converts source code into tokens
+"""
+
+from dataclasses import dataclass
+from enum import Enum, auto
+from typing import List, Optional
+from .errors import RoshSyntaxError
+
+
+class TokenType(Enum):
+    # Literals
+    NUMBER = auto()
+    STRING = auto()
+    TRUE = auto()
+    FALSE = auto()
+    NULL = auto()
+
+    # Keywords
+    CREATE = auto()
+    OBJECT = auto()
+    NUMBER_TYPE = auto()
+    STRING_TYPE = auto()
+    SET = auto()
+    TO = auto()
+    AS = auto()
+    END = auto()
+    PRINT = auto()
+    INPUT = auto()
+    GET = auto()
+    DUMP = auto()
+    SAVE = auto()
+    LOAD = auto()
+    PROMPT = auto()
+    USING = auto()
+    INTO = auto()
+    EVAL = auto()
+    EXEC = auto()
+    READ = auto()
+    WRITE = auto()
+    JSON = auto()
+    IMPORT = auto()
+    FROM = auto()
+    ALL = auto()
+    IF = auto()
+    THEN = auto()
+    ELSE = auto()
+    WHILE = auto()
+    FOR = auto()
+    IN = auto()
+    STEP = auto()
+    BREAK = auto()
+    CONTINUE = auto()
+    STOP = auto()
+    DEFINE = auto()
+    FUNCTION = auto()
+    RETURN = auto()
+    CALL = auto()
+    CLONE = auto()
+    DELETE = auto()
+    PROPERTIES = auto()
+    GOTO = auto()
+    LOOK = auto()
+    CONNECT = auto()
+    HELP = auto()
+    RANDOM = auto()
+    LENGTH = auto()
+    OF = auto()
+    CONTAINS = auto()
+    APPEND = auto()
+    REMOVE = auto()
+    INCREMENT = auto()
+    DECREMENT = auto()
+    SPLIT = auto()
+    SUBSTRING = auto()
+    LOWERCASE = auto()
+    UPPERCASE = auto()
+    TRIM = auto()
+    INDEXOF = auto()
+    LASTINDEXOF = auto()
+
+    # Comparison operators (multi-word)
+    IS = auto()
+    EQUAL = auto()
+    NOT = auto()
+    BELOW = auto()
+    ABOVE = auto()
+
+    # Logical operators
+    AND = auto()
+    OR = auto()
+
+    # Math operators (expression-based)
+    PLUS = auto()
+    MINUS = auto()
+    TIMES = auto()
+    DIVIDED = auto()
+    BY = auto()
+    MODULO = auto()
+
+    # Stack-based operators
+    ADD = auto()
+    SUBTRACT = auto()
+    MULTIPLY = auto()
+    DIVIDE = auto()
+
+    # Stack manipulation
+    DUP = auto()
+    SWAP = auto()
+    DROP = auto()
+
+    # Property stack operations
+    PUSH = auto()
+    POP = auto()
+    STACK = auto()
+
+    # Other
+    IDENTIFIER = auto()
+    DOT = auto()
+    COMMA = auto()
+    COLON = auto()
+    SEMICOLON = auto()
+    LBRACKET = auto()
+    RBRACKET = auto()
+    LANGLE = auto()      # <
+    RANGLE = auto()      # >
+    NEWLINE = auto()
+    INDENT = auto()
+    DEDENT = auto()
+    EOF = auto()
+
+
+@dataclass
+class Token:
+    type: TokenType
+    value: any
+    line: int
+    column: int
+
+    def __repr__(self):
+        return f"Token({self.type.name}, {self.value!r}, {self.line}:{self.column})"
+
+
+class Lexer:
+    def __init__(self, source: str):
+        self.source = source
+        self.pos = 0
+        self.line = 1
+        self.column = 1
+        self.tokens: List[Token] = []
+        # Note: Indentation is cosmetic in Rosh - no tracking needed
+
+    def error(self, message: str):
+        raise RoshSyntaxError(message, self.line, self.column)
+
+    def current_char(self) -> Optional[str]:
+        if self.pos >= len(self.source):
+            return None
+        return self.source[self.pos]
+
+    def peek_char(self, offset: int = 1) -> Optional[str]:
+        pos = self.pos + offset
+        if pos >= len(self.source):
+            return None
+        return self.source[pos]
+
+    def advance(self) -> Optional[str]:
+        if self.pos >= len(self.source):
+            return None
+        char = self.source[self.pos]
+        self.pos += 1
+        if char == '\n':
+            self.line += 1
+            self.column = 1
+        else:
+            self.column += 1
+        return char
+
+    def skip_whitespace_inline(self):
+        """Skip spaces and tabs, but not newlines"""
+        while self.current_char() in (' ', '\t'):
+            self.advance()
+
+    def skip_comment(self):
+        """Skip comments starting with #"""
+        if self.current_char() == '#':
+            while self.current_char() and self.current_char() != '\n':
+                self.advance()
+
+    def skip_multiline_comment(self, delimiter: str):
+        """Skip multiline comments (triple quote or triple hash)"""
+        # Skip opening delimiter
+        for _ in range(len(delimiter)):
+            self.advance()
+
+        # Find closing delimiter
+        while self.current_char():
+            # Check if we've found the closing delimiter
+            if self.peek_ahead(len(delimiter)) == delimiter:
+                # Skip closing delimiter
+                for _ in range(len(delimiter)):
+                    self.advance()
+                return
+            self.advance()
+
+        # If we get here, we hit EOF without closing delimiter
+        self.error(f"Unterminated multiline comment (missing closing {delimiter})")
+
+    def peek_ahead(self, count: int) -> str:
+        """Peek ahead 'count' characters without advancing"""
+        result = ''
+        for i in range(count):
+            if self.pos + i < len(self.source):
+                result += self.source[self.pos + i]
+        return result
+
+    def read_number(self) -> Token:
+        """Read a number literal"""
+        start_line, start_col = self.line, self.column
+        num_str = ''
+        has_dot = False
+
+        while self.current_char() and (self.current_char().isdigit() or self.current_char() == '.'):
+            if self.current_char() == '.':
+                if has_dot:
+                    self.error("Invalid number: multiple decimal points")
+                has_dot = True
+            num_str += self.current_char()
+            self.advance()
+
+        value = float(num_str) if has_dot else int(num_str)
+        return Token(TokenType.NUMBER, value, start_line, start_col)
+
+    def read_string(self) -> Token:
+        """Read a string literal"""
+        start_line, start_col = self.line, self.column
+        quote_char = self.current_char()
+        self.advance()  # Skip opening quote
+
+        string_val = ''
+        while self.current_char() and self.current_char() != quote_char:
+            if self.current_char() == '\\':
+                self.advance()
+                next_char = self.current_char()
+                if next_char == 'n':
+                    string_val += '\n'
+                elif next_char == 't':
+                    string_val += '\t'
+                elif next_char == '\\':
+                    string_val += '\\'
+                elif next_char == quote_char:
+                    string_val += quote_char
+                else:
+                    string_val += next_char
+                self.advance()
+            else:
+                string_val += self.current_char()
+                self.advance()
+
+        if not self.current_char():
+            self.error("Unterminated string")
+
+        self.advance()  # Skip closing quote
+        return Token(TokenType.STRING, string_val, start_line, start_col)
+
+    def read_identifier_or_keyword(self) -> Token:
+        """Read an identifier or keyword"""
+        start_line, start_col = self.line, self.column
+        identifier = ''
+
+        while self.current_char() and (self.current_char().isalnum() or self.current_char() in ('_', '-')):
+            identifier += self.current_char()
+            self.advance()
+
+        # Normalize to lowercase for keyword matching (case-insensitive keywords)
+        identifier_lower = identifier.lower()
+
+        # Map keywords to token types
+        keyword_map = {
+            'create': TokenType.CREATE,
+            'object': TokenType.OBJECT,
+            'number': TokenType.NUMBER_TYPE,
+            'string': TokenType.STRING_TYPE,
+            'set': TokenType.SET,
+            'to': TokenType.TO,
+            'end': TokenType.END,
+            'print': TokenType.PRINT,
+            'input': TokenType.INPUT,
+            'get': TokenType.GET,
+            'dump': TokenType.DUMP,
+            'save': TokenType.SAVE,
+            'load': TokenType.LOAD,
+            'prompt': TokenType.PROMPT,
+            'using': TokenType.USING,
+            'into': TokenType.INTO,
+            'eval': TokenType.EVAL,
+            'exec': TokenType.EXEC,
+            'read': TokenType.READ,
+            'write': TokenType.WRITE,
+            'json': TokenType.JSON,
+            'import': TokenType.IMPORT,
+            'from': TokenType.FROM,
+            'all': TokenType.ALL,
+            'if': TokenType.IF,
+            'then': TokenType.THEN,
+            'else': TokenType.ELSE,
+            'while': TokenType.WHILE,
+            'for': TokenType.FOR,
+            'in': TokenType.IN,
+            'step': TokenType.STEP,
+            'break': TokenType.BREAK,
+            'continue': TokenType.CONTINUE,
+            'stop': TokenType.STOP,
+            'exit': TokenType.STOP,  # 'exit' is alias for 'stop'
+            'define': TokenType.DEFINE,
+            'function': TokenType.FUNCTION,
+            'return': TokenType.RETURN,
+            'call': TokenType.CALL,
+            'clone': TokenType.CLONE,
+            'delete': TokenType.DELETE,
+            'properties': TokenType.PROPERTIES,
+            'props': TokenType.PROPERTIES,  # Alias for properties
+            'goto': TokenType.GOTO,
+            'go': TokenType.GOTO,  # Alias for goto
+            'look': TokenType.LOOK,
+            'l': TokenType.LOOK,  # Short alias
+            'examine': TokenType.LOOK,  # Alias for look
+            'ex': TokenType.LOOK,  # Short alias for examine/look
+            'connect': TokenType.CONNECT,
+            'link': TokenType.CONNECT,  # Alias
+            'help': TokenType.HELP,
+            'random': TokenType.RANDOM,
+            'length': TokenType.LENGTH,
+            'of': TokenType.OF,
+            'contains': TokenType.CONTAINS,
+            'append': TokenType.APPEND,
+            'remove': TokenType.REMOVE,
+            'increment': TokenType.INCREMENT,
+            'decrement': TokenType.DECREMENT,
+            'split': TokenType.SPLIT,
+            'substring': TokenType.SUBSTRING,
+            'lowercase': TokenType.LOWERCASE,
+            'uppercase': TokenType.UPPERCASE,
+            'trim': TokenType.TRIM,
+            'indexof': TokenType.INDEXOF,
+            'lastindexof': TokenType.LASTINDEXOF,
+            'is': TokenType.IS,
+            'equal': TokenType.EQUAL,
+            'not': TokenType.NOT,
+            'below': TokenType.BELOW,
+            'above': TokenType.ABOVE,
+            'and': TokenType.AND,
+            'or': TokenType.OR,
+            'plus': TokenType.PLUS,
+            'minus': TokenType.MINUS,
+            'times': TokenType.TIMES,
+            'divided': TokenType.DIVIDED,
+            'by': TokenType.BY,
+            'modulo': TokenType.MODULO,
+            'add': TokenType.ADD,
+            'subtract': TokenType.SUBTRACT,
+            'multiply': TokenType.MULTIPLY,
+            'divide': TokenType.DIVIDE,
+            'dup': TokenType.DUP,
+            'swap': TokenType.SWAP,
+            'drop': TokenType.DROP,
+            'push': TokenType.PUSH,
+            'pop': TokenType.POP,
+            'stack': TokenType.STACK,
+            'true': TokenType.TRUE,
+            'false': TokenType.FALSE,
+            'null': TokenType.NULL,
+            'as': TokenType.AS,  # 'as' for type annotations and cloning
+            'say': TokenType.PRINT,  # 'say' is alias for 'print' (backwards compat)
+        }
+
+        token_type = keyword_map.get(identifier_lower, TokenType.IDENTIFIER)
+        value = identifier if token_type == TokenType.IDENTIFIER else identifier_lower
+
+        return Token(token_type, value, start_line, start_col)
+
+    def tokenize(self) -> List[Token]:
+        """Main tokenization method - indentation is cosmetic"""
+        while self.pos < len(self.source):
+            char = self.current_char()
+
+            if not char:
+                break
+
+            # Skip all whitespace (spaces, tabs) - indentation is cosmetic
+            if char in (' ', '\t'):
+                self.skip_whitespace_inline()
+                continue
+
+            # Handle newlines
+            if char == '\n':
+                # Only emit NEWLINE if we have tokens and last wasn't NEWLINE
+                if self.tokens and self.tokens[-1].type != TokenType.NEWLINE:
+                    self.tokens.append(Token(TokenType.NEWLINE, None, self.line, self.column))
+                self.advance()
+                continue
+
+            # Multiline comments (check before strings and single-line comments)
+            if self.peek_ahead(3) == '"""':
+                self.skip_multiline_comment('"""')
+                continue
+
+            if self.peek_ahead(3) == '###':
+                self.skip_multiline_comment('###')
+                continue
+
+            # Comments
+            if char == '#':
+                self.skip_comment()
+                continue
+
+            # Numbers
+            if char.isdigit():
+                self.tokens.append(self.read_number())
+                continue
+
+            # Strings
+            if char in ('"', "'"):
+                self.tokens.append(self.read_string())
+                continue
+
+            # Identifiers and keywords
+            if char.isalpha() or char == '_':
+                self.tokens.append(self.read_identifier_or_keyword())
+                continue
+
+            # Punctuation
+            if char == '.':
+                self.tokens.append(Token(TokenType.DOT, '.', self.line, self.column))
+                self.advance()
+                continue
+
+            if char == ',':
+                self.tokens.append(Token(TokenType.COMMA, ',', self.line, self.column))
+                self.advance()
+                continue
+
+            # Brackets for lists
+            if char == '[':
+                self.tokens.append(Token(TokenType.LBRACKET, '[', self.line, self.column))
+                self.advance()
+                continue
+
+            if char == ']':
+                self.tokens.append(Token(TokenType.RBRACKET, ']', self.line, self.column))
+                self.advance()
+                continue
+
+            # Minus sign (for negative numbers and unary minus)
+            if char == '-':
+                self.tokens.append(Token(TokenType.MINUS, '-', self.line, self.column))
+                self.advance()
+                continue
+
+            # Type annotation colon
+            if char == ':':
+                self.tokens.append(Token(TokenType.COLON, ':', self.line, self.column))
+                self.advance()
+                continue
+
+            # Semicolon for command separation
+            if char == ';':
+                self.tokens.append(Token(TokenType.SEMICOLON, ';', self.line, self.column))
+                self.advance()
+                continue
+
+            # Angle brackets for generic types (list<string>)
+            if char == '<':
+                self.tokens.append(Token(TokenType.LANGLE, '<', self.line, self.column))
+                self.advance()
+                continue
+
+            if char == '>':
+                self.tokens.append(Token(TokenType.RANGLE, '>', self.line, self.column))
+                self.advance()
+                continue
+
+            self.error(f"Unexpected character: {char!r}")
+
+        # Add EOF token
+        self.tokens.append(Token(TokenType.EOF, None, self.line, self.column))
+
+        return self.tokens

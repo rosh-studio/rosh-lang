@@ -1,0 +1,55 @@
+{
+  "name": "rosh-combat-system",
+  "version": "2.1.0",
+  "description": "A flexible turn-based combat system for Rosh MUDs",
+  "author": "combat-systems-dev",
+  "license": "MIT",
+  "repository": "https://github.com/example/rosh-combat-system",
+
+  "main": "combat.rosh",
+
+  "dependencies": {
+    "rosh-stdlib-mud": "^1.0.0"
+  },
+
+  "roshVersion": ">=0.0.5",
+
+  "files": [
+    "combat.rosh",
+    "damage-types.rosh",
+    "status-effects.rosh",
+    "ai-tactics.rosh",
+    "examples/**/*.rosh",
+    "README.md",
+    "LICENSE"
+  ],
+
+  "checksums": {
+    "algorithm": "sha256",
+    "files": {
+      "combat.rosh": "1234567890abcdef...",
+      "damage-types.rosh": "fedcba0987654321...",
+      "status-effects.rosh": "abcdef1234567890...",
+      "ai-tactics.rosh": "0987654321fedcba..."
+    }
+  },
+
+  "metadata": {
+    "category": "library",
+    "keywords": ["combat", "turn-based", "rpg", "battle", "game-mechanics"],
+    "stability": "stable"
+  },
+
+  "exports": {
+    "initCombat": "combat.rosh#initCombat",
+    "processTurn": "combat.rosh#processTurn",
+    "calculateDamage": "damage-types.rosh#calculateDamage",
+    "applyStatusEffect": "status-effects.rosh#applyStatusEffect"
+  },
+
+  "scripts": {
+    "test": "rosh test/test-combat.rosh",
+    "example": "rosh examples/basic-battle.rosh",
+    "docs": "rosh generate-docs.rosh"
+  }
+}

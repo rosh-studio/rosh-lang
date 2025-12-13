@@ -1,0 +1,12 @@
+# State dumping example
+
+create number health as 100
+create number score as 1500
+
+create object player
+  set name to "Alice"
+  set level to 5
+end
+
+# Dump entire state as JSON
+dump

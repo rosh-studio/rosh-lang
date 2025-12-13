@@ -1,0 +1,55 @@
+# Demo: Enhanced MUD with Item System
+# Load the MUD first: import "examples/mud-game.rosh"
+# Then run this to see the new features!
+
+print "=== MUD Demo: Items & Properties ==="
+print ""
+
+print "1. Looking around the tavern:"
+call look
+print ""
+
+print "2. Checking status:"
+call status
+print ""
+
+print "3. Checking inventory (should be empty):"
+call inventory
+print ""
+
+print "4. Trying to pick up the sword:"
+call take "sword"
+print ""
+
+print "5. Check inventory again (should have sword):"
+call inventory
+print ""
+
+print "6. Drop the sword:"
+call put "sword"
+print ""
+
+print "7. Look around again (sword should be back):"
+call look
+print ""
+
+print "8. Move to forest:"
+set player.current-room to "forest"
+call look
+print ""
+
+print "9. Pick up the gem:"
+call take "gem"
+call inventory
+print ""
+
+print "10. Examine the gem:"
+call examine "gem"
+print ""
+
+print "=== Demo Complete! ==="
+print ""
+print "Try building your own content:"
+print "  create object newroom ... end"
+print "  set newroom.north to \"courtyard\""
+print "  set courtyard.south to \"newroom\""

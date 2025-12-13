@@ -1,0 +1,37 @@
+{
+  "name": "rosh-core",
+  "version": "0.0.5",
+  "description": "Rosh programming language - core interpreter",
+  "author": "rdubar",
+  "license": "MIT",
+  "repository": "https://github.com/rdubar/rosh",
+
+  "main": "src/rosh/__init__.py",
+  "bin": {
+    "rosh": "src/rosh/__main__.py"
+  },
+
+  "dependencies": {},
+
+  "devDependencies": {
+    "pytest": ">=7.0.0"
+  },
+
+  "roshVersion": ">=0.0.5",
+
+  "files": [
+    "src/rosh/**/*.py",
+    "ROSH-MANUAL.rosh",
+    "examples/**/*.rosh"
+  ],
+
+  "checksums": {
+    "algorithm": "sha256",
+    "files": {}
+  },
+
+  "scripts": {
+    "test": "pytest tests/",
+    "manual": "rosh ROSH-MANUAL.rosh"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "name": "fantasy-adventure",
+  "version": "1.0.0",
+  "description": "A classic fantasy adventure game with dragons and treasure",
+  "author": "game-creator",
+  "license": "MIT",
+  "repository": "https://github.com/example/fantasy-adventure",
+
+  "main": "game.rosh",
+
+  "dependencies": {
+    "rosh-stdlib-mud": "^1.0.0",
+    "rosh-combat-system": "~2.1.0"
+  },
+
+  "roshVersion": ">=0.0.5",
+
+  "files": [
+    "game.rosh",
+    "rooms/**/*.rosh",
+    "items/**/*.rosh",
+    "npcs/**/*.rosh",
+    "README.md"
+  ],
+
+  "checksums": {
+    "algorithm": "sha256",
+    "files": {
+      "game.rosh": "abc123...",
+      "rooms/tavern.rosh": "def456...",
+      "items/sword.rosh": "ghi789..."
+    }
+  },
+
+  "metadata": {
+    "genre": "fantasy",
+    "players": "single-player",
+    "playtime": "2-4 hours",
+    "tags": ["adventure", "fantasy", "dragons", "puzzle"]
+  },
+
+  "scripts": {
+    "start": "rosh game.rosh",
+    "test": "rosh test/test-game.rosh"
+  }
+}

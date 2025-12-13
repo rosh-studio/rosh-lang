@@ -1,0 +1,19 @@
+# 🤖 Hello from Rosh!
+
+print "🤖 Rosh says hello!"
+print ""
+print "Programming that sounds like talking to a robot friend!"
+print ""
+
+# Create a friendly robot
+import mud
+clone character as robot
+set robot.name "🤖 Robo"
+set robot.description "A friendly robot who loves natural language programming"
+set robot.dialogue "Beep boop! I speak human language!"
+
+print "Meet your robot friend:"
+properties robot
+
+print ""
+print "🤖 Welcome to Rosh - where programming is natural!"

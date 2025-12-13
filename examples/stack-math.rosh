@@ -1,0 +1,30 @@
+# Stack-based math operations
+
+create number a as 10
+create number b as 20
+
+# Traditional approach with expressions
+create number sum as a plus b
+print sum
+
+# Stack-based approach with operators
+# Add: 10 + 20 = 30
+get a
+get b
+add
+print
+
+# Multiply: 10 * 20 = 200
+get a
+get b
+multiply
+print
+
+# Complex calculation: (10 + 20) * 2 = 60
+get a
+get b
+add
+create number two as 2
+get two
+multiply
+print

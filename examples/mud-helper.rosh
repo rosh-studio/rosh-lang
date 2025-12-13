@@ -1,0 +1,46 @@
+# MUD Helper - Context-aware AI assistance
+# Adds a helper function that knows about Rosh syntax
+
+define function ask question
+  # This wraps prompt with Rosh context
+  print "Asking AI with Rosh context..."
+
+  # Build context string
+  # In the future, this could be: prompt exec using context
+  # For now, we'll print instructions
+
+  print ""
+  print "=== How to Add a Room in Rosh ==="
+  print ""
+  print "1. Create a room object:"
+  print "   create object library"
+  print "     set name to \"Grand Library\""
+  print "     set description to \"Towering bookshelves line the walls\""
+  print "     set north to \"courtyard\""
+  print "     set south to null"
+  print "     set east to null"
+  print "     set west to null"
+  print "   end"
+  print ""
+  print "2. Connect it to existing rooms:"
+  print "   set courtyard.south to \"library\""
+  print ""
+  print "3. Update the look command to handle the new room:"
+  print "   (Add another if statement in the look function)"
+  print ""
+  print "4. Create movement alias:"
+  print "   alias library set player.current-room to \"library\""
+  print ""
+  print "That's it! The world is live-editable."
+end
+
+print "Helper loaded!"
+print "Usage: call ask \"your question\""
+print ""
+print "Quick answers:"
+print "  - Add room: create object <name> with properties"
+print "  - Add item: create object <name>, set location property"
+print "  - Add command: define function <name> with your logic"
+print "  - Connect rooms: set room.north/south/east/west"
+print "  - Save: dump"
+print "  - Load: load \"file.json\""

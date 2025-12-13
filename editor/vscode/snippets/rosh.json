@@ -1,0 +1,141 @@
+{
+  "Set Variable": {
+    "prefix": "set",
+    "body": [
+      "set ${1:name} to ${2:value}"
+    ],
+    "description": "Set a variable (creates or updates)"
+  },
+  "Set Variable with Type": {
+    "prefix": "setas",
+    "body": [
+      "set ${1:name} as ${2|number,string,boolean,list<number>,list<string>|} to ${3:value}"
+    ],
+    "description": "Set a variable with type annotation"
+  },
+  "Set Variable with Colon Type": {
+    "prefix": "settype",
+    "body": [
+      "set ${1:name}: ${2|number,string,boolean,list<number>,list<string>|} to ${3:value}"
+    ],
+    "description": "Set a variable with colon type annotation"
+  },
+  "Create Object": {
+    "prefix": "object",
+    "body": [
+      "create object ${1:name}",
+      "  set ${2:property} to ${3:value}",
+      "end"
+    ],
+    "description": "Create an object with properties"
+  },
+  "If Statement": {
+    "prefix": "if",
+    "body": [
+      "if ${1:condition} then",
+      "  ${2:// code}",
+      "end"
+    ],
+    "description": "If statement"
+  },
+  "If-Else Statement": {
+    "prefix": "ifelse",
+    "body": [
+      "if ${1:condition} then",
+      "  ${2:// if block}",
+      "else",
+      "  ${3:// else block}",
+      "end"
+    ],
+    "description": "If-else statement"
+  },
+  "Define Function": {
+    "prefix": "function",
+    "body": [
+      "define function ${1:name} ${2:param1} ${3:param2}",
+      "  ${4:// function body}",
+      "end"
+    ],
+    "description": "Define a function"
+  },
+  "Print": {
+    "prefix": "print",
+    "body": [
+      "print ${1:value}"
+    ],
+    "description": "Print a value"
+  },
+  "Get and Print Stack": {
+    "prefix": "getprint",
+    "body": [
+      "get ${1:variable}",
+      "print stack"
+    ],
+    "description": "Get variable onto stack and print from stack"
+  },
+  "While Loop": {
+    "prefix": "while",
+    "body": [
+      "while ${1:condition} then",
+      "  ${2:// loop body}",
+      "end"
+    ],
+    "description": "While loop"
+  },
+  "For Range Loop": {
+    "prefix": "for",
+    "body": [
+      "for ${1:i} in ${2:1} to ${3:10} then",
+      "  ${4:// loop body}",
+      "end"
+    ],
+    "description": "For loop with range"
+  },
+  "For Loop with Step": {
+    "prefix": "forstep",
+    "body": [
+      "for ${1:i} in ${2:0} to ${3:100} step ${4:10} then",
+      "  ${5:// loop body}",
+      "end"
+    ],
+    "description": "For loop with custom step"
+  },
+  "Stop Program": {
+    "prefix": "stop",
+    "body": [
+      "stop"
+    ],
+    "description": "Stop program execution immediately"
+  },
+  "Exit Program": {
+    "prefix": "exit",
+    "body": [
+      "exit"
+    ],
+    "description": "Exit program (alias for stop)"
+  },
+  "Stack Math": {
+    "prefix": "stackmath",
+    "body": [
+      "get ${1:x}",
+      "get ${2:y}",
+      "${3|add,subtract,multiply,divide|}",
+      "print"
+    ],
+    "description": "Stack-based math operation"
+  },
+  "Dump State": {
+    "prefix": "dump",
+    "body": [
+      "dump"
+    ],
+    "description": "Dump interpreter state as JSON"
+  },
+  "Load State": {
+    "prefix": "load",
+    "body": [
+      "load \"${1:filename.json}\""
+    ],
+    "description": "Load state from JSON file"
+  }
+}

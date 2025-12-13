@@ -1,0 +1,13 @@
+# Conditional logic example
+
+create number health as 75
+
+if health is above 50 then
+  print "Player is healthy"
+end
+
+if health is below 30 then
+  print "Player is in danger"
+else
+  print "Player is doing okay"
+end

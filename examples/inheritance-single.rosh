@@ -1,0 +1,19 @@
+# Single Inheritance Example
+# Test: warrior inherits from character
+
+create object character
+  set health to 100
+  set mana to 50
+end
+
+create object warrior from character
+  set strength to 10
+end
+
+# warrior should inherit health and mana
+print "Warrior health:"
+print warrior.health
+print "Warrior mana:"
+print warrior.mana
+print "Warrior strength:"
+print warrior.strength

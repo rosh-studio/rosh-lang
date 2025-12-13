@@ -1,0 +1,75 @@
+# ========================================
+# TYPE ERROR EXAMPLES
+# ========================================
+# This file demonstrates what happens when types don't match
+# Each example shows a different type error
+
+print "=== Type Error Examples ==="
+print "These examples show what errors you'll get with type mismatches"
+print ""
+
+# ========================================
+# ERROR 1: Simple type mismatch
+# ========================================
+print "Example 1: Number annotated, string provided"
+print "Code: create age: number to \"twenty-five\""
+print ""
+
+# Uncomment to see error:
+# create age: number to "twenty-five"
+
+print "Expected Error:"
+print "Type mismatch for variable 'age': annotated as number, but value is string"
+print ""
+
+# ========================================
+# ERROR 2: List element type mismatch
+# ========================================
+print "Example 2: list<number> annotated, list<string> provided"
+print "Code: create scores: list<number> to [\"A\", \"B\", \"C\"]"
+print ""
+
+# Uncomment to see error:
+# create scores: list<number> to ["A", "B", "C"]
+
+print "Expected Error:"
+print "Type mismatch for variable 'scores': annotated as list<number>, but value is list<string>"
+print ""
+
+# ========================================
+# ERROR 3: Wrong list annotation
+# ========================================
+print "Example 3: list<string> annotated, list<number> provided"
+print "Code: create names: list<string> to [1, 2, 3]"
+print ""
+
+# Uncomment to see error:
+# create names: list<string> to [1, 2, 3]
+
+print "Expected Error:"
+print "Type mismatch for variable 'names': annotated as list<string>, but value is list<number>"
+print ""
+
+# ========================================
+# CORRECT USAGE
+# ========================================
+print "=== Correct Usage ==="
+print ""
+
+# These work fine:
+create age: number to 25
+create name: string to "Alice"
+create scores: list<number> to [95, 87, 92]
+create words: list<string> to ["hello", "world"]
+
+print "age (number): "
+print age
+print "name (string): "
+print name
+print "scores (list<number>): "
+print scores
+print "words (list<string>): "
+print words
+print ""
+
+print "All correct annotations - no errors!"

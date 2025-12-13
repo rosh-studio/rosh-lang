@@ -1,0 +1,23 @@
+# Example: Save and Load state
+
+# Create some state
+create number score as 1500
+create object player
+  set name to "Alice"
+  set level to 10
+  set experience to 5000
+end
+
+# Show current state
+print score
+print player.name
+print player.level
+
+# Note: To actually save and load, you would:
+# 1. Run this script and redirect dump to a file:
+#    python -m rosh save-load.rosh > state.json
+#
+# 2. In another script, load the state:
+#    load "state.json"
+#    print score
+#    print player.name

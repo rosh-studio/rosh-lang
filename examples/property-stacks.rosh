@@ -1,0 +1,29 @@
+# Property Stacks Example
+# Test: push/pop for temporary shadowing
+
+create object player
+  set health to 100
+end
+
+print "Initial health:"
+print player.health
+
+# Buff! Push new health value
+push player.health 150
+print "After buff (push 150):"
+print player.health
+
+# Another buff!
+push player.health 200
+print "After second buff (push 200):"
+print player.health
+
+# Remove top buff
+pop player.health
+print "After removing second buff (pop):"
+print player.health
+
+# Remove first buff
+pop player.health
+print "After removing first buff (back to original):"
+print player.health

@@ -1,0 +1,109 @@
+# MUD Example Using Standard Library
+# Shows how to quickly build a game world using templates
+
+print "=== Building a MUD World with Templates ==="
+print ""
+
+# Import the MUD standard library
+print "Importing MUD library..."
+import mud
+
+print "Available templates: thing, room, character, door, container, weapon, armor, npc, player"
+print ""
+
+# Create rooms by cloning the room template
+print "Creating rooms..."
+clone room as tavern
+set tavern.name to "The Rusty Tankard Tavern"
+set tavern.description to "A cozy tavern with wooden tables and a roaring fireplace"
+set tavern.south to "courtyard"
+
+clone room as courtyard
+set courtyard.name to "Village Courtyard"
+set courtyard.description to "The village courtyard with cobblestone paths"
+set courtyard.north to "tavern"
+set courtyard.south to "shop"
+set courtyard.east to "forest"
+
+clone room as shop
+set shop.name to "General Store"
+set shop.description to "A cluttered shop filled with supplies"
+set shop.north to "courtyard"
+
+clone room as forest
+set forest.name to "Dark Forest"
+set forest.description to "Tall trees loom overhead"
+set forest.west to "courtyard"
+
+print "✓ Created 4 rooms"
+print ""
+
+# Create items by cloning templates
+print "Creating items..."
+clone weapon as sword
+set sword.name to "Iron Sword"
+set sword.damage to 25
+set sword.location to "tavern"
+
+clone weapon as dagger
+set dagger.name to "Steel Dagger"
+set dagger.damage to 15
+set dagger.weight to 2
+set dagger.location to "shop"
+
+clone container as chest
+set chest.name to "Wooden Chest"
+set chest.open to false
+set chest.location to "forest"
+set chest.contents to "treasure"
+
+clone thing as potion
+set potion.name to "Health Potion"
+set potion.description to "A red vial that glows faintly"
+set potion.location to "shop"
+
+print "✓ Created 4 items"
+print ""
+
+# Create characters
+print "Creating characters..."
+clone player as hero
+set hero.name to "Hero"
+set hero.health to 100
+set hero.strength to 15
+set hero.location to "tavern"
+
+clone npc as shopkeeper
+set shopkeeper.name to "Merchant Bob"
+set shopkeeper.dialogue to "Welcome to my shop!"
+set shopkeeper.location to "shop"
+
+clone npc as guard
+set guard.name to "Town Guard"
+set guard.friendly to true
+set guard.dialogue to "Stay safe, traveler"
+set guard.location to "courtyard"
+
+print "✓ Created 3 characters"
+print ""
+
+# Show some properties
+print "=== World Summary ==="
+print ""
+print "Player:"
+properties hero
+
+print ""
+print "Starting Location:"
+properties tavern
+
+print ""
+print "A Weapon:"
+properties sword
+
+print ""
+print "An NPC:"
+properties shopkeeper
+
+print ""
+print "=== World is ready to play! ==="

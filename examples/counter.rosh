@@ -1,0 +1,9 @@
+# Simple counter example
+
+create number counter as 0
+
+print counter
+
+create number counter as 5
+
+print counter

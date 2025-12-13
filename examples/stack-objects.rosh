@@ -1,0 +1,17 @@
+# Stack operations with objects
+
+create object player
+  set name to "Bob"
+  set health to 85
+  set max-health to 100
+end
+
+# Get property from object onto stack (using dot notation)
+get player.health
+print
+
+# Traditional property access still works
+print player.name
+
+# Dump state to see everything
+dump

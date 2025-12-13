@@ -1,0 +1,16 @@
+# Basic math operations
+
+create number x as 10
+create number y as 5
+
+create number sum as x plus y
+create number difference as x minus y
+create number product as x times y
+create number quotient as x divided by y
+
+print sum
+print difference
+print product
+print quotient
+
+

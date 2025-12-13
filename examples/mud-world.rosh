@@ -1,0 +1,85 @@
+# Simple MUD World - LPC/TinyMUD inspired!
+# This creates a persistent world you can walk around in
+
+print "=== Creating MUD World ==="
+
+# Create room template (prototype)
+create object room-template
+  set description to "An empty room"
+  set north to null
+  set south to null
+  set east to null
+  set west to null
+  set items to null
+end
+
+# Create specific rooms
+create object tavern from room-template
+  set description to "The Rusty Tankard Tavern. A cozy place with wooden tables and a roaring fireplace."
+  set south to "courtyard"
+  set items to "sword"
+end
+
+create object courtyard from room-template
+  set description to "The village courtyard. Cobblestones underfoot, with paths leading in all directions."
+  set north to "tavern"
+  set south to "shop"
+  set east to "forest"
+  set west to "well"
+end
+
+create object shop from room-template
+  set description to "The General Store. Shelves are stocked with supplies and curiosities."
+  set north to "courtyard"
+  set items to "potion"
+end
+
+create object forest from room-template
+  set description to "Dark Forest. Tall trees loom overhead, casting shadows everywhere."
+  set west to "courtyard"
+  set items to "gem"
+end
+
+create object well from room-template
+  set description to "The Old Well. Ancient stones surround a deep well. Water echoes far below."
+  set east to "courtyard"
+end
+
+# Create items
+create object sword
+  set name to "Rusty Sword"
+  set description to "An old but sturdy blade"
+  set takeable to true
+end
+
+create object potion
+  set name to "Health Potion"
+  set description to "A red vial that glows faintly"
+  set takeable to true
+end
+
+create object gem
+  set name to "Mysterious Gem"
+  set description to "A strange crystal that pulses with inner light"
+  set takeable to true
+end
+
+# Create player
+create object player
+  set location to "tavern"
+  set inventory to null
+  set health to 100
+end
+
+print "World created!"
+print ""
+print "Try these commands in REPL:"
+print "  - Look around: print current_room.description"
+print "  - Move: set player.location to <room_name>"
+print "  - Save world: dump"
+print "  - Load world: load \"world.json\""
+print ""
+print "Player starting location:"
+print player.location
+print ""
+print "Use REPL to explore!"

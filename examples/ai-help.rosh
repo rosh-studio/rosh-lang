@@ -1,0 +1,24 @@
+# AI-Powered Error Recovery Demo
+# When you make mistakes, AI helps you fix them!
+
+# This example intentionally has errors to show AI suggestions
+# Run with: rosh examples/ai-help.rosh
+
+print "Demonstrating AI error recovery..."
+print ""
+
+# Example 1: Try an intentional typo
+# Uncomment to see AI suggestion:
+# crate number x as 42
+
+# Example 2: Wrong syntax
+# Uncomment to see AI suggestion:
+# set player health to 100
+
+# Example 3: Missing 'end'
+# Uncomment to see AI suggestion:
+# create object player
+#   set name to "Hero"
+
+print "To see AI suggestions, uncomment the error examples above"
+print "and run this file. Make sure your OPENAI_API_KEY is set!"

@@ -1,0 +1,30 @@
+# AI Code Generation Example
+# The AI generates actual Rosh code that gets executed!
+
+print "🤖 AI Code Generation Demo"
+print "=========================="
+print ""
+
+# Example 1: Simple code generation
+print "Example 1: Generate a player character"
+prompt exec "Create a player object named hero with health 100, name 'Warrior', and level 5"
+
+print ""
+print "Player created! Let's see it:"
+print hero
+print ""
+
+# Example 2: Generate and store code
+print "Example 2: Generate code for review"
+prompt "Write Rosh code to create a weapon with damage 25" into weapon_code
+print "Generated code:"
+print weapon_code
+print ""
+print "Now executing it:"
+eval weapon_code
+print weapon
+print ""
+
+# Example 3: AI generates calculations
+print "Example 3: Complex calculation"
+prompt exec "Create three numbers x=10, y=20, z=30, then calculate their sum and print it"

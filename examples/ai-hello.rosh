@@ -1,0 +1,10 @@
+# Simple AI prompt example
+# Make sure you've set your OPENAI_API_KEY or configured ~/.rosh/config.json
+
+print "Asking AI for a creative greeting..."
+prompt "Say hello in a creative and funny way"
+
+print ""
+print "Now storing the result:"
+prompt "Generate a random fun fact about programming" into fact
+print fact

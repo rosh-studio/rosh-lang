@@ -1,0 +1,47 @@
+# 🤖 Rosh Help System Demo
+# This example demonstrates the context-aware help system
+
+print "=== Help System Demo ==="
+print ""
+
+# 1. Get help on a specific command
+print "1. Get help for a command:"
+help goto
+print ""
+
+# 2. Import the mud library
+import mud
+
+# 3. Create some objects
+create room tavern
+set tavern.name "The Rusty Tankard"
+set tavern.description "A cozy tavern with a roaring fireplace"
+
+create npc barkeep
+set barkeep.name "Old Tom"
+set barkeep.dialogue "Welcome to my tavern, stranger!"
+
+print "2. Get help for an object:"
+help tavern
+print ""
+
+print "3. Get help for a template:"
+help room
+print ""
+
+print "4. Get help for another object type:"
+help npc
+print ""
+
+# 5. Show how help displays inheritance
+create object hero from player
+  set name "Brave Adventurer"
+  set level 5
+end
+
+print "5. Help shows inheritance:"
+help hero
+print ""
+
+print "=== Demo Complete ==="
+print "Try running 'help' with no arguments to see all available commands!"

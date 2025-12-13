@@ -1,0 +1,985 @@
+#!/usr/bin/env rosh
+"""
+========================================
+THE ROSH MANUAL
+========================================
+The comprehensive, executable guide to the Rosh programming language
+
+This file demonstrates ALL working features of Rosh with executable examples.
+It serves as both:
+  - The official language tutorial
+  - The integration test suite (run before each release)
+
+Run with: rosh ROSH-MANUAL.rosh
+Or:       python -m rosh ROSH-MANUAL.rosh
+
+Last updated: v0.0.6
+"""
+
+print "=== WELCOME TO ROSH ==="
+print "An English-like programming language for interactive storytelling"
+print  # prints a blank line for spacing
+
+# ========================================
+# 1. BASIC VALUES AND VARIABLES
+# ========================================
+print "=== 1. Basic Values and Variables ==="
+
+"""
+NOTE: This section uses the classic 'create number/string' syntax.
+Rosh v0.0.6 also supports the newer 'set' syntax (see Section 26).
+Both syntaxes work! Examples:
+  Classic: create number age to 25
+  Modern:  set age to 25
+The manual uses classic syntax early on, then introduces 'set' in Section 26.
+"""
+
+# Create variables with natural syntax
+create number age to 25
+create string name to "Alice"
+create number score to 100
+
+print "Name:"
+print name
+print "Age:"
+print age
+print ""  # an empty string also prints a blank line
+
+# ========================================
+# 2. ARITHMETIC OPERATIONS
+# ========================================
+print "=== 2. Arithmetic Operations ==="
+
+# Expression-based math with natural operators
+create number sum to 10 plus 5
+create number difference to 20 minus 7
+create number product to 6 times 7
+create number quotient to 100 divided by 4
+
+print "10 plus 5 ="
+print sum
+print "6 times 7 ="
+print product
+
+# Negative numbers
+create number negative to -10
+create number calculation to 5 plus -3
+print "5 plus -3 ="
+print calculation
+print
+
+# ========================================
+# 2b. COMMENTS (NEW multiline in v0.0.6!)
+# ========================================
+print "=== 2b. Comments ==="
+
+# Single-line comments start with #
+print "Single-line comments work"
+
+"""
+Multiline comments can use triple quotes.
+They can span multiple lines.
+Perfect for longer explanations or documentation.
+"""
+print "Triple quote comments work!"
+
+###
+Multiline comments can also use triple hashes.
+This is an alternative syntax.
+Use whichever style you prefer!
+###
+print "Triple hash comments work!"
+print
+
+# ========================================
+# 2c. RESERVED WORDS (Protection for Core Features)
+# ========================================
+print "=== 2c. Reserved Words ==="
+
+"""
+Reserved words are keywords that CANNOT be used as variable/function/object names.
+This protects core language features from being accidentally overridden.
+
+Examples of reserved words (there are ~70 total):
+  - Control flow: if, then, else, end, while, for, break, continue, return
+  - Variables: create, set, to, get
+  - Stack ops: stack, dup, swap, drop, add, subtract, multiply, divide
+  - Types: number, string, object, true, false, null
+  - Operators: is, not, and, or, plus, minus, times, divided, by
+  - I/O: print, input, read, write
+  - And many more...
+"""
+
+# You CAN use similar names:
+set mystack to [1, 2, 3]  # OK - 'mystack' is not reserved
+set player_health to 100  # OK - 'player_health' is not reserved
+
+print "Variables with similar names to reserved words work fine!"
+
+###
+You CANNOT use exact reserved words:
+  create number stack to 5  <- This would error!
+
+Error message would be:
+  "Cannot use reserved word 'stack' as variable name"
+
+The 'stack' command is protected and always available
+###
+set value to 42
+get value
+print "The stack command works:"
+print stack
+
+print
+print "All core language features are protected by reserved words!"
+print
+
+# ========================================
+# 3. COMPARISONS
+# ========================================
+print "=== 3. Comparisons ==="
+
+create number x to 15
+
+if x is above 10 then
+    print "x is greater than 10"
+end
+
+if x is equal to 15 then
+    print "x equals 15"
+end
+print
+
+# ========================================
+# 4. BOOLEAN OPERATORS
+# ========================================
+print "=== 4. Boolean Operators (AND/OR/NOT) ==="
+
+create number temp to 72
+
+# AND - both conditions must be true
+if temp is above 65 and temp is below 80 then
+    print "Temperature is comfortable (65-80), assuming you mean Fahrenheit!"
+end
+
+# OR - at least one condition must be true
+if temp is below 60 or temp is above 90 then
+    print "Temperature is extreme"
+else
+    print "Temperature is moderate"
+end
+
+# NOT - negates a condition
+if not temp is below 50 then
+    print "It's not freezing"
+end
+
+# NOT in compound expressions (NEW in v0.0.6!)
+create number x to 5
+create number y to 10
+if x is above 0 and not y is below 5 then
+    print "x is positive AND y is not less than 5"
+end
+
+if not x is equal to 0 or y is above 5 then
+    print "Either x is not zero OR y is greater than 5"
+end
+print
+
+# ========================================
+# 5. IF/ELSE CONDITIONALS
+# ========================================
+print "=== 5. If/Else If/Else Conditionals ==="
+
+create number grade to 85
+
+# else if syntax (NEW in v0.0.6!)
+if grade is above 90 then
+    print "Grade: A"
+else if grade is above 80 then
+    print "Grade: B"
+else if grade is above 70 then
+    print "Grade: C"
+else if grade is above 60 then
+    print "Grade: D"
+else
+    print "Grade: F"
+end
+print
+
+# ========================================
+# 6. WHILE LOOPS
+# ========================================
+print "=== 6. While Loops ==="
+
+create number countdown to 5
+print "Countdown:"
+while countdown is above 0 then
+    print countdown
+    set countdown to countdown minus 1
+end
+print "Liftoff!"
+print
+
+# ========================================
+# 7. FOR LOOPS - RANGES
+# ========================================
+print "=== 7. For Loops - Ranges ==="
+
+print "Count 1 to 5:"
+for i in 1 to 5 then
+    print i
+end
+
+print "Count by 2s:"
+for i in 2 to 10 step 2 then
+    print i
+end
+print
+
+# ========================================
+# 8. BREAK AND CONTINUE
+# ========================================
+print "=== 8. Break and Continue ==="
+
+print "Break example (stop at 5):"
+for i in 1 to 10 then
+    if i is equal to 6 then
+        break
+    end
+    print i
+end
+
+print "Continue example (skip 3):"
+for i in 1 to 5 then
+    if i is equal to 3 then
+        continue
+    end
+    print i
+end
+print
+
+# ========================================
+# 8b. STOP - Terminate Program
+# ========================================
+print "=== 8b. Stop - Terminate Program ==="
+
+print "Use 'stop' or 'exit' to terminate the program immediately"
+print "Example: Conditional early exit"
+
+create number found_value to 0
+for i in 1 to 10 then
+    if i is equal to 7 then
+        set found_value to i
+        print "Found target value:"
+        print i
+        print "Stopping program"
+        # Uncommenting the line below would stop the program here
+        # stop
+    end
+end
+print "Program continued (stop was commented out)" # 'exit' also works
+print
+
+# ========================================
+# 9. LISTS AND ARRAYS
+# ========================================
+print "=== 9. Lists and Arrays ==="
+
+# Create lists with bracket notation
+create number numbers to [10, 20, 30, 40, 50]
+create number fruits to ["apple", "banana", "cherry"]
+
+print "Numbers list:"
+print numbers
+
+# Access list elements (0-based indexing)
+print "First number:"
+get numbers[0]  # pushes the first element onto the stack
+print stack  # prints and pops the top of the stack
+
+print "Third number:"
+get numbers[2]
+print stack
+
+# Modify list elements
+set numbers[1] to 99
+print "After changing second element:"
+print numbers
+
+# Empty lists
+create number empty to []
+print "Empty list:"
+print empty
+print
+
+# List slicing (NEW in v0.0.6!)
+print "List slicing:"
+create number values to [100, 200, 300, 400, 500]
+
+# Slice from index 1 to 3 (gets elements at indices 1 and 2)
+set slice1 to values[1:3]
+print "values[1:3]:"
+print slice1
+
+# Slice from beginning to index 3
+set slice2 to values[:3]
+print "values[:3]:"
+print slice2
+
+# Slice from index 2 to end
+set slice3 to values[2:]
+print "values[2:]:"
+print slice3
+
+# Full slice (creates a copy)
+set slice4 to values[:]
+print "values[:] (copy):"
+print slice4
+print
+
+# ========================================
+# 10. FUNCTIONS
+# ========================================
+print "=== 10. Functions ==="
+
+# Define a function
+define function greet person
+    print "Hello,"
+    print person
+end
+
+# Call the function
+call greet "Bob"
+
+# Functions with return values
+define function double x
+    return x times 2
+end
+
+define function is_adult age
+    if age is above 17 then
+        return true
+    end
+    return false
+end
+
+# Use return values
+call double 7  # Calls the function and pushes return value onto stack
+print "7 doubled:"
+print stack  # prints the return value from the stack
+
+call is_adult 25
+print "Is 25 an adult?"
+print stack
+print
+
+set value to call double 15
+print "15 doubled (assigned to variable):"
+print value
+print ""
+
+
+# ========================================
+# 11. OBJECTS AND PROPERTIES
+# ========================================
+print "=== 11. Objects and Properties ==="
+
+# Create an object (template)
+create object player
+    create string name to "Hero"
+    create number health to 100
+    create number mana to 50
+end
+
+# Access properties
+print "Player name:"
+print player.name
+
+print "Player health:"
+print player.health
+
+# Modify properties
+set player.health to 85
+print "Health after damage:"
+print player.health
+
+# Clone objects
+clone player as enemy
+set enemy.name to "Goblin"
+set enemy.health to 30
+
+print "Enemy name:"
+print enemy.name
+print
+
+# ========================================
+# 12. FOR LOOPS - COLLECTIONS
+# ========================================
+print "=== 12. For Loops - Collections ==="
+
+# Create multiple items
+create object item
+    create string name to "item"
+    create number value to 0
+end
+
+clone item as sword
+set sword.name to "Iron Sword"
+set sword.value to 150
+
+clone item as shield
+set shield.name to "Wooden Shield"
+set shield.value to 75
+
+clone item as potion
+set potion.name to "Health Potion"
+set potion.value to 25
+
+# Iterate over all items
+print "Inventory:"
+for obj in all item then
+    print "- "
+    get obj.name
+    print
+end
+print
+
+# ========================================
+# 13. BOOLEAN VALUES
+# ========================================
+print "=== 13. Boolean Values ==="
+
+create number is_active to true
+create number is_locked to false
+create number nothing to null
+
+if is_active then
+    print "System is active"
+end
+
+if not is_locked then
+    print "Door is unlocked"
+end
+print
+
+# ========================================
+# 14. COMPLEX EXAMPLE: SIMPLE GAME
+# ========================================
+print "=== 14. Complex Example: Number Guessing Hint ==="
+
+create number secret to 7
+create number attempts to 0
+create number max_attempts to 3
+
+print "Trying to guess the secret number (1-10)..."
+
+# Simulate guessing
+for guess in 1 to 10 then
+    set attempts to attempts plus 1
+
+    if guess is equal to secret then
+        print "Found it!"
+        get guess
+        print
+        print "Attempts:"
+        print attempts
+        break
+    end
+
+    if attempts is equal to max_attempts then
+        print "Too many attempts, stopping search"
+        break
+    end
+end
+print
+
+# ========================================
+# 15. NESTED STRUCTURES
+# ========================================
+print "=== 15. Nested Structures ==="
+
+print "Multiplication table (3x3):"
+for row in 1 to 3 then
+    for col in 1 to 3 then
+        create number result to row times col
+        print result
+    end
+end
+print
+
+print "This is a multi-line function example"; print "with two print statements."
+print
+
+# ========================================
+# 16. STRING AND LIST LENGTH
+# ========================================
+print "--- 16. String and List Length ---"
+
+create string message to "Hello Rosh"
+create number msg_len to length of message
+print "String length"
+print msg_len
+
+create number items to [1, 2, 3, 4, 5]
+create number item_count to length of items
+print "List length"
+print item_count
+
+create number inventory to []
+create number inv_len to length of inventory
+if inv_len is equal to 0 then
+    print "Inventory is empty"
+end
+print
+
+# ========================================
+# 17. RANDOM NUMBERS
+# ========================================
+print "--- 17. Random Numbers ---"
+
+create number die_roll to random 1 to 6
+print "Die roll"
+print die_roll
+
+create number damage to random 5 to 15
+print "Random damage"
+print damage
+
+create number chance to random
+print "Random chance"
+print chance
+
+create number monster_health to random 50 to 100
+if monster_health is above 75 then
+    print "Strong monster"
+else
+    print "Weak monster"
+end
+print
+# ========================================
+# 18. STRING CONCATENATION
+# ========================================
+print "--- 18. String Concatenation ---"
+
+create string greeting to "Hello" plus " " plus "World"
+print greeting
+
+create string player_name to "Hero"
+create string message to "Welcome " plus player_name
+print message
+
+create string first to "Rosh"
+create string second to " is"
+create string third to " awesome"
+create string full to first plus second plus third
+print full
+print
+
+# ========================================
+# 19. CONTAINS (STRING AND LIST)
+# ========================================
+print "--- 19. Contains Operation ---"
+
+create string command to "go north"
+if command contains "north" then
+    print "Player wants to go north"
+end
+
+create number inventory to ["sword", "shield", "potion"]
+if inventory contains "sword" then
+    print "Player has a sword"
+end
+
+if inventory contains "key" then
+    print "Has key"
+else
+    print "No key in inventory"
+end
+
+create string description to "A dark and spooky forest"
+if description contains "spooky" then
+    print "This place is spooky"
+end
+print
+
+# ========================================
+# 20. LIST APPEND AND REMOVE
+# ========================================
+print "--- 20. List Append and Remove ---"
+
+create number inventory to ["sword"]
+print "Starting inventory"
+print inventory
+
+append "shield" to inventory
+append "potion" to inventory
+print "After adding items"
+print inventory
+
+remove "sword" from inventory
+print "After removing sword"
+print inventory
+
+create number nums to [1, 2, 3]
+append 4 to nums
+append 5 to nums
+print "Numbers list"
+print nums
+
+create number size to length of nums
+print "List size"
+print size
+print
+
+# ========================================
+# 21. BASIC MATH FUNCTIONS
+# ========================================
+print "--- 21. Basic Math Functions ---"
+
+# abs - absolute value
+call abs -25
+print "Absolute value of -25"
+print
+
+# min and max
+call min 10 5 20 3 15
+print "Minimum of 10,5,20,3,15"
+print
+
+call max 10 5 20 3 15
+print "Maximum of 10,5,20,3,15"
+print
+
+# round, floor, ceil
+call round 7.6
+print "7.6 rounded"
+print
+
+call floor 7.9
+print "Floor of 7.9"
+print
+
+call ceil 7.1
+print "Ceil of 7.1"
+print
+
+# Use in game logic
+create number damage to random 10 to 20
+print "Random damage value"
+print damage
+print
+
+# ========================================
+# 21b. TYPE CHECKING FUNCTIONS (NEW in v0.0.6!)
+# ========================================
+print "--- 21b. Type Checking Functions ---"
+
+# Test if values are numbers
+set test_num to 42
+set result to call is_number test_num
+print "is_number(42):"
+print result
+
+# Test if values are strings
+set test_str to "hello"
+set result to call is_string test_str
+print "is_string(\"hello\"):"
+print result
+
+# Test if values are lists
+set test_list to [1, 2, 3]
+set result to call is_list test_list
+print "is_list([1,2,3]):"
+print result
+
+# Test for null
+set result to call is_null null
+print "is_null(null):"
+print result
+
+# Test for boolean
+set result to call is_boolean true
+print "is_boolean(true):"
+print result
+
+# Use in conditional logic
+set mystery_value to 100
+if call is_number mystery_value then
+    print "Mystery value is a number!"
+end
+print
+
+# ========================================
+# 26. TYPE ANNOTATIONS (NEW in v0.0.6!)
+# ========================================
+print "--- 26. Type Annotations ---"
+
+"""
+NEW SYNTAX: 'set' for variables, 'create' for objects
+This makes the language more intuitive:
+  set x to 42          ← Setting a variable
+  create object player ← Creating an object
+"""
+
+print "Rosh v0.0.6 introduces 'set' syntax for variables:"
+print "- 'set' for all variables (creating and updating)"
+print "- 'create' only for objects"
+print "- Optional type annotations with validation"
+print "- Semicolons for command separation"
+print
+
+"""
+TYPE INFERENCE (No annotations needed)
+Rosh automatically infers types from values
+"""
+set x to 42                       # Infers: number
+set message to "Hello"            # Infers: string
+set active to true                # Infers: boolean
+set items to [1, 2, 3]            # Infers: list<number>
+set words to ["a", "b"]           # Infers: list<string>
+
+print "Type inference works automatically:"
+print x
+print message
+print items
+print
+
+# OPTIONAL TYPE ANNOTATIONS - Two syntaxes!
+set score: number to 100          # Using colon (:)
+set player_name as string to "Hero"  # Using 'as' (more natural!)
+set is_ready: boolean to true
+
+print "With type annotations (both : and as work):"
+print score
+print player_name
+print is_ready
+print
+
+# UPDATING VARIABLES
+set score to 75
+print "Score after update:"
+print score
+print
+
+# LIST TYPE ANNOTATIONS
+set numbers as list<number> to [10, 20, 30]
+set names as list<string> to ["Alice", "Bob", "Charlie"]
+
+print "Typed lists:"
+print numbers
+print names
+print
+
+# EMPTY LISTS WITH TYPE ANNOTATIONS
+set inventory as list<string> to []
+print "Empty inventory (typed as list<string>):"
+print inventory
+
+append "sword" to inventory
+append "shield" to inventory
+print "After adding items:"
+print inventory
+print
+
+# SEMICOLONS FOR COMMAND SEPARATION
+set a to 1; set b to 2; set c to 3
+print "Multiple commands on one line (with semicolons):"
+print a; print b; print c
+print
+
+###
+IDE EXPERIENCE (Future with VS Code extension)
+When coding with the Rosh extension:
+
+What you'll type:       What IDE will show (with inlay hints):
+set x to 42             set x: number to 42
+set x to 100            set x: number to 100
+set items to []         set items: list<any> to []
+
+The ": number" will appear in gray italic - it's a hint, not your code!
+This helps you see types without cluttering your code.
+###
+
+print "Future IDE Features (VS Code extension):"
+print "- Inlay hints show inferred types in gray"
+print "- Hover over variables to see their types"
+print "- Autocomplete suggests typed values"
+print "- Error highlighting for type mismatches"
+print
+
+"""
+WHY USE TYPE ANNOTATIONS?
+1. Documentation - makes code intent clear
+2. Safety - catches type errors early
+3. IDE support - enables autocomplete and error checking
+4. Self-documenting - readers know what types to expect
+"""
+
+###
+TYPE ERRORS (These would fail if uncommented)
+
+set wrong: number to "hello"
+Error: Type mismatch for variable 'wrong': annotated as number, but value is string
+
+set bad_list: list<number> to ["a", "b"]
+Error: Type mismatch for variable 'bad_list': annotated as list<number>, but value is list<string>
+###
+
+print "Type annotations are optional but recommended for:"
+print "- Empty collections (documents what goes in them)"
+print "- Function parameters (coming soon)"
+print "- Public APIs and interfaces"
+print "- Variables that change rarely (documents intent)"
+print
+
+print "Skip annotations when:"
+print "- Type is obvious from the value"
+print "- Quick prototyping"
+print "- Internal/temporary variables"
+print
+
+# ========================================
+# 28. STRING INTERPOLATION (NEW in v0.0.6!)
+# ========================================
+print "--- 28. String Interpolation ---"
+
+# String interpolation with {expression} syntax
+set player_name to "Hero"
+set player_level to 12
+set player_health to 85
+set player_max_health to 100
+
+print "Player: {player_name}"
+print "Level: {player_level}"
+print "Health: {player_health}/{player_max_health}"
+
+# Works with expressions!
+print "Next level: {player_level plus 1}"
+print "Health percentage: {player_health times 100 divided by player_max_health}%"
+
+# Works with object properties
+create object weapon
+    set name to "Sword of Destiny"
+    set damage to 25
+end
+
+print "Equipped: {weapon.name} (Damage: {weapon.damage})"
+
+# Combine multiple interpolations
+set x to 10
+set y to 5
+print "{x} + {y} = {x plus y}"
+print "{x} * {y} = {x times y}"
+print
+
+# ========================================
+# 29. USER INPUT (NEW in v0.0.6!)
+# ========================================
+print "--- 29. User Input ---"
+
+# Note: This section is commented out because it requires user interaction
+# Uncomment these lines to test input functionality interactively
+
+# print "What is your name? "
+# input user_name
+# print "Hello {user_name}!"
+
+# print "How old are you? "
+# input age
+# print "In 10 years, you'll be {age plus 10} years old!"
+
+print "Input command syntax:"
+print "  input <variable_name>"
+print "  - Reads a line from stdin"
+print "  - Stores it in the specified variable"
+print "  - Perfect for interactive games!"
+print
+
+# ========================================
+# 30. STACK OPERATIONS
+# ========================================
+print "--- 30. Stack Operations ---"
+
+# Rosh has a data stack for advanced operations
+set a to 10
+set b to 20
+set c to 30
+
+# Push values onto stack with 'get'
+get a
+get b
+get c
+
+# View the stack (non-destructive)
+print "Stack contents:"
+stack
+
+# Duplicate top of stack
+dup
+print "After dup:"
+stack
+
+# Swap top two items
+swap
+print "After swap:"
+stack
+
+# Drop (remove) top item
+drop
+print "After drop:"
+stack
+
+# Math operations on stack
+set x to 5
+set y to 3
+get x
+get y
+add              # Pop 2 values, push result
+print "5 + 3 from stack:"
+print stack      # This POPS and prints
+
+print "Stack operations available:"
+print "- get <var>    : Push variable onto stack"
+print "- stack        : View stack contents"
+print "- print stack  : Pop and print top of stack"
+print "- dup          : Duplicate top"
+print "- swap         : Swap top two"
+print "- drop         : Remove top"
+print "- add/subtract/multiply/divide : Math ops"
+print
+
+print "=== ROSH FEATURE SUMMARY ==="
+print "✓ Variables and basic types"
+print "✓ Type inference (automatic)"
+print "✓ Type annotations (optional: number, string, list<T>)"
+print "✓ Comments: single-line (#) and multiline (\"\"\" or ###)"
+print "✓ Reserved words (protects core features like stack, if, create, etc.)"
+print "✓ Semicolons for command separation"
+print "✓ Standard aliases (exit=stop, say=print, props=properties, etc.)"
+print "✓ Arithmetic with negatives"
+print "✓ Comparisons and boolean logic (NOT in compound expressions)"
+print "✓ If/else if/else conditionals"
+print "✓ String interpolation ({expression} in strings)"
+print "✓ User input (input command)"
+print "✓ While loops"
+print "✓ For loops (ranges, collections, list iteration)"
+print "✓ Break and continue"
+print "✓ Lists and arrays"
+print "✓ List slicing (my_list[start:end])"
+print "✓ Functions with return values (can assign: set x to call func 42)"
+print "✓ Objects and properties"
+print "✓ Object cloning and iteration"
+print "✓ String and list length"
+print "✓ String concatenation"
+print "✓ Contains (string and list search)"
+print "✓ List append and remove operations"
+print "✓ String methods (split, substring, case, trim, indexOf)"
+print "✓ Basic math functions (abs, min, max, round, floor, ceil)"
+print "✓ Type checking functions (is_number, is_string, is_list, is_object, is_null, is_boolean)"
+print "✓ Random numbers (dice rolls, ranges)"
+print "✓ Stack operations (get, stack, dup, swap, drop, add/subtract/multiply/divide)"
+print "✓ REPL variable evaluation (type variable name to see its value)"
+print
+print "Thanks for exploring Rosh!"
+print "Visit github.com/rdubar/rosh for more information"
