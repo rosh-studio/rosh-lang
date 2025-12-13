@@ -54,91 +54,177 @@
 
 ## 🚀 Upcoming Milestones
 
-### v0.0.7 - Event System (Q1 2025)
-**Priority: HIGH - Enables complex game logic**
+### v0.0.7 - Event System (Q1 2026) 🔄 IN PROGRESS
+**Priority: HIGH - Enables reactive game logic**
 
-- [ ] Event syntax: `when condition then action end`
-- [ ] Built-in MUD events (combat, navigation, quests)
-- [ ] Event handlers and triggers
-- [ ] Modulo operator
-- [ ] Smart print inference (optional quotes)
-- [ ] Sophisticated error recovery (multi-pass parsing)
+**Goal:** Add event-driven programming for NPCs, rooms, and game state reactions
+
+**Features:**
+- [ ] `when <condition> then ... end` syntax
+- [ ] `on <event> do ... end` syntax
+- [ ] Event loop in stdlib (single-user, deterministic)
+- [ ] Built-in MUD events (combat_start, player_move, item_taken)
+- [ ] NPC reaction system
+- [ ] Room ambient behaviors
 
 **Example:**
 ```rosh
-when player.health is below 0 then
-    print "You died!"
-    goto start_room
+when player.health is below 20 then
+    play sound "warning_beep"
+    print "Health critical!"
+end
+
+on combat_start do
+    set enemy.aggressive to true
+    play music "battle_theme"
 end
 ```
 
-### v0.0.8 - Package System (Q2 2025)
-**Priority: HIGH - Enables code sharing and distribution**
+**Why now:** Events make games feel alive. NPCs react, rooms have behaviors, combat flows naturally.
 
+**Timeline:** 2-3 weeks
+
+---
+
+### v0.0.8 - Voice → Game Demo (Q1 2026)
+**Priority: HIGH - Proves AI-assisted creation**
+
+**Goal:** Demonstrate natural language → playable game in 60-90 seconds
+
+**Features:**
+- [ ] Voice input integration (Web Speech API or Whisper)
+- [ ] Prompt engineering for game generation
+- [ ] AI → Rosh code generation (GPT-4 or Claude)
+- [ ] Immediate execution (terminal or web client)
+- [ ] Demo video recording and editing
+
+**Demo Flow:**
+```
+User (voice): "Create a dungeon with a goblin and treasure"
+AI: [Generates Rosh code in real-time]
+Terminal: [Game runs immediately]
+User: "north, attack goblin, open chest"
+Game: [Playable dungeon crawler]
+```
+
+**Why now:**
+- Proves VR vision WITHOUT needing VR hardware
+- Shows AI-assisted creation (Roshbosh vision)
+- Creates shareable content for social media
+- Perfect for Product Hunt / investor demos
+
+**Timeline:** 2-4 weeks (mostly prompt engineering)
+
+---
+
+### v0.0.9 - Phaser Transpiler MVP (Q2 2026)
+**Priority: HIGH - Proves cross-platform transpilation**
+
+**Goal:** Same Rosh code runs in terminal AND browser with graphics
+
+**Features:**
+- [ ] JavaScript code generation from Rosh AST
+- [ ] Phaser.js runtime bindings
+- [ ] 2D sprite rendering
+- [ ] Mouse/touch input mapping
+- [ ] Sound effects integration
+- [ ] CLI: `rosh transpile --target phaser`
+
+**Demo:**
+```bash
+rosh run dungeon.rosh           # Terminal: ASCII graphics
+rosh transpile --target phaser  # Browser: sprites + sound
+open index.html                 # Same game, visual!
+```
+
+**Why Phaser first:**
+- ✅ JavaScript (simpler than C#/GDScript)
+- ✅ Browser-based (zero install)
+- ✅ 2D (easier than 3D)
+- ✅ Proves transpilation concept
+
+**Timeline:** 4-6 weeks
+
+---
+
+### v0.1.0 - Unity Transpiler MVP (Q3 2026)
+**Priority: CRITICAL - Enables VR deployment**
+
+**Goal:** Transpile Rosh → Unity C# for VR/AR platforms
+
+**Features:**
+- [ ] Unity C# code generation
+- [ ] MonoBehaviour class mapping
+- [ ] VR input handling (Quest, Vision Pro)
+- [ ] 3D scene integration
+- [ ] Voice command support in-headset
+
+**Why now:** After browser proves concept, Unity enables VR deployment for enterprise
+
+**Timeline:** 6-8 weeks (see TRANSPILER-UNITY-PLAN.md)
+
+---
+
+### v0.2.0 - Package System (Q4 2026)
+**Priority: MEDIUM - Enables code sharing**
+
+**Features:**
 - [ ] Package manifest (rosh.manifest.json)
-- [ ] Package manager commands (install, verify, publish)
-- [ ] Hash verification for security
+- [ ] Local import/export
 - [ ] Dependency resolution
-- [ ] Package registry (hosted)
+- [ ] Package verification
 
-### v0.0.8.5 - AI Safety & Compliance (Q1 2025)
-**Priority: CRITICAL - Required before multi-user**
+**Deferred from earlier:** Multiplayer comes first, packages can wait
 
-- [ ] AI prompt vetting and sanitization
-- [ ] Safety scanner for malicious content
-- [ ] Audit logging system
-- [ ] User warnings and education
+---
 
-### v0.0.9 - Multi-User Engine (Q2 2025)
+### v0.3.0 - Multi-User Engine (2027)
 **Priority: HIGH - Enables rosh.cloud**
 
+**Features:**
 - [ ] User authentication and sessions
 - [ ] Networked message passing
-- [ ] Concurrent user execution
 - [ ] Shared world state
-- [ ] User isolation and sandboxing
-- [ ] Complete security audit
+- [ ] Event synchronization across clients
 
-### v0.1.0 - Production Multi-User (Q2 2025)
-**First production-ready release**
-
-- [ ] Stable multi-user API
-- [ ] Comprehensive testing (100+ automated tests)
-- [ ] Performance optimization
-- [ ] Production deployment to rosh.cloud
-- [ ] Documentation and tutorials
+**Deferred:** Single-user demos must be solid first
 
 ---
 
 ## 🔮 Future Milestones
 
-### v0.2.0 - Web Platform
-- Web-based IDE
-- Browser-based execution
-- Real-time collaboration
-- rosh.cloud public launch
+### v0.4.0 - Lua Transpiler (2027)
+**Goal:** Roblox and Love2D support
+- Lua code generation
+- Roblox API bindings
+- Love2D game framework integration
 
-### Milestones 10-14 - Transpilers (2026)
-**Enable Rosh → Multiple Target Languages**
+### v0.5.0 - GDScript Transpiler (2027)
+**Goal:** Godot Engine support
+- GDScript code generation
+- Godot scene integration
+- Open source game engine deployment
 
-- **v0.3.0** - JavaScript transpiler (browser games, Phaser)
-- **v0.4.0** - Lua transpiler (Love2D, Roblox)
-- **v0.5.0** - GDScript transpiler (Godot engine)
-- **v0.6.0** - Python transpiler (education, Pygame)
+### v0.6.0 - roshbosh Platform Beta (Q2 2027)
+**Goal:** "Instagram for remixable mini-games"
+- AI-powered game creation interface
+- One-click remix functionality
+- Social sharing and discovery
+- Asset marketplace
 
-### v1.0.0 - Language Stability (2026+)
+### v1.0.0 - Language Stability (2027+)
 - Frozen syntax (no more breaking changes)
 - Complete language specification
-- Performance optimizations
-- Production-ready for all use cases
+- Production transpilers (Unity, Phaser, Lua)
+- Comprehensive documentation
 
-### v1.5.0 - AI Game Studio (roshbosh) (2027+)
-- Natural language game generation
-- Template-based game creation
-- AI-assisted coding
-- Game gallery and sharing
+### v1.5.0 - rosh.cloud Enterprise Platform (2027+)
+- Multi-user VR world hosting
+- Enterprise licensing and billing
+- Transpiler API services
+- Team collaboration tools
 
-### v2.0.0 - Rust Core (Optional, 2027+)
+### v2.0.0 - Rust Core (Optional, 2028+)
 - High-performance core engine
 - Better sandboxing and security
 - Multi-platform deployment
@@ -148,14 +234,15 @@ end
 
 ## 📊 Milestone Status
 
-| Version | Status | Target | Priority |
-|---------|--------|--------|----------|
-| v0.0.6 | ✅ Complete | 2024-12-13 | - |
-| v0.0.7 | 🔄 Planning | Q1 2025 | HIGH |
-| v0.0.8 | 📋 Spec'd | Q2 2025 | HIGH |
-| v0.0.8.5 | 📋 Spec'd | Q1 2025 | CRITICAL |
-| v0.0.9 | 📋 Spec'd | Q2 2025 | HIGH |
-| v0.1.0 | 🎯 Goal | Q2 2025 | CRITICAL |
+| Version | Feature | Status | Target | Timeline |
+|---------|---------|--------|--------|----------|
+| v0.0.6 | Quality of Life | ✅ Complete | 2025-12-13 | - |
+| v0.0.7 | Event System | 🔄 In Progress | Q1 2026 | 2-3 weeks |
+| v0.0.8 | Voice Demo | 📋 Planned | Q1 2026 | 2-4 weeks |
+| v0.0.9 | Phaser Transpiler | 📋 Planned | Q2 2026 | 4-6 weeks |
+| v0.1.0 | Unity Transpiler | 📋 Planned | Q3 2026 | 6-8 weeks |
+| v0.2.0 | Package System | 📋 Planned | Q4 2026 | - |
+| v0.3.0 | Multi-User | 🎯 Goal | 2027 | - |
 
 ---
 
