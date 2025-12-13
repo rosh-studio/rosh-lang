@@ -69,8 +69,7 @@ class Interpreter:
         self.instance_counters = {}  # type_name -> next_number
 
         # Security flags (v0.0.4+)
-        # Can be disabled with --no-remote-imports flag
-        self.allow_remote_imports = True
+        # Remote imports removed for security (offline-first for VR/AR)
 
     def execute(self, program: Program):
         """Execute a program (list of statements)"""
@@ -274,7 +273,9 @@ class Interpreter:
             # Note: instances and uuid_map are rebuilt from variables during load
         }
 
-        for name, value in self.global_env.bindings.items():
+        for name, binding in self.global_env.bindings.items():
+            # bindings store {'value': ..., 'type': ...}, extract the actual value
+            value = binding['value'] if isinstance(binding, dict) and 'value' in binding else binding
             state["variables"][name] = serialize_value(value)
 
         return state
@@ -1336,27 +1337,25 @@ Generate executable Rosh code (no markdown fences):"""
             raise RoshRuntimeError(f"Error importing module {module_path}: {e}")
 
     def _resolve_module_path(self, module_path: str) -> str:
-        """Resolve a module path to an actual file path"""
+        """Resolve a module path to an actual file path
+
+        Note: Remote URL imports have been removed for security.
+        Use git submodules or local files for sharing code.
+        """
         import os
         from pathlib import Path
-        import urllib.request
 
-        # If it's a URL, fetch it (if allowed)
+        # Remote imports disabled for security - VR/AR worlds are offline-first
         if module_path.startswith('http://') or module_path.startswith('https://'):
-            # Security check: remote imports disabled?
-            if not getattr(self, 'allow_remote_imports', True):
-                raise RoshRuntimeError(
-                    f"Remote imports are disabled (--no-remote-imports flag).\n"
-                    f"Attempted to import: {module_path}\n\n"
-                    f"Why? Remote imports are currently trust-based (no hash verification).\n"
-                    f"For security, download the module manually and import locally:\n"
-                    f"  1. Download: curl {module_path} -o module.rosh\n"
-                    f"  2. Inspect: cat module.rosh  # READ THE CODE!\n"
-                    f"  3. Import: import \"module.rosh\"\n\n"
-                    f"Hash verification coming in v0.0.5.\n"
-                    f"See SHARING-RISKS.md for details."
-                )
-            return self._fetch_url_module(module_path)
+            raise RoshRuntimeError(
+                f"Remote URL imports are not supported for security.\n"
+                f"Attempted to import: {module_path}\n\n"
+                f"Instead:\n"
+                f"  1. Download: curl {module_path} -o module.rosh\n"
+                f"  2. Inspect: cat module.rosh  # READ THE CODE!\n"
+                f"  3. Import: import \"module.rosh\"\n\n"
+                f"For shared code, use git submodules or local package directories."
+            )
 
         # If it's an absolute path or has path separators, treat as file path
         if os.path.isabs(module_path) or '/' in module_path or '\\' in module_path:
@@ -1398,56 +1397,6 @@ Generate executable Rosh code (no markdown fences):"""
         # Not found
         raise RoshRuntimeError(f"Module '{module_path}' not found in package directories")
 
-    def _fetch_url_module(self, url: str) -> str:
-        """Fetch a module from a URL and cache it locally"""
-        import urllib.request
-        import hashlib
-        from pathlib import Path
-
-        # Create cache directory
-        cache_dir = Path.home() / '.rosh' / 'cache'
-        cache_dir.mkdir(parents=True, exist_ok=True)
-
-        # Generate cache filename from URL hash
-        url_hash = hashlib.sha256(url.encode()).hexdigest()[:16]
-        cache_file = cache_dir / f"{url_hash}.rosh"
-
-        # If cached, return it (no confirmation needed for cached modules)
-        if cache_file.exists():
-            return str(cache_file)
-
-        # SECURITY: Require user confirmation for remote imports
-        print(f"\n⚠️  SECURITY WARNING: Remote import requested")
-        print(f"URL: {url}")
-        print(f"\nThis will fetch and execute code from the internet.")
-        print(f"Only proceed if you trust this source.\n")
-
-        response = input("Download and execute this module? [y/N]: ").strip().lower()
-        if response not in ('y', 'yes'):
-            raise RoshRuntimeError(f"Remote import cancelled by user: {url}")
-
-        # Fetch from URL
-        # TODO(v0.0.5): Add hash/signature verification
-        #   - Support checksum parameter: import "url" checksum "sha256:abc..."
-        #   - Compute hash of fetched content
-        #   - Compare against expected hash
-        #   - Raise error on mismatch
-        #   See docs/FUTURE-IMPROVEMENTS.md for full design
-        try:
-            print(f"📦 Fetching {url}...")
-            with urllib.request.urlopen(url, timeout=10) as response:
-                content = response.read().decode('utf-8')
-
-            # Cache it
-            with open(cache_file, 'w') as f:
-                f.write(content)
-
-            print(f"✓ Cached to {cache_file}")
-            return str(cache_file)
-
-        except Exception as e:
-            raise RoshRuntimeError(f"Failed to fetch module from {url}: {e}")
-
     def _suggest_fix_with_ai(self, error_msg: str, code_context: str = "") -> Optional[str]:
         """Use AI to suggest fixes for errors (if API key available)"""
         try:
@@ -1486,6 +1435,11 @@ Focus on the specific syntax or concept they need to correct."""
             if value.get("_type") == "object":
                 # Reconstruct RoshObject
                 obj = RoshObject(value["_name"])
+                # Restore UUID and ID if present
+                if "_uuid" in value:
+                    obj.uuid = value["_uuid"]
+                if "_id" in value:
+                    obj.id = value["_id"]
                 for key, val in value.items():
                     if not key.startswith("_"):
                         obj.set(key, self._deserialize_value(val))
@@ -1597,22 +1551,38 @@ Focus on the specific syntax or concept they need to correct."""
 
         if node.is_collection:
             # Collection-based iteration: for item in my_list OR for item in all items
-            # First, try evaluating as expression (could be a list variable)
-            collection = self.eval_expression(node.start)
-
-            # Check if it's a list - direct list iteration
-            if isinstance(collection, list):
-                items = collection
-            # Check if it's object instances (from "all type")
-            elif isinstance(collection, dict):
-                # If it's an object dict, iterate over properties
-                items = list(collection.values())
-            # Check if we have multiple object instances
-            elif hasattr(collection, '__iter__') and not isinstance(collection, str):
-                items = list(collection)
+            # Check if this is "for...in all <type>" - parser consumed "all" but we need to get all instances
+            from .ast_nodes import Identifier
+            if isinstance(node.start, Identifier):
+                # Check if there are instances of this type
+                type_name = node.start.name
+                if type_name in self.instances and len(self.instances[type_name]) > 0:
+                    # Use all instances of this type
+                    items = self.instances[type_name]
+                else:
+                    # Fall back to evaluating as expression
+                    collection = self.eval_expression(node.start)
+                    if isinstance(collection, list):
+                        items = collection
+                    else:
+                        items = [collection]
             else:
-                # Single value - treat as single-item list
-                items = [collection]
+                # Evaluate as expression (could be a list variable)
+                collection = self.eval_expression(node.start)
+
+                # Check if it's a list - direct list iteration
+                if isinstance(collection, list):
+                    items = collection
+                # Check if it's object instances (from "all type")
+                elif isinstance(collection, dict):
+                    # If it's an object dict, iterate over properties
+                    items = list(collection.values())
+                # Check if we have multiple object instances
+                elif hasattr(collection, '__iter__') and not isinstance(collection, str):
+                    items = list(collection)
+                else:
+                    # Single value - treat as single-item list
+                    items = [collection]
 
             # Iterate over each item
             for item in items:

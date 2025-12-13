@@ -155,10 +155,10 @@ class TestManualBasicFeatures:
     def test_manual_lists(self):
         """Test list creation and access"""
         code = """
-        create number nums to [10, 20, 30]
+        set nums to [10, 20, 30]
         print nums
         get nums[0]
-        print
+        print stack
         """
         success, output = run_rosh_code(code)
         assert success
@@ -223,12 +223,12 @@ class TestManualAdvancedFeatures:
         """Test function definition and calls"""
         code = """
         define function double x
-            create number result to x times 2
+            set result to x times 2
             return result
         end
 
         call double 5
-        print
+        print stack
         """
         success, output = run_rosh_code(code)
         assert success

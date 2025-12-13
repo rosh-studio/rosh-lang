@@ -81,18 +81,18 @@ end
         """Test for loop over all instances"""
         code = """
 create object item
-    create string name to "template"
+    set name to "template"
 end
 
-clone item as apple
+clone item to apple
 set apple.name to "Apple"
 
-clone item as banana
+clone item to banana
 set banana.name to "Banana"
 
 for obj in all item then
     get obj.name
-    print
+    print stack
 end
 """
         output = self.run_code(code)

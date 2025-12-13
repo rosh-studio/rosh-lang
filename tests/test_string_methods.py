@@ -203,8 +203,8 @@ class TestCaseConversion:
     def test_case_normalization(self):
         """Use case conversion for normalization"""
         code = """
-        create string input to "GO NORTH"
-        create string normalized to lowercase of input
+        set text to "GO NORTH"
+        set normalized to lowercase of text
         if normalized is equal to "go north" then
             print "matched"
         end
@@ -363,10 +363,10 @@ class TestStringMethodsCombined:
     def test_split_and_lowercase(self):
         """Split then convert to lowercase"""
         code = """
-        create string input to "GO NORTH"
-        create string words to split input by " "
+        set text to "GO NORTH"
+        set words to split text by " "
         for word in words then
-            create string lower to lowercase of word
+            set lower to lowercase of word
             print lower
         end
         """
@@ -376,9 +376,9 @@ class TestStringMethodsCombined:
     def test_trim_and_split(self):
         """Trim then split"""
         code = """
-        create string input to "  a,b,c  "
-        create string trimmed to trim input
-        create string parts to split trimmed by ","
+        set text to "  a,b,c  "
+        set trimmed to trim text
+        set parts to split trimmed by ","
         print parts
         """
         output, _ = run_rosh(code)

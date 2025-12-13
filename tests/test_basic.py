@@ -31,12 +31,12 @@ class TestBasicFeatures(unittest.TestCase):
 
     def test_create_number(self):
         """Test creating a number variable"""
-        self.execute("create number x as 42")
+        self.execute("set x to 42")
         self.assertEqual(self.interp.global_env.get('x'), 42)
 
     def test_create_string(self):
         """Test creating a string variable"""
-        self.execute('create string name as "Hero"')
+        self.execute('set name to "Hero"')
         self.assertEqual(self.interp.global_env.get('name'), "Hero")
 
     def test_create_object(self):
@@ -54,14 +54,14 @@ class TestBasicFeatures(unittest.TestCase):
 
     def test_set_variable(self):
         """Test modifying a variable"""
-        self.execute("create number x as 10")
+        self.execute("set x to 10")
         self.execute("set x to 20")
         self.assertEqual(self.interp.global_env.get('x'), 20)
 
     def test_stack_operations(self):
         """Test basic stack operations"""
-        self.execute("create number a as 5")
-        self.execute("create number b as 3")
+        self.execute("set a to 5")
+        self.execute("set b to 3")
         self.execute("get a")
         self.execute("get b")
         self.execute("add")
@@ -71,8 +71,8 @@ class TestBasicFeatures(unittest.TestCase):
     def test_if_statement(self):
         """Test conditional execution"""
         self.execute("""
-        create number x as 10
-        create number result as 0
+        set x to 10
+        set result to 0
         if x is above 5 then
             set result to 1
         end

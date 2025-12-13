@@ -107,12 +107,12 @@ end
         """Test simple function return"""
         code = """
 define function double x
-    create number result to x times 2
+    set result to x times 2
     return result
 end
 
 call double 5
-print
+print stack
 """
         output = self.run_code(code)
         self.assertIn('10', output)
@@ -125,7 +125,7 @@ define function sum a b
 end
 
 call sum 10 20
-print
+print stack
 """
         output = self.run_code(code)
         self.assertIn('30', output)
@@ -141,7 +141,7 @@ define function check_positive x
 end
 
 call check_positive -5
-print
+print stack
 """
         output = self.run_code(code)
         self.assertIn('false', output)
@@ -172,9 +172,9 @@ print nums
     def test_list_access(self):
         """Test list element access"""
         code = """
-create number nums to [10, 20, 30]
+set nums to [10, 20, 30]
 get nums[1]
-print
+print stack
 """
         output = self.run_code(code)
         self.assertIn('20', output)

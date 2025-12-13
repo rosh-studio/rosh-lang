@@ -164,7 +164,7 @@ This executable tutorial demonstrates **ALL working features** of Rosh with hand
 - ✅ String searching (indexOf, lastIndexOf)
 - ✅ String concatenation, length, contains
 - ✅ List append/remove/contains operations
-- ✅ Documentation reorganization (ROSH-MANUAL.rosh, unified PROJECT-PLAN.md)
+- ✅ Documentation reorganization (ROSH-MANUAL.rosh; project plan moved to `../rosh-corporate/BUSINESS-PLAN.md`)
 
 **Coming in v0.0.7:**
 - [ ] Event system (`when player.health is below 0 then`)
@@ -177,11 +177,12 @@ This executable tutorial demonstrates **ALL working features** of Rosh with hand
 - [ ] Dependency resolution
 - [ ] Package registry
 
-See **[PROJECT-PLAN.md](PROJECT-PLAN.md)** for the complete roadmap, architecture vision, and development plan.
+See **[ROADMAP.md](ROADMAP.md)** for the technical milestones. The full project/business plan now lives at `../rosh-corporate/BUSINESS-PLAN.md` (private).
 
 **Key Documents:**
 - `ROSH-MANUAL.rosh` - THE comprehensive Rosh manual (start here!)
-- `PROJECT-PLAN.md` - Single source of truth for project direction
+- `ROADMAP.md` - Technical milestones and releases
+- `../rosh-corporate/BUSINESS-PLAN.md` - Full project/business plan (private)
 - `docs/POLICIES.md` - Project governance, standards, workflows
 - `docs/CORPORATE-POLICY.md` - Business model, governance, commercial strategy
 - `docs/DEVELOPMENT.md` - Development setup and workflow (uv, testing, CI)
@@ -193,9 +194,9 @@ See **[PROJECT-PLAN.md](PROJECT-PLAN.md)** for the complete roadmap, architectur
 ## Directory Structure
 
 ```
-rosh/
+rosh-lang/
 ├── ROSH-MANUAL.rosh    # ⭐ THE comprehensive Rosh manual (START HERE!)
-├── PROJECT-PLAN.md     # Single source of truth for project
+├── ROADMAP.md          # Technical milestones (public-friendly)
 ├── README.md           # This file (quick start)
 ├── LICENSE             # MIT License
 ├── src/rosh/           # Python interpreter implementation

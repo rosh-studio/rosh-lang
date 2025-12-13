@@ -172,23 +172,6 @@ class TestV004Regressions(unittest.TestCase):
 class TestSecurityImprovements(unittest.TestCase):
     """Tests for security improvements in v0.0.4"""
 
-    def test_remote_import_requires_confirmation(self):
-        """
-        Test that remote imports require user confirmation.
-
-        This is a behavioral test - we verify the code path exists,
-        but can't easily test interactive prompts in unit tests.
-        """
-        interp = Interpreter()
-
-        # Verify the _fetch_url_module method has confirmation logic
-        import inspect
-        source = inspect.getsource(interp._fetch_url_module)
-
-        # Check for security warning and input prompt
-        self.assertIn("SECURITY WARNING", source)
-        self.assertIn("input(", source)
-
     def test_prompt_exec_requires_confirmation(self):
         """
         Test that prompt exec requires user confirmation.
