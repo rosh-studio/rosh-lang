@@ -1,0 +1,419 @@
+#!/usr/bin/env rosh
+# ============================================
+# EVENT SYSTEM DEMO - Interactive MUD
+# ============================================
+# Demonstrates Rosh v0.0.7 EVENT SYSTEM in action!
+#
+# This demo shows how events make games feel alive:
+# - Combat events (attack, damage, death)
+# - Quest events (item collection, completion)
+# - NPC reaction events (dialogue, state changes)
+# - Room ambient events (traps, discoveries)
+#
+# HOW TO TEST:
+# 1. Run: rosh examples/dungeon-events-demo.rosh
+# 2. Watch the automated demo run
+# 3. See events trigger in real-time
+# 4. Check the code to see how events work
+#
+# KEY CONCEPTS DEMONSTRATED:
+# - when/trigger syntax
+# - Events with parameters
+# - Multiple handlers per event
+# - Nested events (events triggering events)
+# - Game state modification via events
+# ============================================
+
+print "============================================"
+print "   EVENT SYSTEM DEMO - Rosh v0.0.7"
+print "   Watch events bring the game to life!"
+print "============================================"
+print ""
+
+# ============================================
+# GAME OBJECTS
+# ============================================
+
+create object player
+    set name to "Hero"
+    set health to 100
+    set max_health to 100
+    set attack_power to 15
+    set gold to 0
+    set level to 1
+    set experience to 0
+    set gems_found to 0
+    set alive to true
+end
+
+create object goblin
+    set name to "Goblin Scout"
+    set health to 30
+    set max_health to 30
+    set attack_power to 8
+    set alive to true
+    set gold_drop to 25
+end
+
+create object dragon
+    set name to "Ancient Dragon"
+    set health to 100
+    set max_health to 100
+    set attack_power to 20
+    set alive to true
+    set gold_drop to 500
+end
+
+# ============================================
+# EVENT HANDLERS - THE MAGIC HAPPENS HERE!
+# ============================================
+
+print "=== REGISTERING EVENT HANDLERS ==="
+print ""
+
+# ────────────────────────────────────────────
+# COMBAT EVENTS
+# ────────────────────────────────────────────
+
+when combat_start attacker defender then
+    print ""
+    print "⚔️  COMBAT BEGINS!"
+    print "   {attacker.name} vs {defender.name}"
+    print "   {attacker.name}: {attacker.health}/{attacker.max_health} HP"
+    print "   {defender.name}: {defender.health}/{defender.max_health} HP"
+    print ""
+end
+
+when attack attacker defender damage then
+    print "   ⚡ {attacker.name} attacks {defender.name} for {damage} damage!"
+    trigger take_damage with defender damage attacker
+end
+
+when take_damage target amount source then
+    set target.health to target.health minus amount
+    print "   💔 {target.name} takes {amount} damage! ({target.health}/{target.max_health} HP)"
+
+    if target.health is below 1 then
+        trigger entity_died with target source
+    end
+end
+
+when entity_died victim killer then
+    set victim.alive to false
+    set victim.health to 0
+    print ""
+    print "   💀 {victim.name} has been defeated!"
+
+    # Different death handling for player vs enemies
+    if victim is equal to player then
+        trigger player_died
+    else
+        trigger enemy_died with victim killer
+    end
+end
+
+when enemy_died enemy victor then
+    print "   🎉 Victory!"
+
+    # Award gold
+    set player.gold to player.gold plus enemy.gold_drop
+    print "   💰 Found {enemy.gold_drop} gold! (Total: {player.gold})"
+
+    # Award experience
+    set xp_gain to 50
+    trigger gain_experience with xp_gain
+end
+
+when player_died then
+    print ""
+    print "╔════════════════════════════════════════╗"
+    print "║           GAME OVER                    ║"
+    print "║  You have fallen in battle...          ║"
+    print "╚════════════════════════════════════════╝"
+    print ""
+    print "Final Stats:"
+    print "  Level: {player.level}"
+    print "  Gold: {player.gold}"
+    print "  Gems: {player.gems_found}"
+end
+
+# ────────────────────────────────────────────
+# PROGRESSION EVENTS
+# ────────────────────────────────────────────
+
+when gain_experience amount then
+    set player.experience to player.experience plus amount
+    print "   ✨ Gained {amount} experience! ({player.experience} total)"
+
+    # Check for level up (every 100 XP)
+    if player.experience is above 99 then
+        if player.level is equal to 1 then
+            trigger level_up
+        end
+    end
+end
+
+when level_up then
+    set player.level to player.level plus 1
+    print ""
+    print "   🎊 ═══ LEVEL UP! ═══"
+    print "   📈 Now level {player.level}!"
+
+    # Increase stats
+    set health_boost to 20
+    set attack_boost to 5
+
+    set player.max_health to player.max_health plus health_boost
+    set player.health to player.max_health
+    set player.attack_power to player.attack_power plus attack_boost
+
+    print "   ❤️  Max Health +{health_boost} → {player.max_health}"
+    print "   ⚔️  Attack +{attack_boost} → {player.attack_power}"
+    trigger heal_full with player
+    print ""
+end
+
+when heal_full target then
+    set target.health to target.max_health
+    print "   ✨ {target.name} fully healed!"
+end
+
+# ────────────────────────────────────────────
+# QUEST EVENTS
+# ────────────────────────────────────────────
+
+when gem_found gem_color then
+    set player.gems_found to player.gems_found plus 1
+    print ""
+    print "   💎 Found a {gem_color} gem! ({player.gems_found}/3)"
+
+    if player.gems_found is equal to 3 then
+        trigger quest_complete with "Collect 3 Gems"
+    end
+end
+
+when quest_complete quest_name then
+    print ""
+    print "╔════════════════════════════════════════╗"
+    print "║      ✓ QUEST COMPLETE!                 ║"
+    print "║      {quest_name}                     ║"
+    print "╚════════════════════════════════════════╝"
+    print ""
+    set reward_gold to 100
+    set player.gold to player.gold plus reward_gold
+    print "   Reward: {reward_gold} gold!"
+    print ""
+end
+
+# ────────────────────────────────────────────
+# ROOM/AMBIENT EVENTS
+# ────────────────────────────────────────────
+
+when room_enter room_name then
+    print ""
+    print "📍 Entering: {room_name}"
+
+    # Room-specific triggers
+    if room_name is equal to "Trapped Corridor" then
+        trigger trap_triggered with "poison dart" 10
+    end
+end
+
+when trap_triggered trap_type damage then
+    print "   ⚠️  TRAP! A {trap_type} trap is triggered!"
+    trigger take_damage with player damage "trap"
+end
+
+when treasure_found treasure_type value then
+    print "   ✨ Found treasure: {treasure_type}!"
+    set player.gold to player.gold plus value
+    print "   💰 +{value} gold! (Total: {player.gold})"
+end
+
+# ────────────────────────────────────────────
+# MULTIPLE HANDLERS - Same event, multiple responses!
+# ────────────────────────────────────────────
+
+when level_up then
+    print "   🎺 Fanfare plays!"
+end
+
+when level_up then
+    print "   📢 The gods smile upon you!"
+end
+
+when combat_start attacker defender then
+    print "   🎵 Battle music begins..."
+end
+
+print "✓ All event handlers registered!"
+print ""
+print "============================================"
+print "         AUTOMATED DEMO BEGINS"
+print "============================================"
+
+# ============================================
+# DEMO SCENARIO 1: Simple Combat
+# ============================================
+
+print ""
+print "╔════════════════════════════════════════╗"
+print "║  SCENARIO 1: Goblin Encounter          ║"
+print "╚════════════════════════════════════════╝"
+
+trigger room_enter with "Dark Forest"
+
+print ""
+print "You encounter a {goblin.name}!"
+
+trigger combat_start with player goblin
+
+# Round 1
+trigger attack with player goblin player.attack_power
+
+# Goblin attacks back (if alive)
+if goblin.alive is equal to true then
+    trigger attack with goblin player goblin.attack_power
+end
+
+# Round 2
+if goblin.alive is equal to true then
+    trigger attack with player goblin player.attack_power
+end
+
+if goblin.alive is equal to true then
+    trigger attack with goblin player goblin.attack_power
+end
+
+# Round 3 - goblin should die this round
+if goblin.alive is equal to true then
+    trigger attack with player goblin player.attack_power
+end
+
+# ============================================
+# DEMO SCENARIO 2: Quest System
+# ============================================
+
+print ""
+print "╔════════════════════════════════════════╗"
+print "║  SCENARIO 2: The Gem Quest             ║"
+print "╚════════════════════════════════════════╝"
+
+trigger room_enter with "Crystal Cave"
+trigger gem_found with "Ruby"
+
+trigger room_enter with "Underwater Grotto"
+trigger gem_found with "Sapphire"
+
+trigger room_enter with "Mountain Peak"
+trigger gem_found with "Emerald"
+
+# ============================================
+# DEMO SCENARIO 3: Traps and Treasure
+# ============================================
+
+print ""
+print "╔════════════════════════════════════════╗"
+print "║  SCENARIO 3: Dangers & Rewards         ║"
+print "╚════════════════════════════════════════╝"
+
+trigger room_enter with "Trapped Corridor"
+trigger treasure_found with "Ancient Amulet" 75
+
+# ============================================
+# DEMO SCENARIO 4: Boss Fight
+# ============================================
+
+print ""
+print "╔════════════════════════════════════════╗"
+print "║  SCENARIO 4: Dragon Boss Battle        ║"
+print "╚════════════════════════════════════════╝"
+
+trigger room_enter with "Dragon's Lair"
+
+print ""
+print "A massive {dragon.name} blocks your path!"
+print "This will be a tough fight..."
+
+trigger combat_start with player dragon
+
+# Epic battle simulation
+set rounds to 0
+while dragon.alive is equal to true and player.alive is equal to true then
+    set rounds to rounds plus 1
+
+    # Player attacks
+    trigger attack with player dragon player.attack_power
+
+    # Dragon counter-attacks (if alive)
+    if dragon.alive is equal to true then
+        trigger attack with dragon player dragon.attack_power
+    end
+
+    # Safety limit (max 10 rounds)
+    if rounds is equal to 10 then
+        print "   ⚡ Final blow incoming!"
+        trigger take_damage with dragon 999 player
+    end
+end
+
+# ============================================
+# FINAL SUMMARY
+# ============================================
+
+print ""
+print "╔════════════════════════════════════════╗"
+print "║         DEMO COMPLETE!                  ║"
+print "╚════════════════════════════════════════╝"
+print ""
+print "=== FINAL STATS ==="
+print "Player: {player.name}"
+print "  Health: {player.health}/{player.max_health}"
+print "  Level: {player.level}"
+print "  Experience: {player.experience}"
+print "  Gold: {player.gold}"
+print "  Gems: {player.gems_found}/3"
+print "  Status: {player.alive}"
+print ""
+
+print "=== WHAT YOU JUST SAW ==="
+print "✓ Combat events (attack, damage, death)"
+print "✓ Quest events (gem collection, completion)"
+print "✓ Progression events (XP, level up, stat boosts)"
+print "✓ Room events (enter, traps)"
+print "✓ Treasure events (discovery, gold)"
+print "✓ Nested events (death → victory → XP → level up)"
+print "✓ Multiple handlers (level up triggered 3 different messages)"
+print ""
+
+print "=== HOW TO USE EVENTS IN YOUR GAME ==="
+print ""
+print "1. REGISTER HANDLERS:"
+print "   when event_name param1 param2 then"
+print "     ... your code ..."
+print "   end"
+print ""
+print "2. TRIGGER EVENTS:"
+print "   trigger event_name with arg1 arg2"
+print ""
+print "3. BENEFITS:"
+print "   • Decoupled code (handlers separate from triggers)"
+print "   • Multiple reactions to one event"
+print "   • Easy to add new behaviors"
+print "   • Events can trigger other events"
+print "   • Perfect for: combat, quests, NPCs, rooms"
+print ""
+
+print "=== TRY IT YOURSELF ==="
+print ""
+print "Add your own event handlers to this file:"
+print "  - when player_healed amount"
+print "  - when critical_hit attacker damage"
+print "  - when poison_applied target duration"
+print "  - when merchant_talk npc_name"
+print "  - when door_unlocked door_name"
+print ""
+print "Then trigger them in your game logic!"
+print ""
+print "Events make games feel ALIVE! 🎮✨"
+print ""

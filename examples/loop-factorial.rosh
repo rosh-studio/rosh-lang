@@ -1,9 +1,9 @@
 # Factorial Calculator using While Loop
 # Calculates n! = n × (n-1) × (n-2) × ... × 1
 
-create number n as 5
-create number result as 1
-create number i as 1
+create n to 5
+create result to 1
+create i to 1
 
 print "Calculating factorial of"
 print n

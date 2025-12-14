@@ -1,7 +1,7 @@
 # Stack manipulation commands
 
-create number x as 5
-create number y as 3
+create x to 5
+create y to 3
 
 # Dup: duplicate top of stack
 # Useful for reusing a value

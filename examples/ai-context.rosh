@@ -8,7 +8,7 @@ create object player
   set gold to 150
 end
 
-create string quest_status as "searching for ancient artifact"
+create quest_status to "searching for ancient artifact"
 
 print "Player stats created. Asking AI for advice..."
 

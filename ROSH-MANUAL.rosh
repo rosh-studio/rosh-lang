@@ -1261,6 +1261,103 @@ print stack
 print "Metadata is now part of your program!"
 print
 
+"""
+TOON FORMAT SUPPORT (v0.0.9+)
+
+TOON (Token-Oriented Object Notation) is a compact, LLM-optimized format
+designed to reduce token usage and improve AI parsing accuracy.
+
+WHY TOON?
+    - 40% fewer tokens than JSON
+    - 73.9% LLM parsing accuracy (vs 69.7% for JSON)
+    - Human-readable YAML-style syntax
+    - Compact for VR/AR memory constraints
+    - AI-first design philosophy
+
+TOON OUTPUT (--toon flag):
+    Output final stack value as TOON instead of printing.
+
+    Examples:
+        rosh script.rosh --toon
+        rosh -c "create object game; set score to 100; end; get game" --toon
+
+SAVING AS TOON:
+    Save program state as .toon file.
+
+    Example:
+        create object player
+            set name to "Alice"
+            set health to 100
+        end
+
+        save "state.toon"
+        # Saves in TOON format (40% smaller than JSON!)
+
+TOON FORMAT EXAMPLES:
+    Simple object:
+        name: Alice
+        health: 100
+        level: 5
+
+    Array (CSV-style):
+        colors[3]: red,green,blue
+
+    Nested object (YAML-style indentation):
+        player:
+          name: Alice
+          health: 100
+        location:
+          x: 10
+          y: 20
+
+LOADING TOON FILES:
+    Full round-trip support! Save and load .toon files seamlessly.
+
+    Examples:
+        save "state.toon"   # Save as TOON
+        load "state.toon"   # Load from TOON
+
+    # Complete round-trip example
+    create object game
+        set score to 1000
+        set level to 5
+    end
+    save "mygame.toon"
+    # ... later ...
+    load "mygame.toon"
+    get game
+    print stack  # Your game state is restored!
+
+USE CASES:
+    - AI-assisted game development (reduce LLM costs)
+    - Sending game state to AI for analysis
+    - Logging for AI processing
+    - VR/AR world state (compact serialization)
+
+WHEN TO USE TOON VS JSON:
+    Use TOON when:
+        - Working with AI/LLMs (save tokens!)
+        - Building AI-powered games
+        - Optimizing memory usage
+        - Preparing for rosh.cloud deployment
+
+    Use JSON when:
+        - Interfacing with external tools
+        - Debugging (more familiar syntax)
+        - Maximum compatibility needed
+"""
+
+print "TOON format example:"
+create object demo
+    set name to "TOON-demo"
+    set score to 999
+end
+
+# Note: In real usage, you'd use --toon flag or save "file.toon"
+# For demonstration in ROSH-MANUAL, we'll just show it's available
+print "Use --toon flag or 'save \"file.toon\"' to see TOON output!"
+print
+
 print "=== ROSH FEATURE SUMMARY ==="
 print "✓ Variables and basic types"
 print "✓ Type inference (automatic)"
@@ -1295,6 +1392,7 @@ print "✓ Event system (when/trigger for reactive game logic)"
 print "✓ TOML support (import .toml files, --toml output)"
 print "✓ Test mode (--test and --test-input for CI/CD)"
 print "✓ Program metadata (meta keyword with uuid/checksum generation)"
+print "✓ TOON format (--toon flag, save .toon files, LLM-optimized)"
 print "✓ REPL variable evaluation (type variable name to see its value)"
 print
 print "Thanks for exploring Rosh!"

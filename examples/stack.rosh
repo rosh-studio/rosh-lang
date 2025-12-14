@@ -1,12 +1,12 @@
 # Stack-based operations example
 
-create number x as 42
-create number y as 10
+create x to 42
+create y to 10
 
 # Push values onto stack
 get x
 get y
 
-# Pop and print (LIFO - Last In First Out)
-print
-print
+# Print stack values (LIFO - Last In First Out)
+print stack
+print stack

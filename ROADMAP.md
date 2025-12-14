@@ -92,7 +92,7 @@ trigger player_damaged with 15
 
 ---
 
-### v0.0.8 - Infrastructure & Format Support (Q1 2026) 🔄 IN PROGRESS
+### v0.0.8 - Infrastructure & Format Support (Q1 2026) ✅ COMPLETE
 **Priority: CRITICAL - Foundation for AI-assisted development**
 
 **Goal:** Systematic documentation, quality-of-life improvements, and modern format support
@@ -119,37 +119,45 @@ trigger player_damaged with 15
   - Runtime access via `get meta.version`
   - Three scopes: core (version/author/license), generated (uuid/checksum), game (type/engine)
   - Implemented 2025-12-14 (same day as planned!)
-- [ ] Security model decision
-  - Hybrid context-aware approach
-  - Checksum + UUID verification
-  - Warning behavior clarified
-  - dev/local/package/production modes
-- [ ] dump command
-  - Save game state + code together
-  - Serialization improvements
-  - Easy save/load for games
+- ✅ BACKLOG.md created for deferred features
+- 🔄 Security model decision → DEFERRED TO BACKLOG
+  - Not critical for single-user MVP
+  - Revisit with v0.3.0 package system
+- 🔄 Enhanced dump command → DEFERRED TO BACKLOG
+  - Current dump works fine for now
+  - Enhancements can wait for user feedback
 
 **Why now:** These improvements enable scalable AI-assisted development and make Rosh more practical for real projects.
 
-**Status:** TOML and Test Mode implemented 2025-12-14
+**Status:** Core infrastructure complete (2025-12-14). Security model and dump enhancements deferred to backlog.
 
 ---
 
-### v0.0.9 - TOON Format Support (Q1 2026)
+### v0.0.9 - TOON Format Support (Q1 2026) ✅ COMPLETE
 **Priority: HIGH - AI-first format optimization**
 
 **Goal:** Add TOON (Token-Oriented Object Notation) support for AI-optimized state serialization
 
 **Features:**
-- [ ] TOON encoder implementation
+- ✅ TOON encoder implementation (Implemented 2025-12-14)
   - 40% fewer tokens than JSON
   - YAML-style indentation + CSV tables
   - `--toon` output flag
   - `save "file.toon"` support
-- [ ] TOON as opt-in format
-  - Explicit: `save "state.toon"`
-  - JSON remains default in v0.0.9
+- ✅ TOON decoder implementation (Implemented 2025-12-14)
+  - Full round-trip support (save and load .toon files)
+  - `load "file.toon"` support
+  - Parses all TOON formats (primitives, arrays, objects, RoshObjects)
+- ✅ TOON as opt-in format (Implemented 2025-12-14)
+  - Explicit: `save "state.toon"` / `load "state.toon"`
+  - JSON remains default for extensionless saves
   - User testing and feedback collection
+- ✅ Comprehensive test suite (37 unit tests passing)
+  - Encoder tests (16 tests)
+  - Decoder tests (12 tests)
+  - Round-trip tests (6 tests)
+  - File operations tests (3 tests)
+- ✅ Complete documentation in ROSH-MANUAL
 
 **Why TOON:**
 - 40% token reduction for AI/LLM workflows
@@ -157,47 +165,35 @@ trigger player_damaged with 15
 - Human-readable, VR/AR memory efficient
 - Aligns with AI-first language vision
 
-**Timeline:** v0.0.9 encoder only (opt-in usage)
+**Timeline:** v0.0.9 full implementation (encoder + decoder)
 
-**Migration Path:**
-- v0.0.9: TOON encoder, explicit opt-in
-- v0.1.0: TOON decoder + becomes default for extensionless save
-- All versions: JSON always available
+**BDFL Decision (2025-12-14):**
+- Full TOON support implemented (encoder + decoder)
+- JSON remains default for extensionless saves
+- TOON used explicitly via .toon extension
+- Making TOON default for extensionless saves → Unassigned future decision
 
-**BDFL Decision (2025-12-14):** Approved "TOON first" policy for v0.1.0
+**Status:** ✅ COMPLETE (2025-12-14) - Full encoder and decoder support
 
 ---
 
-### v0.1.0 - TOON Default + Transpiler Foundation (Q2-Q3 2026)
-**Priority: CRITICAL - AI-first serialization + cross-platform foundation**
+### v0.1.0 - Transpiler Foundation (Q2-Q3 2026)
+**Priority: HIGH - Cross-platform deployment**
 
-**Goal:** Make TOON the default format and begin cross-platform transpilation
+**Goal:** Begin cross-platform transpilation to prove language portability
 
 **Features:**
-- [ ] TOON decoder implementation
-  - Full read/write support for `.toon` files
-  - `load "state.toon"` support
-  - Round-trip TOON serialization
-- [ ] TOON becomes default
-  - `save "file"` (no extension) → creates `.toon`
-  - JSON available via `save "file.json"`
-  - Migration guide for existing projects
 - [ ] Transpiler foundation (JavaScript/Phaser)
   - AST → JavaScript code generation
   - Phaser.js runtime bindings
   - Initial 2D game support
+  - Same Rosh code runs in terminal (ASCII) and browser (graphics)
 
-**TOON Migration Timeline:**
-- v0.0.9: TOON encoder (opt-in testing)
-- v0.1.0: TOON decoder + default format
-- All versions: JSON always available
-
-**Why now:**
-- One version of TOON testing before making default
-- AI workflows benefit from token reduction immediately
-- Foundation for multi-platform deployment
-
-**BDFL Decision (2025-12-14):** Approved v0.1.0 timeline for TOON default
+**Why this milestone:**
+- Proves Rosh can target multiple platforms
+- Enables browser deployment (zero install barrier)
+- Foundation for future Unity/VR transpilation
+- Browser games demonstrate AI-assisted creation potential
 
 ---
 
@@ -328,9 +324,9 @@ Browser: [Same game with graphics via Phaser]
 |---------|---------|--------|--------|----------|
 | v0.0.6 | Quality of Life | ✅ Complete | 2025-12-13 | - |
 | v0.0.7 | Event System | ✅ Complete | 2025-12-14 | - |
-| v0.0.8 | Infrastructure & Format Support | 🔄 In Progress | Q1 2026 | TOML/Test Mode done |
-| v0.0.9 | TOON Format (Encoder) | 📋 Planned | Q1 2026 | Opt-in usage |
-| v0.1.0 | TOON Default + Transpiler | 📋 Planned | Q2-Q3 2026 | TOON becomes default |
+| v0.0.8 | Infrastructure & Format Support | ✅ Complete | 2025-12-14 | Security/dump→backlog |
+| v0.0.9 | TOON Format (Encoder) | ✅ Complete | 2025-12-14 | Encoder complete (decoder→backlog) |
+| v0.1.0 | Transpiler Foundation | 📋 Planned | Q2-Q3 2026 | JavaScript/Phaser transpiler |
 | v0.2.0 | Voice Demo + Phaser | 📋 Planned | Q3 2026 | 4-6 weeks |
 | v0.3.0 | Package System | 📋 Planned | Q4 2026 | - |
 | v0.4.0 | Unity Transpiler | 📋 Planned | 2027 | 6-8 weeks |

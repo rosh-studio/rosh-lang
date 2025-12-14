@@ -1,10 +1,10 @@
 # Stack-based math operations
 
-create number a as 10
-create number b as 20
+create a to 10
+create b to 20
 
 # Traditional approach with expressions
-create number sum as a plus b
+create sum to a plus b
 print sum
 
 # Stack-based approach with operators
@@ -24,7 +24,7 @@ print
 get a
 get b
 add
-create number two as 2
+create two to 2
 get two
 multiply
 print

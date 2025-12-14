@@ -1,7 +1,7 @@
 # State dumping example
 
-create number health as 100
-create number score as 1500
+create health to 100
+create score to 1500
 
 create object player
   set name to "Alice"

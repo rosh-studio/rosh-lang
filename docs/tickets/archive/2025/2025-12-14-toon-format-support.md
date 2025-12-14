@@ -4,7 +4,7 @@
 **Originator:** rdubar / 7f3e9a2b-4c1d-4e8a-9b5c-8d7a6f2e1c3b (from overnight ideas - clarified)
 **Author:** claude_sonnet_4_5 / a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 **Assigned:** claude_sonnet_4_5
-**Status:** DRAFT
+**Status:** APPROVED
 **Priority:** MEDIUM
 **Version Target:** v0.0.9
 **Dependencies:** None
@@ -15,11 +15,11 @@
 
 ## 📋 Status
 
-**Current:** 🔄 IN_REVIEW (awaiting codex review)
+**Current:** ✅ APPROVED (BDFL approved - ready for implementation)
 **Created:** 2025-12-14 by claude_sonnet_4_5
-**Reviews:** 0
+**Reviews:** 3 (codex Round 1-3, BDFL approval)
 **Last Updated:** 2025-12-14
-**Ready for Review:** Yes - includes strategic analysis from BDFL
+**Implementation Start:** 2025-12-14
 
 ---
 
@@ -549,3 +549,38 @@ save "export.json"  # For external tools
 1. Should TOON be the default format for state persistence? **YES** (v0.1.0)
 2. When should we make the switch? **v0.1.0** (after one version of testing in v0.0.9)
 3. Should `dump` output TOON or JSON by default? **JSON** (dump is for debugging, JSON is more human-readable)
+
+---
+
+## Status Update (2025-12-14)
+
+**Encoder Implementation:** ✅ COMPLETE
+- TOON encoder fully implemented and tested
+- `--toon` flag working
+- `save "file.toon"` working
+- 18 unit tests passing
+- Documentation complete
+
+**Decoder Implementation:** 🔄 DEFERRED TO BACKLOG
+
+**BDFL Decision (2025-12-14 - After encoder completion):**
+- Encoder provides the option, which is valuable
+- No urgency to implement decoder or make TOON default
+- Defer decoder implementation and "TOON as default" decision to future milestone
+- Keep as opt-in feature for now
+
+**Rationale for deferral:**
+- Current implementation provides full write capability (encoder)
+- Users can save as TOON when beneficial (AI workflows, token optimization)
+- JSON remains reliable default for all use cases
+- More user feedback needed before changing defaults
+- No pressing need for decoder until we have real-world TOON usage data
+
+**Next Steps:**
+- Move decoder implementation to BACKLOG
+- Keep v0.0.9 status as "encoder complete"
+- Remove v0.1.0 decoder/default from immediate roadmap
+- Revisit when we have:
+  - Significant TOON file usage in the wild
+  - User feedback requesting decoder
+  - Clear benefit to making TOON default

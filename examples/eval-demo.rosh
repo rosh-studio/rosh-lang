@@ -7,7 +7,7 @@ print ""
 
 # Example 1: Simple eval
 print "Example 1: Execute code from string"
-create string code as "create number x as 42"
+create code to "create x to 42"
 eval code
 print "x ="
 print x
@@ -15,7 +15,7 @@ print ""
 
 # Example 2: Multi-line code
 print "Example 2: Multi-line code"
-create string player_code as "create object player
+create player_code to "create object player
   set name to 'Hero'
   set health to 100
 end"
@@ -26,10 +26,10 @@ print ""
 
 # Example 3: Dynamic code generation
 print "Example 3: Build code dynamically"
-create string var_name as "score"
-create number value as 1500
+create var_name to "score"
+create value to 1500
 # Note: In real use, you'd concatenate strings
 # For now, we'll just eval a simple case
-eval "create number score as 1500"
+eval "create score to 1500"
 print "Score:"
 print score

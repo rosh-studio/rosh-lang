@@ -13,6 +13,23 @@
 
 ---
 
+## 📋 Ticket History
+
+| Date | Event | Actor | Status After |
+|------|-------|-------|--------------|
+| 2025-12-14 09:30 | Created | claude_sonnet_4_5 | DRAFT |
+| 2025-12-14 09:45 | Review Round 1 | codex_gpt_4 | DRAFT |
+| 2025-12-14 09:50 | User feedback | rdubar | DRAFT |
+| 2025-12-14 10:00 | Updates (format v2) | claude_sonnet_4_5 | IN_REVIEW |
+| 2025-12-14 10:05 | Review Round 2 | codex_gpt_4 | IN_REVIEW |
+| 2025-12-14 10:10 | Final updates (format v3) | claude_sonnet_4_5 | IN_REVIEW |
+| 2025-12-14 10:20 | **APPROVED** | rdubar | **APPROVED** |
+| 2025-12-14 10:25 | Format updated to v4 | claude_sonnet_4_5 | APPROVED |
+
+**Current Status:** ✅ APPROVED by BDFL - Archived and serving as reference implementation
+
+---
+
 ## Problem Statement
 
 As the Rosh project grows with AI-assisted development, we need a systematic way to:
@@ -72,7 +89,7 @@ docs/tickets/
       2025-12-15-toml-support.md
 ```
 
-### Ticket Format (v3)
+### Ticket Format (v4)
 
 Every ticket uses this structured format:
 
@@ -89,6 +106,19 @@ Every ticket uses this structured format:
 **Dependencies:** [Ticket references, if any]
 **Security Verification:** [UNVERIFIED | PENDING | VERIFIED]
 **Rosh.cloud Status:** [OFFLINE | rosh.cloud/{uuid}]
+
+---
+
+## 📋 Ticket History
+
+| Date | Event | Actor | Status After |
+|------|-------|-------|--------------|
+| YYYY-MM-DD | Created | author_name | DRAFT |
+| YYYY-MM-DD | Review Round N | reviewer_name | DRAFT/IN_REVIEW |
+| YYYY-MM-DD | Updates | author_name | IN_REVIEW |
+| YYYY-MM-DD | **APPROVED** | bdfl_name | **APPROVED** |
+
+**Current Status:** [Status icon + description]
 
 ---
 
@@ -612,6 +642,9 @@ cat .rosh/tickets/2025-12-14-ai-ticket-review-system.md
 **Comments:**
 Ticket workflow system approved. Proceed with implementation and create next priority tickets.
 
+### User Comment (2025-12-14, rdubar / 7f3e9a2b-4c1d-4e8a-9b5c-8d7a6f2e1c3b)
+- From a human perspective, how do we tell at a glance which tickets are complete and where to find them? Is there a single central record/summary beyond each ticket file (e.g., a status dashboard or consolidated index)?
+
 ---
 
 ## Summary
@@ -650,3 +683,5 @@ This ticket demonstrates the complete ticket workflow:
 **Status:** All blocking issues resolved. Ticket ready for BDFL approval.
 
 **Codex approval:** Confirmed OK to approve from AI review perspective.
+
+Approved rdubar 2025-12-14 at 10:20 GMT

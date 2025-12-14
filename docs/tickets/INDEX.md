@@ -8,19 +8,8 @@
 
 ## Active Tickets (In .rosh/tickets/)
 
-**CRITICAL Priority:**
-- `2025-12-14-toml-support.md` - TOML support (--toml flag, rosh.toml manifests) (✅ APPROVED → IMPLEMENTED)
-
-**HIGH Priority:**
-- `2025-12-14-test-mode.md` - Test mode for CI/CD (mock input/stop) (✅ APPROVED → IMPLEMENTED)
-- `2025-12-14-program-metadata.md` - Program metadata system (meta keyword) (✅ APPROVED → IMPLEMENTED)
-
 **MEDIUM Priority:**
-- `2025-12-14-toon-format-support.md` - TOON format support (--toon flag, .toon state files) (🔄 IN_REVIEW)
-- `2025-12-14-security-model.md` - Security model decision (dev/local/package/production) (✅ APPROVED)
-
-**LOW Priority:**
-- `2025-12-14-ticket-history-section.md` - Ticket status visibility (✅ APPROVED → IMPLEMENTED)
+- `2025-12-14-security-model.md` - Security model decision (dev/local/package/production) (✅ APPROVED, deferred to backlog)
 
 ---
 
@@ -29,16 +18,19 @@
 ### 2025 (In docs/tickets/archive/2025/)
 
 - `2025-12-14-ai-ticket-review-system.md` - ✅ Ticket workflow infrastructure (IMPLEMENTED 2025-12-14)
+- `2025-12-14-toml-support.md` - ✅ TOML support (IMPLEMENTED 2025-12-14)
+- `2025-12-14-test-mode.md` - ✅ Test mode for CI/CD (IMPLEMENTED 2025-12-14)
+- `2025-12-14-program-metadata.md` - ✅ Program metadata system (IMPLEMENTED 2025-12-14)
+- `2025-12-14-toon-format-support.md` - ✅ TOON encoder (IMPLEMENTED 2025-12-14, decoder deferred)
+- `2025-12-14-ticket-history-section.md` - ✅ Ticket status visibility (IMPLEMENTED 2025-12-14)
 
 ---
 
 ## Ticket Statistics
 
-- **Total Active:** 6
-- **Total Archived:** 1
-- **In Review:** 1
-- **Approved:** 1
-- **Approved → Implemented:** 4
+- **Total Active:** 1 (security model - deferred to backlog)
+- **Total Archived:** 6
+- **Implemented 2025-12-14:** 6
 
 ---
 

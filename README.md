@@ -1,6 +1,6 @@
 # 🤖 Rosh Programming Language
 
-**v0.0.6** - A spoken-language-first, stack-based, AI-native programming language for interactive storytelling and MUDs.
+**v0.0.8** - A spoken-language-first, stack-based, AI-native programming language for interactive storytelling and MUDs.
 
 > 🤖 **Rosh** - Programming that sounds like talking to a person!
 
@@ -12,8 +12,9 @@
 Rosh is designed to be:
 - **Spoken-friendly**: Optimized for dictation with minimal punctuation
 - **Stack-based**: Powerful compositional semantics
-- **JSON-native**: All state represented as JSON-compatible values
+- **Format-flexible**: JSON, TOML, and TOON support for state serialization
 - **AI-native**: First-class `prompt` primitive for AI integration
+- **Event-driven**: Reactive programming with `when/trigger` for game logic
 - **MUD-focused**: Built-in primitives for interactive worlds & storytelling
 
 ## Installation
@@ -55,7 +56,7 @@ rosh examples/hello.rosh
 rosh -c "print 'Hello, World!'"
 
 # Multi-line inline code
-rosh -c "create number x as 42
+rosh -c "create x to 42
 get x
 dup
 multiply
@@ -145,51 +146,64 @@ This executable tutorial demonstrates **ALL working features** of Rosh with hand
 
 ## Project Status & Roadmap
 
-**Current Version:** v0.0.6 (Complete)
+**Current Version:** v0.0.8 (In Progress)
+**Latest Complete:** v0.0.9 TOON encoder (2025-12-14)
 
-**What's New in v0.0.6:**
+### Recent Releases
+
+**v0.0.9 - TOON Format Support** ✅ (2025-12-14)
+- ✅ Full TOON encoder and decoder implementation
+- ✅ Save and load `.toon` files (40% fewer tokens than JSON!)
+- ✅ Round-trip support for all Rosh types
+- ✅ 37 comprehensive unit tests (encoder, decoder, round-trip, file ops)
+- JSON remains default - TOON is opt-in via explicit `.toon` extension
+
+**v0.0.8 - Infrastructure & Tooling** 🔄 (In Progress)
+- ✅ TOML support (`--toml` flag, import `.toml` files)
+- ✅ Test mode for CI/CD (`--test`, `--test-input` flags)
+- ✅ Program metadata system (`meta` keyword with UUID/checksum generation)
+- ✅ AI ticket/review/documentation system
+- ✅ BACKLOG.md for deferred features
+
+**v0.0.7 - Event System** ✅ (2025-12-14)
+- ✅ Event-driven programming (`when <event> then ... end`)
+- ✅ Trigger events with parameters (`trigger player_damaged with 15`)
+- ✅ Lexical scoping for event handlers
+- ✅ Event loop stdlib helpers (`every()`, `stop_loop()`)
+- ✅ 21 comprehensive event tests
+
+**v0.0.6 - Quality of Life** ✅ (2025-12-13)
 - ✅ String interpolation (`"Hello {name}, you have {score} points!"`)
 - ✅ User input command (`input username prompt "Enter name:"`)
-- ✅ else if conditionals (`if ... else if ... else`)
-- ✅ NOT in compound expressions (`if x and not y then`)
-- ✅ Multiline comments (triple quote `"""` or triple hash `###`)
-- ✅ Type checking functions (`is_number`, `is_string`, `is_list`, `is_object`, `is_null`, `is_boolean`)
-- ✅ List slicing (`my_list[1:3]`, `my_list[:5]`, `my_list[2:]`)
-- ✅ Interactive mode (`-i` flag - run script then REPL with state preserved)
-- ✅ Complete quality-of-life improvements for interactive development
+- ✅ else if conditionals
+- ✅ NOT in compound expressions
+- ✅ Multiline comments (`"""` or `###`)
+- ✅ Type checking functions
+- ✅ List slicing
+- ✅ Interactive mode (`-i` flag)
 
-**What's New in v0.0.5:**
-- ✅ For loop list iteration (`for item in my_list then`)
-- ✅ String methods (split, substring, uppercase, lowercase, trim)
-- ✅ String searching (indexOf, lastIndexOf)
-- ✅ String concatenation, length, contains
-- ✅ List append/remove/contains operations
-- ✅ Documentation reorganization (ROSH-MANUAL.rosh; project plan moved to `../rosh-corporate/BUSINESS-PLAN.md`)
+### What's Next
 
-**Coming in v0.0.7:**
-- [ ] Event system (`when player.health is below 0 then`)
-- [ ] Modulo operator
+**v0.1.0 - Transpiler Foundation** (Planned Q2-Q3 2026)
+- JavaScript/Phaser transpiler
+- Browser deployment (zero install)
+- Same code: terminal ASCII + browser graphics
 
-**Preview: v0.0.8 Package System** 📦
-- ✅ Package manifest specification complete ([docs/proposals/PACKAGE-MANIFEST.md](docs/proposals/PACKAGE-MANIFEST.md))
-- ✅ Example manifests in `examples/` directory
-- [ ] Package manager commands (install, verify, publish)
-- [ ] Dependency resolution
-- [ ] Package registry
+**v0.2.0 - Voice Demo** (Planned Q3 2026)
+- Voice input → AI → playable game
+- Phaser transpiler MVP
+- Demo video
 
-See **[ROADMAP.md](ROADMAP.md)** for the technical milestones. The full project/business plan now lives at `../rosh-corporate/BUSINESS-PLAN.md` (private).
+See **[ROADMAP.md](ROADMAP.md)** for detailed technical milestones and **[BACKLOG.md](BACKLOG.md)** for deferred features.
 
 **Key Documents:**
 - `ROSH-MANUAL.rosh` - THE comprehensive Rosh manual (start here!)
 - `ROADMAP.md` - Technical milestones and releases
-- `../rosh-corporate/BUSINESS-PLAN.md` - Full project/business plan (private)
+- `BACKLOG.md` - Deferred features and future work
 - `docs/POLICIES.md` - Project governance, standards, workflows
-- `docs/CORPORATE-POLICY.md` - Business model, governance, commercial strategy
-- `docs/DEVELOPMENT.md` - Development setup and workflow (uv, testing, CI)
-- `spec/rosh_full_spec_v0_1.md` - Full language specification
+- `docs/DEVELOPMENT.md` - Development setup and workflow
 - `docs/AI_SETUP.md` - AI integration guide
 - `docs/EVAL-SAFETY.md` - Understanding eval in single-user vs multi-user
-- `docs/proposals/PACKAGE-MANIFEST.md` - Package system specification (v0.0.8 preview)
 
 ## Directory Structure
 
@@ -221,12 +235,16 @@ rosh-lang/
 ## Features
 
 - **AI-native programming**: `prompt` command with OpenAI/Anthropic integration
-- **Context-aware help**: Self-documenting with `help` command for all commands and objects
+- **Event-driven**: Reactive programming with `when/trigger` for game logic
+- **Multi-format**: JSON, TOML, and TOON support for state serialization
+- **Testing support**: `--test` mode for CI/CD with mock inputs
+- **Program metadata**: Auto-generated UUIDs and checksums with `meta` keyword
+- **Context-aware help**: Self-documenting with `help` command
 - **Stack-based operations**: `get`, `add`, `multiply`, `dup`, `swap`, `drop`
 - **Object system**: Create and manipulate objects with properties
-- **State persistence**: `dump` and `load` commands for JSON serialization
-- **Control flow**: `if`/`else` statements with natural language comparisons
-- **Functions**: Define and call custom functions
+- **String interpolation**: `"Hello {name}, you have {score} points!"`
+- **Control flow**: `if`/`else if`/`else` with natural language comparisons
+- **Functions**: Define and call custom functions with return values
 - **Interactive REPL**: Persistent state, history, tab completion, and aliases
 - **VS Code support**: Syntax highlighting, snippets, and code folding
 

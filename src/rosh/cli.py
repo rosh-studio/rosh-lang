@@ -110,6 +110,27 @@ def output_toml(interpreter: Interpreter):
         print(toml_str, end='')
 
 
+def output_toon(interpreter: Interpreter):
+    """Output final stack value as TOON format
+
+    Args:
+        interpreter: The interpreter with final state
+    """
+    from .toon_encoder import toon_output
+
+    # Get final stack value
+    if not interpreter.data_stack:
+        # Empty stack - output comment
+        print("# (empty)")
+        return
+
+    value = interpreter.data_stack[-1]
+
+    # Convert to TOON format
+    toon_str = toon_output(value)
+    print(toon_str)
+
+
 def _fuzzy_match_command(word: str, interpreter=None):
     """Find closest matching command using fuzzy string matching"""
     import difflib
@@ -151,12 +172,13 @@ def _fuzzy_match_command(word: str, interpreter=None):
     return matches[0] if matches else None
 
 
-def run_file(filepath: str, toml_output: bool = False, test_inputs: list = None):
+def run_file(filepath: str, toml_output: bool = False, toon_output: bool = False, test_inputs: list = None):
     """Run a Rosh program from a file
 
     Args:
         filepath: Path to the Rosh file
         toml_output: If True, output final stack value as TOML
+        toon_output: If True, output final stack value as TOON
         test_inputs: Optional list of test inputs for test mode
 
     Returns:
@@ -190,7 +212,7 @@ def run_file(filepath: str, toml_output: bool = False, test_inputs: list = None)
             sys.exit(1)
 
         source = path.read_text()
-        interpreter = run_source(source, filepath, toml_output=toml_output, test_inputs=test_inputs)
+        interpreter = run_source(source, filepath, toml_output=toml_output, toon_output=toon_output, test_inputs=test_inputs)
         return interpreter
 
     except RoshError as e:
@@ -203,7 +225,7 @@ def run_file(filepath: str, toml_output: bool = False, test_inputs: list = None)
         sys.exit(1)
 
 
-def run_source(source: str, filename: str = "<stdin>", interpreter: Interpreter = None, toml_output: bool = False, test_inputs: list = None):
+def run_source(source: str, filename: str = "<stdin>", interpreter: Interpreter = None, toml_output: bool = False, toon_output: bool = False, test_inputs: list = None):
     """Run Rosh source code
 
     Args:
@@ -211,6 +233,7 @@ def run_source(source: str, filename: str = "<stdin>", interpreter: Interpreter 
         filename: Name of the file (for error messages)
         interpreter: Optional existing interpreter to reuse
         toml_output: If True, output final stack value as TOML
+        toon_output: If True, output final stack value as TOON
         test_inputs: Optional list of test inputs for test mode
     """
     from .errors import StopExecution
@@ -237,9 +260,11 @@ def run_source(source: str, filename: str = "<stdin>", interpreter: Interpreter 
         # Program was stopped with 'stop' or 'exit' command - this is normal
         pass
 
-    # Handle TOML output if requested
+    # Handle format-specific output if requested
     if toml_output:
         output_toml(interpreter)
+    elif toon_output:
+        output_toon(interpreter)
 
     return interpreter
 
@@ -545,6 +570,12 @@ def main():
     )
 
     parser.add_argument(
+        "--toon",
+        action="store_true",
+        help="Output as TOON format (Token-Oriented Object Notation, optimized for LLMs)"
+    )
+
+    parser.add_argument(
         "--test",
         metavar="INPUT_FILE",
         help="Test mode: read inputs from file (one per line)"
@@ -557,6 +588,11 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Validate output format flags
+    if args.toml and args.toon:
+        print("Error: Cannot specify both --toml and --toon", file=sys.stderr)
+        sys.exit(2)
 
     # Validate test mode flags
     if args.test and args.test_input:
@@ -584,7 +620,7 @@ def main():
     if args.command:
         # Execute inline code
         try:
-            interpreter = run_source(args.command, "<command>", toml_output=args.toml, test_inputs=test_inputs)
+            interpreter = run_source(args.command, "<command>", toml_output=args.toml, toon_output=args.toon, test_inputs=test_inputs)
             # If -i flag, enter REPL with command's state
             if args.interactive:
                 run_repl(interpreter)
@@ -593,7 +629,7 @@ def main():
             sys.exit(1)
     elif args.file:
         # Run file and optionally enter interactive mode
-        interpreter = run_file(args.file, toml_output=args.toml, test_inputs=test_inputs)
+        interpreter = run_file(args.file, toml_output=args.toml, toon_output=args.toon, test_inputs=test_inputs)
         if args.interactive:
             run_repl(interpreter)
     else:

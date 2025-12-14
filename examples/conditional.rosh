@@ -1,6 +1,6 @@
 # Conditional logic example
 
-create number health as 75
+create health to 75
 
 if health is above 50 then
   print "Player is healthy"

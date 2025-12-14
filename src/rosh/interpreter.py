@@ -970,7 +970,12 @@ class Interpreter:
         print(json_output, file=self.output_stream)
 
     def eval_save(self, node: Save) -> None:
-        """Execute: save [filepath] - saves state to file (default: rosh-state.json)"""
+        """Execute: save [filepath] - saves state to file (default: rosh-state.json)
+
+        Supports multiple formats:
+        - .json: JSON format (default, human-readable)
+        - .toon: TOON format (Token-Oriented Object Notation, LLM-optimized)
+        """
         import json
 
         # Determine filepath
@@ -983,17 +988,31 @@ class Interpreter:
             # Default filename
             filepath = "rosh-state.json"
 
-        # Get state and save to file
+        # Get state
         state = self.get_state()
+
+        # Determine format based on file extension
         try:
-            with open(filepath, 'w') as f:
-                json.dump(state, f, indent=2)
-            self.color_out.success(f"State saved to {filepath}")
+            if filepath.endswith('.toon'):
+                # Save as TOON format
+                from .toon_encoder import save_as_toon
+                save_as_toon(filepath, state)
+                self.color_out.success(f"State saved to {filepath} (TOON format)")
+            else:
+                # Default to JSON format
+                with open(filepath, 'w') as f:
+                    json.dump(state, f, indent=2)
+                self.color_out.success(f"State saved to {filepath}")
         except IOError as e:
             raise RoshRuntimeError(f"Failed to save state to {filepath}: {e}")
 
     def eval_load(self, node: Load) -> None:
-        """Execute: load <filepath> - restores state from JSON file"""
+        """Execute: load <filepath> - restores state from file
+
+        Supports:
+        - .json: JSON format (default)
+        - .toon: TOON format (Token-Oriented Object Notation)
+        """
         import json
         from .values import RoshObject
 
@@ -1004,9 +1023,18 @@ class Interpreter:
         if not isinstance(filepath, str):
             raise RoshTypeError(f"load requires a string filepath, got {type(filepath).__name__}")
 
+        # Load based on file extension
         try:
-            with open(filepath, 'r') as f:
-                state = json.load(f)
+            if filepath.endswith('.toon'):
+                from .toon_decoder import load_from_toon, TOONDecodeError
+                try:
+                    state = load_from_toon(filepath)
+                except TOONDecodeError as e:
+                    raise RoshRuntimeError(f"Invalid TOON format in file {filepath}: {e}")
+            else:
+                # Default to JSON
+                with open(filepath, 'r') as f:
+                    state = json.load(f)
         except FileNotFoundError:
             raise RoshRuntimeError(f"File not found: {filepath}")
         except json.JSONDecodeError as e:

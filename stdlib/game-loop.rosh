@@ -1,0 +1,197 @@
+#!/usr/bin/env rosh
+"""
+ROSH STDLIB - Game Loop
+========================
+A tiny event loop for reactive NPCs and rooms
+
+USAGE:
+    import "stdlib/game-loop.rosh"
+
+    # Register condition-based events
+    call register_condition "player_low_health" player check_low_health
+
+    # Start the game loop
+    call game_loop
+
+EVENTS AUTOMATICALLY TRIGGERED:
+- game_tick (every loop iteration)
+- Registered condition events (when conditions become true)
+"""
+
+# ============================================
+# GAME LOOP STATE
+# ============================================
+
+create object loop_state
+    set running to false
+    set tick_count to 0
+    set max_ticks to 1000
+    set conditions to []
+end
+
+# ============================================
+# CONDITION CHECKING
+# ============================================
+
+"""
+Register a condition that will be checked every tick
+When the condition becomes true, the event is triggered
+
+Parameters:
+  - event_name: Name of event to trigger
+  - target: Object to check condition on
+  - check_fn: Function that returns true/false
+
+Example:
+  define function check_low_health entity
+      get entity.health
+      get stack
+      set health to stack
+
+      if health is below 20 then
+          return true
+      end
+      return false
+  end
+
+  call register_condition "player_low_health" player check_low_health
+"""
+define function register_condition event_name target check_fn
+    create object condition
+        set event to event_name
+        set target_obj to target
+        set check_function to check_fn
+        set last_state to false
+    end
+
+    append condition to loop_state.conditions
+end
+
+# ============================================
+# GAME LOOP
+# ============================================
+
+"""
+Main game loop - runs until stopped
+
+Each iteration:
+1. Triggers game_tick event
+2. Checks all registered conditions
+3. Triggers events when conditions become true
+4. Increments tick counter
+5. Stops after max_ticks (safety limit)
+"""
+define function game_loop
+    set loop_state.running to true
+    set loop_state.tick_count to 0
+
+    print "🎮 Game loop started"
+    print "   Max ticks: {loop_state.max_ticks}"
+    print "   Registered conditions: {length of loop_state.conditions}"
+    print ""
+
+    while loop_state.running is equal to true then
+        # Trigger tick event
+        trigger game_tick with loop_state.tick_count
+
+        # Check all registered conditions
+        call check_conditions
+
+        # Increment tick
+        set loop_state.tick_count to loop_state.tick_count plus 1
+
+        # Safety limit
+        if loop_state.tick_count is above loop_state.max_ticks then
+            print "⚠️  Reached max ticks ({loop_state.max_ticks}), stopping loop"
+            set loop_state.running to false
+        end
+    end
+
+    print ""
+    print "🛑 Game loop stopped (ticks: {loop_state.tick_count})"
+end
+
+# ============================================
+# CONDITION CHECKER
+# ============================================
+
+define function check_conditions
+    for condition in loop_state.conditions then
+        # Call the check function
+        set result to call condition.check_function condition.target_obj
+
+        # Trigger event if condition is true AND it wasn't true before
+        # (edge-triggered, not level-triggered)
+        if result is equal to true and condition.last_state is equal to false then
+            trigger condition.event with condition.target_obj
+            set condition.last_state to true
+        end
+
+        # Reset if condition becomes false again
+        if result is equal to false then
+            set condition.last_state to false
+        end
+    end
+end
+
+# ============================================
+# LOOP CONTROL
+# ============================================
+
+"""
+Stop the game loop from within an event handler
+
+Example:
+  when game_over then
+      print "Game Over!"
+      call stop_game_loop
+  end
+"""
+define function stop_game_loop
+    set loop_state.running to false
+end
+
+"""
+Set maximum number of ticks (default: 1000)
+
+Example:
+  call set_max_ticks 10000
+"""
+define function set_max_ticks count
+    set loop_state.max_ticks to count
+end
+
+# ============================================
+# UTILITY FUNCTIONS
+# ============================================
+
+"""
+Get current tick count
+
+Example:
+  set current_tick to call get_tick_count
+"""
+define function get_tick_count
+    return loop_state.tick_count
+end
+
+"""
+Check if loop is running
+
+Example:
+  if call is_loop_running then
+      print "Loop is active"
+  end
+"""
+define function is_loop_running
+    return loop_state.running
+end
+
+print "✓ Game loop stdlib loaded"
+print "  Functions available:"
+print "    - game_loop()"
+print "    - register_condition(event, target, check_fn)"
+print "    - stop_game_loop()"
+print "    - set_max_ticks(count)"
+print "    - get_tick_count()"
+print "    - is_loop_running()"
