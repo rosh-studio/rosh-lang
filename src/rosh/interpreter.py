@@ -52,7 +52,7 @@ class Interpreter:
     AST walker that executes Rosh programs
     """
 
-    def __init__(self, output_stream=None):
+    def __init__(self, output_stream=None, test_mode=False, test_inputs=None):
         from .color import get_color_output
 
         self.global_env = Environment()
@@ -67,6 +67,18 @@ class Interpreter:
         self.instances = {}  # type_name -> [obj1, obj2, ...]
         self.uuid_map = {}   # uuid -> object
         self.instance_counters = {}  # type_name -> next_number
+
+        # Event system (v0.0.7+)
+        self.event_handlers = {}  # event_name -> [handler1, handler2, ...]
+
+        # Test mode (v0.0.8+)
+        self.test_mode = test_mode
+        self.test_inputs = test_inputs or []
+        self.test_input_index = 0
+
+        # Metadata system (v0.0.8+)
+        self.source_code = None  # Original source code (for checksum calculation)
+        self.program_metadata = {}  # Metadata by scope: 'core', 'generated', 'game', etc.
 
         # Security flags (v0.0.4+)
         # Remote imports removed for security (offline-first for VR/AR)
@@ -334,6 +346,12 @@ class Interpreter:
             return self.eval_while(node)
         elif isinstance(node, ForLoop):
             return self.eval_for(node)
+        elif isinstance(node, WhenStatement):
+            return self.eval_when_statement(node)
+        elif isinstance(node, TriggerEvent):
+            return self.eval_trigger_event(node)
+        elif isinstance(node, Metadata):
+            return self.eval_metadata(node)
         elif isinstance(node, FunctionDef):
             return self.eval_function_def(node)
         elif isinstance(node, Return):
@@ -849,18 +867,36 @@ class Interpreter:
             print(output, file=self.output_stream)
 
     def eval_input(self, node: Input) -> None:
-        """Execute: input <variable_name> [prompt <string>] - reads line from stdin and stores in variable"""
-        try:
-            # Read a line from stdin with optional prompt
-            if node.prompt:
-                user_input = input(node.prompt)
-            else:
-                user_input = input()
-            # Define the variable (creates it if it doesn't exist)
+        """Execute: input <variable_name> [prompt <string>] - reads line from stdin and stores in variable
+
+        In test mode, reads from test_inputs instead of stdin.
+        """
+        if self.test_mode:
+            # Test mode: use mocked input
+            if self.test_input_index >= len(self.test_inputs):
+                raise RoshRuntimeError(
+                    f"Test mode: No more test inputs available "
+                    f"(needed input for '{node.variable_name}')"
+                )
+            user_input = self.test_inputs[self.test_input_index]
+            self.test_input_index += 1
+            # Log to stderr (not stdout, to keep output clean for testing)
+            sys.stderr.write(f"[TEST INPUT: {user_input}]\n")
+            # Define the variable
             self.current_env.define(node.variable_name, user_input)
-        except EOFError:
-            # Handle EOF gracefully (e.g., when input is piped)
-            self.current_env.define(node.variable_name, "")
+        else:
+            # Normal mode: read from stdin
+            try:
+                # Read a line from stdin with optional prompt
+                if node.prompt:
+                    user_input = input(node.prompt)
+                else:
+                    user_input = input()
+                # Define the variable (creates it if it doesn't exist)
+                self.current_env.define(node.variable_name, user_input)
+            except EOFError:
+                # Handle EOF gracefully (e.g., when input is piped)
+                self.current_env.define(node.variable_name, "")
 
     def eval_get(self, node: Get) -> None:
         """Execute: get <target> - pushes value onto stack
@@ -1283,15 +1319,27 @@ Generate executable Rosh code (no markdown fences):"""
             raise RoshRuntimeError(f"Error writing to file {filepath}: {e}")
 
     def eval_import(self, node: Import) -> None:
-        """Execute: import <module_path> - Import and execute a Rosh module
+        """Execute: import <module_path> - Import and execute a Rosh module or TOML file
+
+        For .toml files: Creates a variable with the parsed TOML structure
+        For .rosh files: Executes the code
 
         Use import "!path" to force reload (clears cache for that module)
         Example: import "!stdlib/mud.rosh" will reload even if already imported
         """
+        # Extract variable name and file path from node
+        # Supports: import toml from "file.toml" or import "file.rosh"
+        var_name = None
+        if hasattr(node, 'variable_name') and node.variable_name:
+            var_name = node.variable_name
+
         # Handle module path - if it's an identifier, use it as a literal string
         # This allows: import mud (without quotes)
         if isinstance(node.module_path, Identifier):
             module_path = node.module_path.name
+            # If no explicit variable name, use the identifier as variable name
+            if var_name is None:
+                var_name = module_path
         else:
             # Otherwise evaluate as expression (allows import "path/to/file")
             module_path_value = self.eval_expression(node.module_path)
@@ -1309,7 +1357,17 @@ Generate executable Rosh code (no markdown fences):"""
         # Resolve and fetch the module
         resolved_path = self._resolve_module_path(module_path)
 
-        # Check if already imported (simple caching)
+        # Check if it's a TOML file
+        if resolved_path.endswith('.toml'):
+            # Extract variable name from filename if not provided
+            if var_name is None:
+                from pathlib import Path
+                # Use filename without extension as variable name
+                var_name = Path(resolved_path).stem
+            self._import_toml(resolved_path, var_name)
+            return
+
+        # Check if already imported (simple caching for .rosh files)
         if not hasattr(self, '_imported_modules'):
             self._imported_modules = set()
 
@@ -1320,7 +1378,7 @@ Generate executable Rosh code (no markdown fences):"""
         if resolved_path in self._imported_modules:
             return  # Already imported
 
-        # Read and execute the module
+        # Read and execute the Rosh module
         try:
             with open(resolved_path, 'r') as f:
                 module_code = f.read()
@@ -1335,6 +1393,74 @@ Generate executable Rosh code (no markdown fences):"""
             raise RoshRuntimeError(f"Module not found: {module_path}")
         except Exception as e:
             raise RoshRuntimeError(f"Error importing module {module_path}: {e}")
+
+    def _import_toml(self, filepath: str, var_name: str):
+        """Import a TOML file and create a variable with its contents
+
+        Args:
+            filepath: Path to the .toml file
+            var_name: Name of the variable to create (e.g., 'toml', 'config')
+        """
+        try:
+            # Try to use tomllib (Python 3.11+) or tomli (backport)
+            try:
+                import tomllib
+            except ImportError:
+                import tomli as tomllib
+
+            # Check file size (10MB limit for security)
+            import os
+            file_size = os.path.getsize(filepath)
+            max_size = 10 * 1024 * 1024  # 10MB
+            if file_size > max_size:
+                raise RoshRuntimeError(
+                    f"TOML file too large: {file_size} bytes (max {max_size})\n"
+                    f"File: {filepath}"
+                )
+
+            # Read and parse TOML
+            with open(filepath, 'rb') as f:
+                toml_data = tomllib.load(f)
+
+            # Convert to Rosh values
+            rosh_data = self._toml_to_rosh(toml_data)
+
+            # Create variable with the data
+            self.current_env.define(var_name, rosh_data)
+
+        except ImportError:
+            raise RoshRuntimeError(
+                "TOML support not installed. Run: pip install tomli"
+            )
+        except FileNotFoundError:
+            raise RoshRuntimeError(f"TOML file not found: {filepath}")
+        except Exception as e:
+            raise RoshRuntimeError(f"Error importing TOML file {filepath}: {e}")
+
+    def _toml_to_rosh(self, toml_value: Any) -> Any:
+        """Convert TOML value to Rosh value
+
+        Mappings:
+        - TOML table → RoshObject
+        - TOML array → Python list
+        - TOML string/int/float/bool → Direct mapping
+        - TOML datetime → ISO 8601 string
+        """
+        if isinstance(toml_value, dict):
+            # TOML table → RoshObject
+            obj = RoshObject(name="object")
+            for key, value in toml_value.items():
+                obj.set(key, self._toml_to_rosh(value))
+            return obj
+        elif isinstance(toml_value, list):
+            # TOML array → Python list
+            return [self._toml_to_rosh(item) for item in toml_value]
+        elif hasattr(toml_value, 'isoformat'):
+            # TOML datetime → ISO 8601 string
+            return toml_value.isoformat()
+        else:
+            # Primitives: string, int, float, bool
+            return toml_value
 
     def _resolve_module_path(self, module_path: str) -> str:
         """Resolve a module path to an actual file path
@@ -1360,14 +1486,17 @@ Generate executable Rosh code (no markdown fences):"""
         # If it's an absolute path or has path separators, treat as file path
         if os.path.isabs(module_path) or '/' in module_path or '\\' in module_path:
             # Resolve relative to current directory
-            if module_path.endswith('.rosh'):
+            if module_path.endswith(('.rosh', '.toml')):
                 candidate = Path(module_path)
             else:
+                # Try .rosh first, then .toml
                 candidate = Path(f"{module_path}.rosh")
+                if not candidate.exists():
+                    candidate = Path(f"{module_path}.toml")
 
             if candidate.exists():
                 return str(candidate.resolve())
-            # Also try without adding .rosh
+            # Also try without adding extension
             candidate = Path(module_path)
             if candidate.exists():
                 return str(candidate.resolve())
@@ -1384,15 +1513,27 @@ Generate executable Rosh code (no markdown fences):"""
 
         # Try each package directory
         for pkg_dir in package_dirs:
+            # If already has extension, try as-is first
+            if module_path.endswith(('.rosh', '.toml')):
+                candidate = pkg_dir / module_path
+                if candidate.exists():
+                    return str(candidate)
+
             # Try as directory with same name
             candidate = pkg_dir / module_path / f"{module_path}.rosh"
             if candidate.exists():
                 return str(candidate)
 
-            # Try as direct file
-            candidate = pkg_dir / f"{module_path}.rosh"
-            if candidate.exists():
-                return str(candidate)
+            # Try as direct file (.rosh first, then .toml)
+            if not module_path.endswith('.rosh'):
+                candidate = pkg_dir / f"{module_path}.rosh"
+                if candidate.exists():
+                    return str(candidate)
+
+            if not module_path.endswith('.toml'):
+                candidate = pkg_dir / f"{module_path}.toml"
+                if candidate.exists():
+                    return str(candidate)
 
         # Not found
         raise RoshRuntimeError(f"Module '{module_path}' not found in package directories")
@@ -1646,6 +1787,170 @@ Focus on the specific syntax or concept they need to correct."""
                     current += step_val
             else:
                 raise RoshRuntimeError("For loop step cannot be zero")
+
+    def eval_when_statement(self, node: WhenStatement) -> None:
+        """Register an event handler
+
+        Captures the lexical environment at registration time so handlers
+        can access local variables from their defining scope.
+
+        Example:
+            when player_died then
+                print "Game Over!"
+            end
+
+            when combat_start attacker defender then
+                print "Combat begins!"
+            end
+        """
+        event_name = node.event_name
+
+        # Store handler definition with CAPTURED ENVIRONMENT (lexical scoping)
+        handler = {
+            'parameters': node.parameters,
+            'body': node.body,
+            'line': node.line,
+            'captured_env': self.current_env  # Capture environment at registration time
+        }
+
+        # Register handler (multiple handlers per event supported)
+        if event_name not in self.event_handlers:
+            self.event_handlers[event_name] = []
+
+        self.event_handlers[event_name].append(handler)
+
+    def eval_trigger_event(self, node: TriggerEvent) -> None:
+        """Trigger an event, executing all registered handlers
+
+        Examples:
+            trigger player_died
+            trigger combat_start with goblin player
+        """
+        event_name = node.event_name
+
+        # Evaluate arguments
+        args = [self.eval_expression(arg) for arg in node.arguments]
+
+        # Get all handlers for this event
+        handlers = self.event_handlers.get(event_name, [])
+
+        if not handlers:
+            # No handlers registered - silently continue
+            return
+
+        # Execute each handler
+        for handler in handlers:
+            parameters = handler['parameters']
+            body = handler['body']
+            captured_env = handler['captured_env']  # Environment at registration time
+
+            # Create new environment for handler execution
+            # Use CAPTURED environment as parent (lexical scoping)
+            handler_env = Environment(parent=captured_env)
+
+            # Bind arguments to parameters
+            for i, param in enumerate(parameters):
+                if i < len(args):
+                    handler_env.define(param, args[i])
+                else:
+                    # Not enough arguments - bind to null
+                    handler_env.define(param, None)
+
+            # Execute handler body in new environment
+            prev_env = self.current_env
+            self.current_env = handler_env
+
+            try:
+                for statement in body:
+                    self.eval_statement(statement)
+            finally:
+                # Restore previous environment
+                self.current_env = prev_env
+
+    def eval_metadata(self, node: Metadata) -> None:
+        """Process program metadata declaration
+
+        Examples:
+            meta
+                version "1.0.0"
+                author "rdubar"
+            end
+
+            meta.generated
+                # Auto-generates UUID, checksum, timestamps
+            end
+        """
+        scope = node.scope or 'core'  # Default to 'core' if no scope specified
+
+        # Evaluate all field expressions
+        fields = {}
+        for key, value_expr in node.fields.items():
+            fields[key] = self.eval_expression(value_expr)
+
+        # Auto-generate fields for 'generated' scope
+        if scope == 'generated':
+            # Generate UUID if not provided
+            if 'uuid' not in fields:
+                fields['uuid'] = self._generate_uuid()
+
+            # Generate checksum if not provided
+            if 'checksum' not in fields:
+                if self.source_code:
+                    fields['checksum'] = self._calculate_checksum()
+                else:
+                    # No source code available - warn user
+                    print("⚠️  WARNING: Cannot generate checksum - source code not available (REPL mode?)",
+                          file=sys.stderr)
+                    fields['checksum'] = None
+
+            # Set created timestamp if not provided
+            if 'created' not in fields:
+                from datetime import datetime
+                fields['created'] = datetime.utcnow().isoformat() + 'Z'
+
+        # Store metadata by scope
+        self.program_metadata[scope] = fields
+
+        # Make metadata accessible as 'meta' variable
+        # Create a meta object that can be accessed like: get meta.version
+        if 'meta' not in self.current_env.bindings:
+            meta_obj = RoshObject('meta')
+            self.current_env.define('meta', meta_obj)
+        else:
+            meta_obj = self.current_env.get('meta')
+
+        # Set fields on meta object based on scope
+        if scope == 'core' or scope is None:
+            # Core metadata goes directly on meta object
+            for key, value in fields.items():
+                meta_obj.set(key, value)
+        else:
+            # Scoped metadata goes in a sub-object (meta.generated, meta.game, etc.)
+            if not meta_obj.has(scope):
+                scope_obj = RoshObject(scope)
+                meta_obj.set(scope, scope_obj)
+            else:
+                scope_obj = meta_obj.get(scope)
+
+            for key, value in fields.items():
+                scope_obj.set(key, value)
+
+    def _generate_uuid(self) -> str:
+        """Generate a UUID4 for program identification"""
+        import uuid
+        return str(uuid.uuid4())
+
+    def _calculate_checksum(self) -> str:
+        """Calculate SHA-256 checksum of program source code"""
+        if not self.source_code:
+            raise RoshRuntimeError(
+                "Cannot calculate checksum: source code not available. "
+                "Checksums can only be generated when running from files."
+            )
+
+        import hashlib
+        code_hash = hashlib.sha256(self.source_code.encode('utf-8')).hexdigest()
+        return f"sha256:{code_hash}"
 
     def eval_comparison(self, node: Comparison) -> bool:
         """Evaluate comparison operations"""

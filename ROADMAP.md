@@ -1,7 +1,7 @@
 # Rosh Development Roadmap
 
-**Current Version:** v0.0.6
-**Last Updated:** 2025-12-13
+**Current Version:** v0.0.7
+**Last Updated:** 2025-12-14
 
 > Technical milestones for the Rosh programming language.
 
@@ -50,104 +50,207 @@
 - ✅ Reserved word protection
 - ✅ Complete documentation in ROSH-MANUAL.rosh
 
+### v0.0.7 - Event System (2024-12-13) ✅ COMPLETE
+- ✅ `when <event> then ... end` syntax
+- ✅ `trigger <event>` command with parameters
+- ✅ Lexical scoping (event handlers capture defining environment)
+- ✅ Event loop stdlib (`stdlib/game-loop-simple.rosh`)
+- ✅ Helper functions (`every()`, `stop_loop()`, `reset_ticks()`)
+- ✅ Code review fixes (scoping, validation, import banner)
+- ✅ Comprehensive test suite (137 total tests, 21 event-specific)
+
 ---
 
 ## 🚀 Upcoming Milestones
 
-### v0.0.7 - Event System (Q1 2026) 🔄 IN PROGRESS
+### v0.0.7 - Event System (Q1 2026) ✅ COMPLETE
 **Priority: HIGH - Enables reactive game logic**
 
 **Goal:** Add event-driven programming for NPCs, rooms, and game state reactions
 
 **Features:**
-- [ ] `when <condition> then ... end` syntax
-- [ ] `on <event> do ... end` syntax
-- [ ] Event loop in stdlib (single-user, deterministic)
-- [ ] Built-in MUD events (combat_start, player_move, item_taken)
-- [ ] NPC reaction system
-- [ ] Room ambient behaviors
+- ✅ `when <event> then ... end` syntax
+- ✅ `trigger <event>` command
+- ✅ Event parameters (`when event param then`)
+- ✅ Lexical scoping (handlers capture defining environment)
+- ✅ Event loop stdlib (game-loop-simple.rosh)
+- ✅ Helper functions (`every()`, `stop_loop()`, `reset_ticks()`)
+- ✅ Comprehensive test suite (21 tests)
 
 **Example:**
 ```rosh
-when player.health is below 20 then
-    play sound "warning_beep"
-    print "Health critical!"
+when player_damaged health then
+    if health is below 20 then
+        print "Health critical!"
+    end
 end
 
-on combat_start do
-    set enemy.aggressive to true
-    play music "battle_theme"
-end
+trigger player_damaged with 15
 ```
 
-**Why now:** Events make games feel alive. NPCs react, rooms have behaviors, combat flows naturally.
-
-**Timeline:** 2-3 weeks
+**Status:** Implemented 2025-12-13, code review fixes 2025-12-14
 
 ---
 
-### v0.0.8 - Voice → Game Demo (Q1 2026)
+### v0.0.8 - Infrastructure & Format Support (Q1 2026) 🔄 IN PROGRESS
+**Priority: CRITICAL - Foundation for AI-assisted development**
+
+**Goal:** Systematic documentation, quality-of-life improvements, and modern format support
+
+**Features:**
+- ✅ AI ticket/review/documentation system
+  - Ticket workflow in `.rosh/tickets/`
+  - AI self-identification (UUIDs)
+  - Cross-AI review process
+  - BDFL approval workflow
+  - Context management strategy
+- ✅ TOML support (--toml flag)
+  - TOML parser integration (tomllib/tomli)
+  - `rosh.toml` project manifests
+  - `--toml` output mode
+  - Import TOML files as objects
+- ✅ Test mode for CI/CD
+  - Mock `input` command
+  - `--test` and `--test-input` flags
+  - Automated testing support
+- ✅ Program metadata system
+  - `meta` keyword with scopes (core, generated, game)
+  - Auto-generated UUID, checksum, timestamps
+  - Runtime access via `get meta.version`
+  - Three scopes: core (version/author/license), generated (uuid/checksum), game (type/engine)
+  - Implemented 2025-12-14 (same day as planned!)
+- [ ] Security model decision
+  - Hybrid context-aware approach
+  - Checksum + UUID verification
+  - Warning behavior clarified
+  - dev/local/package/production modes
+- [ ] dump command
+  - Save game state + code together
+  - Serialization improvements
+  - Easy save/load for games
+
+**Why now:** These improvements enable scalable AI-assisted development and make Rosh more practical for real projects.
+
+**Status:** TOML and Test Mode implemented 2025-12-14
+
+---
+
+### v0.0.9 - TOON Format Support (Q1 2026)
+**Priority: HIGH - AI-first format optimization**
+
+**Goal:** Add TOON (Token-Oriented Object Notation) support for AI-optimized state serialization
+
+**Features:**
+- [ ] TOON encoder implementation
+  - 40% fewer tokens than JSON
+  - YAML-style indentation + CSV tables
+  - `--toon` output flag
+  - `save "file.toon"` support
+- [ ] TOON as opt-in format
+  - Explicit: `save "state.toon"`
+  - JSON remains default in v0.0.9
+  - User testing and feedback collection
+
+**Why TOON:**
+- 40% token reduction for AI/LLM workflows
+- 73.9% vs 69.7% LLM parsing accuracy
+- Human-readable, VR/AR memory efficient
+- Aligns with AI-first language vision
+
+**Timeline:** v0.0.9 encoder only (opt-in usage)
+
+**Migration Path:**
+- v0.0.9: TOON encoder, explicit opt-in
+- v0.1.0: TOON decoder + becomes default for extensionless save
+- All versions: JSON always available
+
+**BDFL Decision (2025-12-14):** Approved "TOON first" policy for v0.1.0
+
+---
+
+### v0.1.0 - TOON Default + Transpiler Foundation (Q2-Q3 2026)
+**Priority: CRITICAL - AI-first serialization + cross-platform foundation**
+
+**Goal:** Make TOON the default format and begin cross-platform transpilation
+
+**Features:**
+- [ ] TOON decoder implementation
+  - Full read/write support for `.toon` files
+  - `load "state.toon"` support
+  - Round-trip TOON serialization
+- [ ] TOON becomes default
+  - `save "file"` (no extension) → creates `.toon`
+  - JSON available via `save "file.json"`
+  - Migration guide for existing projects
+- [ ] Transpiler foundation (JavaScript/Phaser)
+  - AST → JavaScript code generation
+  - Phaser.js runtime bindings
+  - Initial 2D game support
+
+**TOON Migration Timeline:**
+- v0.0.9: TOON encoder (opt-in testing)
+- v0.1.0: TOON decoder + default format
+- All versions: JSON always available
+
+**Why now:**
+- One version of TOON testing before making default
+- AI workflows benefit from token reduction immediately
+- Foundation for multi-platform deployment
+
+**BDFL Decision (2025-12-14):** Approved v0.1.0 timeline for TOON default
+
+---
+
+### v0.2.0 - Voice Demo + Phaser Transpiler (Q3 2026)
 **Priority: HIGH - Proves AI-assisted creation**
 
-**Goal:** Demonstrate natural language → playable game in 60-90 seconds
+**Goal:** Demonstrate natural language → playable game with visual output
 
 **Features:**
 - [ ] Voice input integration (Web Speech API or Whisper)
 - [ ] Prompt engineering for game generation
 - [ ] AI → Rosh code generation (GPT-4 or Claude)
-- [ ] Immediate execution (terminal or web client)
+- [ ] Phaser transpiler MVP
+  - Browser-based 2D games
+  - Sprite rendering and audio
+  - Same code: terminal ASCII + browser graphics
 - [ ] Demo video recording and editing
 
 **Demo Flow:**
 ```
 User (voice): "Create a dungeon with a goblin and treasure"
 AI: [Generates Rosh code in real-time]
-Terminal: [Game runs immediately]
-User: "north, attack goblin, open chest"
-Game: [Playable dungeon crawler]
+Terminal: [Text-based game runs]
+Browser: [Same game with graphics via Phaser]
 ```
 
 **Why now:**
 - Proves VR vision WITHOUT needing VR hardware
 - Shows AI-assisted creation (Roshbosh vision)
-- Creates shareable content for social media
-- Perfect for Product Hunt / investor demos
-
-**Timeline:** 2-4 weeks (mostly prompt engineering)
-
----
-
-### v0.0.9 - Phaser Transpiler MVP (Q2 2026)
-**Priority: HIGH - Proves cross-platform transpilation**
-
-**Goal:** Same Rosh code runs in terminal AND browser with graphics
-
-**Features:**
-- [ ] JavaScript code generation from Rosh AST
-- [ ] Phaser.js runtime bindings
-- [ ] 2D sprite rendering
-- [ ] Mouse/touch input mapping
-- [ ] Sound effects integration
-- [ ] CLI: `rosh transpile --target phaser`
-
-**Demo:**
-```bash
-rosh run dungeon.rosh           # Terminal: ASCII graphics
-rosh transpile --target phaser  # Browser: sprites + sound
-open index.html                 # Same game, visual!
-```
-
-**Why Phaser first:**
-- ✅ JavaScript (simpler than C#/GDScript)
-- ✅ Browser-based (zero install)
-- ✅ 2D (easier than 3D)
-- ✅ Proves transpilation concept
+- Browser deployment = zero install barrier
 
 **Timeline:** 4-6 weeks
 
 ---
 
-### v0.1.0 - Unity Transpiler MVP (Q3 2026)
+### v0.3.0 - Package System (Q4 2026)
+**Priority: MEDIUM - Enables code sharing**
+
+**Goal:** Package manager and dependency resolution
+
+**Features:**
+- [ ] Package manifest (rosh.toml format)
+- [ ] Local import/export
+- [ ] Dependency resolution
+- [ ] Package verification with checksums
+- [ ] `rosh install` command
+- [ ] Package repository (initial)
+
+**Why now:** TOML + metadata system provides foundation
+
+---
+
+### v0.4.0 - Unity Transpiler MVP (2027)
 **Priority: CRITICAL - Enables VR deployment**
 
 **Goal:** Transpile Rosh → Unity C# for VR/AR platforms
@@ -161,24 +264,11 @@ open index.html                 # Same game, visual!
 
 **Why now:** After browser proves concept, Unity enables VR deployment for enterprise
 
-**Timeline:** 6-8 weeks (see TRANSPILER-UNITY-PLAN.md)
+**Timeline:** 6-8 weeks
 
 ---
 
-### v0.2.0 - Package System (Q4 2026)
-**Priority: MEDIUM - Enables code sharing**
-
-**Features:**
-- [ ] Package manifest (rosh.manifest.json)
-- [ ] Local import/export
-- [ ] Dependency resolution
-- [ ] Package verification
-
-**Deferred from earlier:** Multiplayer comes first, packages can wait
-
----
-
-### v0.3.0 - Multi-User Engine (2027)
+### v0.5.0 - Multi-User Engine (2027)
 **Priority: HIGH - Enables rosh.cloud**
 
 **Features:**
@@ -193,19 +283,19 @@ open index.html                 # Same game, visual!
 
 ## 🔮 Future Milestones
 
-### v0.4.0 - Lua Transpiler (2027)
+### v0.6.0 - Lua Transpiler (2027)
 **Goal:** Roblox and Love2D support
 - Lua code generation
 - Roblox API bindings
 - Love2D game framework integration
 
-### v0.5.0 - GDScript Transpiler (2027)
+### v0.7.0 - GDScript Transpiler (2027)
 **Goal:** Godot Engine support
 - GDScript code generation
 - Godot scene integration
 - Open source game engine deployment
 
-### v0.6.0 - roshbosh Platform Beta (Q2 2027)
+### v0.8.0 - roshbosh Platform Beta (Q2 2027)
 **Goal:** "Instagram for remixable mini-games"
 - AI-powered game creation interface
 - One-click remix functionality
@@ -237,12 +327,14 @@ open index.html                 # Same game, visual!
 | Version | Feature | Status | Target | Timeline |
 |---------|---------|--------|--------|----------|
 | v0.0.6 | Quality of Life | ✅ Complete | 2025-12-13 | - |
-| v0.0.7 | Event System | 🔄 In Progress | Q1 2026 | 2-3 weeks |
-| v0.0.8 | Voice Demo | 📋 Planned | Q1 2026 | 2-4 weeks |
-| v0.0.9 | Phaser Transpiler | 📋 Planned | Q2 2026 | 4-6 weeks |
-| v0.1.0 | Unity Transpiler | 📋 Planned | Q3 2026 | 6-8 weeks |
-| v0.2.0 | Package System | 📋 Planned | Q4 2026 | - |
-| v0.3.0 | Multi-User | 🎯 Goal | 2027 | - |
+| v0.0.7 | Event System | ✅ Complete | 2025-12-14 | - |
+| v0.0.8 | Infrastructure & Format Support | 🔄 In Progress | Q1 2026 | TOML/Test Mode done |
+| v0.0.9 | TOON Format (Encoder) | 📋 Planned | Q1 2026 | Opt-in usage |
+| v0.1.0 | TOON Default + Transpiler | 📋 Planned | Q2-Q3 2026 | TOON becomes default |
+| v0.2.0 | Voice Demo + Phaser | 📋 Planned | Q3 2026 | 4-6 weeks |
+| v0.3.0 | Package System | 📋 Planned | Q4 2026 | - |
+| v0.4.0 | Unity Transpiler | 📋 Planned | 2027 | 6-8 weeks |
+| v0.5.0 | Multi-User | 🎯 Goal | 2027 | - |
 
 ---
 

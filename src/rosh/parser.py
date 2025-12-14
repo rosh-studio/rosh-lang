@@ -45,6 +45,8 @@ RESERVED_WORDS = {
 
     # Program control
     'stop', 'exit',
+
+    # Note: 'meta' is NOT reserved - it becomes a variable after meta blocks
 }
 
 
@@ -193,6 +195,12 @@ class Parser:
             return self.parse_while()
         elif token.type == TokenType.FOR:
             return self.parse_for()
+        elif token.type == TokenType.WHEN:
+            return self.parse_when()
+        elif token.type == TokenType.TRIGGER:
+            return self.parse_trigger()
+        elif token.type == TokenType.META:
+            return self.parse_meta()
         elif token.type == TokenType.DEFINE:
             return self.parse_define()
         elif token.type == TokenType.RETURN:
@@ -495,7 +503,11 @@ class Parser:
     def parse_target(self) -> ASTNode:
         """Parse a target (identifier, property access, or list indexing)"""
         from .ast_nodes import ListIndex
-        name_token = self.expect(TokenType.IDENTIFIER)
+        # Accept both IDENTIFIER and META (meta is usable as identifier in expressions)
+        name_token = self.current_token()
+        if name_token.type not in (TokenType.IDENTIFIER, TokenType.META):
+            self.error(f"Expected identifier, got {name_token.type.name}")
+        self.advance()
         target = Identifier(name=name_token.value, line=name_token.line)
 
         # Handle property access with dots and list indexing with brackets
@@ -944,6 +956,149 @@ class Parser:
             step=step,
             body=body,
             is_collection=False,
+            line=line
+        )
+
+    def parse_when(self):
+        """Parse: when <event_name> [param1 param2 ...] then ... end
+
+        Examples:
+            when player_died then ... end
+            when combat_start attacker defender then ... end
+        """
+        from .ast_nodes import WhenStatement
+        line = self.current_token().line
+        self.expect(TokenType.WHEN)
+
+        # Get event name
+        event_token = self.expect_identifier_for("event name")
+        event_name = event_token.value
+
+        # Parse optional parameters (until 'then')
+        parameters = []
+        while self.current_token().type not in (TokenType.THEN, TokenType.EOF):
+            param_token = self.expect_identifier_for("event parameter")
+            parameters.append(param_token.value)
+
+        self.expect(TokenType.THEN)
+        self.skip_newlines()
+
+        # Parse body
+        body = []
+        while self.current_token().type not in (TokenType.END, TokenType.EOF):
+            stmt = self.parse_statement()
+            if stmt:
+                body.append(stmt)
+            self.skip_newlines()
+
+        self.expect(TokenType.END)
+        self.skip_newlines()
+
+        return WhenStatement(
+            event_name=event_name,
+            parameters=parameters,
+            body=body,
+            line=line
+        )
+
+    def parse_trigger(self):
+        """Parse: trigger <event_name> [with arg1, arg2, ...]
+
+        Examples:
+            trigger player_died
+            trigger combat_start with goblin player
+        """
+        from .ast_nodes import TriggerEvent
+        line = self.current_token().line
+        self.expect(TokenType.TRIGGER)
+
+        # Get event name
+        event_token = self.expect_identifier_for("event name")
+        event_name = event_token.value
+
+        # Parse optional arguments after 'with'
+        arguments = []
+        if self.current_token().type == TokenType.WITH:
+            self.advance()  # consume 'with'
+
+            # Parse arguments (expressions separated by nothing or comma)
+            # Continue until we hit newline, semicolon, or EOF
+            while self.current_token().type not in (TokenType.NEWLINE, TokenType.SEMICOLON, TokenType.EOF):
+                # Skip optional commas
+                if self.current_token().type == TokenType.COMMA:
+                    self.advance()
+                    continue
+
+                # Parse argument expression
+                arg = self.parse_expression()
+                arguments.append(arg)
+
+        self.skip_newlines()
+
+        return TriggerEvent(
+            event_name=event_name,
+            arguments=arguments,
+            line=line
+        )
+
+    def parse_meta(self):
+        """Parse: meta [.scope] ... end
+
+        Examples:
+            meta
+                version "1.0.0"
+                author "rdubar"
+            end
+
+            meta.generated
+                uuid "550e8400..."
+                checksum "sha256:abc..."
+            end
+
+            meta.game
+                type "2D"
+                engine "phaser"
+            end
+        """
+        from .ast_nodes import Metadata
+        line = self.current_token().line
+        self.expect(TokenType.META)
+
+        # Check for optional scope (meta.generated, meta.game, etc.)
+        scope = None
+        if self.current_token().type == TokenType.DOT:
+            self.advance()  # consume dot
+            scope_token = self.expect_identifier_for("metadata scope")
+            scope = scope_token.value
+
+        self.skip_newlines()
+
+        # Parse key-value pairs until 'end'
+        fields = {}
+        while self.current_token().type not in (TokenType.END, TokenType.EOF):
+            # Skip newlines between fields
+            if self.current_token().type == TokenType.NEWLINE:
+                self.advance()
+                continue
+
+            # Parse key (identifier)
+            key_token = self.expect_identifier_for("metadata key")
+            key = key_token.value
+
+            # Parse value (expression)
+            value_expr = self.parse_expression()
+
+            # Store in fields dictionary
+            fields[key] = value_expr
+
+            self.skip_newlines()
+
+        self.expect(TokenType.END)
+        self.skip_newlines()
+
+        return Metadata(
+            scope=scope,
+            fields=fields,
             line=line
         )
 
@@ -1493,6 +1648,10 @@ class Parser:
             return self.parse_call()
 
         elif token.type == TokenType.IDENTIFIER:
+            return self.parse_target()
+
+        elif token.type == TokenType.META:
+            # 'meta' can be used as an identifier in expressions (after meta block creates it)
             return self.parse_target()
 
         else:

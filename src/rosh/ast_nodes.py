@@ -449,3 +449,54 @@ class Decrement(ASTNode):
     """decrement <target> - Decrement a variable by 1"""
     target: ASTNode  # Identifier or PropertyAccess
     line: int = 0
+
+
+@dataclass
+class WhenStatement(ASTNode):
+    """when <event_name> [parameters] then ... end - Define event handler"""
+    event_name: str
+    parameters: list[str]  # Parameter names for event arguments
+    body: list[ASTNode]
+    line: int = 0
+
+
+@dataclass
+class TriggerEvent(ASTNode):
+    """trigger <event_name> [with <args>] - Trigger an event"""
+    event_name: str
+    arguments: list[ASTNode]  # Expressions to evaluate as arguments
+    line: int = 0
+
+
+@dataclass
+class Metadata(ASTNode):
+    """meta [.scope] ... end - Program metadata declaration
+
+    Scopes:
+        - None (default): Core metadata (version, author, license, etc.)
+        - 'generated': Auto-generated metadata (uuid, checksum, security_key, timestamps)
+        - 'game': Game-specific metadata (type, engine, multiplayer, etc.)
+
+    Examples:
+        meta
+            version "1.0.0"
+            author "rdubar"
+        end
+
+        meta.generated
+            uuid "550e8400-e29b-41d4-a716-446655440000"
+            checksum "sha256:abc123..."
+        end
+
+        meta.game
+            type "2D"
+            engine "phaser"
+        end
+    """
+    scope: Optional[str] = None  # None = core, 'generated', 'game', etc.
+    fields: dict = None  # key-value pairs from the meta block
+    line: int = 0
+
+    def __post_init__(self):
+        if self.fields is None:
+            self.fields = {}

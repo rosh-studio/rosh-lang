@@ -13,7 +13,7 @@ It serves as both:
 Run with: rosh ROSH-MANUAL.rosh
 Or:       python -m rosh ROSH-MANUAL.rosh
 
-Last updated: v0.0.6
+Last updated: v0.0.7
 """
 
 print "=== WELCOME TO ROSH ==="
@@ -102,6 +102,7 @@ This protects core language features from being accidentally overridden.
 
 Examples of reserved words (there are ~70 total):
   - Control flow: if, then, else, end, while, for, break, continue, return
+  - Events: when, trigger, with
   - Variables: create, set, to, get
   - Stack ops: stack, dup, swap, drop, add, subtract, multiply, divide
   - Types: number, string, object, true, false, null
@@ -949,6 +950,317 @@ print "- drop         : Remove top"
 print "- add/subtract/multiply/divide : Math ops"
 print
 
+# ========================================
+# 31. EVENT SYSTEM (NEW in v0.0.7!)
+# ========================================
+print "--- 31. Event System ---"
+
+"""
+The event system lets you register handlers that respond to game events.
+This is perfect for creating reactive NPCs, combat systems, quests, and more!
+
+Syntax:
+  when <event_name> [param1 param2 ...] then
+    ... handler code ...
+  end
+
+  trigger <event_name> [with arg1, arg2, ...]
+"""
+
+# Simple event with no parameters
+when game_over then
+    print "💀 Game Over!"
+    print "Thanks for playing!"
+end
+
+# Trigger the event
+print "Triggering game_over event:"
+trigger game_over
+print
+
+# Event with parameters
+when player_damaged amount then
+    print "⚔️ Player took {amount} damage!"
+end
+
+print "Triggering player_damaged event with 25:"
+trigger player_damaged with 25
+print
+
+# Multiple handlers for same event
+when victory then
+    print "🎉 Victory!"
+end
+
+when victory then
+    print "Final Score: 1000"
+end
+
+print "Triggering victory event (runs both handlers):"
+trigger victory
+print
+
+# Event with multiple parameters
+create object player
+    set name to "Hero"
+    set health to 100
+end
+
+create object goblin
+    set name to "Goblin"
+    set damage to 15
+end
+
+when combat_start attacker defender then
+    print "{attacker.name} attacks {defender.name}!"
+end
+
+print "Combat event:"
+trigger combat_start with goblin player
+print
+
+# Events can modify game state
+when take_damage target amount then
+    set target.health to target.health minus amount
+    print "{target.name} health: {target.health}"
+
+    if target.health is below 1 then
+        trigger entity_died with target
+    end
+end
+
+when entity_died entity then
+    print "💀 {entity.name} has died!"
+end
+
+print "Damage system:"
+trigger take_damage with player 30
+trigger take_damage with player 50
+trigger take_damage with player 25
+print
+
+# Quest system example
+set gems_collected to 0
+
+when gem_found then
+    set gems_collected to gems_collected plus 1
+    print "💎 Collected gem #{gems_collected}"
+
+    if gems_collected is equal to 3 then
+        trigger quest_complete with "Find 3 Gems"
+    end
+end
+
+when quest_complete quest_name then
+    print "✓ Quest Complete: {quest_name}"
+    print "Reward: 100 gold!"
+end
+
+print "Quest system:"
+trigger gem_found
+trigger gem_found
+trigger gem_found
+print
+
+# Events can be triggered from within handlers (nested)
+when player_level_up new_level then
+    print "🎊 Level Up! Now level {new_level}"
+    trigger stat_increase with "strength" 5
+end
+
+when stat_increase stat_name amount then
+    print "+{amount} {stat_name}!"
+end
+
+print "Nested events:"
+trigger player_level_up with 2
+print
+
+print "Event System Features:"
+print "- Register handlers: when <event> [params] then ... end"
+print "- Trigger events: trigger <event> [with args]"
+print "- Multiple handlers per event"
+print "- Parameters passed to handlers"
+print "- Events can trigger other events"
+print "- Perfect for: combat, quests, NPCs, game state"
+print
+
+"""
+TOML SUPPORT (v0.0.8+)
+
+Import and work with TOML configuration files.
+
+IMPORTING TOML FILES:
+    You can import TOML files directly - they become Rosh objects.
+    The filename without .toml becomes the variable name.
+
+    Example with config.toml:
+        [database]
+        host = "localhost"
+        port = 5432
+
+    Import it:
+        import "config.toml"
+        get config.database.host
+        print stack
+        # Prints: localhost
+
+TOML OUTPUT:
+    Use --toml flag to output results as TOML instead of printing.
+
+    Command:
+        rosh script.rosh --toml
+
+    Outputs the final stack value as TOML format.
+
+WHY TOML:
+    - Human-friendly configuration format
+    - Standard for project manifests (Cargo.toml, pyproject.toml)
+    - Foundation for rosh.toml project files (future)
+"""
+
+print "TOML import example:"
+# Note: We would need an actual .toml file to demonstrate
+# This is just showing the syntax
+print "import \"settings.toml\"  # Creates 'settings' variable"
+print "get settings.app.name"
+print "# Access TOML data as Rosh objects!"
+print
+
+"""
+TEST MODE FOR CI/CD (v0.0.8+)
+
+Run Rosh programs with pre-defined inputs for automated testing.
+
+TWO WAYS TO PROVIDE TEST INPUTS:
+
+1. FROM FILE (--test):
+    rosh game.rosh --test inputs.txt
+
+    Each line in inputs.txt becomes one input response.
+
+2. INLINE (--test-input):
+    rosh game.rosh --test-input "Alice,5,yes"
+
+    Comma-separated values become input responses.
+    Use \, to include literal commas in an input.
+
+EXAMPLE:
+    # game.rosh
+    input name prompt "Name: "
+    input age prompt "Age: "
+    print "Hello {name}, age {age}!"
+
+    # Run with test inputs
+    rosh game.rosh --test-input "Alice,25"
+
+    # Output: Hello Alice, age 25!
+
+USE CASES:
+    - Automated testing in CI/CD pipelines
+    - Regression testing for interactive programs
+    - Batch processing with different inputs
+    - No more hanging on input() in scripts!
+"""
+
+print "Test mode example:"
+print "# Create a program that asks for input"
+print "# Then run: rosh program.rosh --test-input \"answer1,answer2\""
+print "# Perfect for CI/CD testing!"
+print
+
+"""
+PROGRAM METADATA (v0.0.8+)
+
+Declare metadata about your Rosh programs using the 'meta' keyword.
+
+THREE SCOPES OF METADATA:
+
+1. CORE METADATA (program info):
+    meta
+        version "1.0.0"
+        author "username"
+        license "MIT"
+        description "My awesome game"
+    end
+
+2. GENERATED METADATA (auto-generated):
+    meta.generated
+        # Automatically generates:
+        # - uuid: Unique program identifier
+        # - checksum: SHA-256 hash (for verification)
+        # - created: ISO 8601 timestamp
+    end
+
+3. GAME METADATA (game-specific):
+    meta.game
+        type "2D"
+        engine "phaser"
+        multiplayer false
+    end
+
+ACCESSING METADATA AT RUNTIME:
+    After declaring metadata, it's available as the 'meta' variable:
+
+    get meta.version
+    print stack
+    # Prints: 1.0.0
+
+    get meta.generated.uuid
+    print stack
+    # Prints: 550e8400-e29b-41d4-a716-446655440000
+
+    get meta.game.type
+    print stack
+    # Prints: 2D
+
+WHY USE METADATA:
+    - Version tracking (which Rosh version was this written for?)
+    - Authorship attribution
+    - Security verification (checksums detect tampering)
+    - Package manager foundation (for future)
+    - rosh.cloud verification (when available)
+
+CHECKSUMS AND SECURITY:
+    - Checksums are SHA-256 hashes of your program code
+    - Auto-generated when you use meta.generated
+    - Used to verify code hasn't been modified
+    - Foundation for rosh.cloud verification system
+"""
+
+print "Metadata example:"
+
+meta
+    version "1.0.0"
+    author "rosh-demo"
+    license "MIT"
+end
+
+meta.generated
+    # UUID and checksum auto-generated!
+end
+
+meta.game
+    type "text"
+    engine "rosh-cli"
+end
+
+print "Program metadata:"
+get meta.version
+print stack
+
+get meta.author
+print stack
+
+get meta.generated.uuid
+print stack
+
+get meta.generated.checksum
+print stack
+
+print "Metadata is now part of your program!"
+print
+
 print "=== ROSH FEATURE SUMMARY ==="
 print "✓ Variables and basic types"
 print "✓ Type inference (automatic)"
@@ -979,6 +1291,10 @@ print "✓ Basic math functions (abs, min, max, round, floor, ceil)"
 print "✓ Type checking functions (is_number, is_string, is_list, is_object, is_null, is_boolean)"
 print "✓ Random numbers (dice rolls, ranges)"
 print "✓ Stack operations (get, stack, dup, swap, drop, add/subtract/multiply/divide)"
+print "✓ Event system (when/trigger for reactive game logic)"
+print "✓ TOML support (import .toml files, --toml output)"
+print "✓ Test mode (--test and --test-input for CI/CD)"
+print "✓ Program metadata (meta keyword with uuid/checksum generation)"
 print "✓ REPL variable evaluation (type variable name to see its value)"
 print
 print "Thanks for exploring Rosh!"

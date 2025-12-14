@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rosh"
-version = "0.0.6"
+version = "0.0.7"
 description = "A spoken-language-first, stack-based, AI-native programming language"
 license = {text = "MIT"}
 readme = "README.md"
@@ -14,7 +14,9 @@ authors = [
 ]
 urls = {Homepage = "https://github.com/rdubar/rosh", Repository = "https://github.com/rdubar/rosh"}
 dependencies = [
-    "rich>=13.0.0"
+    "rich>=13.0.0",
+    "tomli>=2.0.0; python_version<'3.11'",
+    "tomli-w>=1.0.0"
 ]
 
 [project.optional-dependencies]

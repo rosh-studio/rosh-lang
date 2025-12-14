@@ -79,6 +79,14 @@ class TokenType(Enum):
     INDEXOF = auto()
     LASTINDEXOF = auto()
 
+    # Event system
+    WHEN = auto()
+    TRIGGER = auto()
+    WITH = auto()
+
+    # Metadata system
+    META = auto()
+
     # Comparison operators (multi-word)
     IS = auto()
     EQUAL = auto()
@@ -344,6 +352,10 @@ class Lexer:
             'trim': TokenType.TRIM,
             'indexof': TokenType.INDEXOF,
             'lastindexof': TokenType.LASTINDEXOF,
+            'when': TokenType.WHEN,
+            'trigger': TokenType.TRIGGER,
+            'with': TokenType.WITH,
+            'meta': TokenType.META,
             'is': TokenType.IS,
             'equal': TokenType.EQUAL,
             'not': TokenType.NOT,

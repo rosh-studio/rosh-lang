@@ -21,6 +21,95 @@ except ImportError:
     READLINE_AVAILABLE = False
 
 
+def _parse_test_input(input_string: str) -> list:
+    """Parse comma-separated test inputs with escape support
+
+    Args:
+        input_string: Comma-separated inputs (supports \\, for literal commas)
+
+    Returns:
+        List of input strings
+
+    Examples:
+        "foo,bar,baz" -> ["foo", "bar", "baz"]
+        "foo\\,bar,baz" -> ["foo,bar", "baz"]
+    """
+    inputs = []
+    current = []
+    i = 0
+    while i < len(input_string):
+        if input_string[i] == '\\' and i + 1 < len(input_string) and input_string[i + 1] == ',':
+            # Escaped comma
+            current.append(',')
+            i += 2
+        elif input_string[i] == ',':
+            # Un-escaped comma - end of input
+            inputs.append(''.join(current))
+            current = []
+            i += 1
+        else:
+            current.append(input_string[i])
+            i += 1
+
+    # Add final input
+    if current or inputs:  # Handle empty string case
+        inputs.append(''.join(current))
+
+    return inputs
+
+
+def output_toml(interpreter: Interpreter):
+    """Output final stack value as TOML
+
+    Args:
+        interpreter: The interpreter with final state
+    """
+    try:
+        # Use tomli-w for writing TOML
+        import tomli_w
+    except ImportError:
+        print("Error: tomli-w not installed. Run: pip install tomli-w", file=sys.stderr)
+        sys.exit(1)
+
+    from .values import rosh_to_python
+
+    # Get final stack value
+    if not interpreter.data_stack:
+        # Empty stack - output comment
+        print("# (empty)")
+        return
+
+    value = interpreter.data_stack[-1]
+
+    # Convert to Python dict/list (TOML-compatible)
+    python_value = rosh_to_python(value)
+
+    # Handle different value types
+    if python_value is None or python_value == "null":
+        # Null values - output comment (TOML doesn't have null)
+        print("# (null)")
+    elif isinstance(python_value, dict):
+        # Object - output as TOML table
+        # Remove internal fields (_uuid, _name, _id)
+        filtered = {k: v for k, v in python_value.items() if not k.startswith('_')}
+        if filtered:
+            toml_str = tomli_w.dumps(filtered)
+            print(toml_str, end='')
+        else:
+            print("# (empty object)")
+    elif isinstance(python_value, list):
+        # List - wrap in a table for valid TOML
+        toml_str = tomli_w.dumps({"value": python_value})
+        print(toml_str, end='')
+    elif isinstance(python_value, str) and python_value.startswith('<function'):
+        # Function - output comment
+        print(f"# {python_value}")
+    else:
+        # Primitive value - wrap in table
+        toml_str = tomli_w.dumps({"value": python_value})
+        print(toml_str, end='')
+
+
 def _fuzzy_match_command(word: str, interpreter=None):
     """Find closest matching command using fuzzy string matching"""
     import difflib
@@ -62,8 +151,13 @@ def _fuzzy_match_command(word: str, interpreter=None):
     return matches[0] if matches else None
 
 
-def run_file(filepath: str):
+def run_file(filepath: str, toml_output: bool = False, test_inputs: list = None):
     """Run a Rosh program from a file
+
+    Args:
+        filepath: Path to the Rosh file
+        toml_output: If True, output final stack value as TOML
+        test_inputs: Optional list of test inputs for test mode
 
     Returns:
         Interpreter: The interpreter with the script's final state
@@ -96,7 +190,7 @@ def run_file(filepath: str):
             sys.exit(1)
 
         source = path.read_text()
-        interpreter = run_source(source, filepath)
+        interpreter = run_source(source, filepath, toml_output=toml_output, test_inputs=test_inputs)
         return interpreter
 
     except RoshError as e:
@@ -109,8 +203,16 @@ def run_file(filepath: str):
         sys.exit(1)
 
 
-def run_source(source: str, filename: str = "<stdin>", interpreter: Interpreter = None):
-    """Run Rosh source code"""
+def run_source(source: str, filename: str = "<stdin>", interpreter: Interpreter = None, toml_output: bool = False, test_inputs: list = None):
+    """Run Rosh source code
+
+    Args:
+        source: The Rosh source code
+        filename: Name of the file (for error messages)
+        interpreter: Optional existing interpreter to reuse
+        toml_output: If True, output final stack value as TOML
+        test_inputs: Optional list of test inputs for test mode
+    """
     from .errors import StopExecution
 
     # Lex
@@ -123,13 +225,21 @@ def run_source(source: str, filename: str = "<stdin>", interpreter: Interpreter 
 
     # Interpret (use provided interpreter or create new one)
     if interpreter is None:
-        interpreter = Interpreter()
+        test_mode = bool(test_inputs)
+        interpreter = Interpreter(test_mode=test_mode, test_inputs=test_inputs or [])
+
+    # Set source code for checksum calculation (metadata system)
+    interpreter.source_code = source
 
     try:
         interpreter.execute(program)
     except StopExecution:
         # Program was stopped with 'stop' or 'exit' command - this is normal
         pass
+
+    # Handle TOML output if requested
+    if toml_output:
+        output_toml(interpreter)
 
     return interpreter
 
@@ -428,7 +538,44 @@ def main():
         help="Disable remote HTTP/HTTPS imports (security: blocks untrusted code)"
     )
 
+    parser.add_argument(
+        "--toml",
+        action="store_true",
+        help="Output as TOML format (final stack value)"
+    )
+
+    parser.add_argument(
+        "--test",
+        metavar="INPUT_FILE",
+        help="Test mode: read inputs from file (one per line)"
+    )
+
+    parser.add_argument(
+        "--test-input",
+        metavar="INPUTS",
+        help="Test mode: comma-separated inline inputs"
+    )
+
     args = parser.parse_args()
+
+    # Validate test mode flags
+    if args.test and args.test_input:
+        print("Error: Cannot specify both --test and --test-input", file=sys.stderr)
+        sys.exit(2)
+
+    # Parse test inputs
+    test_inputs = []
+    if args.test:
+        try:
+            with open(args.test, 'r') as f:
+                # Read lines and strip trailing newlines
+                test_inputs = [line.rstrip('\n\r') for line in f.readlines()]
+        except FileNotFoundError:
+            print(f"Error: Test input file not found: {args.test}", file=sys.stderr)
+            sys.exit(1)
+    elif args.test_input:
+        # Parse comma-separated inputs with escape support
+        test_inputs = _parse_test_input(args.test_input)
 
     # Set global flag for REPL
     global _disable_remote_imports
@@ -437,7 +584,7 @@ def main():
     if args.command:
         # Execute inline code
         try:
-            interpreter = run_source(args.command, "<command>")
+            interpreter = run_source(args.command, "<command>", toml_output=args.toml, test_inputs=test_inputs)
             # If -i flag, enter REPL with command's state
             if args.interactive:
                 run_repl(interpreter)
@@ -446,7 +593,7 @@ def main():
             sys.exit(1)
     elif args.file:
         # Run file and optionally enter interactive mode
-        interpreter = run_file(args.file)
+        interpreter = run_file(args.file, toml_output=args.toml, test_inputs=test_inputs)
         if args.interactive:
             run_repl(interpreter)
     else:

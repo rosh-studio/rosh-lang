@@ -34,6 +34,178 @@ Every new feature must:
 
 ---
 
+## 🎫 Ticket Workflow (AI-Assisted Development)
+
+**Since:** v0.0.7+ (2025-12-14)
+**Purpose:** Systematic documentation, AI collaboration, and quality control
+
+### Overview
+
+All significant changes go through a ticket-based workflow:
+
+1. **Create Ticket** - Document problem and proposed solution
+2. **Implement** - Make changes, reference ticket
+3. **Review** - AI or human reviews implementation
+4. **Iterate** - Back-and-forth until resolved
+5. **Approve** - BDFL (rdubar) final approval
+6. **Archive** - Move to archive when implemented
+
+### Ticket Structure
+
+**Active tickets:** `.rosh/tickets/YYYY-MM-DD-short-title.md`
+**Archive:** `docs/tickets/archive/YYYY/`
+**Index:** `docs/tickets/INDEX.md` (quick reference)
+
+### When to Create a Ticket
+
+**Always create tickets for:**
+- New features (event system, TOML support, etc.)
+- Breaking changes
+- Security decisions
+- Architecture changes
+- Significant refactoring
+
+**Skip tickets for:**
+- Typo fixes
+- Comment updates
+- Minor documentation tweaks
+- Obvious bug fixes (< 10 lines)
+
+### Ticket Format
+
+```markdown
+# [Title]
+
+**Created:** YYYY-MM-DD
+**Author:** [AI Model + UUID or username + UUID]
+**Assigned:** [Who's implementing]
+**Status:** [DRAFT | IN_REVIEW | RESOLVED | APPROVED | ARCHIVED]
+**Priority:** [CRITICAL | HIGH | MEDIUM | LOW]
+**Version Target:** vX.X.X
+**Dependencies:** [Ticket references, if any]
+
+---
+
+## Problem Statement
+[What needs solving]
+
+## Proposed Solution
+[How to solve it]
+
+## Implementation Notes
+[Technical details, files changed, design decisions]
+
+## Testing
+[How to verify it works]
+
+## Review Comments
+[AI/human feedback, iteration discussion]
+```
+
+### Identity System
+
+**AI Contributors:**
+- Claude Sonnet 4.5: `a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d`
+- Other AIs self-identify with model name + UUID
+
+**Human Contributors:**
+- rdubar (BDFL): `7f3e9a2b-4c1d-4e8a-9b5c-8d7a6f2e1c3b`
+
+AI always self-identifies in tickets created or reviewed.
+
+### Review Process
+
+**AI Review:**
+1. Different AI model reviews implementation
+2. Checks against ticket specification
+3. Suggests improvements or approves
+4. Iterates with implementer until resolved
+
+**Human Review (BDFL):**
+1. Final approval required for all tickets
+2. Can request changes at any stage
+3. Marks ticket as APPROVED when ready
+4. Ticket then archived to `docs/tickets/archive/YYYY/`
+
+### Context Management
+
+**To prevent bloat:**
+- Keep tickets < 1000 lines
+- Archive implemented tickets by year
+- Use INDEX.md for quick reference
+- Cross-reference related tickets
+
+**See:** `.rosh/tickets/2025-12-14-ai-ticket-review-system.md` for complete specification
+
+### Error and Confusion Documentation Policy
+
+**Policy (Added 2025-12-14):** All errors, misunderstandings, and confusions during development MUST be documented in ticket history.
+
+**Why:** Transparency helps future contributors understand decision-making and avoid repeating mistakes.
+
+**When to document:**
+- ❌ **Misinterpreted requirements** - Document what was misunderstood and how it was resolved
+- ❌ **Implementation mistakes** - Explain what went wrong and the fix
+- ❌ **Breaking changes** - Document impact and migration path
+- ❌ **API changes** - Record old vs new behavior
+- ⚠️ **Ambiguous specifications** - Document clarifications from BDFL
+
+**Where to document:**
+1. **In the ticket** - Add "Implementation Notes (Post-Implementation)" section
+2. **In CHANGELOG.md** - Note breaking changes and corrections
+3. **In commit messages** - Reference the confusion in relevant commits
+
+**Example:** See `2025-12-14-toml-support.md` for the TOML/TOON flag name confusion documentation.
+
+**Format:**
+```markdown
+## Implementation Notes (Post-Implementation)
+
+**IMPORTANT: [Brief Title] - RESOLVED (YYYY-MM-DD)**
+
+**Issue:** [What was misunderstood]
+
+**What happened:** [Chronological explanation]
+
+**Resolution:** [How it was fixed]
+
+**Lesson learned:** [What to do differently next time]
+
+**Policy updated:** [If this led to a policy change]
+```
+
+### How to Log a Review
+
+**For AI reviewers:**
+1. Add a new section under `## Review Notes` with heading format:
+   ```markdown
+   ### Round N (YYYY-MM-DD, ai_username / uuid)
+   ```
+2. Always self-identify with your model username and UUID:
+   - `claude_sonnet_4_5` / `a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d`
+   - `codex_gpt_4` / `d5c9cb8a-2b5f-4e6a-9d3e-e8d1a65cb25f`
+3. Provide constructive feedback on:
+   - Implementation correctness
+   - Adherence to ticket spec
+   - Code quality and style
+   - Missing test coverage
+   - Documentation completeness
+4. Mark issues as ✅ (approved), ⚠️ (needs attention), or ❌ (blocking)
+
+**For human reviewers:**
+1. Same format, use your Rosh username and UUID
+2. Final approval authority rests with BDFL (rdubar)
+
+**Example:**
+```markdown
+### Round 2 (2025-12-14, codex_gpt_4 / d5c9cb8a-...)
+- ✅ Implementation matches spec
+- ⚠️ Missing edge case tests for empty input
+- ✅ Documentation is clear
+```
+
+---
+
 ## 🧪 Testing Policy
 
 ### Test File Organization
