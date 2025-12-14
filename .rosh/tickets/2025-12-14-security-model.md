@@ -611,3 +611,31 @@ Added to acceptance criteria:
 **Comments (2025-12-14, rdubar):**
 - Approved. Hybrid context-aware approach is the right choice.
 - Implement phased approach as specified (v0.0.8 fail-safe, v0.2.0 hybrid, v0.3.0+ configurable).
+
+---
+
+## Implementation Decision (2025-12-14)
+
+**Status:** DEFERRED TO BACKLOG
+
+**Rationale:**
+- Security model is well-designed and approved
+- **Not critical for single-user MVP** (current focus)
+- No package distribution yet (nothing to secure)
+- Checksums and metadata system already implemented (v0.0.8)
+- Actual verification behavior can wait
+
+**Documented in:**
+- BACKLOG.md - "Security Model" section
+- ROADMAP.md - v0.0.8 marked as deferred
+- This ticket remains in `.rosh/tickets/` as reference (not archived)
+
+**Revisit when:**
+- v0.3.0 Package System is being implemented
+- Package distribution becomes a priority
+- Multi-user or untrusted code scenarios emerge
+
+**Next Steps:**
+- Implementation design is complete (use this ticket as spec)
+- When ready to implement, all decisions are documented here
+- No further design work needed

@@ -182,16 +182,88 @@ This executable tutorial demonstrates **ALL working features** of Rosh with hand
 - ✅ List slicing
 - ✅ Interactive mode (`-i` flag)
 
+**v0.1.5 - Phaser Transpiler MVP** ✅ (2025-12-14)
+- ✅ JavaScript/Phaser transpiler (`rosh build --target phaser`)
+- ✅ Browser deployment (zero-install, runs in any browser)
+- ✅ Objects → Phaser colored rectangles
+- ✅ Print statements → console.log with string interpolation
+- ✅ Fail-fast error handling for unsupported features
+- ✅ 22 comprehensive tests (15 unit + 7 integration)
+
+**Example:**
+```bash
+# Write Rosh code
+create object goblin
+    set x to 100
+    set y to 200
+end
+
+# Transpile to Phaser
+rosh build game.rosh --target phaser --output dist/
+
+# Open in browser → See colored rectangle at (100, 200)!
+```
+
+**v0.1.6 - Input + Events in Phaser** ✅ (2025-12-14)
+- ✅ Event system (`when/trigger`) in Phaser transpiler
+- ✅ Object inheritance (`create object hero from player`)
+- ✅ Player auto-controls (arrow keys + space = automatic movement & fire)
+- ✅ Smart defaults (lives, score, speed properties)
+- ✅ Auto-generated HUD (lives/score display)
+- ✅ Property mutations in event handlers
+- ✅ Trigger statements with parameters
+- ✅ Special properties (fixed, speed, etc.)
+- ✅ 24 comprehensive tests (15 unit + 9 v0.1.6 features)
+
+**Example:**
+```rosh
+# Just this code gives you a fully controllable game!
+create object hero from player
+    set x to 400
+    set y to 300
+end
+
+# Auto-generated:
+# - Arrow key movement (uses speed property)
+# - Space bar fires
+# - Lives/score HUD display
+# - Keyboard event system
+```
+
+**v0.1.7 - Sprite System** ✅ (2025-12-14)
+- ✅ Sprite/image support in Phaser transpiler (`set sprite to "hero.png"`)
+- ✅ Automatic asset preloading (Phaser `preload()` method generation)
+- ✅ Graceful fallback to colored rectangles when sprites missing
+- ✅ Smart asset copying (`--copy-assets` flag - only copies used sprites)
+- ✅ Python web server workflow (always shown to avoid CORS issues)
+- ✅ Comprehensive documentation (limitations, troubleshooting, examples)
+- ✅ 6300+ free game assets included (selection of Kenney's collection)
+- ✅ 32 comprehensive tests (24 existing + 8 sprite tests)
+
+**Example:**
+```bash
+# Build game with automatic asset copying
+rosh build examples/games/sprite-demo.rosh --target phaser --output dist/ --copy-assets
+
+# Output shows:
+#   📦 Copied: hero.png
+#   📦 Copied: enemy.png
+#   📦 Copied: coin.png
+#   ✅ Copied 3 sprite(s) to dist/assets
+#   🎮 To run with sprites:
+#      cd dist/ && python3 -m http.server 8000
+#      Then open: http://localhost:8000
+
+# Run and see real game graphics instead of colored rectangles!
+```
+
+**Impact:** Transforms Rosh from "toy examples with colored boxes" to "real games with professional graphics."
+
 ### What's Next
 
-**v0.1.0 - Transpiler Foundation** (Planned Q2-Q3 2026)
-- JavaScript/Phaser transpiler
-- Browser deployment (zero install)
-- Same code: terminal ASCII + browser graphics
-
-**v0.2.0 - Voice Demo** (Planned Q3 2026)
+**v0.2.0 - Voice Demo** (Planned)
 - Voice input → AI → playable game
-- Phaser transpiler MVP
+- AI-generated sprites (DALL-E integration)
 - Demo video
 
 See **[ROADMAP.md](ROADMAP.md)** for detailed technical milestones and **[BACKLOG.md](BACKLOG.md)** for deferred features.
@@ -219,7 +291,10 @@ rosh-lang/
 │   ├── interpreter.py  # Execution engine
 │   ├── ast_nodes.py    # AST node definitions
 │   └── cli.py          # Command-line interface
-├── examples/           # Example .rosh programs (MUDs, games, demos)
+├── examples/           # Example .rosh programs
+│   ├── games/          # Phaser browser games (sprite-demo, mvp-demo, etc.)
+│   ├── mud/            # Interactive MUD examples
+│   └── basics/         # Core language features
 ├── stdlib/             # Standard library
 │   └── mud.rosh        # MUD templates (rooms, NPCs, items)
 ├── docs/               # Documentation
@@ -235,6 +310,7 @@ rosh-lang/
 ## Features
 
 - **AI-native programming**: `prompt` command with OpenAI/Anthropic integration
+- **Browser game development**: Phaser 3 transpiler with sprite support (`rosh build --target phaser`)
 - **Event-driven**: Reactive programming with `when/trigger` for game logic
 - **Multi-format**: JSON, TOML, and TOON support for state serialization
 - **Testing support**: `--test` mode for CI/CD with mock inputs

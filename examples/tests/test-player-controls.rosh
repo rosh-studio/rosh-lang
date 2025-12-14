@@ -1,0 +1,8 @@
+# Test player auto-controls (Phase 4)
+create object hero from player
+    set x to 400
+    set y to 300
+end
+
+print "Hero created at ({hero.x}, {hero.y})"
+print "Use arrow keys to move!"

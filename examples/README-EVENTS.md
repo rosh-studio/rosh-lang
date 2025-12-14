@@ -8,7 +8,7 @@
 **Best for:** Verifying the event system works correctly
 
 ```bash
-rosh examples/test-events-simple.rosh
+rosh examples/tests/test-events-simple.rosh
 ```
 
 **Expected output:** All 8 tests should show `✓ PASS`
@@ -27,7 +27,7 @@ rosh examples/test-events-simple.rosh
 **Best for:** Seeing events in action in a game
 
 ```bash
-rosh examples/dungeon-events-demo.rosh
+rosh examples/mud/dungeon-events-demo.rosh
 ```
 
 **What you'll see:**

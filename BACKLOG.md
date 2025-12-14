@@ -62,6 +62,49 @@
 
 ---
 
+### Security Model
+
+**Status:** BACKLOG (Deferred from v0.0.8, planned for v0.3.0)
+**Ticket:** `.rosh/tickets/2025-12-14-security-model.md`
+
+**Description:**
+Comprehensive security model for package distribution and remote imports:
+- Package hash verification (SHA-256)
+- Digital signatures for trusted publishers
+- Sandboxing for untrusted code execution
+- Permission system for filesystem/network access
+- Security audit trail
+
+**Why Backlog:**
+- Not critical for single-user local development (current MVP focus)
+- No package distribution system yet (nothing to secure)
+- Checksums and metadata infrastructure already in place (v0.0.8)
+- Focus is on transpiler and graphical demos first
+
+**What Needs to Happen First:**
+- v0.3.0: Package system implementation
+- Multi-user or package distribution becoming a priority
+- Community feedback on security requirements
+
+**Criteria to Move to Active Roadmap:**
+- When v0.3.0 Package System development begins
+- When remote package distribution becomes available
+- When multi-user features are being considered
+- When enterprise use cases emerge
+
+**Estimated Effort:** 2-3 weeks (verification implementation, sandboxing, testing)
+
+**Current State:**
+- ✅ Security model designed and BDFL-approved
+- ✅ Metadata system (UUID, checksums) implemented in v0.0.8
+- ⏸️ Actual verification and sandboxing behavior deferred
+
+**References:**
+- Ticket: `.rosh/tickets/2025-12-14-security-model.md`
+- Related: ROADMAP.md v0.3.0 (Package System)
+
+---
+
 ### Unity Transpiler (VR/AR Deployment)
 
 **Status:** BACKLOG (Planned for v0.4.0, 2027)

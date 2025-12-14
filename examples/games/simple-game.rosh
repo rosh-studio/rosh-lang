@@ -1,0 +1,38 @@
+# =============================================================================
+# Simple Game: Getting Started with Phaser
+# =============================================================================
+#
+# WHAT THIS DEMONSTRATES:
+# - Creating game objects with set positions
+# - String interpolation to display object properties
+# - Basic Phaser transpiler output
+#
+# HOW TO RUN:
+#   rosh build examples/games/simple-game.rosh --target phaser --output dist/
+#
+# Then open dist/index.html in your web browser
+#
+# WHAT YOU'LL SEE:
+# - Two colored rectangles (goblin and chest)
+# - Console messages showing their positions
+# - No interactivity (just a static scene)
+#
+# NEXT STEPS:
+# - See hero-game.rosh for player controls
+# - See mvp-demo.rosh for full feature showcase
+#
+# =============================================================================
+
+create object goblin
+    set x to 100
+    set y to 200
+end
+
+create object chest
+    set x to 400
+    set y to 200
+end
+
+print "Game created!"
+print "Goblin at ({goblin.x}, {goblin.y})"
+print "Chest at ({chest.x}, {chest.y})"

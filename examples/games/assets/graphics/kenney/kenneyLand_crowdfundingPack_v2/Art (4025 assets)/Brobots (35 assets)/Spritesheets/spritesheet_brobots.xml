@@ -1,0 +1,36 @@
+<TextureAtlas imagePath="sheet.png">
+	<SubTexture name="brobot_blueBody.png" x="538" y="0" width="157" height="128"/>
+	<SubTexture name="brobot_blueDamage1.png" x="381" y="0" width="157" height="128"/>
+	<SubTexture name="brobot_blueDamage2.png" x="540" y="232" width="157" height="128"/>
+	<SubTexture name="brobot_blueDrive1.png" x="366" y="597" width="158" height="150"/>
+	<SubTexture name="brobot_blueDrive2.png" x="524" y="597" width="158" height="146"/>
+	<SubTexture name="brobot_blueHurt.png" x="541" y="743" width="157" height="128"/>
+	<SubTexture name="brobot_blueJump.png" x="363" y="747" width="178" height="162"/>
+	<SubTexture name="brobot_greenBody.png" x="540" y="360" width="157" height="104"/>
+	<SubTexture name="brobot_greenDamage1.png" x="498" y="909" width="157" height="104"/>
+	<SubTexture name="brobot_greenDamage2.png" x="341" y="909" width="157" height="104"/>
+	<SubTexture name="brobot_greenDrive1.png" x="375" y="128" width="158" height="120"/>
+	<SubTexture name="brobot_greenDrive2.png" x="183" y="897" width="158" height="116"/>
+	<SubTexture name="brobot_greenHurt.png" x="533" y="128" width="157" height="104"/>
+	<SubTexture name="brobot_greenJump.png" x="364" y="289" width="176" height="132"/>
+	<SubTexture name="brobot_redBody.png" x="196" y="161" width="179" height="128"/>
+	<SubTexture name="brobot_redDamage1.png" x="202" y="0" width="179" height="128"/>
+	<SubTexture name="brobot_redDamage2.png" x="363" y="469" width="179" height="128"/>
+	<SubTexture name="brobot_redDrive1.png" x="183" y="747" width="180" height="150"/>
+	<SubTexture name="brobot_redDrive2.png" x="184" y="323" width="180" height="146"/>
+	<SubTexture name="brobot_redHurt.png" x="184" y="469" width="179" height="128"/>
+	<SubTexture name="brobot_redJump.png" x="0" y="161" width="196" height="162"/>
+	<SubTexture name="brobot_yellowBody.png" x="0" y="875" width="183" height="128"/>
+	<SubTexture name="brobot_yellowDamage1.png" x="183" y="619" width="183" height="128"/>
+	<SubTexture name="brobot_yellowDamage2.png" x="0" y="747" width="183" height="128"/>
+	<SubTexture name="brobot_yellowDrive1.png" x="0" y="323" width="184" height="150"/>
+	<SubTexture name="brobot_yellowDrive2.png" x="0" y="473" width="184" height="146"/>
+	<SubTexture name="brobot_yellowHurt.png" x="0" y="619" width="183" height="128"/>
+	<SubTexture name="brobot_yellowJump.png" x="0" y="0" width="202" height="161"/>
+	<SubTexture name="tracks_back1.png" x="667" y="464" width="103" height="66"/>
+	<SubTexture name="tracks_back2.png" x="667" y="464" width="103" height="66"/>
+	<SubTexture name="tracks_long1.png" x="542" y="464" width="125" height="66"/>
+	<SubTexture name="tracks_long2.png" x="542" y="530" width="125" height="66"/>
+	<SubTexture name="tracks_short1.png" x="655" y="871" width="103" height="66"/>
+	<SubTexture name="tracks_short2.png" x="655" y="937" width="103" height="66"/>
+</TextureAtlas>

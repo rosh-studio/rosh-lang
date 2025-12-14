@@ -1,0 +1,65 @@
+# =============================================================================
+# Hero Game: Player Controls and Events
+# =============================================================================
+#
+# WHAT THIS DEMONSTRATES:
+# - Object inheritance (create object X from player)
+# - Automatic player controls (arrow keys + space bar)
+# - Event handlers (when fire then...)
+# - Property mutations in handlers (set hero.score to...)
+# - Event triggering (trigger check_victory)
+# - Fixed objects (immovable)
+#
+# HOW TO RUN:
+#   rosh build examples/games/hero-game.rosh --target phaser --output dist/
+#
+# Then open dist/index.html in your web browser
+#
+# CONTROLS:
+# - Arrow keys: Move hero automatically (inherited from player)
+# - Space bar: Fire (triggers fire event, increases score by 10)
+#
+# KEY CONCEPTS:
+# - The 'player' type gives automatic keyboard controls
+# - Events connect user input to game logic
+# - Properties can be modified in event handlers
+# - Events can trigger other events
+#
+# =============================================================================
+
+# Player character with inheritance
+create object hero from player
+    set x to 400
+    set y to 300
+    set lives to 3
+    set score to 0
+end
+
+# Enemy (no inheritance - uses defaults)
+create object enemy
+    set x to 100
+    set y to 100
+end
+
+# Immovable chest (fixed property)
+create object chest
+    set x to 700
+    set y to 300
+    set fixed to true
+end
+
+# Event handlers with property mutations
+when fire then
+    set hero.score to hero.score plus 10
+    print "Hero fires! Score: {hero.score}"
+    trigger check_victory
+end
+
+when check_victory then
+    print "Checking victory condition..."
+end
+
+# Startup message
+print "=== Hero Game v0.1.6 ==="
+print "Arrow keys to move, Space to fire"
+print "Hero starts with {hero.lives} lives"

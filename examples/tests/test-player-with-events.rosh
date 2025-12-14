@@ -1,0 +1,19 @@
+# Test player with custom fire event
+create object hero from player
+    set x to 400
+    set y to 300
+    set lives to 5
+end
+
+create object enemy
+    set x to 100
+    set y to 100
+end
+
+# Custom fire handler
+when fire then
+    print "Hero fires at enemy!"
+end
+
+print "Hero created with {hero.lives} lives"
+print "Use arrow keys to move, space to fire"

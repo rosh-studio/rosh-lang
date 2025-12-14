@@ -526,6 +526,148 @@ def run_repl(interpreter: Interpreter = None):
             pass
 
 
+def copy_sprite_assets(source_path: Path, output_dir: Path, sprite_assets: dict):
+    """Copy only the sprite assets that are actually used in the game (v0.1.7)
+
+    Searches for sprite files in these locations (in order):
+    1. Same directory as source file
+    2. ../assets/ relative to source file
+    3. examples/games/assets/ (for examples)
+
+    Args:
+        source_path: Path to the source .rosh file
+        output_dir: Output directory for the game
+        sprite_assets: Dict of {object_name: sprite_filename} from transpiler
+    """
+    import shutil
+    from pathlib import Path
+
+    # Create assets directory in output
+    assets_dir = output_dir / 'assets'
+    assets_dir.mkdir(parents=True, exist_ok=True)
+
+    # Search paths for assets
+    source_dir = source_path.parent
+    search_paths = [
+        source_dir / 'assets',  # Same dir as .rosh file
+        source_dir.parent / 'assets',  # ../assets/
+        source_dir.parent / 'games' / 'assets',  # For examples
+        Path('examples/games/assets'),  # Absolute fallback
+    ]
+
+    copied_count = 0
+    for obj_name, sprite_file in sprite_assets.items():
+        # Try each search path
+        for search_path in search_paths:
+            sprite_path = search_path / sprite_file
+            if sprite_path.exists():
+                dest_path = assets_dir / sprite_file
+                shutil.copy2(sprite_path, dest_path)
+                print(f"  📦 Copied: {sprite_file}", file=sys.stderr)
+                copied_count += 1
+                break
+        else:
+            # Sprite not found in any search path
+            print(f"  ⚠️  Not found: {sprite_file} (will use fallback rectangle)", file=sys.stderr)
+
+    if copied_count > 0:
+        print(f"✅ Copied {copied_count} sprite(s) to {assets_dir}", file=sys.stderr)
+
+
+def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = False):
+    """Transpile Rosh code to target platform
+
+    Args:
+        filepath: Path to Rosh file to transpile
+        target: Target platform (phaser, etc.)
+        output_dir: Directory for output files
+        copy_assets: If True, automatically copy required sprite assets
+
+    Exits:
+        0 on success
+        1 on error
+    """
+    from pathlib import Path
+    import shutil
+    from .lexer import Lexer
+    from .parser import Parser
+    from .transpilers.phaser import PhaserTranspiler
+    from .errors import RoshError
+
+    try:
+        # Read source file
+        path = Path(filepath)
+        if not path.exists():
+            print(f"Error: File not found: {filepath}", file=sys.stderr)
+            sys.exit(1)
+
+        source = path.read_text()
+
+        # Lex and parse
+        lexer = Lexer(source)
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        program = parser.parse()
+
+        # Transpile based on target
+        if target == 'phaser':
+            transpiler = PhaserTranspiler()
+            js_code = transpiler.transpile(program)
+            generate_phaser_output(js_code, output_dir)
+
+            # Copy assets if requested (v0.1.7)
+            if copy_assets and transpiler.sprite_assets:
+                copy_sprite_assets(path, Path(output_dir), transpiler.sprite_assets)
+
+            print(f"✅ Transpilation successful!", file=sys.stderr)
+            print(f"📁 Output: {output_dir}", file=sys.stderr)
+
+            # Show how to run (v0.1.7 - always recommend web server to avoid CORS issues)
+            if transpiler.sprite_assets:
+                print(f"🎮 To run with sprites:", file=sys.stderr)
+            else:
+                print(f"🎮 To run:", file=sys.stderr)
+            print(f"   cd {output_dir} && python3 -m http.server 8000", file=sys.stderr)
+            print(f"   Then open: http://localhost:8000", file=sys.stderr)
+        else:
+            print(f"Error: Unknown target: {target}", file=sys.stderr)
+            sys.exit(1)
+
+    except RoshError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def generate_phaser_output(js_code: str, output_dir: str):
+    """Generate Phaser output files
+
+    Creates:
+    - game.js (generated Phaser code)
+    - index.html (HTML boilerplate)
+    - assets/ (placeholder directory)
+
+    Args:
+        js_code: Generated JavaScript code
+        output_dir: Directory for output files
+    """
+    from pathlib import Path
+    import shutil
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Write game.js
+    with open(output_path / "game.js", "w") as f:
+        f.write(js_code)
+
+    # Copy HTML template
+    template_dir = Path(__file__).parent / "transpilers" / "templates"
+    shutil.copy(template_dir / "phaser_index.html", output_path / "index.html")
+
+    # Create assets directory
+    (output_path / "assets").mkdir(exist_ok=True)
+
+
 def main():
     """Main entry point for the Rosh CLI"""
     parser = argparse.ArgumentParser(
@@ -533,11 +675,30 @@ def main():
         prog="rosh"
     )
 
-    parser.add_argument(
-        "file",
-        nargs="?",
-        help="Rosh file to execute (.rosh)"
-    )
+    # Check if using build subcommand (peek at args)
+    import sys
+    using_subcommand = len(sys.argv) > 1 and sys.argv[1] == 'build'
+
+    if using_subcommand:
+        # Add subparsers for commands
+        subparsers = parser.add_subparsers(dest='subcommand', help='Commands')
+
+        # Build subcommand
+        build_parser = subparsers.add_parser('build', help='Transpile Rosh code to target platform')
+        build_parser.add_argument('file', help='Rosh file to transpile')
+        build_parser.add_argument('--target', required=True, choices=['phaser'],
+                                  help='Target platform (phaser)')
+        build_parser.add_argument('--output', default='dist/',
+                                  help='Output directory (default: dist/)')
+        build_parser.add_argument('--copy-assets', action='store_true',
+                                  help='Automatically copy required sprite assets to output')
+    else:
+        # Default behavior (run/REPL) - preserve existing arguments
+        parser.add_argument(
+            "file",
+            nargs="?",
+            help="Rosh file to execute (.rosh)"
+        )
 
     parser.add_argument(
         "-c", "--command",
@@ -616,6 +777,12 @@ def main():
     # Set global flag for REPL
     global _disable_remote_imports
     _disable_remote_imports = args.no_remote_imports
+
+    # Handle build subcommand
+    if hasattr(args, 'subcommand') and args.subcommand == 'build':
+        copy_assets = getattr(args, 'copy_assets', False)
+        run_build(args.file, args.target, args.output, copy_assets)
+        return
 
     if args.command:
         # Execute inline code

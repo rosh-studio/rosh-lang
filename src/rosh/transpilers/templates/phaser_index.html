@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rosh Game - Phaser</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #1a1a1a;
+            font-family: 'Courier New', monospace;
+        }
+        #game-container {
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        .info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: #888;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="info">🤖 Rosh → Phaser | Press F12 for console</div>
+    <div id="game-container"></div>
+
+    <!-- Phaser 3 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+
+    <!-- Generated game code -->
+    <script src="game.js"></script>
+</body>
+</html>

@@ -167,6 +167,198 @@ load game from "savegame.rosh"
 
 ---
 
+## 14-Dec-2025: Advanced Game Features (Phaser Transpiler)
+
+**Context:** After implementing sprite system (v0.1.7), thinking ahead about more complex game development needs.
+
+### Game State Management
+
+**Levels/Scenes:**
+- Multiple game scenes (menu, level1, level2, game-over)
+- Scene transitions with state preservation
+- Level progression and unlocking
+
+**Possible approaches:**
+```rosh
+# Option 1: Multi-file with scene objects
+create scene main_menu
+    set background to "menu.png"
+end
+
+create scene level1
+    set background to "forest.png"
+    set next_scene to level2
+end
+
+# Option 2: Scene switching with events
+when level_complete then
+    trigger switch_scene with "level2"
+end
+
+# Option 3: Import-based levels
+import "levels/level1.rosh"
+import "levels/level2.rosh"
+```
+
+**Challenges:**
+- Phaser transpiler doesn't support imports (interpreter-only)
+- May need scene bundling or code generation approach
+- State persistence between scenes
+
+### Pause/Resume/Restart
+
+**Essential for real games:**
+- Pause menu (Esc key, pause button)
+- Resume game (unpause)
+- Restart level (reset state)
+- Quit to menu
+
+**Possible approaches:**
+```rosh
+# Option 1: Built-in game states
+when pause_pressed then
+    pause game
+end
+
+when unpause_pressed then
+    resume game
+end
+
+when restart_pressed then
+    restart scene
+end
+
+# Option 2: Manual state management
+create object game_state
+    set paused to false
+    set current_level to 1
+end
+
+when key_esc then
+    set game_state.paused to not game_state.paused
+end
+
+# Option 3: Phaser scene methods (generated)
+# Transpiler generates: this.scene.pause()
+```
+
+**Implementation considerations:**
+- Need to generate Phaser scene lifecycle methods
+- Pause should stop update loop but keep rendering
+- Need UI overlay for pause menu
+
+### Save/Load Game Progress
+
+**User expectations:**
+- Save progress (level, score, unlocks)
+- Load saved game on restart
+- Multiple save slots?
+
+**Challenges:**
+- Browser localStorage vs file system
+- Phaser uses localStorage by default
+- Rosh interpreter uses save/load commands (file-based)
+- Need transpiler-specific save/load that uses localStorage
+
+**Possible approach:**
+```rosh
+# In Phaser, save to localStorage
+when level_complete then
+    save_browser current_level to "progress"
+end
+
+# On game start, load from localStorage
+when game_start then
+    load_browser "progress" into saved_level
+    if saved_level exists then
+        set current_level to saved_level
+    end
+end
+```
+
+### More Complex Mechanics
+
+**Physics & Collision:**
+- Gravity, jumping, platforms
+- Complex collision shapes (not just rectangles)
+- Phaser Arcade Physics integration
+
+**AI/Pathfinding:**
+- Enemy AI (patrol, chase, flee)
+- Pathfinding algorithms
+- Behavior trees
+
+**Particle Effects:**
+- Explosions, trails, sparkles
+- Phaser particle emitters
+
+**Audio:**
+- Background music
+- Sound effects
+- Volume control
+
+**UI Systems:**
+- Health bars, progress bars
+- Dialog boxes, tooltips
+- Inventory screens
+- Skill trees
+
+**Multiplayer:**
+- Local multiplayer (split screen, hot seat)
+- Online multiplayer (WebSockets)
+- Turn-based vs real-time
+
+### Strategic Direction
+
+**Phase 1 (Current - v0.1.7):**
+- ✅ Single scene games
+- ✅ Basic sprites
+- ✅ Simple collision
+- ✅ Keyboard input
+
+**Phase 2 (Next - v0.1.8?):**
+- Pause/resume/restart
+- localStorage save/load
+- Background music & sound effects
+- Sprite animation (sprite sheets)
+
+**Phase 3 (Future - v0.2.x):**
+- Multiple scenes/levels
+- Advanced physics (gravity, jumping)
+- Particle effects
+- More complex UI
+
+**Phase 4 (Later - v0.3.x+):**
+- AI/pathfinding
+- Multiplayer basics
+- Advanced game mechanics
+
+### Open Questions
+
+1. **Scene management:** How do we handle multi-scene games without imports?
+   - Generate all scenes in one file?
+   - Build step that concatenates scenes?
+   - Phaser scene manager integration?
+
+2. **State persistence:** Browser vs interpreter differences
+   - Unify save/load API?
+   - Separate browser-specific commands?
+   - Auto-detect environment?
+
+3. **Physics:** When to add Phaser Physics?
+   - Wait for user demand?
+   - Add when we do platformers?
+   - Optional opt-in flag?
+
+4. **Complexity ceiling:** How far should Rosh Phaser go?
+   - Simple games only?
+   - Full game engine competitor?
+   - Find the right balance?
+
+**Decision:** Document these, get user feedback, prioritize based on real needs.
+
+---
+
 ## Notes
 
 - All ideas dated for chronological tracking

@@ -1,0 +1,81 @@
+# =============================================================================
+# Sprite Demo: Using Images Instead of Colored Rectangles
+# =============================================================================
+#
+# WHAT THIS DEMONSTRATES:
+# - Loading sprite images from assets/ folder
+# - Fallback to colored rectangles if sprite missing
+# - Mixing sprites and rectangles in the same game
+#
+# HOW TO RUN:
+#   rosh build examples/games/sprite-demo.rosh --target phaser --output dist/
+#
+# Then open dist/index.html in your web browser
+#
+# ASSET SETUP:
+# Place your sprite images in: dist/assets/
+# - dist/assets/hero.png
+# - dist/assets/enemy.png
+# - dist/assets/coin.png
+#
+# If assets are missing, you'll see colored rectangles instead (automatic fallback)
+#
+# CONTROLS:
+# - Arrow keys: Move hero
+# - Space bar: Fire
+#
+# =============================================================================
+
+# Hero with sprite
+create object hero from player
+    set x to 50%
+    set y to 50%
+    set sprite to "hero.png"
+    set lives to 3
+    set score to 0
+end
+
+# Enemy with sprite
+create object enemy
+    set x to 75%
+    set y to 25%
+    set sprite to "enemy.png"
+end
+
+# Coin with sprite
+create object coin
+    set x to 25%
+    set y to 75%
+    set sprite to "coin.png"
+    set fixed to true
+end
+
+# Chest without sprite (will use colored rectangle)
+create object chest
+    set x to 90%
+    set y to 50%
+    set fixed to true
+end
+
+# HUD
+create object hud
+    set target to hero
+    set x to 2%
+    set y to 2%
+end
+
+# Collision handling
+when collision hero enemy then
+    set hero.lives to hero.lives minus 1
+    print "Ouch! Lives: {hero.lives}"
+end
+
+when collision hero coin then
+    set hero.score to hero.score plus 100
+    print "Got coin! Score: {hero.score}"
+end
+
+print "=== Sprite Demo ==="
+print "Arrow keys to move, Space to fire"
+print "If you see colored rectangles, sprites are missing from assets/"
+print "Check console for sprite loading messages"

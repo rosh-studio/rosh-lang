@@ -223,7 +223,7 @@ class Lexer:
         return result
 
     def read_number(self) -> Token:
-        """Read a number literal"""
+        """Read a number literal (supports percentages like 50%)"""
         start_line, start_col = self.line, self.column
         num_str = ''
         has_dot = False
@@ -235,6 +235,13 @@ class Lexer:
                 has_dot = True
             num_str += self.current_char()
             self.advance()
+
+        # Check for percentage sign
+        if self.current_char() == '%':
+            num_str += '%'
+            self.advance()
+            # Return as identifier so it can be handled specially
+            return Token(TokenType.IDENTIFIER, num_str, start_line, start_col)
 
         value = float(num_str) if has_dot else int(num_str)
         return Token(TokenType.NUMBER, value, start_line, start_col)
