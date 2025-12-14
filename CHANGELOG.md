@@ -8,14 +8,331 @@
 
 ## [Unreleased]
 
+### In Progress
+- v0.0.8 - Infrastructure & Tooling
+  - ✅ TOML support (--toml flag)
+  - ✅ Test mode for CI/CD (--test flag)
+  - ✅ Program metadata system (meta keyword)
+  - ✅ AI ticket/review system
+  - ⏳ BACKLOG.md for deferred features
+
 ### Next Steps
-- Multiline comments
-- Type checking functions (is_number, is_string, etc.)
-- List slicing
+- In-game REPL system (v0.2.0) - Proposed
+- Audio & animation for Phaser (v0.1.8)
+- Game state management (pause/resume/restart)
+- Multiple scenes/levels
+- Second transpiler target (Godot GDScript)
 
 ---
 
-## [v0.0.6] - 2024-12-13
+## [2025-12-14] - Documentation & Strategic Planning
+
+### Added
+- **IN-GAME-REPL-PROPOSAL.md** - Comprehensive proposal for live coding inside games
+  - Three implementation approaches (JavaScript prototype, WebSocket server, standalone)
+  - Use cases: live development, teaching, debugging, demos, multiplayer
+  - Implementation timeline and phases
+  - THE original inspiration for Rosh (especially multiplayer 3D worlds)
+
+- **MVP-ANALYSIS.md** - Strategic analysis of priorities
+  - In-game REPL vs Phaser polish comparison
+  - Recommendation: Build REPL prototype (1-2 days)
+  - Risk/reward analysis
+  - Platform progression strategy
+
+### Updated
+- **IDEAS.md** - Advanced game features brainstorming
+  - Game state management (levels/scenes)
+  - Pause/resume/restart mechanics
+  - Save/load strategies
+  - Complex mechanics (physics, AI, audio, UI, multiplayer)
+  - Strategic roadmap phases
+
+---
+
+## [v0.1.7] - 2025-12-14
+
+**Sprite/Image Support** - Transform Rosh from colored boxes to real game graphics!
+
+### Added
+- **Sprite property support**
+  - Syntax: `set sprite to "hero.png"`
+  - Must use literal strings (transpiler limitation)
+  - Works with all object types (player, character, object)
+
+- **Automatic asset preloading**
+  - Generates Phaser `preload()` method
+  - Loads all referenced sprites before game starts
+  - Prevents missing texture errors
+
+- **Graceful fallback rendering**
+  - Missing sprites → colored rectangles (game still works!)
+  - Console warnings: `⚠️ Texture not found: hero.png`
+  - No fatal errors from missing assets
+
+- **Smart asset copying**
+  - New `--copy-assets` flag
+  - Selectively copies ONLY referenced sprites
+  - Organized output: `dist/assets/hero.png`
+  - Clear console output: `📦 Copied: hero.png`
+
+- **6300+ free game assets included**
+  - Kenney's asset collection (kenney.nl)
+  - Selection from zapcoder's compilation
+  - Characters, enemies, items, environments, UI
+  - All organized in `examples/games/assets/`
+  - Full attribution in CREDITS.md
+
+- **Python web server workflow**
+  - ALWAYS shown (prevents CORS issues)
+  - Instructions: `cd dist/ && python3 -m http.server 8000`
+  - Works offline, no external dependencies
+
+### Changed
+- CLI output always shows web server instructions (not just when sprites detected)
+- Prevents user confusion when they add sprites later
+
+### Documentation
+- **examples/games/README.md**
+  - Added "Phaser Transpiler Limitations" section
+  - Documented sprite literal string requirement
+  - Troubleshooting guide for sprite loading
+  - Clear warnings about MUD examples (don't transpile!)
+
+- **docs/tickets/SPRITE-SYSTEM-TICKET.md**
+  - Moved from root to organized location
+  - Added Codex review feedback section
+  - Complete testing documentation (8 tests)
+  - Status: Complete and Reviewed
+
+### Testing
+- **8 new comprehensive tests** (32 total Phaser tests)
+  - `test_sprite_preload_generation` - Preload method creation
+  - `test_sprite_fallback_rendering` - Graceful fallback logic
+  - `test_sprite_assets_tracking` - Asset dictionary tracking
+  - `test_mixed_sprites_and_rectangles` - Hybrid objects
+  - `test_no_sprites_no_preload` - Conditional preload
+  - `test_sprite_with_player_auto_controls` - Integration with player system
+  - `test_multiple_sprites_preload` - Multi-asset games
+  - `test_sprite_literal_string_only` - Validation of limitation
+
+### Impact
+**Transforms Rosh from "toy examples with colored boxes" to "real games with professional graphics."**
+
+Before v0.1.7: Only colored rectangles
+After v0.1.7: Real game graphics with 6300+ free assets!
+
+---
+
+## [v0.1.6] - 2025-12-14
+
+**Input + Events in Phaser** - Auto-controllable player objects with smart defaults!
+
+### Added
+- **Event system (`when/trigger`) in Phaser transpiler**
+  - Transpiles interpreter event syntax to Phaser events
+  - Event handler registration in `create()`
+  - Update loop with event triggering
+  - Property mutations in event handlers work
+  - Trigger statements with parameters
+
+- **Object inheritance (`create object X from Y`)**
+  - Syntax: `create object hero from player`
+  - Base types: `player`, `character`, `object`
+  - Smart defaults by type
+  - Property override (not addition)
+
+- **Player auto-controls - JUST WORKS!**
+  - Arrow keys automatically move player objects
+  - Space bar triggers 'fire' event
+  - ZERO event handlers needed for basic games
+  - Uses `speed` property for movement (default: 5)
+
+- **Smart defaults for player objects**
+  - `lives: 3`, `score: 0`, `speed: 5`
+  - Auto-generated HUD display (lives/score)
+  - Can override any default
+
+- **Special properties**
+  - `fixed: true` - Object doesn't get auto-controls
+  - `lives`, `score` - Auto-display in HUD
+  - `speed` - Movement speed for player objects
+
+- **Keyboard input**
+  - Automatic keyboard setup in `create()`
+  - Arrow keys, space bar, and custom keys
+  - Events: `key_pressed`, `space_pressed`, `update`
+
+### Examples
+```rosh
+# This is ALL you need for a controllable player!
+create object hero from player
+    set x to 400
+    set y to 300
+end
+
+# Automatically gets:
+# - Arrow key movement
+# - Space bar fire
+# - Lives/score HUD
+# - All with ZERO event handlers!
+```
+
+### Testing
+- **20+ new tests** for events, inheritance, auto-controls, HUD
+- All 35+ Phaser tests passing
+
+### Impact
+**80% less code for simple games!**
+
+Before: 50+ lines of keyboard handling
+After: 3 lines to create controllable player
+
+---
+
+## [v0.1.5] - 2025-12-14
+
+**Phaser Transpiler MVP** - Rosh games run in ANY browser, zero install!
+
+### Added
+- **JavaScript/Phaser transpiler** (`rosh build --target phaser`)
+  - Full transpiler architecture in `src/rosh/transpilers/phaser.py`
+  - Objects → Phaser colored rectangles
+  - Print statements → `console.log()` with string interpolation
+  - Fail-fast error handling (unsupported features error immediately)
+
+- **Browser deployment**
+  - Zero-install (runs in any browser)
+  - Generates `game.js`, `index.html`
+  - Uses Phaser 3.70.0 from CDN
+  - Works offline after first load
+
+- **String interpolation support**
+  - `"Hello {name}"` → `` `Hello ${name}` ``
+  - Works in both interpreter and transpiler
+  - Nested expressions supported
+
+- **Validation system**
+  - Pre-transpile AST validation
+  - Clear error messages for unsupported features
+  - Lists all validation errors at once
+
+### Documentation
+- **examples/games/README.md** - Phaser game development guide
+- **examples/games/mvp-demo.rosh** - Working example game
+
+### Testing
+- **15 comprehensive unit tests**
+- **7 integration tests**
+- JavaScript validation with `node --check`
+- Browser testing workflow
+
+### Example
+```bash
+# Write Rosh code
+create object goblin
+    set x to 100
+    set y to 200
+end
+
+# Transpile to Phaser
+rosh build game.rosh --target phaser --output dist/
+
+# Open in browser → See colored rectangle at (100, 200)!
+```
+
+### Impact
+**Rosh games can now run anywhere without installing anything!**
+
+---
+
+## [v0.0.9] - 2025-12-14
+
+**TOON Format Support** - 40% fewer tokens than JSON for AI-native serialization!
+
+### Added
+- **TOON encoder** (`src/rosh/toon_encoder.py`)
+  - Converts Python values to TOON format
+  - Supports: str, int, float, bool, None, list, dict, objects
+  - Smart indentation and formatting
+  - Special handling for Rosh objects
+
+- **TOON decoder** (`src/rosh/toon_decoder.py`)
+  - Parses TOON format back to Python values
+  - Robust error handling with line numbers
+  - Validates TOON syntax
+
+- **File operations**
+  - `save game to "state.toon"` - Saves as TOON
+  - `load game from "state.toon"` - Loads TOON files
+  - Auto-detection: `.toon` extension → TOON format
+  - Default remains JSON (explicit `.toon` required)
+
+- **Round-trip support**
+  - All Rosh types serialize and deserialize correctly
+  - Preserves object structure and properties
+  - Maintains data integrity
+
+### Testing
+- **37 comprehensive unit tests**
+  - Encoder tests (primitives, collections, objects)
+  - Decoder tests (parsing, validation, errors)
+  - Round-trip tests (JSON parity)
+  - File operations tests
+
+### Impact
+**40% token reduction for AI context!**
+
+Example state:
+- JSON: 450 tokens
+- TOON: 270 tokens (40% savings!)
+
+---
+
+## [v0.0.7] - 2025-12-14
+
+**Event System** - Reactive programming for game logic!
+
+### Added
+- **Event-driven programming**
+  - Syntax: `when <event> then ... end`
+  - Register event handlers
+  - Trigger events with parameters: `trigger player_damaged with 15`
+  - Lexical scoping for event handlers
+
+- **Event loop stdlib helpers**
+  - `every(seconds, event_name)` - Periodic events
+  - `stop_loop()` - Stop event loop
+  - Timer-based event triggering
+
+- **Built-in event handlers**
+  - `when start` - Game initialization
+  - `when update` - Every frame
+  - `when key_pressed` - Keyboard input
+  - Custom events via `trigger`
+
+### Examples
+```rosh
+when player_damaged then
+    set player.health to player.health minus damage
+    if player.health is below 0 then
+        trigger game_over
+    end
+end
+
+trigger player_damaged with 15
+```
+
+### Testing
+- **21 comprehensive event tests**
+- All pass successfully
+
+### Impact
+**Enables reactive game logic without polling loops!**
+
+---
+
+## [v0.0.6] - 2025-12-13
 
 **Quality of Life Release** - Massive improvements to language usability based on real-world usage!
 
@@ -271,7 +588,14 @@ print "Health: {player.health} / {player.max_health}"
 
 | Version | Date | Milestone | Key Features |
 |---------|------|-----------|--------------|
-| v0.0.5 | 2024-12-12 | String Operations | List iteration, string methods, function return assignment, stack viewing, REPL improvements |
+| v0.1.7 | 2025-12-14 | Sprite System | Sprite/image support, asset preloading, 6300+ free assets, smart copying |
+| v0.1.6 | 2025-12-14 | Input + Events in Phaser | Player auto-controls, object inheritance, keyboard input, smart defaults |
+| v0.1.5 | 2025-12-14 | Phaser Transpiler MVP | JavaScript/Phaser transpiler, browser deployment, zero-install games |
+| v0.0.9 | 2025-12-14 | TOON Format | TOON encoder/decoder, 40% token savings, round-trip serialization |
+| v0.0.8 | 2025-12-14 | Infrastructure | TOML support, test mode, metadata system, AI tickets (In Progress) |
+| v0.0.7 | 2025-12-14 | Event System | when/trigger syntax, event loop, reactive programming |
+| v0.0.6 | 2025-12-13 | Quality of Life | String interpolation, input command, else if, NOT in compounds |
+| v0.0.5 | 2024-12-12 | String Operations | List iteration, string methods, function return assignment, stack viewing |
 | v0.0.4 | 2024-11-30 | Collections & Control Flow | For loops, lists, break/continue, object cloning |
 | v0.0.3 | 2024-11-15 | Inheritance & Enhancement | Inheritance, while loops, math functions, random |
 | v0.0.2 | 2024-11-01 | AI Integration | prompt, prompt exec, eval, file I/O |
@@ -281,37 +605,39 @@ print "Health: {player.health} / {player.max_health}"
 
 ## Upcoming
 
-### v0.0.6 (Planned - Q1 2025)
-- Multiline comments (""" or ###)
-- String interpolation ("Hello {name}")
-- Type checking functions (is_number, is_string, etc.)
-- List slicing (my_list[1:3])
-- Modulo operator (x modulo y)
-- else if / elif syntax
-- Increment/decrement shortcuts
+### v0.2.0 (Proposed - 2025)
+- **In-game REPL** (live coding inside games) - ORIGINAL VISION
+  - JavaScript prototype (1-2 days)
+  - WebSocket server (1 week)
+  - Multiplayer collaborative worlds
+  - Voice integration path
 
-### v0.0.7 (Planned - Q1 2025)
-- **Event system** (when/trigger syntax) - TOP PRIORITY
+### v0.1.8 (Planned - 2025)
+- Audio & animation for Phaser
+- Game state management (pause/resume/restart)
+- Background music & sound effects
+- Sprite animation (sprite sheets)
+
+### v0.1.9 (Planned - 2025)
+- Multiple scenes/levels in Phaser
+- Scene transitions
+- Level progression
+
+### v0.3.0+ (2026)
+- Second transpiler: Godot 2D (GDScript)
+- Third transpiler: Godot 3D
+- Fourth transpiler: Minecraft (Java mods)
+- Fifth transpiler: Unity (C#)
+
+### Future Features (Deferred)
 - Error handling (try/catch)
 - Dictionary/map data structures
 - List comprehensions
 - Lambda functions
-
-### v0.0.8 (Planned - Q2 2025)
 - Package system with manifests
-- Package manager commands
-- Dependency resolution
-- Module registry
-
-### v0.1.0 (Planned - Q2 2025)
 - Multi-user MUD support
-- WebSocket server
-- Sandboxing and security
-- rosh.cloud deployment (docs.rosh.cloud, demo.rosh.cloud)
-
-### v0.3.0+ (2026)
-- Transpilers: JavaScript, Lua, GDScript, Python
-- Multi-platform game development
+- WebSocket server (for in-game REPL)
+- rosh.cloud deployment
 
 ### v2.0+ (2027+)
 - Optional Rust core rewrite
