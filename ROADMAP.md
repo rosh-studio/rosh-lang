@@ -1,9 +1,11 @@
 # Rosh Development Roadmap
 
-**Current Version:** v0.0.7
+**Current Version:** v0.0.9
 **Last Updated:** 2025-12-14
 
 > Technical milestones for the Rosh programming language.
+
+**Note on Timelines:** Dates represent "focused implementation time" not calendar time. AI-assisted development (v0.0.6-v0.0.9) was unrealistically fast (2 days). Human-paced development and testing cycles will be significantly slower. Use these as complexity estimates, not deadlines.
 
 ---
 
@@ -177,23 +179,65 @@ trigger player_damaged with 15
 
 ---
 
-### v0.1.0 - Transpiler Foundation (Q2-Q3 2026)
-**Priority: HIGH - Cross-platform deployment**
+### v0.1.0 - Transpiler Proof of Concept (Q2 2026)
+**Priority: CRITICAL - Validate transpiler approach**
 
-**Goal:** Begin cross-platform transpilation to prove language portability
+**Goal:** Prove transpilation concept with minimal implementation
+
+**Approach:**
+- [ ] Transpiler POC: Transpile simple Rosh program to BOTH:
+  - **Pygame** (Python → Python, easier implementation)
+  - **Phaser** (Python → JavaScript, more exciting demos)
+- [ ] Evaluate which is easier/more maintainable
+- [ ] Commit to one platform for MVP (v0.1.5)
+
+**Test Program:**
+```rosh
+create object player
+    set name to "Alice"
+    set health to 100
+end
+print "Player: {player.name}, Health: {player.health}"
+```
+
+**Success Criteria:**
+- Same Rosh code runs in terminal (text) and graphics
+- Clear winner emerges for MVP focus
+
+**Why POC first:**
+- De-risks transpiler work before committing weeks
+- Python → Python (Pygame) might be easier than expected
+- JavaScript (Phaser) has zero-install appeal but higher complexity
+- Small investment validates approach
+
+**Timeline:** 3-5 days focused work
+
+---
+
+### v0.1.5 - First Transpiler MVP (Q2-Q3 2026)
+**Priority: HIGH - Graphical game demos**
+
+**Goal:** Complete transpiler for platform chosen in v0.1.0 POC
 
 **Features:**
-- [ ] Transpiler foundation (JavaScript/Phaser)
-  - AST → JavaScript code generation
-  - Phaser.js runtime bindings
-  - Initial 2D game support
-  - Same Rosh code runs in terminal (ASCII) and browser (graphics)
+- [ ] Full transpiler (Pygame OR Phaser, determined by POC)
+- [ ] Core Rosh features:
+  - Objects (create/set/get)
+  - Events (when/trigger)
+  - String interpolation
+  - Control flow (if/else, loops)
+- [ ] Graphics bindings:
+  - Pygame: pygame.draw, sprites, text
+  - Phaser: scenes, sprites, text
+- [ ] Demo game (runs in terminal + graphics)
 
 **Why this milestone:**
 - Proves Rosh can target multiple platforms
-- Enables browser deployment (zero install barrier)
-- Foundation for future Unity/VR transpilation
-- Browser games demonstrate AI-assisted creation potential
+- Enables visual game development
+- Foundation for future transpilers (Unity, Lua, etc.)
+- Demonstrates AI-assisted creation potential
+
+**Timeline:** 4-6 weeks focused work
 
 ---
 
@@ -279,6 +323,29 @@ Browser: [Same game with graphics via Phaser]
 
 ## 🔮 Future Milestones
 
+### v0.5.5 - Second Transpiler Platform (2027)
+**Goal:** Implement the transpiler NOT chosen in v0.1.0 POC
+
+**Options:**
+- If v0.1.5 chose Pygame → Implement Phaser here
+- If v0.1.5 chose Phaser → Implement Pygame here
+
+**Why:** Having both browser (Phaser) and desktop (Pygame) coverage provides maximum reach
+
+**Pygame Features (if not done in v0.1.5):**
+- Python → Python transpilation (simplest path)
+- pygame.draw, sprites, text rendering
+- Desktop distribution (Windows, Mac, Linux)
+- Educational use cases (same language as interpreter)
+
+**Phaser Features (if not done in v0.1.5):**
+- Python → JavaScript transpilation
+- Browser-based deployment (zero install)
+- Phaser.js scenes, sprites, audio
+- Web distribution for maximum reach
+
+---
+
 ### v0.6.0 - Lua Transpiler (2027)
 **Goal:** Roblox and Love2D support
 - Lua code generation
@@ -325,12 +392,14 @@ Browser: [Same game with graphics via Phaser]
 | v0.0.6 | Quality of Life | ✅ Complete | 2025-12-13 | - |
 | v0.0.7 | Event System | ✅ Complete | 2025-12-14 | - |
 | v0.0.8 | Infrastructure & Format Support | ✅ Complete | 2025-12-14 | Security/dump→backlog |
-| v0.0.9 | TOON Format (Encoder) | ✅ Complete | 2025-12-14 | Encoder complete (decoder→backlog) |
-| v0.1.0 | Transpiler Foundation | 📋 Planned | Q2-Q3 2026 | JavaScript/Phaser transpiler |
-| v0.2.0 | Voice Demo + Phaser | 📋 Planned | Q3 2026 | 4-6 weeks |
+| v0.0.9 | TOON Format (Full) | ✅ Complete | 2025-12-14 | Encoder + Decoder, JSON default |
+| v0.1.0 | Transpiler POC | 📋 Next | Q2 2026 | Pygame + Phaser evaluation |
+| v0.1.5 | First Transpiler MVP | 📋 Planned | Q2-Q3 2026 | Chosen platform (4-6 weeks) |
+| v0.2.0 | Voice Demo | 📋 Planned | Q3 2026 | AI-assisted creation |
 | v0.3.0 | Package System | 📋 Planned | Q4 2026 | - |
-| v0.4.0 | Unity Transpiler | 📋 Planned | 2027 | 6-8 weeks |
+| v0.4.0 | Unity Transpiler | 📋 Planned | 2027 | VR/AR (6-8 weeks) |
 | v0.5.0 | Multi-User | 🎯 Goal | 2027 | - |
+| v0.5.5 | Second Transpiler | 🎯 Goal | 2027 | Pygame or Phaser |
 
 ---
 
