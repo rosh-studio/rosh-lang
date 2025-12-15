@@ -342,6 +342,26 @@ class UnaryOp(ASTNode):
 
 
 @dataclass
+class PlaySound(ASTNode):
+    """play sound 'filename' - Play a sound effect"""
+    filename: str
+    line: int = 0
+
+
+@dataclass
+class PlayMusic(ASTNode):
+    """play music 'filename' - Play background music (looping)"""
+    filename: str
+    line: int = 0
+
+
+@dataclass
+class StopMusic(ASTNode):
+    """stop music - Stop background music"""
+    line: int = 0
+
+
+@dataclass
 class FunctionDef(ASTNode):
     """define function <name> <params> ... end"""
     name: str

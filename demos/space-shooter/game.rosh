@@ -1,0 +1,536 @@
+# Space Shooter - Classic Arcade Game
+# Horizontal movement, multiple bullets, multiple enemies, 3 lives
+
+# === GAME CONFIGURATION ===
+# Canvas: 800x600
+# Player: bottom center, moves left/right
+# Bullets: fire upward, multiple allowed
+# Enemies: spawn at top, move down
+
+# === TITLE SCREEN ===
+create object title
+    set x to 50%
+    set y to 25%
+    set text to "Space Shooter"
+    set color to "cyan"
+    set font_size to 48
+end
+
+create object instructions
+    set x to 50%
+    set y to 45%
+    set text to "Arrow keys to move, SPACE to fire"
+    set color to "white"
+    set font_size to 18
+end
+
+create object start_text
+    set x to 50%
+    set y to 70%
+    set text to "Press SPACE to start"
+    set color to "yellow"
+    set font_size to 20
+end
+
+# === PLAYER ===
+create object player
+    set x to 50%
+    set y to 90%
+    set width to 50
+    set height to 50
+    set sprite to "player.png"
+    set color to "green"
+    set visible to false
+    set speed to 8
+end
+
+# === BULLETS (pool of 5) ===
+create object bullet1
+    set x to 0
+    set y to 0
+    set width to 9
+    set height to 33
+    set sprite to "laserGreen.png"
+    set color to "green"
+    set visible to false
+    set active to 0
+end
+
+create object bullet2
+    set x to 0
+    set y to 0
+    set width to 9
+    set height to 33
+    set sprite to "laserGreen.png"
+    set color to "green"
+    set visible to false
+    set active to 0
+end
+
+create object bullet3
+    set x to 0
+    set y to 0
+    set width to 9
+    set height to 33
+    set sprite to "laserGreen.png"
+    set color to "green"
+    set visible to false
+    set active to 0
+end
+
+create object bullet4
+    set x to 0
+    set y to 0
+    set width to 9
+    set height to 33
+    set sprite to "laserGreen.png"
+    set color to "green"
+    set visible to false
+    set active to 0
+end
+
+create object bullet5
+    set x to 0
+    set y to 0
+    set width to 9
+    set height to 33
+    set sprite to "laserGreen.png"
+    set color to "green"
+    set visible to false
+    set active to 0
+end
+
+# === ENEMIES (pool of 4) ===
+create object enemy1
+    set x to 100
+    set y to -50
+    set width to 40
+    set height to 40
+    set sprite to "enemyShip.png"
+    set color to "red"
+    set visible to false
+    set active to 0
+    set speed to 2
+end
+
+create object enemy2
+    set x to 300
+    set y to -50
+    set width to 40
+    set height to 40
+    set sprite to "enemyShip.png"
+    set color to "red"
+    set visible to false
+    set active to 0
+    set speed to 2
+end
+
+create object enemy3
+    set x to 500
+    set y to -50
+    set width to 40
+    set height to 40
+    set sprite to "enemyShip.png"
+    set color to "red"
+    set visible to false
+    set active to 0
+    set speed to 2
+end
+
+create object enemy4
+    set x to 700
+    set y to -50
+    set width to 40
+    set height to 40
+    set sprite to "enemyShip.png"
+    set color to "red"
+    set visible to false
+    set active to 0
+    set speed to 2
+end
+
+# === UI ===
+create object score_text
+    set x to 70
+    set y to 30
+    set text to "Score: 0"
+    set color to "white"
+    set font_size to 20
+    set visible to false
+end
+
+create object lives_text
+    set x to 730
+    set y to 30
+    set text to "Lives: 3"
+    set color to "green"
+    set font_size to 20
+    set visible to false
+end
+
+create object game_over_text
+    set x to 50%
+    set y to 45%
+    set text to "GAME OVER"
+    set color to "red"
+    set font_size to 48
+    set visible to false
+end
+
+create object final_score_text
+    set x to 50%
+    set y to 60%
+    set text to "Final Score: 0"
+    set color to "white"
+    set font_size to 24
+    set visible to false
+end
+
+create object restart_text
+    set x to 50%
+    set y to 75%
+    set text to "Press R to restart"
+    set color to "yellow"
+    set font_size to 20
+    set visible to false
+end
+
+# === GAME STATE ===
+create object state
+    set x to 0
+    set y to 0
+    set width to 1
+    set height to 1
+    set visible to false
+    set level to 0
+    set score to 0
+    set lives to 3
+    set spawn_timer to 0
+    set next_bullet to 1
+end
+
+# === FUNCTIONS ===
+define function start_game
+    set title.visible to false
+    set instructions.visible to false
+    set start_text.visible to false
+    set player.visible to true
+    set score_text.visible to true
+    set lives_text.visible to true
+    set state.level to 1
+    set state.score to 0
+    set state.lives to 3
+    set state.spawn_timer to 0
+    set player.x to 400
+    set score_text.text to "Score: 0"
+    set lives_text.text to "Lives: 3"
+    call spawn_enemy_wave
+end
+
+define function spawn_enemy_wave
+    # Activate all enemies at different x positions
+    set enemy1.x to 100
+    set enemy1.y to -50
+    set enemy1.active to 1
+    set enemy1.visible to true
+
+    set enemy2.x to 300
+    set enemy2.y to -100
+    set enemy2.active to 1
+    set enemy2.visible to true
+
+    set enemy3.x to 500
+    set enemy3.y to -150
+    set enemy3.active to 1
+    set enemy3.visible to true
+
+    set enemy4.x to 700
+    set enemy4.y to -200
+    set enemy4.active to 1
+    set enemy4.visible to true
+end
+
+define function fire_bullet
+    # Find next available bullet and fire it
+    play sound "laser1.ogg"
+    if state.next_bullet is equal to 1 then
+        if bullet1.active is equal to 0 then
+            set bullet1.x to player.x
+            set bullet1.y to player.y minus 30
+            set bullet1.active to 1
+            set bullet1.visible to true
+        end
+        set state.next_bullet to 2
+    end
+    if state.next_bullet is equal to 2 then
+        if bullet2.active is equal to 0 then
+            set bullet2.x to player.x
+            set bullet2.y to player.y minus 30
+            set bullet2.active to 1
+            set bullet2.visible to true
+        end
+        set state.next_bullet to 3
+    end
+    if state.next_bullet is equal to 3 then
+        if bullet3.active is equal to 0 then
+            set bullet3.x to player.x
+            set bullet3.y to player.y minus 30
+            set bullet3.active to 1
+            set bullet3.visible to true
+        end
+        set state.next_bullet to 4
+    end
+    if state.next_bullet is equal to 4 then
+        if bullet4.active is equal to 0 then
+            set bullet4.x to player.x
+            set bullet4.y to player.y minus 30
+            set bullet4.active to 1
+            set bullet4.visible to true
+        end
+        set state.next_bullet to 5
+    end
+    if state.next_bullet is equal to 5 then
+        if bullet5.active is equal to 0 then
+            set bullet5.x to player.x
+            set bullet5.y to player.y minus 30
+            set bullet5.active to 1
+            set bullet5.visible to true
+        end
+        set state.next_bullet to 1
+    end
+end
+
+define function update_score
+    set score_text.text to "Score: {state.score}"
+end
+
+define function update_lives
+    set lives_text.text to "Lives: {state.lives}"
+    if state.lives is equal to 0 then
+        call game_over
+    end
+end
+
+define function game_over
+    set state.level to 0
+    set player.visible to false
+    set score_text.visible to false
+    set lives_text.visible to false
+    # Hide all bullets
+    set bullet1.visible to false
+    set bullet2.visible to false
+    set bullet3.visible to false
+    set bullet4.visible to false
+    set bullet5.visible to false
+    # Hide all enemies
+    set enemy1.visible to false
+    set enemy2.visible to false
+    set enemy3.visible to false
+    set enemy4.visible to false
+    # Show game over screen
+    set game_over_text.visible to true
+    set final_score_text.text to "Final Score: {state.score}"
+    set final_score_text.visible to true
+    set restart_text.visible to true
+end
+
+define function restart_game
+    set game_over_text.visible to false
+    set final_score_text.visible to false
+    set restart_text.visible to false
+    # Reset bullets
+    set bullet1.active to 0
+    set bullet2.active to 0
+    set bullet3.active to 0
+    set bullet4.active to 0
+    set bullet5.active to 0
+    # Reset enemies
+    set enemy1.active to 0
+    set enemy2.active to 0
+    set enemy3.active to 0
+    set enemy4.active to 0
+    call start_game
+end
+
+# === INPUT HANDLERS ===
+when space_pressed then
+    if state.level is equal to 0 then
+        call start_game
+    end
+    if state.level is above 0 then
+        call fire_bullet
+    end
+end
+
+# Smooth continuous movement (runs every frame while key held)
+when while_key_left then
+    if state.level is above 0 then
+        if player.x is above 30 then
+            set player.x to player.x minus 5
+        end
+    end
+end
+
+when while_key_right then
+    if state.level is above 0 then
+        if player.x is below 770 then
+            set player.x to player.x plus 5
+        end
+    end
+end
+
+when key_r then
+    if state.level is equal to 0 then
+        if game_over_text.visible is equal to true then
+            call restart_game
+        end
+    end
+end
+
+# === GAME LOOP UPDATE (runs every frame) ===
+when update then
+    if state.level is above 0 then
+        # Move bullets upward
+        if bullet1.active is equal to 1 then
+            set bullet1.y to bullet1.y minus 10
+            if bullet1.y is below 0 then
+                set bullet1.active to 0
+                set bullet1.visible to false
+            end
+        end
+        if bullet2.active is equal to 1 then
+            set bullet2.y to bullet2.y minus 10
+            if bullet2.y is below 0 then
+                set bullet2.active to 0
+                set bullet2.visible to false
+            end
+        end
+        if bullet3.active is equal to 1 then
+            set bullet3.y to bullet3.y minus 10
+            if bullet3.y is below 0 then
+                set bullet3.active to 0
+                set bullet3.visible to false
+            end
+        end
+        if bullet4.active is equal to 1 then
+            set bullet4.y to bullet4.y minus 10
+            if bullet4.y is below 0 then
+                set bullet4.active to 0
+                set bullet4.visible to false
+            end
+        end
+        if bullet5.active is equal to 1 then
+            set bullet5.y to bullet5.y minus 10
+            if bullet5.y is below 0 then
+                set bullet5.active to 0
+                set bullet5.visible to false
+            end
+        end
+
+        # Move enemies downward
+        if enemy1.active is equal to 1 then
+            set enemy1.y to enemy1.y plus 2
+            if enemy1.y is above 650 then
+                # Enemy reached bottom - respawn at top
+                set enemy1.y to -50
+            end
+        end
+        if enemy2.active is equal to 1 then
+            set enemy2.y to enemy2.y plus 2
+            if enemy2.y is above 650 then
+                set enemy2.y to -50
+            end
+        end
+        if enemy3.active is equal to 1 then
+            set enemy3.y to enemy3.y plus 2
+            if enemy3.y is above 650 then
+                set enemy3.y to -50
+            end
+        end
+        if enemy4.active is equal to 1 then
+            set enemy4.y to enemy4.y plus 2
+            if enemy4.y is above 650 then
+                set enemy4.y to -50
+            end
+        end
+
+        # Simple collision detection (bullet vs enemy)
+        # Check bullet1 vs all enemies
+        if bullet1.active is equal to 1 then
+            if enemy1.active is equal to 1 then
+                if bullet1.x is above enemy1.x minus 20 then
+                    if bullet1.x is below enemy1.x plus 20 then
+                        if bullet1.y is above enemy1.y minus 20 then
+                            if bullet1.y is below enemy1.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy1.y to -50
+                                set bullet1.active to 0
+                                set bullet1.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        # Check enemy collision with player
+        if enemy1.active is equal to 1 then
+            if enemy1.y is above player.y minus 25 then
+                if enemy1.y is below player.y plus 25 then
+                    if enemy1.x is above player.x minus 30 then
+                        if enemy1.x is below player.x plus 30 then
+                            play sound "lose3.ogg"
+                            set enemy1.y to -50
+                            set state.lives to state.lives minus 1
+                            call update_lives
+                        end
+                    end
+                end
+            end
+        end
+        if enemy2.active is equal to 1 then
+            if enemy2.y is above player.y minus 25 then
+                if enemy2.y is below player.y plus 25 then
+                    if enemy2.x is above player.x minus 30 then
+                        if enemy2.x is below player.x plus 30 then
+                            play sound "lose3.ogg"
+                            set enemy2.y to -50
+                            set state.lives to state.lives minus 1
+                            call update_lives
+                        end
+                    end
+                end
+            end
+        end
+        if enemy3.active is equal to 1 then
+            if enemy3.y is above player.y minus 25 then
+                if enemy3.y is below player.y plus 25 then
+                    if enemy3.x is above player.x minus 30 then
+                        if enemy3.x is below player.x plus 30 then
+                            play sound "lose3.ogg"
+                            set enemy3.y to -50
+                            set state.lives to state.lives minus 1
+                            call update_lives
+                        end
+                    end
+                end
+            end
+        end
+        if enemy4.active is equal to 1 then
+            if enemy4.y is above player.y minus 25 then
+                if enemy4.y is below player.y plus 25 then
+                    if enemy4.x is above player.x minus 30 then
+                        if enemy4.x is below player.x plus 30 then
+                            play sound "lose3.ogg"
+                            set enemy4.y to -50
+                            set state.lives to state.lives minus 1
+                            call update_lives
+                        end
+                    end
+                end
+            end
+        end
+    end
+end

@@ -85,6 +85,11 @@ class TokenType(Enum):
     TRIGGER = auto()
     WITH = auto()
 
+    # Sound/music system
+    PLAY = auto()
+    SOUND = auto()
+    MUSIC = auto()
+
     # Metadata system
     META = auto()
 
@@ -363,6 +368,9 @@ class Lexer:
             'when': TokenType.WHEN,
             'trigger': TokenType.TRIGGER,
             'with': TokenType.WITH,
+            'play': TokenType.PLAY,
+            'sound': TokenType.SOUND,
+            'music': TokenType.MUSIC,
             'meta': TokenType.META,
             'is': TokenType.IS,
             'equal': TokenType.EQUAL,

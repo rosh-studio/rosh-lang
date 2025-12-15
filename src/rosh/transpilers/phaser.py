@@ -154,6 +154,12 @@ class PhaserTranspiler(BaseTranspiler):
         if self.event_handlers or self.player_objects or self.enable_repl:
             self.emit_event_system_helpers()
 
+        # 8.5. Generate user-defined functions as class methods (v0.2.1)
+        for statement in program.statements:
+            if isinstance(statement, FunctionDef):
+                self.emit_blank()
+                self.emit_function_def(statement)
+
         self.indent_level -= 1
         self.emit("}")
         self.emit_blank()
@@ -181,12 +187,11 @@ class PhaserTranspiler(BaseTranspiler):
         """
         # List of unsupported node types for v0.1.6
         unsupported_types = [
-            (IfStatement, "if/else statements"),
+            # IfStatement now supported! (v0.2.1)
+            # FunctionDef and FunctionCall now supported! (v0.2.1)
             (WhileLoop, "while loops"),
             (ForLoop, "for loops"),
             # WhenStatement and TriggerEvent now supported in v0.1.6!
-            (FunctionDef, "function definitions"),
-            (FunctionCall, "function calls"),
             (Input, "user input"),
             (Import, "imports"),
             (Eval, "eval"),
@@ -255,7 +260,7 @@ class PhaserTranspiler(BaseTranspiler):
                     self.event_handlers[event_key].append(node)
 
                     # Check if needs keyboard
-                    if node.event_name in ['key_pressed', 'space_pressed']:
+                    if node.event_name in ['key_pressed', 'space_pressed', 'key_left', 'key_right', 'key_up', 'key_down', 'key_r']:
                         self.needs_keyboard_input = True
 
                     # Check if needs update loop
@@ -310,6 +315,13 @@ class PhaserTranspiler(BaseTranspiler):
             self.emit_print(node)
         elif isinstance(node, TriggerEvent):
             self.emit_trigger_event(node)
+        elif isinstance(node, IfStatement):
+            self.emit_if_statement(node)
+        elif isinstance(node, FunctionCall):
+            self.emit_function_call(node)
+        elif isinstance(node, FunctionDef):
+            # FunctionDef at statement level is handled separately in transpile()
+            pass
         else:
             # Should be caught by validate_ast, but defensive programming
             raise RoshRuntimeError(
@@ -336,10 +348,12 @@ class PhaserTranspiler(BaseTranspiler):
         return value
 
     def emit_create_object(self, node: CreateObject) -> None:
-        """Convert: create object goblin ... end → Phaser rectangle
+        """Convert: create object goblin ... end → Phaser rectangle/text/sprite
 
-        Extracts properties from object body and generates Phaser
-        rectangle with position, size, and color.
+        Extracts properties from object body and generates appropriate Phaser object:
+        - If 'text' property exists → Phaser text object
+        - If 'sprite' property exists → Phaser image/sprite
+        - Otherwise → Phaser colored rectangle
 
         Special handling for HUD objects with 'target' property.
         Supports percentage positioning: set x to 50% → 400px (50% of 800px)
@@ -369,6 +383,14 @@ class PhaserTranspiler(BaseTranspiler):
         height = self.convert_percentage_to_pixels(properties.get('height', 50), 'height')
         color = properties.get('color', self.DEFAULT_COLORS[self.object_counter % 8])
 
+        # Check if object has text (renders as Phaser text object)
+        text = properties.get('text')
+        if text is not None:
+            self.emit_text_object(node.name, properties, x, y)
+            self.emit_blank()
+            self.object_counter += 1
+            return
+
         # Check if object has a sprite
         sprite = properties.get('sprite')
 
@@ -392,25 +414,38 @@ class PhaserTranspiler(BaseTranspiler):
             self.indent_level -= 1
             self.emit("}")
         else:
-            # Emit Phaser rectangle code (convert floats to ints for clean output)
-            self.emit(
-                f"this.{node.name} = this.add.rectangle({int(x)}, {int(y)}, {int(width)}, {int(height)}, {hex(color)});"
-            )
+            # Check for shape property (circle, rectangle)
+            shape = properties.get('shape', 'rectangle')
+            if shape == 'circle':
+                # Emit Phaser circle (use width as diameter, so radius = width/2)
+                radius = int(width) // 2
+                self.emit(
+                    f"this.{node.name} = this.add.circle({int(x)}, {int(y)}, {radius}, {hex(color)});"
+                )
+            else:
+                # Emit Phaser rectangle code (convert floats to ints for clean output)
+                self.emit(
+                    f"this.{node.name} = this.add.rectangle({int(x)}, {int(y)}, {int(width)}, {int(height)}, {hex(color)});"
+                )
 
-        # Store special properties on the Phaser object (Phases 5-6)
-        if 'lives' in properties:
-            self.emit(f"this.{node.name}.lives = {properties['lives']};")
-        if 'score' in properties:
-            self.emit(f"this.{node.name}.score = {properties['score']};")
-        if 'speed' in properties:
-            self.emit(f"this.{node.name}.speed = {properties['speed']};")
-        if 'fixed' in properties:
-            # Fixed property for immovable objects (Phase 6)
-            fixed_val = 'true' if properties['fixed'] else 'false'
-            self.emit(f"this.{node.name}.fixed = {fixed_val};")
-        if 'wrap_edges' in properties:
-            wrap_val = 'true' if properties['wrap_edges'] else 'false'
-            self.emit(f"this.{node.name}.wrap_edges = {wrap_val};")
+        # Store custom properties on the Phaser object
+        # These are properties beyond the standard rendering ones (x, y, width, height, color, sprite, text)
+        rendering_props = {'x', 'y', 'width', 'height', 'color', 'sprite', 'text', 'font_size', 'font', 'align', 'visible', 'shape'}
+        for prop_name, prop_value in properties.items():
+            if prop_name not in rendering_props:
+                # Emit custom property assignment
+                if isinstance(prop_value, bool):
+                    val_js = 'true' if prop_value else 'false'
+                elif isinstance(prop_value, str):
+                    val_js = f'"{prop_value}"'
+                else:
+                    val_js = str(prop_value)
+                self.emit(f"this.{node.name}.{prop_name} = {val_js};")
+
+        # Handle visibility (use Phaser's setVisible method)
+        if 'visible' in properties:
+            visible_val = 'true' if properties['visible'] else 'false'
+            self.emit(f"this.{node.name}.setVisible({visible_val});")
 
         self.emit_blank()
         self.object_counter += 1
@@ -517,6 +552,7 @@ class PhaserTranspiler(BaseTranspiler):
         Examples:
           set player.x to player.x minus 5    → this.player.x = this.player.x - 5;
           set player.lives to 3                → this.player.lives = 3;
+          set title.visible to false          → this.title.setVisible(false);
 
         Args:
             node: SetProperty AST node
@@ -526,13 +562,28 @@ class PhaserTranspiler(BaseTranspiler):
             # Object property mutation (e.g., set player.x to 100)
             obj_name = self.get_property_access_root(node.target)
             property_chain = self.get_property_chain(node.target)
-            property_path = f"this.{obj_name}.{'.'.join(property_chain)}"
+            prop_name = property_chain[-1] if property_chain else ''
 
             # Evaluate value expression
             value_js = self.emit_expression(node.value)
 
-            # Emit assignment
-            self.emit(f"{property_path} = {value_js};")
+            # Special handling for Phaser-specific properties that need method calls
+            if prop_name == 'visible':
+                # Phaser uses setVisible() method
+                obj_path = f"this.{obj_name}" + (f".{'.'.join(property_chain[:-1])}" if len(property_chain) > 1 else "")
+                self.emit(f"{obj_path}.setVisible({value_js});")
+            elif prop_name == 'text' or prop_name == 'textContent':
+                # Phaser text objects use setText() method
+                obj_path = f"this.{obj_name}" + (f".{'.'.join(property_chain[:-1])}" if len(property_chain) > 1 else "")
+                self.emit(f"{obj_path}.setText({value_js});")
+            elif prop_name == 'alpha':
+                # Phaser uses setAlpha() method
+                obj_path = f"this.{obj_name}" + (f".{'.'.join(property_chain[:-1])}" if len(property_chain) > 1 else "")
+                self.emit(f"{obj_path}.setAlpha({value_js});")
+            else:
+                # Standard property assignment
+                property_path = f"this.{obj_name}.{'.'.join(property_chain)}"
+                self.emit(f"{property_path} = {value_js};")
 
         elif isinstance(node.target, Identifier):
             # Simple property (only allowed inside object definitions)
@@ -586,6 +637,91 @@ class PhaserTranspiler(BaseTranspiler):
 
         self.emit(f"this.triggerEvent('{event_name}', {params_js});")
 
+    def emit_if_statement(self, node: IfStatement) -> None:
+        """Convert: if <condition> then ... end → JavaScript if statement
+
+        Examples:
+          if player.x is 100 then         → if (this.player.x === 100) {
+              set player.y to 200              this.player.y = 200;
+          end                               }
+
+          if box.x is goal.x then         → if (this.box.x === this.goal.x) {
+              trigger win                      this.triggerEvent('win', null);
+          else                              } else {
+              trigger miss                     this.triggerEvent('miss', null);
+          end                               }
+
+        Args:
+            node: IfStatement AST node
+        """
+        # Emit condition
+        condition_js = self.emit_expression(node.condition)
+        self.emit(f"if ({condition_js}) {{")
+        self.indent_level += 1
+
+        # Emit then body
+        for stmt in node.then_body:
+            self.emit_statement(stmt)
+
+        self.indent_level -= 1
+
+        # Emit else body if present
+        if node.else_body:
+            self.emit("} else {")
+            self.indent_level += 1
+            for stmt in node.else_body:
+                self.emit_statement(stmt)
+            self.indent_level -= 1
+
+        self.emit("}")
+
+    def emit_function_call(self, node: FunctionCall) -> None:
+        """Convert: call <name> → this.<name>()
+
+        Examples:
+          call check_win                    → this.check_win();
+          call move_box with box1           → this.move_box(this.box1);
+
+        Args:
+            node: FunctionCall AST node
+        """
+        func_name = node.name
+
+        # Build arguments list
+        if node.arguments:
+            args_js = ", ".join(self.emit_expression(arg) for arg in node.arguments)
+            self.emit(f"this.{func_name}({args_js});")
+        else:
+            self.emit(f"this.{func_name}();")
+
+    def emit_function_def(self, node: FunctionDef) -> None:
+        """Convert: define <name> ... end → GameScene method
+
+        Examples:
+          define check_win                  → check_win() { ... }
+              if box.x is equal to goal.x then
+                  set win_text.visible to true
+              end
+          end
+
+        Args:
+            node: FunctionDef AST node
+        """
+        func_name = node.name
+
+        # Build parameter list
+        params = ", ".join(node.parameters) if node.parameters else ""
+
+        self.emit(f"{func_name}({params}) {{")
+        self.indent_level += 1
+
+        # Emit function body
+        for stmt in node.body:
+            self.emit_statement(stmt)
+
+        self.indent_level -= 1
+        self.emit("}")
+
     def emit_expression(self, node: ASTNode) -> str:
         """Convert expression AST to JavaScript expression string
 
@@ -638,6 +774,29 @@ class PhaserTranspiler(BaseTranspiler):
             }
 
             js_op = op_map.get(node.operator, node.operator)
+            return f"({left} {js_op} {right})"
+
+        elif isinstance(node, Comparison):
+            left = self.emit_expression(node.left)
+            right = self.emit_expression(node.right)
+
+            # Map Rosh comparison operators to JavaScript
+            comparison_map = {
+                'equal': '===',
+                'is': '===',
+                'not_equal': '!==',
+                'is_not': '!==',
+                'below': '<',
+                'less_than': '<',
+                'above': '>',
+                'greater_than': '>',
+                'at_most': '<=',
+                'less_than_or_equal': '<=',
+                'at_least': '>=',
+                'greater_than_or_equal': '>=',
+            }
+
+            js_op = comparison_map.get(node.operator, '===')
             return f"({left} {js_op} {right})"
 
         else:
@@ -730,7 +889,8 @@ class PhaserTranspiler(BaseTranspiler):
         self.emit("this.cursors = this.input.keyboard.createCursorKeys();")
         self.emit("this.keys = {")
         self.indent_level += 1
-        self.emit("space: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)")
+        self.emit("space: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),")
+        self.emit("r: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R)")
         self.indent_level -= 1
         self.emit("};")
         self.emit_blank()
@@ -852,6 +1012,71 @@ class PhaserTranspiler(BaseTranspiler):
             # Clamp y
             self.emit(f"this.{obj_name}.y = Math.max(halfHeight, Math.min({self.GAME_HEIGHT} - halfHeight, this.{obj_name}.y));")
         self.emit_blank()
+
+    def emit_text_object(self, name: str, properties: Dict[str, Any], x: float, y: float) -> None:
+        """Generate Phaser text object for display/UI elements
+
+        Creates a Phaser text object with configurable styling.
+        Used for titles, labels, prompts, and any text-based UI.
+
+        Args:
+            name: Object name
+            properties: Object properties including text, color, font_size, etc.
+            x: X position (already converted from percentage)
+            y: Y position (already converted from percentage)
+
+        Text Properties:
+            text: The text content to display
+            color: Text color (CSS color name or hex, default: 'white')
+            font_size: Font size in pixels (default: 16)
+            font: Font family (default: 'Arial')
+            align: Text alignment - 'left', 'center', 'right' (default: 'center')
+            visible: Whether text is visible (default: true)
+        """
+        # Extract text properties with defaults
+        text = properties.get('text', '')
+        color = properties.get('color', 'white')
+        font_size = properties.get('font_size', 16)
+        font = properties.get('font', 'Arial')
+        align = properties.get('align', 'center')
+        visible = properties.get('visible', True)
+
+        # Convert color to CSS format if it's a hex number
+        if isinstance(color, int):
+            color = f"#{color:06x}"
+        elif isinstance(color, str) and not color.startswith('#'):
+            # Keep CSS color names as-is
+            pass
+
+        # Escape text for JavaScript string
+        escaped_text = str(text).replace('\\', '\\\\').replace("'", "\\'").replace('\n', '\\n')
+
+        # Build Phaser text style object
+        style_parts = [
+            f"fontFamily: '{font}'",
+            f"fontSize: '{int(font_size)}px'",
+            f"color: '{color}'",
+            f"align: '{align}'"
+        ]
+        style_str = "{ " + ", ".join(style_parts) + " }"
+
+        # Emit Phaser text creation
+        self.emit(f"this.{name} = this.add.text({int(x)}, {int(y)}, '{escaped_text}', {style_str});")
+
+        # Set origin based on alignment (center text on position for 'center' align)
+        if align == 'center':
+            self.emit(f"this.{name}.setOrigin(0.5, 0.5);")
+        elif align == 'right':
+            self.emit(f"this.{name}.setOrigin(1, 0.5);")
+        else:  # left
+            self.emit(f"this.{name}.setOrigin(0, 0.5);")
+
+        # Handle visibility
+        if not visible:
+            self.emit(f"this.{name}.setVisible(false);")
+
+        # Store custom properties for REPL access
+        self.emit(f"this.{name}.textContent = '{escaped_text}';")
 
     def emit_hud_object(self, hud_name: str, properties: Dict[str, Any]) -> None:
         """Generate HUD display object
@@ -975,9 +1200,38 @@ class PhaserTranspiler(BaseTranspiler):
             self.emit("}")
             self.emit_blank()
 
+            # Discrete arrow key events (for grid-based movement)
+            self.emit("if (Phaser.Input.Keyboard.JustDown(this.cursors.left)) {")
+            self.indent_level += 1
+            self.emit("this.triggerEvent('key_left', null);")
+            self.indent_level -= 1
+            self.emit("}")
+            self.emit("if (Phaser.Input.Keyboard.JustDown(this.cursors.right)) {")
+            self.indent_level += 1
+            self.emit("this.triggerEvent('key_right', null);")
+            self.indent_level -= 1
+            self.emit("}")
+            self.emit("if (Phaser.Input.Keyboard.JustDown(this.cursors.up)) {")
+            self.indent_level += 1
+            self.emit("this.triggerEvent('key_up', null);")
+            self.indent_level -= 1
+            self.emit("}")
+            self.emit("if (Phaser.Input.Keyboard.JustDown(this.cursors.down)) {")
+            self.indent_level += 1
+            self.emit("this.triggerEvent('key_down', null);")
+            self.indent_level -= 1
+            self.emit("}")
+            self.emit_blank()
+
             self.emit("if (Phaser.Input.Keyboard.JustDown(this.keys.space)) {")
             self.indent_level += 1
             self.emit("this.triggerEvent('space_pressed', null);")
+            self.indent_level -= 1
+            self.emit("}")
+
+            self.emit("if (Phaser.Input.Keyboard.JustDown(this.keys.r)) {")
+            self.indent_level += 1
+            self.emit("this.triggerEvent('key_r', null);")
             self.indent_level -= 1
             self.emit("}")
             self.emit_blank()

@@ -635,13 +635,16 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
                 print(f"🔧 DEV MODE: REPL enabled (press ` or F12 to toggle)", file=sys.stderr)
                 print(f"⚠️  WARNING: Do not ship REPL to production!", file=sys.stderr)
 
-            # Show how to run (v0.1.7 - always recommend web server to avoid CORS issues)
+            # Show how to run
             if transpiler.sprite_assets:
-                print(f"🎮 To run with sprites:", file=sys.stderr)
+                # Sprites require a web server to avoid CORS issues
+                print(f"🎮 To run (sprites require server):", file=sys.stderr)
+                print(f"   cd {output_dir} && python3 -m http.server 8000", file=sys.stderr)
+                print(f"   Then open: http://localhost:8000", file=sys.stderr)
             else:
+                # No sprites - can open directly in browser
                 print(f"🎮 To run:", file=sys.stderr)
-            print(f"   cd {output_dir} && python3 -m http.server 8000", file=sys.stderr)
-            print(f"   Then open: http://localhost:8000", file=sys.stderr)
+                print(f"   open {output_dir}/index.html", file=sys.stderr)
         else:
             print(f"Error: Unknown target: {target}", file=sys.stderr)
             sys.exit(1)

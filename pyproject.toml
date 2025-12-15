@@ -30,6 +30,9 @@ dev = [
     "ruff>=0.1.0",
     "black>=23.0.0",
 ]
+pygame = [
+    "pygame-ce>=2.5.0",  # Community edition - better Python 3.14 compatibility
+]
 
 [project.scripts]
 rosh = "rosh.cli:main"

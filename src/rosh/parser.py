@@ -199,6 +199,8 @@ class Parser:
             return self.parse_when()
         elif token.type == TokenType.TRIGGER:
             return self.parse_trigger()
+        elif token.type == TokenType.PLAY:
+            return self.parse_play()
         elif token.type == TokenType.META:
             return self.parse_meta()
         elif token.type == TokenType.DEFINE:
@@ -1070,6 +1072,33 @@ class Parser:
             line=line
         )
 
+    def parse_play(self):
+        """Parse: play sound "filename" OR play music "filename" OR stop music
+
+        Examples:
+            play sound "shoot.wav"
+            play music "background.mp3"
+            stop music
+        """
+        from .ast_nodes import PlaySound, PlayMusic, StopMusic
+        line = self.current_token().line
+        self.expect(TokenType.PLAY)
+
+        next_token = self.current_token()
+
+        if next_token.type == TokenType.SOUND:
+            self.advance()  # consume 'sound'
+            filename_token = self.expect(TokenType.STRING)
+            return PlaySound(filename=filename_token.value, line=line)
+
+        elif next_token.type == TokenType.MUSIC:
+            self.advance()  # consume 'music'
+            filename_token = self.expect(TokenType.STRING)
+            return PlayMusic(filename=filename_token.value, line=line)
+
+        else:
+            self.error(f"Expected 'sound' or 'music' after 'play', got {next_token.type.name}")
+
     def parse_meta(self):
         """Parse: meta [.scope] ... end
 
@@ -1279,10 +1308,17 @@ class Parser:
         return Continue(line=line)
 
     def parse_stop(self):
-        """Parse: stop OR exit"""
-        from .ast_nodes import Stop
+        """Parse: stop OR stop music"""
+        from .ast_nodes import Stop, StopMusic
         line = self.current_token().line
         self.expect(TokenType.STOP)
+
+        # Check if this is "stop music"
+        if self.current_token().type == TokenType.MUSIC:
+            self.advance()  # consume 'music'
+            return StopMusic(line=line)
+
+        # Otherwise it's just "stop" (program termination)
         return Stop(line=line)
 
     def parse_call(self) -> FunctionCall:
