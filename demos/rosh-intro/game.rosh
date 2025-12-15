@@ -44,11 +44,12 @@ create object dot
     set visible to false
 end
 
-# State tracking
+# State tracking (invisible - just for data)
 create object state
     set phase to 1
     set logo_done to false
     set tagline_done to false
+    set visible to false
 end
 
 # Animation loop - runs every frame

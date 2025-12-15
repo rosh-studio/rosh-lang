@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Auto-generated from Rosh code
-# Transpiled with Rosh Pygame Transpiler v0.1.9
+# Transpiled with Rosh Pygame Transpiler v0.1.10
 
 import pygame
 import sys
@@ -94,6 +94,7 @@ dot = GameObject(400, 450, 8, 8, (0, 255, 255), 'rectangle')
 dot.visible = False
 
 state = GameObject(100, 100, 50, 50, (255, 255, 0), 'rectangle')
+state.visible = False
 state.phase = 1
 state.logo_done = False
 state.tagline_done = False

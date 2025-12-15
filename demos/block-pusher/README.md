@@ -1,13 +1,20 @@
-# Block Pusher - Phaser Demo
+# Block Pusher Demo
 
 A Sokoban-style puzzle game demonstrating Rosh's multi-screen flow, text rendering, and game state management.
 
+**Works in both Phaser (browser) and Pygame (native)!**
+
 ## Running the Demo
 
+**Phaser (Browser):**
 ```bash
-cd dist
-python3 -m http.server 8000
-# Open http://localhost:8000 in browser
+cd demos/block-pusher/dist && python3 -m http.server 8000
+# Open http://localhost:8000
+```
+
+**Pygame (Native):**
+```bash
+python demos/block-pusher/pygame/game.py
 ```
 
 ## Features Demonstrated
@@ -37,6 +44,18 @@ python3 -m http.server 8000
 - `levels.txt` - ASCII level documentation
 - `SPEC.md` - Full game specification
 
+## Rebuild
+
+**Phaser:**
+```bash
+rosh build demos/block-pusher/game.rosh --target phaser --output demos/block-pusher/dist/ --copy-assets
+```
+
+**Pygame:**
+```bash
+rosh build demos/block-pusher/game.rosh --target pygame --output demos/block-pusher/pygame/
+```
+
 ## Transpiled With
 
-Rosh Phaser Transpiler v0.1.7
+Rosh Phaser Transpiler v0.1.10 / Pygame Transpiler v0.1.10

@@ -1,5 +1,5 @@
 // Auto-generated from Rosh code
-// Transpiled with Rosh Phaser Transpiler v0.1.7
+// Transpiled with Rosh Phaser Transpiler v0.1.10
 
 class GameScene extends Phaser.Scene {
     constructor() {
@@ -30,6 +30,7 @@ class GameScene extends Phaser.Scene {
         this.state.phase = 1;
         this.state.logo_done = false;
         this.state.tagline_done = false;
+        this.state.setVisible(false);
 
 
         // Event handler registrations

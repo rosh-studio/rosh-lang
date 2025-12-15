@@ -1,12 +1,20 @@
-# Space Shooter - Pygame Demo
+# Space Shooter Demo
 
 A classic arcade space shooter demonstrating Rosh's real-time game loop, smooth movement, object pools, collision detection, and sound effects.
 
+**Works in both Phaser (browser) and Pygame (native)!**
+
 ## Running the Demo
 
+**Pygame (Native):**
 ```bash
-# From rosh-lang directory
 python demos/space-shooter/pygame/game.py
+```
+
+**Phaser (Browser):**
+```bash
+cd demos/space-shooter/phaser && python3 -m http.server 8000
+# Open http://localhost:8000
 ```
 
 ## Features Demonstrated
@@ -61,6 +69,20 @@ end
 play sound "laser1.ogg"
 ```
 
+## Rebuild
+
+**Phaser:**
+```bash
+rosh build demos/space-shooter/game.rosh --target phaser --output demos/space-shooter/phaser/ --copy-assets
+# Note: Sound files need to be copied manually for now
+cp demos/space-shooter/pygame/assets/*.ogg demos/space-shooter/phaser/assets/
+```
+
+**Pygame:**
+```bash
+rosh build demos/space-shooter/game.rosh --target pygame --output demos/space-shooter/pygame/
+```
+
 ## Transpiled With
 
-Rosh Pygame Transpiler v0.1.9
+Rosh Phaser Transpiler v0.1.10 / Pygame Transpiler v0.1.10

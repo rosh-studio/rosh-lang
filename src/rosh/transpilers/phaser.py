@@ -98,6 +98,9 @@ class PhaserTranspiler(BaseTranspiler):
         self.hud_objects = []  # Track HUD objects for display/updates
         # v0.1.7: Sprite/asset tracking
         self.sprite_assets: Dict[str, str] = {}  # object_name -> sprite_filename
+        # v0.1.10: Sound/music tracking
+        self.sound_assets: list = []  # List of sound filenames to preload
+        self.music_file: str = None  # Background music filename (if any)
 
     def transpile(self, program: Program, enable_repl: bool = False) -> str:
         """Convert Rosh Program AST to Phaser JavaScript
@@ -141,8 +144,8 @@ class PhaserTranspiler(BaseTranspiler):
         self.emit("}")
         self.emit_blank()
 
-        # 5.5. Generate preload() method if sprites are used (v0.1.7)
-        if self.sprite_assets:
+        # 5.5. Generate preload() method if sprites or sounds are used (v0.1.7+)
+        if self.sprite_assets or self.sound_assets or self.music_file:
             self.emit_preload_method()
 
         # 6. Generate create() method with game logic
@@ -319,6 +322,20 @@ class PhaserTranspiler(BaseTranspiler):
                     # Scan nested structures
                     scan_statements(node.body)
 
+                # v0.1.10: Detect sound assets
+                elif isinstance(node, PlaySound):
+                    if node.filename not in self.sound_assets:
+                        self.sound_assets.append(node.filename)
+
+                elif isinstance(node, PlayMusic):
+                    self.music_file = node.filename
+
+                # Scan if/else bodies
+                elif isinstance(node, IfStatement):
+                    scan_statements(node.then_body)
+                    if node.else_body:
+                        scan_statements(node.else_body)
+
         scan_statements(program.statements)
 
     def emit_statement(self, node: ASTNode) -> None:
@@ -347,6 +364,22 @@ class PhaserTranspiler(BaseTranspiler):
         elif isinstance(node, FunctionDef):
             # FunctionDef at statement level is handled separately in transpile()
             pass
+        elif isinstance(node, PlaySound):
+            # v0.1.10: Sound effects
+            sound_key = node.filename.replace('.', '_').replace('/', '_')
+            self.emit(f"this.sound.play('{sound_key}');")
+        elif isinstance(node, PlayMusic):
+            # v0.1.10: Background music (looping)
+            music_key = node.filename.replace('.', '_').replace('/', '_')
+            self.emit(f"if (!this.bgMusic || !this.bgMusic.isPlaying) {{")
+            self.indent_level += 1
+            self.emit(f"this.bgMusic = this.sound.add('{music_key}', {{ loop: true }});")
+            self.emit(f"this.bgMusic.play();")
+            self.indent_level -= 1
+            self.emit(f"}}")
+        elif isinstance(node, StopMusic):
+            # v0.1.10: Stop background music
+            self.emit(f"if (this.bgMusic) {{ this.bgMusic.stop(); }}")
         else:
             # Should be caught by validate_ast, but defensive programming
             raise RoshRuntimeError(
@@ -550,6 +583,18 @@ class PhaserTranspiler(BaseTranspiler):
             else:
                 raise RoshRuntimeError(
                     f"Unsupported binary operator in constant expression: {node.operator}"
+                )
+
+        elif isinstance(node, UnaryOp):
+            # Handle negative numbers (e.g., -50)
+            operand = self.eval_constant_expression(node.operand)
+            if node.operator in ['-', 'minus']:
+                return -operand if operand is not None else None
+            elif node.operator in ['not', '!']:
+                return not operand if operand is not None else None
+            else:
+                raise RoshRuntimeError(
+                    f"Unsupported unary operator in constant expression: {node.operator}"
                 )
 
         elif isinstance(node, Identifier):
@@ -832,6 +877,17 @@ class PhaserTranspiler(BaseTranspiler):
 
             js_op = comparison_map.get(node.operator, '===')
             return f"({left} {js_op} {right})"
+
+        elif isinstance(node, UnaryOp):
+            operand = self.emit_expression(node.operand)
+            if node.operator in ['-', 'minus']:
+                return f"(-{operand})"
+            elif node.operator in ['not', '!']:
+                return f"(!{operand})"
+            else:
+                raise RoshRuntimeError(
+                    f"Unsupported unary operator: {node.operator}"
+                )
 
         else:
             raise RoshRuntimeError(
@@ -1190,20 +1246,33 @@ class PhaserTranspiler(BaseTranspiler):
         self.emit_blank()
 
     def emit_preload_method(self) -> None:
-        """Emit Phaser preload() method for loading sprite assets (v0.1.7)
+        """Emit Phaser preload() method for loading sprites and sounds (v0.1.7+)
 
-        Generates preload() method that loads all sprite images from assets/ folder.
-        Includes error handling with fallback to colored rectangles.
+        Generates preload() method that loads all sprite images and audio files
+        from assets/ folder. Includes error handling with fallback to colored rectangles.
         """
         self.emit("preload() {")
         self.indent_level += 1
 
+        # Load sprites
         for obj_name, sprite_file in self.sprite_assets.items():
             self.emit(f"// Load sprite for {obj_name}")
             # Append .png extension if not already present
             if not sprite_file.endswith(('.png', '.jpg', '.jpeg', '.gif')):
                 sprite_file = sprite_file + '.png'
             self.emit(f"this.load.image('{obj_name}_sprite', 'assets/{sprite_file}');")
+
+        # v0.1.10: Load sound effects
+        for sound_file in self.sound_assets:
+            sound_key = sound_file.replace('.', '_').replace('/', '_')
+            self.emit(f"// Load sound: {sound_file}")
+            self.emit(f"this.load.audio('{sound_key}', 'assets/{sound_file}');")
+
+        # v0.1.10: Load background music
+        if self.music_file:
+            music_key = self.music_file.replace('.', '_').replace('/', '_')
+            self.emit(f"// Load background music")
+            self.emit(f"this.load.audio('{music_key}', 'assets/{self.music_file}');")
 
         self.indent_level -= 1
         self.emit("}")
