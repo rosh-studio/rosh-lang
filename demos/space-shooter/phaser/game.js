@@ -28,6 +28,8 @@ class GameScene extends Phaser.Scene {
         this.load.image('enemy3_sprite', 'assets/enemyShip.png');
         // Load sprite for enemy4
         this.load.image('enemy4_sprite', 'assets/enemyShip.png');
+        // Load sound: laser1.ogg
+        this.load.audio('laser1_ogg', 'assets/laser1.ogg');
         // Load sound: lose1.ogg
         this.load.audio('lose1_ogg', 'assets/lose1.ogg');
         // Load sound: lose3.ogg
@@ -341,6 +343,318 @@ class GameScene extends Phaser.Scene {
                             }
                         }
                     }
+                    if ((this.enemy2.active === 1)) {
+                        if ((this.bullet1.x > (this.enemy2.x - 20))) {
+                            if ((this.bullet1.x < (this.enemy2.x + 20))) {
+                                if ((this.bullet1.y > (this.enemy2.y - 20))) {
+                                    if ((this.bullet1.y < (this.enemy2.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy2.y = (-50);
+                                        this.bullet1.active = 0;
+                                        this.bullet1.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if ((this.enemy3.active === 1)) {
+                        if ((this.bullet1.x > (this.enemy3.x - 20))) {
+                            if ((this.bullet1.x < (this.enemy3.x + 20))) {
+                                if ((this.bullet1.y > (this.enemy3.y - 20))) {
+                                    if ((this.bullet1.y < (this.enemy3.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy3.y = (-50);
+                                        this.bullet1.active = 0;
+                                        this.bullet1.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if ((this.enemy4.active === 1)) {
+                        if ((this.bullet1.x > (this.enemy4.x - 20))) {
+                            if ((this.bullet1.x < (this.enemy4.x + 20))) {
+                                if ((this.bullet1.y > (this.enemy4.y - 20))) {
+                                    if ((this.bullet1.y < (this.enemy4.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy4.y = (-50);
+                                        this.bullet1.active = 0;
+                                        this.bullet1.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if ((this.bullet2.active === 1)) {
+                    if ((this.enemy1.active === 1)) {
+                        if ((this.bullet2.x > (this.enemy1.x - 20))) {
+                            if ((this.bullet2.x < (this.enemy1.x + 20))) {
+                                if ((this.bullet2.y > (this.enemy1.y - 20))) {
+                                    if ((this.bullet2.y < (this.enemy1.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy1.y = (-50);
+                                        this.bullet2.active = 0;
+                                        this.bullet2.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if ((this.enemy2.active === 1)) {
+                        if ((this.bullet2.x > (this.enemy2.x - 20))) {
+                            if ((this.bullet2.x < (this.enemy2.x + 20))) {
+                                if ((this.bullet2.y > (this.enemy2.y - 20))) {
+                                    if ((this.bullet2.y < (this.enemy2.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy2.y = (-50);
+                                        this.bullet2.active = 0;
+                                        this.bullet2.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if ((this.enemy3.active === 1)) {
+                        if ((this.bullet2.x > (this.enemy3.x - 20))) {
+                            if ((this.bullet2.x < (this.enemy3.x + 20))) {
+                                if ((this.bullet2.y > (this.enemy3.y - 20))) {
+                                    if ((this.bullet2.y < (this.enemy3.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy3.y = (-50);
+                                        this.bullet2.active = 0;
+                                        this.bullet2.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if ((this.enemy4.active === 1)) {
+                        if ((this.bullet2.x > (this.enemy4.x - 20))) {
+                            if ((this.bullet2.x < (this.enemy4.x + 20))) {
+                                if ((this.bullet2.y > (this.enemy4.y - 20))) {
+                                    if ((this.bullet2.y < (this.enemy4.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy4.y = (-50);
+                                        this.bullet2.active = 0;
+                                        this.bullet2.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if ((this.bullet3.active === 1)) {
+                    if ((this.enemy1.active === 1)) {
+                        if ((this.bullet3.x > (this.enemy1.x - 20))) {
+                            if ((this.bullet3.x < (this.enemy1.x + 20))) {
+                                if ((this.bullet3.y > (this.enemy1.y - 20))) {
+                                    if ((this.bullet3.y < (this.enemy1.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy1.y = (-50);
+                                        this.bullet3.active = 0;
+                                        this.bullet3.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if ((this.enemy2.active === 1)) {
+                        if ((this.bullet3.x > (this.enemy2.x - 20))) {
+                            if ((this.bullet3.x < (this.enemy2.x + 20))) {
+                                if ((this.bullet3.y > (this.enemy2.y - 20))) {
+                                    if ((this.bullet3.y < (this.enemy2.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy2.y = (-50);
+                                        this.bullet3.active = 0;
+                                        this.bullet3.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if ((this.enemy3.active === 1)) {
+                        if ((this.bullet3.x > (this.enemy3.x - 20))) {
+                            if ((this.bullet3.x < (this.enemy3.x + 20))) {
+                                if ((this.bullet3.y > (this.enemy3.y - 20))) {
+                                    if ((this.bullet3.y < (this.enemy3.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy3.y = (-50);
+                                        this.bullet3.active = 0;
+                                        this.bullet3.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if ((this.enemy4.active === 1)) {
+                        if ((this.bullet3.x > (this.enemy4.x - 20))) {
+                            if ((this.bullet3.x < (this.enemy4.x + 20))) {
+                                if ((this.bullet3.y > (this.enemy4.y - 20))) {
+                                    if ((this.bullet3.y < (this.enemy4.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy4.y = (-50);
+                                        this.bullet3.active = 0;
+                                        this.bullet3.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if ((this.bullet4.active === 1)) {
+                    if ((this.enemy1.active === 1)) {
+                        if ((this.bullet4.x > (this.enemy1.x - 20))) {
+                            if ((this.bullet4.x < (this.enemy1.x + 20))) {
+                                if ((this.bullet4.y > (this.enemy1.y - 20))) {
+                                    if ((this.bullet4.y < (this.enemy1.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy1.y = (-50);
+                                        this.bullet4.active = 0;
+                                        this.bullet4.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if ((this.enemy2.active === 1)) {
+                        if ((this.bullet4.x > (this.enemy2.x - 20))) {
+                            if ((this.bullet4.x < (this.enemy2.x + 20))) {
+                                if ((this.bullet4.y > (this.enemy2.y - 20))) {
+                                    if ((this.bullet4.y < (this.enemy2.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy2.y = (-50);
+                                        this.bullet4.active = 0;
+                                        this.bullet4.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if ((this.enemy3.active === 1)) {
+                        if ((this.bullet4.x > (this.enemy3.x - 20))) {
+                            if ((this.bullet4.x < (this.enemy3.x + 20))) {
+                                if ((this.bullet4.y > (this.enemy3.y - 20))) {
+                                    if ((this.bullet4.y < (this.enemy3.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy3.y = (-50);
+                                        this.bullet4.active = 0;
+                                        this.bullet4.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if ((this.enemy4.active === 1)) {
+                        if ((this.bullet4.x > (this.enemy4.x - 20))) {
+                            if ((this.bullet4.x < (this.enemy4.x + 20))) {
+                                if ((this.bullet4.y > (this.enemy4.y - 20))) {
+                                    if ((this.bullet4.y < (this.enemy4.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy4.y = (-50);
+                                        this.bullet4.active = 0;
+                                        this.bullet4.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if ((this.bullet5.active === 1)) {
+                    if ((this.enemy1.active === 1)) {
+                        if ((this.bullet5.x > (this.enemy1.x - 20))) {
+                            if ((this.bullet5.x < (this.enemy1.x + 20))) {
+                                if ((this.bullet5.y > (this.enemy1.y - 20))) {
+                                    if ((this.bullet5.y < (this.enemy1.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy1.y = (-50);
+                                        this.bullet5.active = 0;
+                                        this.bullet5.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if ((this.enemy2.active === 1)) {
+                        if ((this.bullet5.x > (this.enemy2.x - 20))) {
+                            if ((this.bullet5.x < (this.enemy2.x + 20))) {
+                                if ((this.bullet5.y > (this.enemy2.y - 20))) {
+                                    if ((this.bullet5.y < (this.enemy2.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy2.y = (-50);
+                                        this.bullet5.active = 0;
+                                        this.bullet5.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if ((this.enemy3.active === 1)) {
+                        if ((this.bullet5.x > (this.enemy3.x - 20))) {
+                            if ((this.bullet5.x < (this.enemy3.x + 20))) {
+                                if ((this.bullet5.y > (this.enemy3.y - 20))) {
+                                    if ((this.bullet5.y < (this.enemy3.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy3.y = (-50);
+                                        this.bullet5.active = 0;
+                                        this.bullet5.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if ((this.enemy4.active === 1)) {
+                        if ((this.bullet5.x > (this.enemy4.x - 20))) {
+                            if ((this.bullet5.x < (this.enemy4.x + 20))) {
+                                if ((this.bullet5.y > (this.enemy4.y - 20))) {
+                                    if ((this.bullet5.y < (this.enemy4.y + 20))) {
+                                        this.sound.play('lose1_ogg');
+                                        this.enemy4.y = (-50);
+                                        this.bullet5.active = 0;
+                                        this.bullet5.setVisible(false);
+                                        this.state.score = (this.state.score + 10);
+                                        this.update_score();
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 if ((this.enemy1.active === 1)) {
                     if ((this.enemy1.y > (this.player.y - 25))) {
@@ -423,6 +737,19 @@ class GameScene extends Phaser.Scene {
         }
         if (Phaser.Input.Keyboard.JustDown(this.cursors.down)) {
             this.triggerEvent('key_down', null);
+        }
+
+        if (this.cursors.left.isDown) {
+            this.triggerEvent('while_key_left', null);
+        }
+        if (this.cursors.right.isDown) {
+            this.triggerEvent('while_key_right', null);
+        }
+        if (this.cursors.up.isDown) {
+            this.triggerEvent('while_key_up', null);
+        }
+        if (this.cursors.down.isDown) {
+            this.triggerEvent('while_key_down', null);
         }
 
         if (Phaser.Input.Keyboard.JustDown(this.keys.space)) {

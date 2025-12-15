@@ -454,8 +454,11 @@ when update then
             end
         end
 
-        # Simple collision detection (bullet vs enemy)
-        # Check bullet1 vs all enemies
+        # =================================================================
+        # COLLISION DETECTION: All bullets vs all enemies
+        # =================================================================
+
+        # --- Bullet 1 vs all enemies ---
         if bullet1.active is equal to 1 then
             if enemy1.active is equal to 1 then
                 if bullet1.x is above enemy1.x minus 20 then
@@ -473,9 +476,331 @@ when update then
                     end
                 end
             end
+            if enemy2.active is equal to 1 then
+                if bullet1.x is above enemy2.x minus 20 then
+                    if bullet1.x is below enemy2.x plus 20 then
+                        if bullet1.y is above enemy2.y minus 20 then
+                            if bullet1.y is below enemy2.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy2.y to -50
+                                set bullet1.active to 0
+                                set bullet1.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+            if enemy3.active is equal to 1 then
+                if bullet1.x is above enemy3.x minus 20 then
+                    if bullet1.x is below enemy3.x plus 20 then
+                        if bullet1.y is above enemy3.y minus 20 then
+                            if bullet1.y is below enemy3.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy3.y to -50
+                                set bullet1.active to 0
+                                set bullet1.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+            if enemy4.active is equal to 1 then
+                if bullet1.x is above enemy4.x minus 20 then
+                    if bullet1.x is below enemy4.x plus 20 then
+                        if bullet1.y is above enemy4.y minus 20 then
+                            if bullet1.y is below enemy4.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy4.y to -50
+                                set bullet1.active to 0
+                                set bullet1.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
         end
 
-        # Check enemy collision with player
+        # --- Bullet 2 vs all enemies ---
+        if bullet2.active is equal to 1 then
+            if enemy1.active is equal to 1 then
+                if bullet2.x is above enemy1.x minus 20 then
+                    if bullet2.x is below enemy1.x plus 20 then
+                        if bullet2.y is above enemy1.y minus 20 then
+                            if bullet2.y is below enemy1.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy1.y to -50
+                                set bullet2.active to 0
+                                set bullet2.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+            if enemy2.active is equal to 1 then
+                if bullet2.x is above enemy2.x minus 20 then
+                    if bullet2.x is below enemy2.x plus 20 then
+                        if bullet2.y is above enemy2.y minus 20 then
+                            if bullet2.y is below enemy2.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy2.y to -50
+                                set bullet2.active to 0
+                                set bullet2.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+            if enemy3.active is equal to 1 then
+                if bullet2.x is above enemy3.x minus 20 then
+                    if bullet2.x is below enemy3.x plus 20 then
+                        if bullet2.y is above enemy3.y minus 20 then
+                            if bullet2.y is below enemy3.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy3.y to -50
+                                set bullet2.active to 0
+                                set bullet2.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+            if enemy4.active is equal to 1 then
+                if bullet2.x is above enemy4.x minus 20 then
+                    if bullet2.x is below enemy4.x plus 20 then
+                        if bullet2.y is above enemy4.y minus 20 then
+                            if bullet2.y is below enemy4.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy4.y to -50
+                                set bullet2.active to 0
+                                set bullet2.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        # --- Bullet 3 vs all enemies ---
+        if bullet3.active is equal to 1 then
+            if enemy1.active is equal to 1 then
+                if bullet3.x is above enemy1.x minus 20 then
+                    if bullet3.x is below enemy1.x plus 20 then
+                        if bullet3.y is above enemy1.y minus 20 then
+                            if bullet3.y is below enemy1.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy1.y to -50
+                                set bullet3.active to 0
+                                set bullet3.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+            if enemy2.active is equal to 1 then
+                if bullet3.x is above enemy2.x minus 20 then
+                    if bullet3.x is below enemy2.x plus 20 then
+                        if bullet3.y is above enemy2.y minus 20 then
+                            if bullet3.y is below enemy2.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy2.y to -50
+                                set bullet3.active to 0
+                                set bullet3.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+            if enemy3.active is equal to 1 then
+                if bullet3.x is above enemy3.x minus 20 then
+                    if bullet3.x is below enemy3.x plus 20 then
+                        if bullet3.y is above enemy3.y minus 20 then
+                            if bullet3.y is below enemy3.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy3.y to -50
+                                set bullet3.active to 0
+                                set bullet3.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+            if enemy4.active is equal to 1 then
+                if bullet3.x is above enemy4.x minus 20 then
+                    if bullet3.x is below enemy4.x plus 20 then
+                        if bullet3.y is above enemy4.y minus 20 then
+                            if bullet3.y is below enemy4.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy4.y to -50
+                                set bullet3.active to 0
+                                set bullet3.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        # --- Bullet 4 vs all enemies ---
+        if bullet4.active is equal to 1 then
+            if enemy1.active is equal to 1 then
+                if bullet4.x is above enemy1.x minus 20 then
+                    if bullet4.x is below enemy1.x plus 20 then
+                        if bullet4.y is above enemy1.y minus 20 then
+                            if bullet4.y is below enemy1.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy1.y to -50
+                                set bullet4.active to 0
+                                set bullet4.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+            if enemy2.active is equal to 1 then
+                if bullet4.x is above enemy2.x minus 20 then
+                    if bullet4.x is below enemy2.x plus 20 then
+                        if bullet4.y is above enemy2.y minus 20 then
+                            if bullet4.y is below enemy2.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy2.y to -50
+                                set bullet4.active to 0
+                                set bullet4.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+            if enemy3.active is equal to 1 then
+                if bullet4.x is above enemy3.x minus 20 then
+                    if bullet4.x is below enemy3.x plus 20 then
+                        if bullet4.y is above enemy3.y minus 20 then
+                            if bullet4.y is below enemy3.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy3.y to -50
+                                set bullet4.active to 0
+                                set bullet4.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+            if enemy4.active is equal to 1 then
+                if bullet4.x is above enemy4.x minus 20 then
+                    if bullet4.x is below enemy4.x plus 20 then
+                        if bullet4.y is above enemy4.y minus 20 then
+                            if bullet4.y is below enemy4.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy4.y to -50
+                                set bullet4.active to 0
+                                set bullet4.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        # --- Bullet 5 vs all enemies ---
+        if bullet5.active is equal to 1 then
+            if enemy1.active is equal to 1 then
+                if bullet5.x is above enemy1.x minus 20 then
+                    if bullet5.x is below enemy1.x plus 20 then
+                        if bullet5.y is above enemy1.y minus 20 then
+                            if bullet5.y is below enemy1.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy1.y to -50
+                                set bullet5.active to 0
+                                set bullet5.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+            if enemy2.active is equal to 1 then
+                if bullet5.x is above enemy2.x minus 20 then
+                    if bullet5.x is below enemy2.x plus 20 then
+                        if bullet5.y is above enemy2.y minus 20 then
+                            if bullet5.y is below enemy2.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy2.y to -50
+                                set bullet5.active to 0
+                                set bullet5.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+            if enemy3.active is equal to 1 then
+                if bullet5.x is above enemy3.x minus 20 then
+                    if bullet5.x is below enemy3.x plus 20 then
+                        if bullet5.y is above enemy3.y minus 20 then
+                            if bullet5.y is below enemy3.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy3.y to -50
+                                set bullet5.active to 0
+                                set bullet5.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+            if enemy4.active is equal to 1 then
+                if bullet5.x is above enemy4.x minus 20 then
+                    if bullet5.x is below enemy4.x plus 20 then
+                        if bullet5.y is above enemy4.y minus 20 then
+                            if bullet5.y is below enemy4.y plus 20 then
+                                play sound "lose1.ogg"
+                                set enemy4.y to -50
+                                set bullet5.active to 0
+                                set bullet5.visible to false
+                                set state.score to state.score plus 10
+                                call update_score
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        # =================================================================
+        # COLLISION: Enemies vs Player
+        # =================================================================
         if enemy1.active is equal to 1 then
             if enemy1.y is above player.y minus 25 then
                 if enemy1.y is below player.y plus 25 then

@@ -336,6 +336,10 @@ class PhaserTranspiler(BaseTranspiler):
                     if node.else_body:
                         scan_statements(node.else_body)
 
+                # Scan function bodies for sounds
+                elif isinstance(node, FunctionDef):
+                    scan_statements(node.body)
+
         scan_statements(program.statements)
 
     def emit_statement(self, node: ASTNode) -> None:
@@ -1327,6 +1331,30 @@ class PhaserTranspiler(BaseTranspiler):
             self.emit("}")
             self.emit_blank()
 
+            # Continuous key events (for smooth movement - while_key_*)
+            self.emit("if (this.cursors.left.isDown) {")
+            self.indent_level += 1
+            self.emit("this.triggerEvent('while_key_left', null);")
+            self.indent_level -= 1
+            self.emit("}")
+            self.emit("if (this.cursors.right.isDown) {")
+            self.indent_level += 1
+            self.emit("this.triggerEvent('while_key_right', null);")
+            self.indent_level -= 1
+            self.emit("}")
+            self.emit("if (this.cursors.up.isDown) {")
+            self.indent_level += 1
+            self.emit("this.triggerEvent('while_key_up', null);")
+            self.indent_level -= 1
+            self.emit("}")
+            self.emit("if (this.cursors.down.isDown) {")
+            self.indent_level += 1
+            self.emit("this.triggerEvent('while_key_down', null);")
+            self.indent_level -= 1
+            self.emit("}")
+            self.emit_blank()
+
+            # Use this.keys.space (explicitly added in key setup)
             self.emit("if (Phaser.Input.Keyboard.JustDown(this.keys.space)) {")
             self.indent_level += 1
             self.emit("this.triggerEvent('space_pressed', null);")

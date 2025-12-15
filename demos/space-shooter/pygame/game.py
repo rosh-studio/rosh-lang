@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Auto-generated from Rosh code
-# Transpiled with Rosh Pygame Transpiler v0.1.9
+# Transpiled with Rosh Pygame Transpiler v0.1.10
 
 import pygame
 import sys
@@ -75,6 +75,13 @@ class TextObject:
 
     def set_text(self, text):
         self.text = text
+
+    def set_font_size(self, size):
+        self.font_size = size
+        try:
+            self.font = pygame.font.SysFont('Arial', int(size))
+        except Exception as e:
+            print(f'Warning: Font resize failed: {e}')
 
     def draw(self, surface):
         if not self.visible:
@@ -417,6 +424,219 @@ def handle_update():
                                 enemy1.y = (-50)
                                 bullet1.active = 0
                                 bullet1.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+            if (enemy2.active == 1):
+                if (bullet1.x > (enemy2.x - 20)):
+                    if (bullet1.x < (enemy2.x + 20)):
+                        if (bullet1.y > (enemy2.y - 20)):
+                            if (bullet1.y < (enemy2.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy2.y = (-50)
+                                bullet1.active = 0
+                                bullet1.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+            if (enemy3.active == 1):
+                if (bullet1.x > (enemy3.x - 20)):
+                    if (bullet1.x < (enemy3.x + 20)):
+                        if (bullet1.y > (enemy3.y - 20)):
+                            if (bullet1.y < (enemy3.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy3.y = (-50)
+                                bullet1.active = 0
+                                bullet1.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+            if (enemy4.active == 1):
+                if (bullet1.x > (enemy4.x - 20)):
+                    if (bullet1.x < (enemy4.x + 20)):
+                        if (bullet1.y > (enemy4.y - 20)):
+                            if (bullet1.y < (enemy4.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy4.y = (-50)
+                                bullet1.active = 0
+                                bullet1.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+        if (bullet2.active == 1):
+            if (enemy1.active == 1):
+                if (bullet2.x > (enemy1.x - 20)):
+                    if (bullet2.x < (enemy1.x + 20)):
+                        if (bullet2.y > (enemy1.y - 20)):
+                            if (bullet2.y < (enemy1.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy1.y = (-50)
+                                bullet2.active = 0
+                                bullet2.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+            if (enemy2.active == 1):
+                if (bullet2.x > (enemy2.x - 20)):
+                    if (bullet2.x < (enemy2.x + 20)):
+                        if (bullet2.y > (enemy2.y - 20)):
+                            if (bullet2.y < (enemy2.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy2.y = (-50)
+                                bullet2.active = 0
+                                bullet2.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+            if (enemy3.active == 1):
+                if (bullet2.x > (enemy3.x - 20)):
+                    if (bullet2.x < (enemy3.x + 20)):
+                        if (bullet2.y > (enemy3.y - 20)):
+                            if (bullet2.y < (enemy3.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy3.y = (-50)
+                                bullet2.active = 0
+                                bullet2.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+            if (enemy4.active == 1):
+                if (bullet2.x > (enemy4.x - 20)):
+                    if (bullet2.x < (enemy4.x + 20)):
+                        if (bullet2.y > (enemy4.y - 20)):
+                            if (bullet2.y < (enemy4.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy4.y = (-50)
+                                bullet2.active = 0
+                                bullet2.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+        if (bullet3.active == 1):
+            if (enemy1.active == 1):
+                if (bullet3.x > (enemy1.x - 20)):
+                    if (bullet3.x < (enemy1.x + 20)):
+                        if (bullet3.y > (enemy1.y - 20)):
+                            if (bullet3.y < (enemy1.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy1.y = (-50)
+                                bullet3.active = 0
+                                bullet3.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+            if (enemy2.active == 1):
+                if (bullet3.x > (enemy2.x - 20)):
+                    if (bullet3.x < (enemy2.x + 20)):
+                        if (bullet3.y > (enemy2.y - 20)):
+                            if (bullet3.y < (enemy2.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy2.y = (-50)
+                                bullet3.active = 0
+                                bullet3.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+            if (enemy3.active == 1):
+                if (bullet3.x > (enemy3.x - 20)):
+                    if (bullet3.x < (enemy3.x + 20)):
+                        if (bullet3.y > (enemy3.y - 20)):
+                            if (bullet3.y < (enemy3.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy3.y = (-50)
+                                bullet3.active = 0
+                                bullet3.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+            if (enemy4.active == 1):
+                if (bullet3.x > (enemy4.x - 20)):
+                    if (bullet3.x < (enemy4.x + 20)):
+                        if (bullet3.y > (enemy4.y - 20)):
+                            if (bullet3.y < (enemy4.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy4.y = (-50)
+                                bullet3.active = 0
+                                bullet3.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+        if (bullet4.active == 1):
+            if (enemy1.active == 1):
+                if (bullet4.x > (enemy1.x - 20)):
+                    if (bullet4.x < (enemy1.x + 20)):
+                        if (bullet4.y > (enemy1.y - 20)):
+                            if (bullet4.y < (enemy1.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy1.y = (-50)
+                                bullet4.active = 0
+                                bullet4.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+            if (enemy2.active == 1):
+                if (bullet4.x > (enemy2.x - 20)):
+                    if (bullet4.x < (enemy2.x + 20)):
+                        if (bullet4.y > (enemy2.y - 20)):
+                            if (bullet4.y < (enemy2.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy2.y = (-50)
+                                bullet4.active = 0
+                                bullet4.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+            if (enemy3.active == 1):
+                if (bullet4.x > (enemy3.x - 20)):
+                    if (bullet4.x < (enemy3.x + 20)):
+                        if (bullet4.y > (enemy3.y - 20)):
+                            if (bullet4.y < (enemy3.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy3.y = (-50)
+                                bullet4.active = 0
+                                bullet4.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+            if (enemy4.active == 1):
+                if (bullet4.x > (enemy4.x - 20)):
+                    if (bullet4.x < (enemy4.x + 20)):
+                        if (bullet4.y > (enemy4.y - 20)):
+                            if (bullet4.y < (enemy4.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy4.y = (-50)
+                                bullet4.active = 0
+                                bullet4.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+        if (bullet5.active == 1):
+            if (enemy1.active == 1):
+                if (bullet5.x > (enemy1.x - 20)):
+                    if (bullet5.x < (enemy1.x + 20)):
+                        if (bullet5.y > (enemy1.y - 20)):
+                            if (bullet5.y < (enemy1.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy1.y = (-50)
+                                bullet5.active = 0
+                                bullet5.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+            if (enemy2.active == 1):
+                if (bullet5.x > (enemy2.x - 20)):
+                    if (bullet5.x < (enemy2.x + 20)):
+                        if (bullet5.y > (enemy2.y - 20)):
+                            if (bullet5.y < (enemy2.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy2.y = (-50)
+                                bullet5.active = 0
+                                bullet5.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+            if (enemy3.active == 1):
+                if (bullet5.x > (enemy3.x - 20)):
+                    if (bullet5.x < (enemy3.x + 20)):
+                        if (bullet5.y > (enemy3.y - 20)):
+                            if (bullet5.y < (enemy3.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy3.y = (-50)
+                                bullet5.active = 0
+                                bullet5.visible = False
+                                state.score = (state.score + 10)
+                                update_score()
+            if (enemy4.active == 1):
+                if (bullet5.x > (enemy4.x - 20)):
+                    if (bullet5.x < (enemy4.x + 20)):
+                        if (bullet5.y > (enemy4.y - 20)):
+                            if (bullet5.y < (enemy4.y + 20)):
+                                play_sound("lose1.ogg")
+                                enemy4.y = (-50)
+                                bullet5.active = 0
+                                bullet5.visible = False
                                 state.score = (state.score + 10)
                                 update_score()
         if (enemy1.active == 1):
