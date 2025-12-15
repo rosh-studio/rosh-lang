@@ -259,6 +259,35 @@ class Parser:
             self.skip_newlines()
 
             body = []
+
+            # Check for shorthand position syntax: at x, y  OR  at x y
+            if self.current_token().type == TokenType.AT:
+                self.advance()
+                x_token = self.expect(TokenType.NUMBER)
+                x_value = Literal(value=x_token.value, type_name='number', line=x_token.line)
+
+                # Accept comma (optional) between coordinates
+                if self.current_token().type == TokenType.COMMA:
+                    self.advance()
+
+                y_token = self.expect(TokenType.NUMBER)
+                y_value = Literal(value=y_token.value, type_name='number', line=y_token.line)
+
+                # Add implicit set x and set y to body
+                from .ast_nodes import SetProperty, Identifier
+                body.append(SetProperty(
+                    target=Identifier(name='x', line=line),
+                    value=x_value,
+                    line=line
+                ))
+                body.append(SetProperty(
+                    target=Identifier(name='y', line=line),
+                    value=y_value,
+                    line=line
+                ))
+                self.skip_newlines()
+
+            # Parse remaining body statements (if any)
             while self.current_token().type not in (TokenType.END, TokenType.EOF):
                 stmt = self.parse_statement()
                 if stmt:

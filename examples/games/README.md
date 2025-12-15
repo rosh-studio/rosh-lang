@@ -219,3 +219,193 @@ Open browser console (F12) to see error messages and print statements.
 - Check browser console (F12) for "Sprite not found" warnings
 - Verify sprite files exist in `dist/assets/`
 - Sprite names must be literal strings: `set sprite to "file.png"` (not variables)
+
+---
+
+## 🎮 Live Coding with the Rosh Console
+
+**⚠️ DEV ONLY - Do not ship to production!**
+
+The Rosh Console allows you to modify running games in real-time without rebuilding. This is perfect for rapid prototyping, debugging, and live demos.
+
+### Enabling the Console
+
+Build with the `--repl` flag:
+
+```bash
+rosh build examples/games/sprite-demo.rosh --target phaser --repl --copy-assets --output dist/
+cd dist && python3 -m http.server 8000
+open http://localhost:8000
+```
+
+### Opening the Console
+
+Press **backtick** (`` ` ``) or **F12** to toggle the console overlay.
+
+You'll see a green-on-black terminal interface appear over your game:
+
+```
+🎮 ROSH CONSOLE
+Press ` or F12 to toggle | Type 'help' for commands
+
+rosh>
+```
+
+### Available Commands
+
+The console supports natural language commands with multiple aliases:
+
+| Command | Aliases | Example |
+|---------|---------|---------|
+| **list** | look, ls, show, objects | `list` |
+| **properties** | describe, info, inspect | `properties hero` |
+| **get** | - | `get hero.x` |
+| **set** | - | `set hero.x to 400` |
+| **create** | - | `create bomb at 200 300` |
+| **trigger** | fire | `trigger attack` |
+| **clear** | cls | `clear` |
+| **help** | ? | `help` |
+
+### Command Examples
+
+**List all objects:**
+```
+list
+```
+Output: `hero, goblin1, goblin2, coin1, coin2`
+
+**Inspect an object:**
+```
+properties hero
+```
+Output shows all properties (x, y, width, height, sprite, etc.)
+
+**Get a specific property:**
+```
+get hero.x
+```
+Output: `hero.x = 100`
+
+**Modify properties (watch it move!):**
+```
+set hero.x to 400
+set hero.y to 300
+```
+
+**Create new objects live:**
+```
+create dragon at 200 400
+create treasure at 500 300
+```
+
+**Trigger custom events:**
+```
+trigger attack
+trigger damage with 50
+```
+
+**Clear the console:**
+```
+clear
+```
+
+### Natural Language Support
+
+The console understands natural variations:
+
+```
+# All of these work:
+list
+look
+show objects
+ls
+
+# Properties can be checked multiple ways:
+properties hero
+describe hero
+info hero
+inspect hero
+```
+
+### Typo Tolerance
+
+The console uses fuzzy matching to suggest corrections:
+
+```
+rosh> properies hero
+Did you mean: properties?
+```
+
+### Shorthand Syntax
+
+The console and source files support comma-optional position syntax:
+
+```rosh
+create bomb at 200, 300    # Both work
+create bomb at 200 300
+```
+
+**⚠️ Important:** The `at` keyword is now **reserved** and cannot be used as a variable name.
+
+**Limitations:**
+- Only accepts numeric literals (not expressions or percentages)
+- Must be used with `create object` statements
+- Example: `create hero at 100 300` ✅
+- Invalid: `create hero at 50% middle` ❌ (use explicit set x/y instead)
+
+**If you need expressions:**
+```rosh
+create object hero
+    set x to 50%
+    set y to middle
+end
+```
+
+### Use Cases
+
+**Rapid Prototyping:**
+- Test different positions without rebuilding: `set enemy.x to 500`
+- Try new objects on the fly: `create powerup at 300 300`
+
+**Debugging:**
+- Check current state: `get player.health`
+- List all objects: `list`
+- Inspect properties: `properties enemy`
+
+**Live Demos:**
+- Modify games during client presentations
+- Show real-time adjustments without code changes
+- Perfect for VR/AR consulting pitches
+
+**Iteration Speed:**
+- Traditional: Edit code → Rebuild → Refresh → Test (10 seconds)
+- With console: Press backtick → Type command → See result (1 second)
+
+### Security Warning
+
+**⚠️ The Rosh Console is for development only:**
+
+- **Never deploy with `--repl` to production**
+- Build warnings show when REPL is enabled
+- The console allows arbitrary code execution
+- Only use for local development and trusted demos
+
+**For production builds, omit the `--repl` flag:**
+```bash
+rosh build game.rosh --target phaser --output dist/  # No REPL
+```
+
+### Demo
+
+See `demos/repl-demo/` for a polished example demonstrating the Rosh Console with professional graphics.
+
+### Limitations (Phase 1)
+
+- Limited command set (no if/while/functions)
+- Single player only (dev tool)
+- No state persistence across sessions
+- Commands must match exact formats
+
+For full Rosh syntax support, see Phase 2 (coming soon).
+
+---

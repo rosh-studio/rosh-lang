@@ -1,0 +1,51 @@
+# 🎮 Rosh Console Demo
+# Demonstrates live coding with the in-game console
+# Press ` (backtick) or F12 to open the console
+
+# Create hero character with sprite and player controls
+create object hero from player at 100 300
+    set sprite to "hero.png"
+    set width to 64
+    set height to 64
+    set speed to 5
+end
+
+# Create enemies
+create object goblin1 at 400 200
+    set sprite to "enemy.png"
+    set width to 48
+    set height to 48
+end
+
+create object goblin2 at 600 300
+    set sprite to "enemy.png"
+    set width to 48
+    set height to 48
+end
+
+# Create collectible coins
+create object coin1 at 300 250
+    set sprite to "coin.png"
+    set width to 32
+    set height to 32
+end
+
+create object coin2 at 500 350
+    set sprite to "coin.png"
+    set width to 32
+    set height to 32
+end
+
+# Welcome message
+print "🎮 Rosh Console Demo"
+print "Press ` (backtick) or F12 to open console"
+print ""
+print "Try these commands:"
+print "  list                    - See all objects"
+print "  set hero.x to middle    - Move hero to center"
+print "  set hero.x to 50%       - Same as middle"
+print "  create dragon at 200 400 - Create new object"
+print "  properties hero         - Inspect hero"
+print "  help                    - See all commands"
+print ""
+print "Use arrow keys to move the hero!"

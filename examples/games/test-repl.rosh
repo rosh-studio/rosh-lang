@@ -1,0 +1,26 @@
+# Test REPL - Simple Game for REPL Testing
+# Build with: rosh build test-repl.rosh --target phaser --repl --output dist/
+
+# Create a simple player object
+create object player
+    set x to 400
+    set y to 300
+    set width to 50
+    set height to 50
+end
+
+# Create a target object to interact with
+create object target
+    set x to 600
+    set y to 400
+    set width to 40
+    set height to 40
+end
+
+# Instructions shown in browser console
+print "🎮 REPL Test Game Loaded!"
+print "Press backtick or F12 to open REPL"
+print "Try: list objects"
+print "Try: set player.x to 500"
+print "Try: get player.x"
+print "Try: help"

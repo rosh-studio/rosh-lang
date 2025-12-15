@@ -574,7 +574,7 @@ def copy_sprite_assets(source_path: Path, output_dir: Path, sprite_assets: dict)
         print(f"✅ Copied {copied_count} sprite(s) to {assets_dir}", file=sys.stderr)
 
 
-def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = False):
+def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = False, enable_repl: bool = False):
     """Transpile Rosh code to target platform
 
     Args:
@@ -582,6 +582,7 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
         target: Target platform (phaser, etc.)
         output_dir: Directory for output files
         copy_assets: If True, automatically copy required sprite assets
+        enable_repl: If True, inject in-game REPL for live coding (dev mode only)
 
     Exits:
         0 on success
@@ -603,6 +604,13 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
 
         source = path.read_text()
 
+        # Validate REPL flag (only supported for Phaser)
+        if enable_repl and target != 'phaser':
+            print(f"Error: --repl flag is only supported for Phaser target", file=sys.stderr)
+            print(f"       Current target: {target}", file=sys.stderr)
+            print(f"       To use REPL: rosh build {filepath} --target phaser --repl", file=sys.stderr)
+            sys.exit(1)
+
         # Lex and parse
         lexer = Lexer(source)
         tokens = lexer.tokenize()
@@ -612,7 +620,7 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
         # Transpile based on target
         if target == 'phaser':
             transpiler = PhaserTranspiler()
-            js_code = transpiler.transpile(program)
+            js_code = transpiler.transpile(program, enable_repl=enable_repl)
             generate_phaser_output(js_code, output_dir)
 
             # Copy assets if requested (v0.1.7)
@@ -621,6 +629,11 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
 
             print(f"✅ Transpilation successful!", file=sys.stderr)
             print(f"📁 Output: {output_dir}", file=sys.stderr)
+
+            # Show dev mode warning if REPL enabled
+            if enable_repl:
+                print(f"🔧 DEV MODE: REPL enabled (press ` or F12 to toggle)", file=sys.stderr)
+                print(f"⚠️  WARNING: Do not ship REPL to production!", file=sys.stderr)
 
             # Show how to run (v0.1.7 - always recommend web server to avoid CORS issues)
             if transpiler.sprite_assets:
@@ -692,6 +705,8 @@ def main():
                                   help='Output directory (default: dist/)')
         build_parser.add_argument('--copy-assets', action='store_true',
                                   help='Automatically copy required sprite assets to output')
+        build_parser.add_argument('--repl', action='store_true',
+                                  help='🔧 DEV MODE: Enable in-game REPL (press ` or F12 to toggle console)')
     else:
         # Default behavior (run/REPL) - preserve existing arguments
         parser.add_argument(
@@ -781,7 +796,8 @@ def main():
     # Handle build subcommand
     if hasattr(args, 'subcommand') and args.subcommand == 'build':
         copy_assets = getattr(args, 'copy_assets', False)
-        run_build(args.file, args.target, args.output, copy_assets)
+        enable_repl = getattr(args, 'repl', False)
+        run_build(args.file, args.target, args.output, copy_assets, enable_repl)
         return
 
     if args.command:

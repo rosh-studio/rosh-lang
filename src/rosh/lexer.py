@@ -24,6 +24,7 @@ class TokenType(Enum):
     SET = auto()
     TO = auto()
     AS = auto()
+    AT = auto()
     END = auto()
     PRINT = auto()
     INPUT = auto()
@@ -390,6 +391,7 @@ class Lexer:
             'false': TokenType.FALSE,
             'null': TokenType.NULL,
             'as': TokenType.AS,  # 'as' for type annotations and cloning
+            'at': TokenType.AT,  # 'at' for position shorthand (create object at x, y)
             'say': TokenType.PRINT,  # 'say' is alias for 'print' (backwards compat)
         }
 

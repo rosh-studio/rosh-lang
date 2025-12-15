@@ -74,11 +74,12 @@ class PhaserTranspiler(BaseTranspiler):
         # v0.1.7: Sprite/asset tracking
         self.sprite_assets: Dict[str, str] = {}  # object_name -> sprite_filename
 
-    def transpile(self, program: Program) -> str:
+    def transpile(self, program: Program, enable_repl: bool = False) -> str:
         """Convert Rosh Program AST to Phaser JavaScript
 
         Args:
             program: Rosh Program AST node
+            enable_repl: If True, inject in-game REPL for live coding (dev mode)
 
         Returns:
             Generated Phaser JavaScript code
@@ -86,6 +87,9 @@ class PhaserTranspiler(BaseTranspiler):
         Raises:
             RoshRuntimeError: If program contains unsupported features
         """
+        # Store REPL flag
+        self.enable_repl = enable_repl
+
         # 1. Validate AST (fail fast on unsupported features)
         self.validate_ast(program)
 
@@ -105,8 +109,8 @@ class PhaserTranspiler(BaseTranspiler):
         self.emit("constructor() {")
         self.indent_level += 1
         self.emit("super({ key: 'GameScene' });")
-        # Initialize event handlers if events or player objects are used
-        if self.event_handlers or self.player_objects:
+        # Initialize event handlers if events, player objects, or REPL are used
+        if self.event_handlers or self.player_objects or self.enable_repl:
             self.emit("this.eventHandlers = {};")
         self.indent_level -= 1
         self.emit("}")
@@ -145,8 +149,9 @@ class PhaserTranspiler(BaseTranspiler):
         if self.needs_update_loop or self.event_handlers:
             self.emit_update_method()
 
-        # 8. Generate event system helper methods (if events or player objects)
-        if self.event_handlers or self.player_objects:
+        # 8. Generate event system helper methods (if events, player objects, or REPL)
+        # REPL needs event system for 'trigger' command
+        if self.event_handlers or self.player_objects or self.enable_repl:
             self.emit_event_system_helpers()
 
         self.indent_level -= 1
@@ -155,6 +160,10 @@ class PhaserTranspiler(BaseTranspiler):
 
         # 9. Generate Phaser game config and initialization
         self.emit_game_config()
+
+        # 10. Generate in-game REPL if enabled (v0.2.0)
+        if self.enable_repl:
+            self.emit_repl_code()
 
         return self.get_code()
 
@@ -373,6 +382,8 @@ class PhaserTranspiler(BaseTranspiler):
             self.emit(f"if (this.textures.exists('{node.name}_sprite')) {{")
             self.indent_level += 1
             self.emit(f"this.{node.name} = this.add.image({int(x)}, {int(y)}, '{node.name}_sprite');")
+            # Set display size to match specified width/height
+            self.emit(f"this.{node.name}.setDisplaySize({int(width)}, {int(height)});")
             self.indent_level -= 1
             self.emit("} else {")
             self.indent_level += 1
@@ -929,6 +940,9 @@ class PhaserTranspiler(BaseTranspiler):
 
         for obj_name, sprite_file in self.sprite_assets.items():
             self.emit(f"// Load sprite for {obj_name}")
+            # Append .png extension if not already present
+            if not sprite_file.endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                sprite_file = sprite_file + '.png'
             self.emit(f"this.load.image('{obj_name}_sprite', 'assets/{sprite_file}');")
 
         self.indent_level -= 1
@@ -1107,3 +1121,708 @@ class PhaserTranspiler(BaseTranspiler):
 
         self.emit_comment("Create and start the game")
         self.emit("const game = new Phaser.Game(config);")
+
+    def emit_repl_code(self) -> None:
+        """Emit in-game REPL for live coding (v0.2.0)
+
+        Generates:
+        - DOM console overlay (HTML/CSS)
+        - RoshREPL class with command parser and executor
+        - Keyboard listener (backtick or F12 toggle)
+        - 8 commands: set, create, get, trigger, list, describe, help, clear
+        """
+        self.emit_blank()
+        self.emit_blank()
+        self.emit_comment("=" * 70)
+        self.emit_comment("⚠️  WARNING: DEVELOPMENT MODE - DO NOT SHIP TO PRODUCTION  ⚠️")
+        self.emit_comment("=" * 70)
+        self.emit_comment("IN-GAME REPL (v0.2.0) - LIVE CODING CONSOLE")
+        self.emit_comment("")
+        self.emit_comment("This code allows arbitrary command execution in the browser.")
+        self.emit_comment("Only use this build for local development and trusted demos.")
+        self.emit_comment("")
+        self.emit_comment("To disable: Remove --repl flag from build command")
+        self.emit_comment("=" * 70)
+        self.emit_blank()
+
+        # Emit DEV_MODE constant
+        self.emit("const ROSH_DEV_MODE = true;")
+        self.emit_blank()
+
+        # 1. Inject DOM overlay CSS/HTML (wrapped in DEV_MODE check)
+        self.emit("if (ROSH_DEV_MODE) {")
+        self.indent_level += 1
+        self.emit_repl_dom_overlay()
+
+        # 2. Generate RoshREPL class
+        self.emit_repl_class()
+
+        # 3. Initialize REPL after game is ready
+        self.emit_repl_initialization()
+
+        # Close DEV_MODE guard
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit_comment("END DEV MODE")
+        self.emit_blank()
+
+    def emit_repl_dom_overlay(self) -> None:
+        """Generate DOM overlay HTML/CSS for REPL console"""
+        self.emit_comment("Inject DOM overlay for REPL console")
+        self.emit("(function() {")
+        self.indent_level += 1
+
+        # CSS Styles
+        self.emit_comment("CSS Styles")
+        self.emit("const style = document.createElement('style');")
+        self.emit("style.textContent = `")
+        self.emit("#rosh-console {")
+        self.emit("    position: fixed;")
+        self.emit("    bottom: 0;")
+        self.emit("    left: 0;")
+        self.emit("    width: 100%;")
+        self.emit("    height: 300px;")
+        self.emit("    background: rgba(0, 0, 0, 0.95);")
+        self.emit("    color: #00ff00;")
+        self.emit("    font-family: 'Courier New', monospace;")
+        self.emit("    font-size: 14px;")
+        self.emit("    border-top: 2px solid #00ff00;")
+        self.emit("    display: none;")
+        self.emit("    flex-direction: column;")
+        self.emit("    z-index: 10000;")
+        self.emit("    overflow: hidden;")
+        self.emit("}")
+        self.emit("#rosh-console.visible {")
+        self.emit("    display: flex;")
+        self.emit("}")
+        self.emit("#rosh-console-header {")
+        self.emit("    padding: 8px 12px;")
+        self.emit("    background: #1a1a1a;")
+        self.emit("    border-bottom: 1px solid #00ff00;")
+        self.emit("    display: flex;")
+        self.emit("    justify-content: space-between;")
+        self.emit("    align-items: center;")
+        self.emit("}")
+        self.emit("#rosh-console-header strong {")
+        self.emit("    color: #00ff00;")
+        self.emit("}")
+        self.emit("#rosh-console-header small {")
+        self.emit("    color: #888;")
+        self.emit("}")
+        self.emit("#rosh-console-output {")
+        self.emit("    flex: 1;")
+        self.emit("    overflow-y: auto;")
+        self.emit("    padding: 10px;")
+        self.emit("    font-size: 13px;")
+        self.emit("    line-height: 1.4;")
+        self.emit("    position: relative;")
+        self.emit("}")
+        self.emit("#rosh-console-output > div {")
+        self.emit("    position: static;")
+        self.emit("    margin: 2px 0;")
+        self.emit("}")
+        self.emit("#rosh-console-output .command { color: #ffff00; }")
+        self.emit("#rosh-console-output .success { color: #33ff33; }")
+        self.emit("#rosh-console-output .error { color: #ff3333; }")
+        self.emit("#rosh-console-output .info { color: #00ffff; }")
+        self.emit("#rosh-console-input {")
+        self.emit("    padding: 10px;")
+        self.emit("    border-top: 1px solid #00ff00;")
+        self.emit("    display: flex;")
+        self.emit("    gap: 8px;")
+        self.emit("    align-items: center;")
+        self.emit("}")
+        self.emit("#rosh-console-input .prompt {")
+        self.emit("    color: #00ff00;")
+        self.emit("    font-weight: bold;")
+        self.emit("}")
+        self.emit("#rosh-console-input input {")
+        self.emit("    flex: 1;")
+        self.emit("    background: #1a1a1a;")
+        self.emit("    border: 1px solid #00ff00;")
+        self.emit("    color: #00ff00;")
+        self.emit("    padding: 6px 8px;")
+        self.emit("    font-family: 'Courier New', monospace;")
+        self.emit("    font-size: 14px;")
+        self.emit("    outline: none;")
+        self.emit("}")
+        self.emit("#rosh-console-input input:focus {")
+        self.emit("    border-color: #33ff33;")
+        self.emit("    box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);")
+        self.emit("}")
+        self.emit("`;")
+        self.emit("document.head.appendChild(style);")
+        self.emit_blank()
+
+        # HTML Structure (create programmatically for reliability)
+        self.emit_comment("HTML Structure")
+        self.emit("const consoleDiv = document.createElement('div');")
+        self.emit("consoleDiv.id = 'rosh-console';")
+        self.emit_blank()
+        self.emit("// Header")
+        self.emit("const headerDiv = document.createElement('div');")
+        self.emit("headerDiv.id = 'rosh-console-header';")
+        self.emit("headerDiv.innerHTML = '<strong>🎮 ROSH CONSOLE</strong><small>Press ` or F12 to toggle | Type \\'help\\' for commands</small>';")
+        self.emit("consoleDiv.appendChild(headerDiv);")
+        self.emit_blank()
+        self.emit("// Output area")
+        self.emit("const outputDiv = document.createElement('div');")
+        self.emit("outputDiv.id = 'rosh-console-output';")
+        self.emit("consoleDiv.appendChild(outputDiv);")
+        self.emit_blank()
+        self.emit("// Input area")
+        self.emit("const inputDiv = document.createElement('div');")
+        self.emit("inputDiv.id = 'rosh-console-input';")
+        self.emit("inputDiv.innerHTML = '<span class=\"prompt\">rosh></span><input type=\"text\" id=\"rosh-input\" placeholder=\"Enter command...\">';")
+        self.emit("consoleDiv.appendChild(inputDiv);")
+        self.emit_blank()
+        self.emit("document.body.appendChild(consoleDiv);")
+
+        self.indent_level -= 1
+        self.emit("})();")
+        self.emit_blank()
+
+    def emit_repl_class(self) -> None:
+        """Generate RoshREPL JavaScript class with parser and executor"""
+        self.emit_comment("RoshREPL Class")
+        self.emit("class RoshREPL {")
+        self.indent_level += 1
+
+        # Constructor
+        self.emit("constructor(scene) {")
+        self.indent_level += 1
+        self.emit("this.scene = scene;")
+        self.emit("this.consoleVisible = false;")
+        self.emit("this.commandHistory = [];")
+        self.emit("this.historyIndex = -1;")
+        self.emit("this.setupKeyboard();")
+        self.emit("this.setupInput();")
+        self.emit("this.log('🎮 Rosh Console ready! Type \"help\" for commands.', 'info');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        # Setup keyboard
+        self.emit("setupKeyboard() {")
+        self.indent_level += 1
+        self.emit("document.addEventListener('keydown', (e) => {")
+        self.indent_level += 1
+        self.emit("// Block all game input when console is active")
+        self.emit("if (this.consoleVisible && e.target.id !== 'rosh-input') {")
+        self.indent_level += 1
+        self.emit("// Don't block toggle keys")
+        self.emit("if (e.key !== '`' && e.key !== 'F12') {")
+        self.indent_level += 1
+        self.emit("e.stopPropagation();")
+        self.emit("e.preventDefault();")
+        self.emit("// Focus console input")
+        self.emit("document.getElementById('rosh-input').focus();")
+        self.emit("return;")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("// Toggle console with backtick or F12")
+        self.emit("if (e.key === '`' || e.key === 'F12') {")
+        self.indent_level += 1
+        self.emit("e.preventDefault();")
+        self.emit("this.toggleConsole();")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("});")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        # Setup input
+        self.emit("setupInput() {")
+        self.indent_level += 1
+        self.emit("const input = document.getElementById('rosh-input');")
+        self.emit("input.addEventListener('keydown', (e) => {")
+        self.indent_level += 1
+        self.emit("if (e.key === 'Enter') {")
+        self.indent_level += 1
+        self.emit("const cmd = input.value.trim();")
+        self.emit("if (cmd) {")
+        self.indent_level += 1
+        self.emit("this.executeCommand(cmd);")
+        self.emit("this.commandHistory.push(cmd);")
+        self.emit("this.historyIndex = this.commandHistory.length;")
+        self.emit("input.value = '';")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("} else if (e.key === 'ArrowUp') {")
+        self.indent_level += 1
+        self.emit("e.preventDefault();")
+        self.emit("if (this.historyIndex > 0) {")
+        self.indent_level += 1
+        self.emit("this.historyIndex--;")
+        self.emit("input.value = this.commandHistory[this.historyIndex];")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("} else if (e.key === 'ArrowDown') {")
+        self.indent_level += 1
+        self.emit("e.preventDefault();")
+        self.emit("if (this.historyIndex < this.commandHistory.length - 1) {")
+        self.indent_level += 1
+        self.emit("this.historyIndex++;")
+        self.emit("input.value = this.commandHistory[this.historyIndex];")
+        self.indent_level -= 1
+        self.emit("} else {")
+        self.indent_level += 1
+        self.emit("this.historyIndex = this.commandHistory.length;")
+        self.emit("input.value = '';")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("});")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        # Toggle console
+        self.emit("toggleConsole() {")
+        self.indent_level += 1
+        self.emit("const console = document.getElementById('rosh-console');")
+        self.emit("this.consoleVisible = !this.consoleVisible;")
+        self.emit("console.classList.toggle('visible');")
+        self.emit("if (this.consoleVisible) {")
+        self.indent_level += 1
+        self.emit("// Disable Phaser keyboard input when console opens")
+        self.emit("this.scene.input.keyboard.enabled = false;")
+        self.emit("document.getElementById('rosh-input').focus();")
+        self.indent_level -= 1
+        self.emit("} else {")
+        self.indent_level += 1
+        self.emit("// Re-enable Phaser keyboard input when console closes")
+        self.emit("this.scene.input.keyboard.enabled = true;")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        # Log method
+        self.emit("log(message, type = 'info') {")
+        self.indent_level += 1
+        self.emit("const output = document.getElementById('rosh-console-output');")
+        self.emit("if (!output) {")
+        self.indent_level += 1
+        self.emit("console.error('[REPL Error] Console output div not found!');")
+        self.emit("return;")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("const line = document.createElement('div');")
+        self.emit("line.className = type;")
+        self.emit("line.textContent = message;")
+        self.emit("output.appendChild(line);")
+        self.emit("output.scrollTop = output.scrollHeight;")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        # Execute command
+        self.emit("executeCommand(cmd) {")
+        self.indent_level += 1
+        self.emit("this.log(`> ${cmd}`, 'command');")
+        self.emit("try {")
+        self.indent_level += 1
+        self.emit("// Parse command")
+        self.emit("const lower = cmd.toLowerCase().trim();")
+        self.emit("const firstWord = lower.split(' ')[0];")
+        self.emit("console.log('[REPL Debug] Command:', cmd, '| Lower:', lower, '| FirstWord:', firstWord);")
+        self.emit_blank()
+        self.emit("// Help command")
+        self.emit("if (lower === 'help' || lower === '?') {")
+        self.indent_level += 1
+        self.emit("this.cmdHelp();")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("// Clear command")
+        self.emit("else if (lower === 'clear' || lower === 'cls') {")
+        self.indent_level += 1
+        self.emit("this.cmdClear();")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("// List objects command (aliases: list, look, show, objects, ls)")
+        self.emit("else if (lower === 'list' || lower === 'list objects' || lower === 'look' || lower === 'show' || lower === 'objects' || lower === 'ls') {")
+        self.indent_level += 1
+        self.emit("this.cmdListObjects();")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("// Set command: set object.property to value")
+        self.emit("else if (lower.startsWith('set ')) {")
+        self.indent_level += 1
+        self.emit("const match = cmd.match(/^set\\s+([\\w.]+)\\s+to\\s+(.+)$/i);")
+        self.emit("if (match) this.cmdSet(match[1], match[2]);")
+        self.emit("else throw new Error('Usage: set object.property to value');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("// Get command: get object.property (alias: show)")
+        self.emit("else if (lower.startsWith('get ') || lower.startsWith('show ')) {")
+        self.indent_level += 1
+        self.emit("const target = cmd.slice(firstWord.length + 1).trim();")
+        self.emit("this.cmdGet(target);")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("// Create object command: create object name at x, y")
+        self.emit("else if (lower.startsWith('create object ') || lower.startsWith('create ')) {")
+        self.indent_level += 1
+        self.emit("// Accept both 'at 200, 200' and 'at 200 200' (comma optional)")
+        self.emit("const match = cmd.match(/^create(?:\\s+object)?\\s+(\\w+)(?:\\s+at\\s+(\\d+)(?:\\s*,\\s*|\\s+)(\\d+))?$/i);")
+        self.emit("if (match) this.cmdCreateObject(match[1], match[2], match[3]);")
+        self.emit("else throw new Error('Usage: create name at x y (or x, y)');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("// Describe command: describe object (aliases: inspect, properties, info)")
+        self.emit("else if (lower.startsWith('describe ') || lower.startsWith('inspect ') || lower.startsWith('properties ') || lower.startsWith('info ')) {")
+        self.indent_level += 1
+        self.emit("const target = cmd.slice(firstWord.length + 1).trim();")
+        self.emit("this.cmdDescribe(target);")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("// Trigger command: trigger event (alias: fire)")
+        self.emit("else if (lower.startsWith('trigger') || lower.startsWith('fire')) {")
+        self.indent_level += 1
+        self.emit("const event = cmd.slice(firstWord.length + 1).trim();")
+        self.emit("if (!event) {")
+        self.indent_level += 1
+        self.emit("throw new Error('Usage: trigger <event_name> (e.g., trigger attack)');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("this.cmdTrigger(event);")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("else {")
+        self.indent_level += 1
+        self.emit("// Fuzzy matching for typos")
+        self.emit("const suggestions = this.getSuggestions(firstWord);")
+        self.emit("if (suggestions.length > 0) {")
+        self.indent_level += 1
+        self.emit("throw new Error(`Unknown command: ${firstWord}. Did you mean: ${suggestions.join(', ')}?`);")
+        self.indent_level -= 1
+        self.emit("} else {")
+        self.indent_level += 1
+        self.emit("throw new Error(`Unknown command: ${firstWord}. Type 'help' for commands.`);")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("} catch (error) {")
+        self.indent_level += 1
+        self.emit("this.log(`✗ ${error.message}`, 'error');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        # Fuzzy matching helper
+        self.emit("// Fuzzy matching for typos")
+        self.emit("getSuggestions(word) {")
+        self.indent_level += 1
+        self.emit("const commands = ['help', 'clear', 'list', 'look', 'set', 'get', 'create', 'describe', 'properties', 'inspect', 'trigger', 'fire', 'show', 'info'];")
+        self.emit("const levenshtein = (a, b) => {")
+        self.indent_level += 1
+        self.emit("const matrix = [];")
+        self.emit("for (let i = 0; i <= b.length; i++) matrix[i] = [i];")
+        self.emit("for (let j = 0; j <= a.length; j++) matrix[0][j] = j;")
+        self.emit("for (let i = 1; i <= b.length; i++) {")
+        self.indent_level += 1
+        self.emit("for (let j = 1; j <= a.length; j++) {")
+        self.indent_level += 1
+        self.emit("if (b.charAt(i - 1) === a.charAt(j - 1)) {")
+        self.indent_level += 1
+        self.emit("matrix[i][j] = matrix[i - 1][j - 1];")
+        self.indent_level -= 1
+        self.emit("} else {")
+        self.indent_level += 1
+        self.emit("matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("return matrix[b.length][a.length];")
+        self.indent_level -= 1
+        self.emit("};")
+        self.emit("return commands.filter(cmd => levenshtein(word, cmd) <= 2).slice(0, 3);")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        # Command implementations
+        self.emit("// Command: help")
+        self.emit("cmdHelp() {")
+        self.indent_level += 1
+        self.emit("this.log('🎮 ROSH CONSOLE - Available Commands:', 'info');")
+        self.emit("this.log('', 'info');")
+        self.emit("this.log('  list / look / ls              - Show all objects', 'info');")
+        self.emit("this.log('  describe / properties / info  - Show object properties', 'info');")
+        self.emit("this.log('  get <obj.prop>                - Get property value', 'info');")
+        self.emit("this.log('  set <obj.prop> to <value>     - Change property', 'info');")
+        self.emit("this.log('  create <name> at <x> <y>      - Create new object', 'info');")
+        self.emit("this.log('  trigger / fire <event>        - Fire event', 'info');")
+        self.emit("this.log('  clear / cls                   - Clear console', 'info');")
+        self.emit("this.log('  help / ?                      - Show this help', 'info');")
+        self.emit("this.log('', 'info');")
+        self.emit("this.log('💡 Tip: Commands are natural language friendly!', 'info');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        self.emit("// Command: clear")
+        self.emit("cmdClear() {")
+        self.indent_level += 1
+        self.emit("document.getElementById('rosh-console-output').innerHTML = '';")
+        self.emit("this.log('Console cleared', 'success');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        self.emit("// Command: list objects")
+        self.emit("cmdListObjects() {")
+        self.indent_level += 1
+        self.emit("const objects = Object.keys(this.scene).filter(k => ")
+        self.emit("    this.scene[k] && typeof this.scene[k] === 'object' && this.scene[k].x !== undefined")
+        self.emit(");")
+        self.emit("if (objects.length === 0) {")
+        self.indent_level += 1
+        self.emit("this.log('No objects found', 'info');")
+        self.indent_level -= 1
+        self.emit("} else {")
+        self.indent_level += 1
+        self.emit("this.log(`Found ${objects.length} object(s):`, 'info');")
+        self.emit("objects.forEach(name => this.log(`  - ${name}`, 'info'));")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        self.emit("// Command: set")
+        self.emit("cmdSet(target, value) {")
+        self.indent_level += 1
+        self.emit("const obj = this.getProperty(target, true);")
+        self.emit("if (obj.error) throw new Error(obj.error);")
+        self.emit_blank()
+        self.emit("// Evaluate value (simple number/string/boolean parsing)")
+        self.emit("let evaluatedValue = value.trim();")
+        self.emit_blank()
+        self.emit("// Handle 'middle' alias (converts to 50%)")
+        self.emit("if (evaluatedValue.toLowerCase() === 'middle') {")
+        self.indent_level += 1
+        self.emit("evaluatedValue = '50%';")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("// Handle percentages (convert to pixels based on canvas size)")
+        self.emit("if (evaluatedValue.endsWith('%')) {")
+        self.indent_level += 1
+        self.emit("const percent = parseFloat(evaluatedValue.slice(0, -1));")
+        self.emit("const prop = target.split('.').pop();")
+        self.emit("if (prop === 'x' || prop === 'width') {")
+        self.indent_level += 1
+        self.emit(f"evaluatedValue = (percent / 100) * {self.GAME_WIDTH};")
+        self.indent_level -= 1
+        self.emit("} else if (prop === 'y' || prop === 'height') {")
+        self.indent_level += 1
+        self.emit(f"evaluatedValue = (percent / 100) * {self.GAME_HEIGHT};")
+        self.indent_level -= 1
+        self.emit("} else {")
+        self.indent_level += 1
+        self.emit("throw new Error('Percentages only work for x, y, width, height properties');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("// Handle boolean literals")
+        self.emit("else if (evaluatedValue === 'true') evaluatedValue = true;")
+        self.emit("else if (evaluatedValue === 'false') evaluatedValue = false;")
+        self.emit("else if (evaluatedValue === 'null') evaluatedValue = null;")
+        self.emit("// Handle numbers")
+        self.emit("else if (!isNaN(evaluatedValue)) evaluatedValue = parseFloat(evaluatedValue);")
+        self.emit("// Handle quoted strings")
+        self.emit("else if (evaluatedValue.startsWith('\"') && evaluatedValue.endsWith('\"')) {")
+        self.indent_level += 1
+        self.emit("evaluatedValue = evaluatedValue.slice(1, -1);")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("// Set the value")
+        self.emit("const parts = target.split('.');")
+        self.emit("const prop = parts[parts.length - 1];")
+        self.emit("obj.parent[prop] = evaluatedValue;")
+        self.emit("this.log(`✓ Set ${target} = ${evaluatedValue}`, 'success');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        self.emit("// Command: get")
+        self.emit("cmdGet(target) {")
+        self.indent_level += 1
+        self.emit("const result = this.getProperty(target);")
+        self.emit("if (result.error) throw new Error(result.error);")
+        self.emit("this.log(`${target} = ${JSON.stringify(result.value)}`, 'success');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        self.emit("// Command: create object")
+        self.emit("cmdCreateObject(name, x = '400', y = '300') {")
+        self.indent_level += 1
+        self.emit("if (this.scene[name]) {")
+        self.indent_level += 1
+        self.emit("throw new Error(`Object '${name}' already exists`);")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("// Handle 'middle' alias for coordinates")
+        self.emit("if (x.toLowerCase() === 'middle') x = '50%';")
+        self.emit("if (y.toLowerCase() === 'middle') y = '50%';")
+        self.emit_blank()
+        self.emit("// Handle percentage values")
+        self.emit("let xPos = parseInt(x);")
+        self.emit("let yPos = parseInt(y);")
+        self.emit("if (typeof x === 'string' && x.endsWith('%')) {")
+        self.indent_level += 1
+        self.emit(f"xPos = (parseFloat(x.slice(0, -1)) / 100) * {self.GAME_WIDTH};")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("if (typeof y === 'string' && y.endsWith('%')) {")
+        self.indent_level += 1
+        self.emit(f"yPos = (parseFloat(y.slice(0, -1)) / 100) * {self.GAME_HEIGHT};")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("this.scene[name] = this.scene.add.rectangle(xPos, yPos, 50, 50, 0xff00ff);")
+        self.emit("this.log(`✓ Created object '${name}' at (${xPos}, ${yPos})`, 'success');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        self.emit("// Command: describe")
+        self.emit("cmdDescribe(target) {")
+        self.indent_level += 1
+        self.emit("console.log('[cmdDescribe] Called with target:', target);")
+        self.emit("console.log('[cmdDescribe] this.scene:', this.scene);")
+        self.emit("const obj = this.scene[target];")
+        self.emit("console.log('[cmdDescribe] Found obj:', obj);")
+        self.emit("if (!obj) throw new Error(`Object '${target}' not found`);")
+        self.emit_blank()
+        self.emit("this.log(`Object: ${target}`, 'info');")
+        self.emit("console.log('[cmdDescribe] Logged object header');")
+        self.emit_blank()
+        self.emit("// Show common game properties first")
+        self.emit("const commonProps = ['x', 'y', 'width', 'height', 'displayWidth', 'displayHeight', 'lives', 'score', 'speed', 'health', 'alpha', 'rotation', 'scale', 'visible'];")
+        self.emit("const found = [];")
+        self.emit("commonProps.forEach(prop => {")
+        self.indent_level += 1
+        self.emit("if (obj[prop] !== undefined) {")
+        self.indent_level += 1
+        self.emit("const val = typeof obj[prop] === 'number' ? obj[prop].toFixed(2) : obj[prop];")
+        self.emit("this.log(`  ${prop}: ${val}`, 'info');")
+        self.emit("found.push(prop);")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("});")
+        self.emit_blank()
+        self.emit("// Show other custom properties (excluding Phaser internals)")
+        self.emit("const otherProps = Object.keys(obj).filter(k => {")
+        self.indent_level += 1
+        self.emit("return !k.startsWith('_') && ")
+        self.emit("       !found.includes(k) && ")
+        self.emit("       typeof obj[k] !== 'function' && ")
+        self.emit("       typeof obj[k] !== 'object';")
+        self.indent_level -= 1
+        self.emit("});")
+        self.emit("if (otherProps.length > 0) {")
+        self.indent_level += 1
+        self.emit("this.log('  Other properties:', 'info');")
+        self.emit("otherProps.forEach(prop => {")
+        self.indent_level += 1
+        self.emit("this.log(`    ${prop}: ${obj[prop]}`, 'info');")
+        self.indent_level -= 1
+        self.emit("});")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        self.emit("// Command: trigger")
+        self.emit("cmdTrigger(event) {")
+        self.indent_level += 1
+        self.emit("if (typeof this.scene.triggerEvent === 'function') {")
+        self.indent_level += 1
+        self.emit("this.scene.triggerEvent(event, null);")
+        self.emit("this.log(`✓ Triggered event: ${event}`, 'success');")
+        self.indent_level -= 1
+        self.emit("} else {")
+        self.indent_level += 1
+        self.emit("throw new Error('Event system not available in this game');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        # Helper: getProperty
+        self.emit("// Helper: get property by path (e.g., 'player.x')")
+        self.emit("getProperty(path, returnParent = false) {")
+        self.indent_level += 1
+        self.emit("const parts = path.split('.');")
+        self.emit("let obj = this.scene;")
+        self.emit("let parent = null;")
+        self.emit_blank()
+        self.emit("for (let i = 0; i < parts.length; i++) {")
+        self.indent_level += 1
+        self.emit("parent = obj;")
+        self.emit("obj = obj[parts[i]];")
+        self.emit("if (obj === undefined) {")
+        self.indent_level += 1
+        self.emit("return { error: `Property '${parts.slice(0, i + 1).join('.')}' not found` };")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("return returnParent ? { parent, value: obj } : { value: obj };")
+        self.indent_level -= 1
+        self.emit("}")
+
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+    def emit_repl_initialization(self) -> None:
+        """Initialize REPL after game is created"""
+        self.emit_comment("Initialize REPL")
+        self.emit("window.addEventListener('load', () => {")
+        self.indent_level += 1
+        self.emit("// Wait for game scene to be ready")
+        self.emit("setTimeout(() => {")
+        self.indent_level += 1
+        self.emit("const scene = game.scene.scenes[0];")
+        self.emit("if (scene) {")
+        self.indent_level += 1
+        self.emit("window.roshREPL = new RoshREPL(scene);")
+        self.emit("console.log('🎮 Rosh Console initialized. Press ` or F12 to toggle.');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}, 100);")
+        self.indent_level -= 1
+        self.emit("});")
+        self.emit_blank()
+        self.emit_comment("END REPL")

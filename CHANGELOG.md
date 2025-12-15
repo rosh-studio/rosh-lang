@@ -17,11 +17,81 @@
   - ⏳ BACKLOG.md for deferred features
 
 ### Next Steps
-- In-game REPL system (v0.2.0) - Proposed
+- In-game REPL Phase 2 (WebSocket server with full Rosh syntax) - Pending decision
 - Audio & animation for Phaser (v0.1.8)
 - Game state management (pause/resume/restart)
 - Multiple scenes/levels
 - Second transpiler target (Godot GDScript)
+- Function support in Phaser transpiler (v0.1.6+)
+- Meta settings support
+
+---
+
+## [2025-12-15] - In-Game REPL Phase 1 Complete (Ticket #009)
+
+### Added
+- **🎮 In-Game REPL Console** - Live coding inside Phaser games (dev-only feature)
+  - `--repl` flag for build command enables console overlay
+  - Natural language commands: list, set, get, create, properties, trigger, help, clear
+  - Multiple aliases per command (list/look/ls/show/objects)
+  - Fuzzy matching for typo correction (Levenshtein distance)
+  - Percentage support (`set hero.x to 50%`)
+  - "middle" alias for 50% (`set hero.x to middle`)
+  - Toggle with backtick (`) or F12 key
+  - Terminal-style UI (green-on-black, scrollable output)
+  - Command history (up/down arrows)
+  - Error handling (commands never crash game)
+  - All commands tested in Chrome & Safari
+
+- **Shorthand Position Syntax** - Comma-optional coordinates
+  - `create object hero at 100 300` (works in both source files and REPL)
+  - `create object hero at 100, 300` (also works)
+  - Added `AT` token to lexer
+  - Parser support for position shorthand
+
+- **Polished Demo** - Professional demo with Kenney.nl graphics
+  - `demos/repl-demo/` with hero, enemies, coins sprites
+  - Player controls (arrow keys)
+  - Comprehensive README.md with consultancy pitch
+  - Asset attribution in examples/games/assets/CREDITS.md
+
+- **Demo Quality Policy** - Added to POLICIES.md
+  - Requirement: Polish demos before committing
+  - Use professional graphics (Kenney.nl assets, not colored rectangles)
+  - Test in multiple browsers (Chrome + Safari minimum)
+  - Complete documentation with commands and use cases
+
+- **REPL Documentation** - Added to examples/games/README.md
+  - Complete "Live Coding with the Rosh Console" section
+  - Command reference with examples
+  - Use cases (prototyping, debugging, live demos)
+  - Security warnings (dev-only)
+  - Link to polished demo
+
+### Fixed
+- **Sprite Display** - Sprites now render at correct size
+  - Added `setDisplaySize()` call after image creation
+  - Sprite loading with `.png` extension auto-appending
+  - Proper fallback to rectangles if sprites missing
+
+### Technical
+- Modified files:
+  - `src/rosh/lexer.py` - Added AT token
+  - `src/rosh/parser.py` - Shorthand position syntax
+  - `src/rosh/transpilers/phaser.py` - REPL generation (~400 lines)
+  - `rosh-corporate/docs/POLICIES.md` - Demo quality standards
+  - `examples/games/README.md` - REPL documentation
+  - `demos/repl-demo/game.rosh` - Professional demo
+  - `demos/repl-demo/README.md` - Demo documentation
+
+### User Validation
+- **Status:** Phase 1 COMPLETE and user-validated
+- **Feedback:** "fuck me this is impressive" - "What other gaming systems out there allow you to make up a 2d game as you go along?"
+- **Impact:** "Great progress after 3 days"
+
+### Deferred to Future Tickets
+- Function support in Phaser transpiler (required for `define function` / `call` pattern)
+- Meta settings support (required for `set meta show_console to true`)
 
 ---
 
