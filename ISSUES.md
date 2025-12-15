@@ -1,6 +1,6 @@
 # Rosh Issues & Known Limitations
 
-**Last Updated:** 2024-12-12
+**Last Updated:** 2024-12-15
 **Policy:** See docs/POLICIES.md for issue tracking guidelines
 
 > Dated issues tracking - bugs, limitations, and planned fixes.
@@ -68,6 +68,40 @@
 **Resolution Plan:**
 - Milestone 7 (v0.0.7)
 - Syntax: `set config to {key: value}`
+
+---
+
+### **No Object Collections for Game Objects**
+**Status:** Design needed
+**Discovered:** 2024-12-15
+
+Creating multiple similar game objects requires numbered names:
+
+```rosh
+# Current approach - must create each separately
+create object bullet1
+    set active to 0
+    set sprite to "laser.png"
+end
+create object bullet2
+    set active to 0
+    set sprite to "laser.png"
+end
+# ... repeat for bullet3, bullet4, bullet5
+```
+
+This leads to:
+- Repetitive code (5 bullets = 5 nearly-identical blocks)
+- Verbose collision detection (5 bullets × 4 enemies = 20 checks)
+- No way to iterate over "all bullets"
+
+**Resolution Plan:**
+- Add object collection syntax: `create 5 objects bullet`
+- Add iteration: `for each bullet then ... end`
+- See docs/proposals/EVENT-SYSTEM.md for collision events proposal
+
+**Workaround (current):**
+Use numbered objects and check each explicitly.
 
 ---
 
@@ -264,4 +298,4 @@ Added: split, substring, uppercase, lowercase, trim, indexOf, lastIndexOf
 
 ---
 
-*Last updated: 2024-12-13*
+*Last updated: 2024-12-15*

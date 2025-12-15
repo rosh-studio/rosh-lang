@@ -390,6 +390,104 @@ end
 
 ---
 
+## 🎮 2D Game Events (Future Enhancement)
+
+**Status:** Proposed for future version
+**Added:** 2024-12-15
+**Motivation:** Space shooter demo requires 20 nested collision checks (5 bullets × 4 enemies)
+
+### **The Problem: Verbose Collision Detection**
+
+Currently, collision detection requires manual coordinate checks for every object pair:
+
+```rosh
+# Current approach - VERY verbose!
+# Must repeat this for EVERY bullet vs EVERY enemy (20 checks!)
+if bullet1.active is equal to 1 then
+    if enemy1.active is equal to 1 then
+        if bullet1.x is above enemy1.x minus 20 then
+            if bullet1.x is below enemy1.x plus 20 then
+                if bullet1.y is above enemy1.y minus 20 then
+                    if bullet1.y is below enemy1.y plus 20 then
+                        # Collision detected!
+                        play sound "hit.ogg"
+                        set enemy1.y to -50
+                        set bullet1.active to 0
+                    end
+                end
+            end
+        end
+    end
+end
+# ... repeat for bullet1 vs enemy2, enemy3, enemy4
+# ... repeat for bullet2 vs all enemies
+# ... etc. (350+ lines of code!)
+```
+
+### **Proposed Solution: Collision Events**
+
+```rosh
+# Option A: when collision between
+when collision between bullet and enemy then
+    play sound "hit.ogg"
+    set enemy.y to -50
+    set bullet.active to 0
+    set state.score to state.score plus 10
+end
+
+# Option B: when object collides with
+when bullet collides with enemy then
+    # Same as above
+end
+
+# Option C: Collision groups (most powerful)
+create group bullets from bullet1, bullet2, bullet3, bullet4, bullet5
+create group enemies from enemy1, enemy2, enemy3, enemy4
+
+when any bullets collides with any enemies then
+    play sound "hit.ogg"
+    set collided_enemy.y to -50
+    set collided_bullet.active to 0
+end
+```
+
+### **Implementation Considerations**
+
+1. **Collision detection method:**
+   - AABB (axis-aligned bounding box) - simplest, good for rectangles
+   - Circle collision - good for sprites
+   - Pixel-perfect - expensive but accurate
+
+2. **Performance:**
+   - Transpiler could optimize to spatial hashing for many objects
+   - Only check active objects
+
+3. **Built-in collision events for transpilers:**
+   - Phaser has built-in collision detection
+   - Pygame requires manual checks (like current approach)
+   - Could generate optimized code per target
+
+### **Related: Object Collections**
+
+Collision events work best with object collections (see ISSUES.md):
+
+```rosh
+# Future syntax idea
+create 5 objects bullet
+    set active to 0
+    set sprite to "laser.png"
+end
+
+# Iterate
+for each bullet then
+    if bullet.active is equal to 1 then
+        set bullet.y to bullet.y minus 10
+    end
+end
+```
+
+---
+
 ## 📚 Examples
 
 ### **Example 1: Simple Combat System**
