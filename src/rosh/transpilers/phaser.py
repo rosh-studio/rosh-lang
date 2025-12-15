@@ -38,6 +38,31 @@ class PhaserTranspiler(BaseTranspiler):
         7: 0x8800ff,  # Purple
     }
 
+    # CSS color names to hex values (for string color support)
+    CSS_COLORS = {
+        'white': 0xffffff,
+        'black': 0x000000,
+        'red': 0xff0000,
+        'green': 0x00ff00,
+        'blue': 0x0000ff,
+        'yellow': 0xffff00,
+        'cyan': 0x00ffff,
+        'magenta': 0xff00ff,
+        'orange': 0xff8800,
+        'purple': 0x8800ff,
+        'pink': 0xff69b4,
+        'gray': 0x888888,
+        'grey': 0x888888,
+        'gold': 0xffd700,
+        'silver': 0xc0c0c0,
+        'lime': 0x00ff00,
+        'navy': 0x000080,
+        'teal': 0x008080,
+        'aqua': 0x00ffff,
+        'maroon': 0x800000,
+        'olive': 0x808000,
+    }
+
     # Game canvas dimensions (used for percentage calculations)
     GAME_WIDTH = 800
     GAME_HEIGHT = 600
@@ -98,7 +123,7 @@ class PhaserTranspiler(BaseTranspiler):
 
         # 3. Generate header comment
         self.emit_comment("Auto-generated from Rosh code")
-        self.emit_comment("Transpiled with Rosh Phaser Transpiler v0.1.7")
+        self.emit_comment("Transpiled with Rosh Phaser Transpiler v0.1.10")
         self.emit_blank()
 
         # 4. Generate GameScene class
@@ -382,6 +407,9 @@ class PhaserTranspiler(BaseTranspiler):
         width = self.convert_percentage_to_pixels(properties.get('width', 50), 'width')
         height = self.convert_percentage_to_pixels(properties.get('height', 50), 'height')
         color = properties.get('color', self.DEFAULT_COLORS[self.object_counter % 8])
+        # Convert string color names to hex integers
+        if isinstance(color, str):
+            color = self.CSS_COLORS.get(color.lower(), 0x888888)  # Default gray if unknown
 
         # Check if object has text (renders as Phaser text object)
         text = properties.get('text')
@@ -576,6 +604,12 @@ class PhaserTranspiler(BaseTranspiler):
                 # Phaser text objects use setText() method
                 obj_path = f"this.{obj_name}" + (f".{'.'.join(property_chain[:-1])}" if len(property_chain) > 1 else "")
                 self.emit(f"{obj_path}.setText({value_js});")
+            elif prop_name == 'font_size':
+                # Phaser text objects use setFontSize() method
+                # Also update our custom font_size property for reading back
+                # Use block scope to avoid redeclaration in loops
+                obj_path = f"this.{obj_name}" + (f".{'.'.join(property_chain[:-1])}" if len(property_chain) > 1 else "")
+                self.emit(f"{{ const _fs = {value_js}; {obj_path}.font_size = _fs; {obj_path}.setFontSize(_fs); }}")
             elif prop_name == 'alpha':
                 # Phaser uses setAlpha() method
                 obj_path = f"this.{obj_name}" + (f".{'.'.join(property_chain[:-1])}" if len(property_chain) > 1 else "")
@@ -1075,8 +1109,9 @@ class PhaserTranspiler(BaseTranspiler):
         if not visible:
             self.emit(f"this.{name}.setVisible(false);")
 
-        # Store custom properties for REPL access
+        # Store custom properties for REPL access and dynamic updates
         self.emit(f"this.{name}.textContent = '{escaped_text}';")
+        self.emit(f"this.{name}.font_size = {int(font_size)};")  # Track font_size for animations
 
     def emit_hud_object(self, hud_name: str, properties: Dict[str, Any]) -> None:
         """Generate HUD display object

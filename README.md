@@ -1,6 +1,6 @@
 # 🤖 Rosh Programming Language
 
-**v0.0.8** - A spoken-language-first, stack-based, AI-native programming language for interactive storytelling and MUDs.
+**v0.1.10** - A spoken-language-first, stack-based, AI-native programming language for games and interactive storytelling.
 
 > 🤖 **Rosh** - Programming that sounds like talking to a person!
 
@@ -146,8 +146,8 @@ This executable tutorial demonstrates **ALL working features** of Rosh with hand
 
 ## Project Status
 
-**Current Version:** v0.0.8 (In Progress)
-**Latest Complete:** v0.0.9 TOON encoder (2025-12-14)
+**Current Version:** v0.1.10 (Transpiler Demo & Polish)
+**Interpreter:** v0.0.9 (TOON format support)
 
 > **For detailed roadmap:** See `../rosh-dev/ROADMAP.md` (private planning repo)
 
@@ -260,6 +260,40 @@ rosh build examples/games/sprite-demo.rosh --target phaser --output dist/ --copy
 ```
 
 **Impact:** Transforms Rosh from "toy examples with colored boxes" to "real games with professional graphics."
+
+**v0.1.8 - Pygame Transpiler** ✅ (2025-12-14)
+- ✅ Native desktop game output (`rosh build --target pygame`)
+- ✅ Zero browser dependency - runs with `python3 game.py`
+- ✅ Full parity with Phaser: objects, text, key events, update loops
+- ✅ Grid-based collision support (coordinate math)
+- ✅ Input fires once per press (matches Phaser JustDown)
+
+**v0.1.9 - Sound Support** ✅ (2025-12-15)
+- ✅ Sound effects: `play sound "laser.wav"`
+- ✅ Background music: `play music "theme.ogg"` / `stop music`
+- ✅ Automatic asset caching and preloading
+- ✅ Works in both Phaser (Web Audio) and Pygame (mixer)
+
+**v0.1.10 - Demo & Polish** ✅ (2025-12-15)
+- ✅ Dynamic `font_size` animation support
+- ✅ Pygame CLI integration (`rosh build --target pygame`)
+- ✅ Rosh intro demo (works in both Phaser and Pygame)
+- ✅ Asset reorganization (distributed sprites/sounds)
+
+**Example (works in both targets!):**
+```rosh
+create object logo
+    set text to "rosh"
+    set font_size to 8
+    set color to "cyan"
+end
+
+when update then
+    if logo.font_size is below 96 then
+        set logo.font_size to logo.font_size plus 2
+    end
+end
+```
 
 ### What's Next
 

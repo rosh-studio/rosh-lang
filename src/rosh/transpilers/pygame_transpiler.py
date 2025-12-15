@@ -108,7 +108,7 @@ class PygameTranspiler(BaseTranspiler):
         # 3. Generate header
         self.emit("#!/usr/bin/env python3")
         self.emit_comment("Auto-generated from Rosh code")
-        self.emit_comment("Transpiled with Rosh Pygame Transpiler v0.1.9")
+        self.emit_comment("Transpiled with Rosh Pygame Transpiler v0.1.10")
         self.emit_blank()
 
         # 4. Imports
@@ -327,6 +327,20 @@ class PygameTranspiler(BaseTranspiler):
         self.emit("def set_text(self, text):")
         self.indent_level += 1
         self.emit("self.text = text")
+        self.indent_level -= 1
+        self.emit_blank()
+
+        self.emit("def set_font_size(self, size):")
+        self.indent_level += 1
+        self.emit("self.font_size = size")
+        self.emit("try:")
+        self.indent_level += 1
+        self.emit("self.font = pygame.font.SysFont('Arial', int(size))")
+        self.indent_level -= 1
+        self.emit("except Exception as e:")
+        self.indent_level += 1
+        self.emit("print(f'Warning: Font resize failed: {e}')")
+        self.indent_level -= 1
         self.indent_level -= 1
         self.emit_blank()
 
@@ -581,6 +595,13 @@ class PygameTranspiler(BaseTranspiler):
             obj_name = target.split('.')[0]
             if obj_name in self.text_objects:
                 self.emit(f"{obj_name}.set_text({value})")
+                return
+
+        # Special handling for font_size property
+        if '.font_size' in target:
+            obj_name = target.split('.')[0]
+            if obj_name in self.text_objects:
+                self.emit(f"{obj_name}.set_font_size({value})")
                 return
 
         self.emit(f"{target} = {value}")

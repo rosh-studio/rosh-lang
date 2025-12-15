@@ -5,6 +5,102 @@ All notable changes to the Rosh programming language will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.10] - 2025-12-15
+
+### ✨ Demo & Polish
+- **Dynamic font_size** - Animate text size in both Phaser and Pygame transpilers
+- **Pygame CLI** - Full CLI support (`rosh build --target pygame`)
+- **Rosh intro demo** - Animated loading screen works in both targets
+- **Asset reorganization** - Distributed sprites/sounds in `assets/` folder
+
+### 🔧 Fixes
+- Fixed Phaser font_size double-increment bug (block-scoped const)
+- Fixed CLI output message (always show server instructions for Phaser)
+
+## [0.1.9] - 2025-12-15
+
+### 🎵 Sound Support
+- **Sound effects** - `play sound "laser.wav"` in both transpilers
+- **Background music** - `play music "theme.ogg"` / `stop music`
+- **Asset caching** - Automatic preloading and caching
+- Works in Phaser (Web Audio) and Pygame (mixer)
+
+## [0.1.8] - 2025-12-14
+
+### 🎮 Pygame Transpiler
+- **Native desktop games** - `rosh build --target pygame` (Phase 2)
+- **Full feature parity** - Objects, text, key events, update loops
+- **Grid-based collision** - Coordinate math like Block Pusher
+- **Input parity** - Fires once per press (matches Phaser JustDown)
+- **No browser needed** - Run with `python3 game.py`
+
+## [0.1.7] - 2025-12-14
+
+### 🖼️ Sprite System
+- **Sprite support** - `set sprite to "hero.png"` in Phaser transpiler
+- **Asset copying** - `--copy-assets` flag copies only used sprites
+- **Graceful fallback** - Missing sprites show colored rectangles
+- 6300+ free game assets included (Kenney collection)
+
+## [0.1.6] - 2025-12-14
+
+### ⌨️ Input & Events in Phaser
+- **Event system** - `when/trigger` in Phaser transpiler
+- **Object inheritance** - `create object hero from player`
+- **Auto-controls** - Arrow keys + space for player objects
+- **Smart defaults** - lives, score, speed properties
+- **Auto HUD** - Lives/score display
+
+## [0.1.5] - 2025-12-14
+
+### 🌐 Phaser Transpiler MVP
+- **Browser games** - `rosh build --target phaser`
+- **Objects** - Colored rectangles with position/size
+- **Print** - console.log with string interpolation
+- **Fail-fast** - Clear errors for unsupported features
+
+## [0.0.9] - 2025-12-14
+
+### 📦 TOON Format
+- **TOON encoder/decoder** - 40% fewer tokens than JSON
+- **File operations** - Save/load `.toon` files
+- **Round-trip support** - All Rosh types preserved
+- 37 comprehensive tests
+
+## [0.0.8] - 2025-12-13
+
+### 🔧 Infrastructure & Tooling
+- **TOML support** - `--toml` flag, import `.toml` files
+- **Test mode** - `--test`, `--test-input` flags for CI/CD
+- **Program metadata** - `meta` keyword with UUID/checksum
+
+## [0.0.7] - 2025-12-14
+
+### ⚡ Event System
+- **Event-driven programming** - `when <event> then ... end`
+- **Trigger with params** - `trigger player_damaged with 15`
+- **Lexical scoping** - Event handlers have proper scope
+- **Event loop stdlib** - `every()`, `stop_loop()` helpers
+
+## [0.0.6] - 2025-12-13
+
+### 🎨 Quality of Life
+- **String interpolation** - `"Hello {name}!"`
+- **User input** - `input username prompt "Enter name:"`
+- **else if** - Chained conditionals
+- **NOT** - In compound expressions
+- **Multiline comments** - `"""` or `###`
+- **Type checking** - Type checking functions
+- **List slicing** - Slice syntax
+- **Interactive mode** - `-i` flag
+
+## [0.0.5] - 2025-12-12
+
+### 📚 Documentation & Cleanup
+- Repository reorganization
+- Numbered ticket system
+- Strategic planning documents
+
 ## [0.0.4] - 2024-12-11
 
 ### 🔧 Critical Fixes

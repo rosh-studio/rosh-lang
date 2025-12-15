@@ -39,3 +39,26 @@ rosh = "rosh.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.rosh"]
+
+# Include assets in distribution
+[tool.setuptools.data-files]
+"share/rosh/assets/sprites" = [
+    "assets/sprites/hero.png",
+    "assets/sprites/enemy.png",
+    "assets/sprites/coin.png",
+    "assets/sprites/player.png",
+    "assets/sprites/laserGreen.png",
+    "assets/sprites/enemyShip.png",
+    "assets/sprites/space-invader-32x32-6f.png",
+]
+"share/rosh/assets/sounds" = [
+    "assets/sounds/laser1.ogg",
+    "assets/sounds/lose1.ogg",
+    "assets/sounds/lose3.ogg",
+]
+"share/rosh/assets" = [
+    "assets/CREDITS.md",
+]

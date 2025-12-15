@@ -532,7 +532,8 @@ def copy_sprite_assets(source_path: Path, output_dir: Path, sprite_assets: dict)
     Searches for sprite files in these locations (in order):
     1. Same directory as source file
     2. ../assets/ relative to source file
-    3. examples/games/assets/ (for examples)
+    3. rosh-lang/assets/ (distributed assets)
+    4. examples/games/assets/ (DEPRECATED - will be removed in v0.2.0)
 
     Args:
         source_path: Path to the source .rosh file
@@ -548,14 +549,32 @@ def copy_sprite_assets(source_path: Path, output_dir: Path, sprite_assets: dict)
 
     # Search paths for assets
     source_dir = source_path.parent
+
+    # Find rosh-lang root (look for assets/ folder)
+    rosh_lang_root = source_dir
+    for _ in range(5):  # Search up to 5 levels
+        if (rosh_lang_root / 'assets' / 'sprites').exists():
+            break
+        rosh_lang_root = rosh_lang_root.parent
+
     search_paths = [
         source_dir / 'assets',  # Same dir as .rosh file
         source_dir.parent / 'assets',  # ../assets/
-        source_dir.parent / 'games' / 'assets',  # For examples
-        Path('examples/games/assets'),  # Absolute fallback
+        rosh_lang_root / 'assets' / 'sprites',  # rosh-lang/assets/sprites/
+        rosh_lang_root / 'assets' / 'sounds',  # rosh-lang/assets/sounds/
+        source_dir.parent / 'games' / 'assets',  # For examples (deprecated)
+        Path('examples/games/assets'),  # Absolute fallback (deprecated)
     ]
 
+    # Track if we used deprecated paths
+    deprecated_path_used = False
+
     copied_count = 0
+    deprecated_paths = [
+        source_dir.parent / 'games' / 'assets',
+        Path('examples/games/assets'),
+    ]
+
     for obj_name, sprite_file in sprite_assets.items():
         # Try each search path
         for search_path in search_paths:
@@ -565,6 +584,9 @@ def copy_sprite_assets(source_path: Path, output_dir: Path, sprite_assets: dict)
                 shutil.copy2(sprite_path, dest_path)
                 print(f"  📦 Copied: {sprite_file}", file=sys.stderr)
                 copied_count += 1
+                # Check if this was a deprecated path
+                if search_path in deprecated_paths:
+                    deprecated_path_used = True
                 break
         else:
             # Sprite not found in any search path
@@ -572,6 +594,10 @@ def copy_sprite_assets(source_path: Path, output_dir: Path, sprite_assets: dict)
 
     if copied_count > 0:
         print(f"✅ Copied {copied_count} sprite(s) to {assets_dir}", file=sys.stderr)
+
+    if deprecated_path_used:
+        print(f"⚠️  DEPRECATION WARNING: Assets found in examples/games/assets/", file=sys.stderr)
+        print(f"   This path will be removed in v0.2.0. Move assets to assets/sprites/ or assets/sounds/", file=sys.stderr)
 
 
 def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = False, enable_repl: bool = False):
@@ -593,6 +619,7 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
     from .lexer import Lexer
     from .parser import Parser
     from .transpilers.phaser import PhaserTranspiler
+    from .transpilers.pygame_transpiler import PygameTranspiler
     from .errors import RoshError
 
     try:
@@ -635,16 +662,25 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
                 print(f"🔧 DEV MODE: REPL enabled (press ` or F12 to toggle)", file=sys.stderr)
                 print(f"⚠️  WARNING: Do not ship REPL to production!", file=sys.stderr)
 
-            # Show how to run
-            if transpiler.sprite_assets:
-                # Sprites require a web server to avoid CORS issues
-                print(f"🎮 To run (sprites require server):", file=sys.stderr)
-                print(f"   cd {output_dir} && python3 -m http.server 8000", file=sys.stderr)
-                print(f"   Then open: http://localhost:8000", file=sys.stderr)
-            else:
-                # No sprites - can open directly in browser
-                print(f"🎮 To run:", file=sys.stderr)
-                print(f"   open {output_dir}/index.html", file=sys.stderr)
+            # Show how to run (always recommend server for Phaser - animations need it)
+            print(f"🎮 To run:", file=sys.stderr)
+            print(f"   cd {output_dir} && python3 -m http.server 8000", file=sys.stderr)
+            print(f"   open http://localhost:8000", file=sys.stderr)
+
+        elif target == 'pygame':
+            transpiler = PygameTranspiler()
+            py_code = transpiler.transpile(program)
+            generate_pygame_output(py_code, output_dir)
+
+            # Copy assets if requested
+            if copy_assets and transpiler.sprite_assets:
+                copy_sprite_assets(path, Path(output_dir), transpiler.sprite_assets)
+
+            print(f"✅ Transpilation successful!", file=sys.stderr)
+            print(f"📁 Output: {output_dir}", file=sys.stderr)
+            print(f"🎮 To run:", file=sys.stderr)
+            print(f"   python3 {output_dir}/game.py", file=sys.stderr)
+
         else:
             print(f"Error: Unknown target: {target}", file=sys.stderr)
             sys.exit(1)
@@ -684,6 +720,30 @@ def generate_phaser_output(js_code: str, output_dir: str):
     (output_path / "assets").mkdir(exist_ok=True)
 
 
+def generate_pygame_output(py_code: str, output_dir: str):
+    """Generate Pygame output files
+
+    Creates:
+    - game.py (generated Pygame code, executable)
+    - assets/ (placeholder directory)
+
+    Args:
+        py_code: Generated Python code
+        output_dir: Directory for output files
+    """
+    from pathlib import Path
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Write game.py
+    with open(output_path / "game.py", "w") as f:
+        f.write(py_code)
+
+    # Create assets directory
+    (output_path / "assets").mkdir(exist_ok=True)
+
+
 def main():
     """Main entry point for the Rosh CLI"""
     parser = argparse.ArgumentParser(
@@ -702,8 +762,8 @@ def main():
         # Build subcommand
         build_parser = subparsers.add_parser('build', help='Transpile Rosh code to target platform')
         build_parser.add_argument('file', help='Rosh file to transpile')
-        build_parser.add_argument('--target', required=True, choices=['phaser'],
-                                  help='Target platform (phaser)')
+        build_parser.add_argument('--target', required=True, choices=['phaser', 'pygame'],
+                                  help='Target platform (phaser, pygame)')
         build_parser.add_argument('--output', default='dist/',
                                   help='Output directory (default: dist/)')
         build_parser.add_argument('--copy-assets', action='store_true',
