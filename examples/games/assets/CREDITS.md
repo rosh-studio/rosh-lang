@@ -23,6 +23,7 @@ All assets in the `graphics/kenney/` folder are from Kenney's amazing free game 
 
 - `space-invader-32x32-6f.png` - AI generated sprite sheet
 - Additional assets in `zapcoder/` folder - various open source contributors
+- #TODO: Music from Jim Lang & Al Watt to be included & credited.
 
 ---
 

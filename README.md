@@ -144,10 +144,12 @@ rosh ROSH-MANUAL.rosh
 
 This executable tutorial demonstrates **ALL working features** of Rosh with hands-on examples!
 
-## Project Status & Roadmap
+## Project Status
 
 **Current Version:** v0.0.8 (In Progress)
 **Latest Complete:** v0.0.9 TOON encoder (2025-12-14)
+
+> **For detailed roadmap:** See `../rosh-dev/ROADMAP.md` (private planning repo)
 
 ### Recent Releases
 
@@ -163,7 +165,7 @@ This executable tutorial demonstrates **ALL working features** of Rosh with hand
 - ✅ Test mode for CI/CD (`--test`, `--test-input` flags)
 - ✅ Program metadata system (`meta` keyword with UUID/checksum generation)
 - ✅ AI ticket/review/documentation system
-- ✅ BACKLOG.md for deferred features
+- ✅ Development planning reorganization (ROADMAP, tickets moved to private repo)
 
 **v0.0.7 - Event System** ✅ (2025-12-14)
 - ✅ Event-driven programming (`when <event> then ... end`)
@@ -266,24 +268,26 @@ rosh build examples/games/sprite-demo.rosh --target phaser --output dist/ --copy
 - AI-generated sprites (DALL-E integration)
 - Demo video
 
-See **[ROADMAP.md](ROADMAP.md)** for detailed technical milestones and **[BACKLOG.md](BACKLOG.md)** for deferred features.
-
 **Key Documents:**
 - `ROSH-MANUAL.rosh` - THE comprehensive Rosh manual (start here!)
-- `ROADMAP.md` - Technical milestones and releases
-- `BACKLOG.md` - Deferred features and future work
-- `docs/POLICIES.md` - Project governance, standards, workflows
+- `CHANGELOG.md` - Version history and release notes
+- `QUICK-START.md` - Fast installation and basic usage
+- `docs/ARCHITECTURE.md` - System architecture and design decisions
 - `docs/DEVELOPMENT.md` - Development setup and workflow
+- `docs/CONTRIBUTING.md` - Contribution guidelines
 - `docs/AI_SETUP.md` - AI integration guide
 - `docs/EVAL-SAFETY.md` - Understanding eval in single-user vs multi-user
+
+**For strategic planning:** See `../rosh-dev/ROADMAP.md` (private repo)
 
 ## Directory Structure
 
 ```
 rosh-lang/
 ├── ROSH-MANUAL.rosh    # ⭐ THE comprehensive Rosh manual (START HERE!)
-├── ROADMAP.md          # Technical milestones (public-friendly)
 ├── README.md           # This file (quick start)
+├── CHANGELOG.md        # Version history and release notes
+├── QUICK-START.md      # Fast installation guide
 ├── LICENSE             # MIT License
 ├── src/rosh/           # Python interpreter implementation
 │   ├── lexer.py        # Tokenization
