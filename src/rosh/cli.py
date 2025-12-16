@@ -148,8 +148,10 @@ def _fuzzy_match_command(word: str, interpreter=None):
         'push', 'pop',
         # Object management
         'clone', 'delete', 'properties', 'props',
+        # Universal REPL commands
+        'list', 'ls', 'objects', 'look', 'l', 'examine', 'ex', 'inspect', 'x',
         # MUD commands
-        'goto', 'go', 'look', 'l', 'examine', 'ex', 'connect', 'link',
+        'goto', 'go', 'connect', 'link',
         # AI commands
         'prompt',
         # Help
@@ -169,6 +171,117 @@ def _fuzzy_match_command(word: str, interpreter=None):
     # Find close matches (up to 3, with cutoff of 0.6)
     matches = difflib.get_close_matches(word.lower(), commands, n=1, cutoff=0.6)
 
+    return matches[0] if matches else None
+
+
+def _list_objects(interpreter, out):
+    """List all objects in the current environment (Universal REPL command)"""
+    from .values import RoshObject, rosh_to_python
+
+    objects = []
+    for name in interpreter.current_env.bindings.keys():
+        try:
+            value = interpreter.current_env.get(name)
+            if isinstance(value, RoshObject):
+                objects.append((name, value))
+        except:
+            pass
+
+    if not objects:
+        out.dim("No objects defined. Use 'create object <name>' to create one.")
+        return
+
+    out.print("Objects:", style="bold cyan")
+    for name, obj in objects:
+        # Get type (object name)
+        obj_type = obj.name if hasattr(obj, 'name') and obj.name else "object"
+        # Get position if available
+        props = []
+        if obj.has('x'):
+            x = rosh_to_python(obj.get('x'))
+            y = rosh_to_python(obj.get('y')) if obj.has('y') else 0
+            props.append(f"at [{x}, {y}]")
+        if obj.has('color'):
+            props.append(f"color={rosh_to_python(obj.get('color'))}")
+
+        prop_str = f" ({', '.join(props)})" if props else ""
+        out.print(f"  {name} ({obj_type}){prop_str}", style="green")
+
+
+def _examine_object(interpreter, out, obj_name: str):
+    """Show properties of a specific object (Universal REPL command)"""
+    from .values import RoshObject, rosh_to_python
+    import difflib
+
+    # Check if object exists
+    if not interpreter.current_env.exists(obj_name):
+        # Object not found - suggest alternatives
+        all_objects = []
+        for name in interpreter.current_env.bindings.keys():
+            try:
+                value = interpreter.current_env.get(name)
+                if isinstance(value, RoshObject):
+                    all_objects.append(name)
+            except:
+                pass
+
+        out.error(f"Object '{obj_name}' not found.")
+
+        if all_objects:
+            # Fuzzy match
+            matches = difflib.get_close_matches(obj_name, all_objects, n=3, cutoff=0.4)
+            if matches:
+                out.print(f"Did you mean: {', '.join(matches)}?", style="yellow")
+            else:
+                out.print(f"Available: {', '.join(all_objects)}", style="dim")
+        else:
+            out.dim("No objects defined yet.")
+        return
+
+    value = interpreter.current_env.get(obj_name)
+
+    if not isinstance(value, RoshObject):
+        # Not an object, just show its value
+        out.print(f"{obj_name} = {rosh_to_python(value)}", style="cyan")
+        return
+
+    # Show object details
+    out.print()
+    out.print(f"=== {obj_name} ===", style="bold cyan")
+    obj_type = value.name if hasattr(value, 'name') and value.name else "object"
+    out.print(f"Type: {obj_type}", style="dim")
+    if hasattr(value, 'uuid') and value.uuid:
+        out.print(f"UUID: {value.uuid}", style="dim")
+    if hasattr(value, 'id') and value.id:
+        out.print(f"ID: {value.id}", style="dim")
+    out.print()
+
+    # Get all properties from the object
+    if hasattr(value, 'property_stacks') and value.property_stacks:
+        for prop_name in value.property_stacks:
+            prop_value = value.get(prop_name)
+            py_value = rosh_to_python(prop_value)
+            out.print(f"  {prop_name}: {repr(py_value)}", style="green")
+    else:
+        out.dim("  (no properties)")
+    out.print()
+
+
+def _fuzzy_match_object(interpreter, obj_name: str) -> str:
+    """Find closest matching object name"""
+    from .values import RoshObject
+    import difflib
+
+    all_objects = []
+    for name in interpreter.current_env.bindings.keys():
+        try:
+            value = interpreter.current_env.get(name)
+            if isinstance(value, RoshObject):
+                all_objects.append(name)
+        except:
+            pass
+
+    matches = difflib.get_close_matches(obj_name, all_objects, n=1, cutoff=0.4)
     return matches[0] if matches else None
 
 
@@ -438,6 +551,33 @@ def run_repl(interpreter: Interpreter = None):
                 else:
                     line = expanded
                 out.dim(f"→ {line}")  # Show expansion
+
+            # ===== Universal REPL Commands =====
+            # "If it works somewhere, it should work everywhere"
+            stripped = line.strip().lower()
+            parts = line.strip().split()
+
+            # list / ls / objects (no args) - show all objects
+            if stripped in ('list', 'ls', 'objects', 'list objects'):
+                _list_objects(interpreter, out)
+                continue
+
+            # look (no args) - same as list
+            if stripped in ('look', 'l'):
+                _list_objects(interpreter, out)
+                continue
+
+            # look <obj> / examine <obj> / inspect <obj> / x <obj> - show object properties
+            if len(parts) >= 2 and parts[0].lower() in ('look', 'l', 'examine', 'ex', 'inspect', 'x'):
+                obj_name = parts[1]
+                _examine_object(interpreter, out, obj_name)
+                continue
+
+            # clear / cls - clear screen (simple version)
+            if stripped in ('clear', 'cls'):
+                import subprocess
+                subprocess.run('clear' if sys.platform != 'win32' else 'cls', shell=True)
+                continue
 
             # Add line to buffer
             buffer.append(line)
