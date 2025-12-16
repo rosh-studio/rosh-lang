@@ -85,42 +85,10 @@ class GameState:
     pass
 
 # Create game objects
-logo = TextObject(400, 280, "rosh", (0, 255, 255), 8)
+logo = TextObject(400, 300, "rosh", (0, 255, 255), 72)
 
-tagline = TextObject(400, 350, "happy coding", (128, 128, 128), 1)
-tagline.visible = False
+tagline = TextObject(400, 380, "one language. many worlds.", (128, 128, 128), 18)
 
-dot = GameObject(400, 450, 8, 8, (0, 255, 255), 'rectangle')
-dot.visible = False
-
-state = GameObject(100, 100, 50, 50, (255, 255, 0), 'rectangle')
-state.visible = False
-state.phase = 1
-state.logo_done = False
-state.tagline_done = False
-
-
-# Event handlers
-def handle_update():
-    if (state.phase == 1):
-        if (logo.font_size < 96):
-            logo.set_font_size((logo.font_size + 2))
-        else:
-            state.phase = 2
-            tagline.visible = True
-            dot.visible = True
-    if (state.phase == 2):
-        if (tagline.font_size < 24):
-            tagline.set_font_size((tagline.font_size + 1))
-        else:
-            state.phase = 3
-    if (state.phase == 3):
-        if (dot.width < 12):
-            dot.width = (dot.width + 1)
-            dot.height = (dot.height + 1)
-        else:
-            dot.width = 8
-            dot.height = 8
 
 # Main game loop
 running = True
@@ -130,17 +98,12 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
-    # Per-frame game update
-    handle_update()
-
     # Clear screen
     screen.fill((45, 45, 45))
 
     # Draw all objects
     logo.draw(screen)
     tagline.draw(screen)
-    dot.draw(screen)
-    state.draw(screen)
 
     pygame.display.flip()
     clock.tick(60)

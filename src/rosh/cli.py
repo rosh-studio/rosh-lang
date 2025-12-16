@@ -620,6 +620,7 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
     from .parser import Parser
     from .transpilers.phaser import PhaserTranspiler
     from .transpilers.pygame_transpiler import PygameTranspiler
+    from .transpilers.threejs import ThreeJSTranspiler
     from .errors import RoshError
 
     try:
@@ -680,6 +681,21 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             print(f"📁 Output: {output_dir}", file=sys.stderr)
             print(f"🎮 To run:", file=sys.stderr)
             print(f"   python3 {output_dir}/game.py", file=sys.stderr)
+
+        elif target == 'threejs':
+            transpiler = ThreeJSTranspiler()
+            js_code = transpiler.transpile(program)
+            generate_threejs_output(js_code, output_dir)
+
+            # Copy assets if requested
+            if copy_assets and transpiler.sprite_assets:
+                copy_sprite_assets(path, Path(output_dir), transpiler.sprite_assets)
+
+            print(f"✅ Transpilation successful!", file=sys.stderr)
+            print(f"📁 Output: {output_dir}", file=sys.stderr)
+            print(f"🎮 To run:", file=sys.stderr)
+            print(f"   cd {output_dir} && python3 -m http.server 8000", file=sys.stderr)
+            print(f"   open http://localhost:8000", file=sys.stderr)
 
         else:
             print(f"Error: Unknown target: {target}", file=sys.stderr)
@@ -744,6 +760,36 @@ def generate_pygame_output(py_code: str, output_dir: str):
     (output_path / "assets").mkdir(exist_ok=True)
 
 
+def generate_threejs_output(js_code: str, output_dir: str):
+    """Generate Three.js output files
+
+    Creates:
+    - game.js (generated Three.js code, ES modules)
+    - index.html (HTML boilerplate)
+    - assets/ (placeholder directory)
+
+    Args:
+        js_code: Generated JavaScript code
+        output_dir: Directory for output files
+    """
+    from pathlib import Path
+    import shutil
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Write game.js
+    with open(output_path / "game.js", "w") as f:
+        f.write(js_code)
+
+    # Copy HTML template
+    template_dir = Path(__file__).parent / "transpilers" / "templates"
+    shutil.copy(template_dir / "threejs_index.html", output_path / "index.html")
+
+    # Create assets directory
+    (output_path / "assets").mkdir(exist_ok=True)
+
+
 def main():
     """Main entry point for the Rosh CLI"""
     parser = argparse.ArgumentParser(
@@ -762,8 +808,8 @@ def main():
         # Build subcommand
         build_parser = subparsers.add_parser('build', help='Transpile Rosh code to target platform')
         build_parser.add_argument('file', help='Rosh file to transpile')
-        build_parser.add_argument('--target', required=True, choices=['phaser', 'pygame'],
-                                  help='Target platform (phaser, pygame)')
+        build_parser.add_argument('--target', required=True, choices=['phaser', 'pygame', 'threejs'],
+                                  help='Target platform (phaser, pygame, threejs)')
         build_parser.add_argument('--output', default='dist/',
                                   help='Output directory (default: dist/)')
         build_parser.add_argument('--copy-assets', action='store_true',

@@ -415,7 +415,12 @@ class Parser:
             self.error(f"Expected type name, got {type_token.type.name}")
 
     def parse_set(self):
-        """Parse: set <name>: <type> to <value> OR set <name> as <type> to <value> OR set <target> [to] <value>"""
+        """Parse: set <name>: <type> to <value> OR set <name> as <type> to <value> OR set <target> [to] <value>
+
+        Also supports natural language property access:
+          set book.color to red   (dot syntax)
+          set book color to red   (natural language - equivalent to above)
+        """
         line = self.current_token().line
         self.expect(TokenType.SET)
 
@@ -441,6 +446,32 @@ class Parser:
                     annotated_type=annotated_type,
                     line=line
                 )
+
+            # Check for natural language property access: set book color to red
+            # Pattern: IDENTIFIER IDENTIFIER TO (where second identifier is property name)
+            if next_token.type == TokenType.IDENTIFIER:
+                # Peek further to see if there's a TO after the second identifier
+                # This distinguishes "set book color to red" from "set x 42" (no to)
+                self.advance()  # consume first identifier (object name)
+                prop_token = self.current_token()
+                after_prop = self.peek_token()
+
+                if after_prop.type == TokenType.TO:
+                    # Natural language: set book color to red
+                    self.advance()  # consume property name
+                    self.advance()  # consume TO
+                    value = self.parse_expression()
+
+                    target = PropertyAccess(
+                        object=Identifier(name=name_token.value, line=name_token.line),
+                        property=prop_token.value,
+                        line=prop_token.line
+                    )
+                    return SetProperty(target=target, value=value, line=line)
+                else:
+                    # Not natural language syntax, backtrack
+                    # Put back the position - we consumed one token too many
+                    self.pos -= 1  # go back to first identifier
 
         # Otherwise parse as normal set/assignment
         target = self.parse_target()

@@ -134,21 +134,21 @@ class TestPhaserTranspiler(unittest.TestCase):
         self.assertIn("0xff", js)       # Blue
         self.assertIn("0xff0000", js)   # Red
 
-    def test_unsupported_feature_if(self):
-        """Test that if statements raise clear error"""
+    def test_if_statements_supported(self):
+        """Test that if statements are now supported (v0.1.6+)"""
         code = """
-        if true then
-            print "test"
+        create object player
+            set health to 100
+        end
+        if player.health is above 50 then
+            print "healthy"
         end
         """
 
-        with self.assertRaises(RoshRuntimeError) as ctx:
-            self.transpile(code)
-
-        error_msg = str(ctx.exception)
-        self.assertIn("does not support 'if/else statements'", error_msg)
-        self.assertIn("Planned for v0.1.6", error_msg)
-        self.assertIn("✅ create object", error_msg)
+        js = self.transpile(code)
+        # Should generate if statement code
+        self.assertIn("if", js)
+        self.assertIn("healthy", js)
 
     def test_unsupported_feature_while(self):
         """Test that while loops raise error"""

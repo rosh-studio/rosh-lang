@@ -1,8 +1,12 @@
 # Rosh Intro Demo
 
-Animated loading screen showing the "Rosh" logo zooming from small to large.
+Date: 2025-12-16
+Author: Claude Opus 4.5
+Project Lead: rdubar
 
-**Works in both Phaser (browser) and Pygame (native)!**
+Animated loading screen showing the "Rosh" logo.
+
+**Works in Phaser (2D browser), Pygame (2D native), and Three.js (3D browser)!**
 
 ## Features
 
@@ -26,6 +30,22 @@ cd demos/rosh-intro/pygame
 python3 game.py
 ```
 
+## Run in Three.js (3D Browser)
+
+```bash
+cd demos/rosh-intro/threejs
+python3 -m http.server 8000
+# Open http://localhost:8000
+```
+
+Controls:
+- WASD: Move camera
+- Q/E: Move up/down
+- Arrow keys: Rotate view
+- Mouse drag: Orbit camera
+- Scroll: Zoom
+- Backtick (`): Open REPL console
+
 ## Rebuild
 
 **Phaser:**
@@ -38,11 +58,15 @@ rosh build demos/rosh-intro/game.rosh --target phaser --output demos/rosh-intro/
 rosh build demos/rosh-intro/game.rosh --target pygame --output demos/rosh-intro/pygame/
 ```
 
-## Technical Notes
+**Three.js:**
+```bash
+rosh build demos/rosh-intro/game.rosh --target threejs --output demos/rosh-intro/threejs/
+```
 
-This demo showcases the dynamic `font_size` support added in v0.1.10:
+## Technical Notes
 
 - Phaser: Uses `setFontSize()` method for runtime font changes
 - Pygame: Uses `set_font_size()` method that recreates the font object
+- Three.js: Uses canvas-based text sprites with OrbitControls navigation
 
-Both transpilers now support changing font size in `when update then` loops.
+All three transpilers demonstrate "one language, many worlds" - the same Rosh source runs on 2D web, 2D native, and 3D web.

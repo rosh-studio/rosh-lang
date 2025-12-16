@@ -298,7 +298,6 @@ end
 ## Questions?
 
 - Check `ROADMAP.md` for v0.0.7 milestone details
-- See `docs/proposals/EVENT-SYSTEM.md` for specification
 - Read the test suite: `tests/test_events.py`
 - Try the demos: `test-events-simple.rosh`, `dungeon-events-demo.rosh`, `reactive-npc-demo.rosh`
 

@@ -122,10 +122,10 @@ class TestTranspilerCLI(unittest.TestCase):
     def test_build_with_unsupported_feature(self):
         """Test build command fails gracefully on unsupported features"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create Rosh file with unsupported feature (if statement)
+            # Create Rosh file with unsupported feature (while loop)
             rosh_file = Path(tmpdir) / "test.rosh"
             rosh_file.write_text("""
-            if true then
+            while true then
                 print "test"
             end
             """)
@@ -138,8 +138,7 @@ class TestTranspilerCLI(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 1)
-            self.assertIn("does not support 'if/else statements'", result.stderr)
-            self.assertIn("Planned for v0.1.6", result.stderr)
+            self.assertIn("does not support 'while loops'", result.stderr)
 
     def test_html_template_content(self):
         """Test that HTML template includes Phaser CDN"""

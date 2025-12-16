@@ -57,6 +57,10 @@ end
 # Clone object
 clone player as enemy
 set enemy.name to "Goblin"
+
+# Natural language property access - both work:
+set enemy.health to 50       # Dot syntax
+set enemy health to 50       # Space syntax (more natural!)
 ```
 
 ---
@@ -236,8 +240,9 @@ create object player
     set inventory to []
 end
 
-# Update player
-set player.health to 90
+# Update player - both syntaxes are equivalent:
+set player.health to 90      # Dot syntax (programmer style)
+set player health to 90      # Natural language (spoken style)
 ```
 
 ---

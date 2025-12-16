@@ -1,87 +1,31 @@
 # =============================================================================
-# Rosh Intro - Animated Loading Screen Demo
+# Rosh Intro - Simple Logo Demo
 # =============================================================================
 #
-# A simple demo showing the "Rosh" logo zooming from small to large.
-# Works in both Phaser and Pygame!
+# The "rosh" logo - works in Phaser, Pygame, AND Three.js!
+# "One language. Many worlds."
 #
-# RUN IN PHASER:
+# BUILD FOR ALL TARGETS:
 #   rosh build demos/rosh-intro/game.rosh --target phaser --output demos/rosh-intro/phaser/
-#   cd demos/rosh-intro/phaser && python3 -m http.server 8000
-#   open http://localhost:8000
-#
-# RUN IN PYGAME:
-#   python demos/rosh-intro/pygame/game.py
+#   rosh build demos/rosh-intro/game.rosh --target pygame --output demos/rosh-intro/pygame/
+#   rosh build demos/rosh-intro/game.rosh --target threejs --output demos/rosh-intro/threejs/
 #
 # =============================================================================
 
-# Main logo - starts small, zooms to large
+# The logo
 create object logo
     set text to "rosh"
     set x to 400
-    set y to 280
-    set font_size to 8
+    set y to 300
+    set font_size to 72
     set color to "cyan"
 end
 
-# Tagline - appears after logo zoom completes
+# Tagline
 create object tagline
-    set text to "happy coding"
+    set text to "one language. many worlds."
     set x to 400
-    set y to 350
-    set font_size to 1
+    set y to 380
+    set font_size to 18
     set color to "gray"
-    set visible to false
-end
-
-# Decorative dot - pulses in corner
-create object dot
-    set x to 400
-    set y to 450
-    set width to 8
-    set height to 8
-    set color to "cyan"
-    set visible to false
-end
-
-# State tracking (invisible - just for data)
-create object state
-    set phase to 1
-    set logo_done to false
-    set tagline_done to false
-    set visible to false
-end
-
-# Animation loop - runs every frame
-when update then
-    # Phase 1: Zoom the logo
-    if state.phase is equal to 1 then
-        if logo.font_size is below 96 then
-            set logo.font_size to logo.font_size plus 2
-        else
-            set state.phase to 2
-            set tagline.visible to true
-            set dot.visible to true
-        end
-    end
-
-    # Phase 2: Fade in tagline
-    if state.phase is equal to 2 then
-        if tagline.font_size is below 24 then
-            set tagline.font_size to tagline.font_size plus 1
-        else
-            set state.phase to 3
-        end
-    end
-
-    # Phase 3: Pulse the dot (subtle animation)
-    if state.phase is equal to 3 then
-        if dot.width is below 12 then
-            set dot.width to dot.width plus 1
-            set dot.height to dot.height plus 1
-        else
-            set dot.width to 8
-            set dot.height to 8
-        end
-    end
 end
