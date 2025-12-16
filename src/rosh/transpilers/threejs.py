@@ -397,6 +397,14 @@ class ThreeJSTranspiler(BaseTranspiler):
                 else:
                     self.emit(f"{obj_name}.userData.{prop_name} = {prop_value};")
 
+        # Assign UUID to object for REPL get command (#017)
+        self.emit(f"{obj_name}.userData._rosh_uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {{")
+        self.indent_level += 1
+        self.emit("const r = Math.random() * 16 | 0;")
+        self.emit("return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);")
+        self.indent_level -= 1
+        self.emit("});")
+
         self.emit_blank()
         self.object_counter += 1
 
@@ -442,6 +450,13 @@ class ThreeJSTranspiler(BaseTranspiler):
         if not visible:
             self.emit(f"{name}.visible = false;")
         self.emit(f"scene.add({name});")
+        # Assign UUID to object for REPL get command (#017)
+        self.emit(f"{name}.userData._rosh_uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {{")
+        self.indent_level += 1
+        self.emit("const r = Math.random() * 16 | 0;")
+        self.emit("return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);")
+        self.indent_level -= 1
+        self.emit("});")
 
     def _emit_textured_plane(self, name: str, image_file: str, x: float, y: float, z: float, width: float, height: float, visible: bool) -> None:
         """Generate a textured plane for 2D sprites in 3D space
@@ -463,6 +478,13 @@ class ThreeJSTranspiler(BaseTranspiler):
         if not visible:
             self.emit(f"{name}.visible = false;")
         self.emit(f"scene.add({name});")
+        # Assign UUID to object for REPL get command (#017)
+        self.emit(f"{name}.userData._rosh_uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {{")
+        self.indent_level += 1
+        self.emit("const r = Math.random() * 16 | 0;")
+        self.emit("return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);")
+        self.indent_level -= 1
+        self.emit("});")
 
     def _collect_properties(self, node: CreateObject) -> Dict[str, Any]:
         """Extract properties from CreateObject body
@@ -968,12 +990,15 @@ class ThreeJSTranspiler(BaseTranspiler):
         self.emit("if (parts[0] === 'help') {")
         self.indent_level += 1
         self.emit("log('Commands:', 'info');")
-        self.emit("log('  list objects     - Show all objects in scene');")
-        self.emit("log('  inspect <name>   - Show object properties');")
-        self.emit("log('  set <obj>.<prop> to <value>  - Change property');")
-        self.emit("log('  camera reset     - Reset camera to default view');")
+        self.emit("log('  list objects      - Show all objects in scene');")
+        self.emit("log('  examine/look/inspect <name> - Show object properties');")
+        self.emit("log('  get <obj>         - Get object (display)');")
+        self.emit("log('  get <obj> <prop>  - Get property value');")
+        self.emit("log('  get <uuid>        - Get by UUID (8+ chars)');")
+        self.emit("log('  set <obj> <prop> to <value> - Change property');")
+        self.emit("log('  camera reset      - Reset camera to default view');")
         self.emit("log('  camera <x> <y> <z> - Move camera to position');")
-        self.emit("log('  clear            - Clear console');")
+        self.emit("log('  clear             - Clear console');")
         self.indent_level -= 1
         self.emit("}")
         self.emit_blank()
@@ -1022,8 +1047,8 @@ class ThreeJSTranspiler(BaseTranspiler):
         self.emit("}")
         self.emit_blank()
 
-        # Inspect command
-        self.emit("else if (parts[0] === 'inspect' && parts[1]) {")
+        # Inspect command (aliases: examine, look, x)
+        self.emit("else if ((parts[0] === 'inspect' || parts[0] === 'examine' || parts[0] === 'look' || parts[0] === 'x') && parts[1]) {")
         self.indent_level += 1
         self.emit("const obj = scene.getObjectByName(parts[1]);")
         self.emit("if (obj) {")
@@ -1056,6 +1081,103 @@ class ThreeJSTranspiler(BaseTranspiler):
         self.emit("log(`Object '${parts[1]}' not found`, 'err');")
         self.indent_level -= 1
         self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        # Get command - unified get with space syntax and UUID support
+        self.emit("// Get command - unified get (space syntax, dot syntax, UUID)")
+        self.emit("else if (parts[0] === 'get' && parts.length >= 2) {")
+        self.indent_level += 1
+        self.emit("// Parse: 'get book', 'get book color', 'get book.color', or 'get <uuid>'")
+        self.emit("const targetStr = cmd.slice(4).trim();")
+        self.emit("const targetParts = targetStr.split(/[\\s.]+/);")
+        self.emit("const objName = targetParts[0];")
+        self.emit("const propName = targetParts[1] || null;")
+        self.emit_blank()
+        self.emit("// Find object by name or UUID")
+        self.emit("let obj = scene.getObjectByName(objName);")
+        self.emit("let foundName = objName;")
+        self.emit_blank()
+        self.emit("// If not found by name, try UUID lookup (8+ chars)")
+        self.emit("if (!obj && objName.length >= 8) {")
+        self.indent_level += 1
+        self.emit("scene.traverse(child => {")
+        self.indent_level += 1
+        self.emit("if (!obj && child.userData && child.userData._rosh_uuid && child.userData._rosh_uuid.startsWith(objName)) {")
+        self.indent_level += 1
+        self.emit("obj = child;")
+        self.emit("foundName = child.name || objName;")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("});")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("if (!obj) {")
+        self.indent_level += 1
+        self.emit("// List available objects")
+        self.emit("const available = [];")
+        self.emit("scene.traverse(child => { if (child.name && !child.name.startsWith('_')) available.push(child.name); });")
+        self.emit("if (available.length > 0) {")
+        self.indent_level += 1
+        self.emit("log(`Object '${objName}' not found. Available: ${available.slice(0, 5).join(', ')}`, 'err');")
+        self.indent_level -= 1
+        self.emit("} else {")
+        self.indent_level += 1
+        self.emit("log(`Object '${objName}' not found`, 'err');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("return;")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("// If no property requested, display the object")
+        self.emit("if (!propName) {")
+        self.indent_level += 1
+        self.emit("const objType = obj.isMesh ? 'mesh' : obj.isSprite ? 'sprite' : obj.isLight ? 'light' : 'object';")
+        self.emit("log(`<${objType}: ${foundName}>`, 'ok');")
+        self.emit("return;")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("// Special case: uuid property")
+        self.emit("if (propName.toLowerCase() === 'uuid') {")
+        self.indent_level += 1
+        self.emit("if (obj.userData && obj.userData._rosh_uuid) {")
+        self.indent_level += 1
+        self.emit("log(obj.userData._rosh_uuid, 'ok');")
+        self.indent_level -= 1
+        self.emit("} else {")
+        self.indent_level += 1
+        self.emit("log(`Object '${foundName}' has no UUID`, 'err');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("return;")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("// Get the property value")
+        self.emit("let value;")
+        self.emit("if (propName === 'x') value = obj.position.x;")
+        self.emit("else if (propName === 'y') value = obj.position.y;")
+        self.emit("else if (propName === 'z') value = obj.position.z;")
+        self.emit("else if (propName === 'visible') value = obj.visible;")
+        self.emit("else if (propName === 'color' && obj.material && obj.material.color) value = '#' + obj.material.color.getHexString();")
+        self.emit("else if (propName === 'scale') value = obj.scale.x;")
+        self.emit("else if (obj.userData && obj.userData[propName] !== undefined) value = obj.userData[propName];")
+        self.emit("else if (obj['_' + propName] !== undefined) value = obj['_' + propName];")
+        self.emit("else {")
+        self.indent_level += 1
+        self.emit("log(`Property '${propName}' not found on '${foundName}'`, 'err');")
+        self.emit("return;")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("// Display the value")
+        self.emit("const displayValue = typeof value === 'number' ? value.toFixed(2) : JSON.stringify(value);")
+        self.emit("log(displayValue, 'ok');")
         self.indent_level -= 1
         self.emit("}")
         self.emit_blank()

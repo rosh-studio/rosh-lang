@@ -512,6 +512,14 @@ class PhaserTranspiler(BaseTranspiler):
             visible_val = 'true' if properties['visible'] else 'false'
             self.emit(f"this.{node.name}.setVisible({visible_val});")
 
+        # Assign UUID to object for REPL get command (#017)
+        self.emit(f"this.{node.name}._rosh_uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {{")
+        self.indent_level += 1
+        self.emit("const r = Math.random() * 16 | 0;")
+        self.emit("return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);")
+        self.indent_level -= 1
+        self.emit("});")
+
         self.emit_blank()
         self.object_counter += 1
 
@@ -1954,7 +1962,9 @@ class PhaserTranspiler(BaseTranspiler):
         self.emit("this.log('', 'info');")
         self.emit("this.log('  list / look / ls              - Show all objects', 'info');")
         self.emit("this.log('  describe / properties / info  - Show object properties', 'info');")
-        self.emit("this.log('  get <obj.prop>                - Get property value', 'info');")
+        self.emit("this.log('  get <obj>                     - Get object (display)', 'info');")
+        self.emit("this.log('  get <obj> <prop>              - Get property value', 'info');")
+        self.emit("this.log('  get <uuid>                    - Get by UUID (8+ chars)', 'info');")
         self.emit("this.log('  set <obj.prop> to <value>     - Change property', 'info');")
         self.emit("this.log('  create <name> at <x> <y>      - Create new object', 'info');")
         self.emit("this.log('  trigger / fire <event>        - Fire event', 'info');")
@@ -2053,12 +2063,95 @@ class PhaserTranspiler(BaseTranspiler):
         self.emit("}")
         self.emit_blank()
 
-        self.emit("// Command: get")
+        self.emit("// Command: get (unified - supports space syntax, dot syntax, and UUID)")
         self.emit("cmdGet(target) {")
         self.indent_level += 1
-        self.emit("const result = this.getProperty(target);")
-        self.emit("if (result.error) throw new Error(result.error);")
-        self.emit("this.log(`${target} = ${JSON.stringify(result.value)}`, 'success');")
+        self.emit("// Parse target - could be 'book', 'book color', 'book.color', or UUID")
+        self.emit("const parts = target.trim().split(/[\\s.]+/);")
+        self.emit("const objName = parts[0];")
+        self.emit("const propName = parts[1] || null;")
+        self.emit_blank()
+        self.emit("// Find object by name or UUID")
+        self.emit("let obj = this.scene[objName];")
+        self.emit("let foundName = objName;")
+        self.emit_blank()
+        self.emit("// If not found by name, try UUID lookup (8+ chars)")
+        self.emit("if (!obj && objName.length >= 8) {")
+        self.indent_level += 1
+        self.emit("for (const key of Object.keys(this.scene)) {")
+        self.indent_level += 1
+        self.emit("const sceneObj = this.scene[key];")
+        self.emit("if (sceneObj && sceneObj._rosh_uuid && sceneObj._rosh_uuid.startsWith(objName)) {")
+        self.indent_level += 1
+        self.emit("obj = sceneObj;")
+        self.emit("foundName = key;")
+        self.emit("break;")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("if (!obj) {")
+        self.indent_level += 1
+        self.emit("// Suggest available objects")
+        self.emit("const available = Object.keys(this.scene).filter(k => !k.startsWith('_') && typeof this.scene[k] === 'object');")
+        self.emit("const suggestions = this.getSuggestions(objName);")
+        self.emit("if (suggestions.length > 0) {")
+        self.indent_level += 1
+        self.emit("throw new Error(`Object '${objName}' not found. Did you mean: ${suggestions.join(', ')}?`);")
+        self.indent_level -= 1
+        self.emit("} else if (available.length > 0) {")
+        self.indent_level += 1
+        self.emit("throw new Error(`Object '${objName}' not found. Available: ${available.slice(0, 5).join(', ')}`);")
+        self.indent_level -= 1
+        self.emit("} else {")
+        self.indent_level += 1
+        self.emit("throw new Error(`Object '${objName}' not found`);")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("// If no property requested, return the object")
+        self.emit("if (!propName) {")
+        self.indent_level += 1
+        self.emit("const objType = obj.type || 'object';")
+        self.emit("this.log(`<${objType}: ${foundName}>`, 'success');")
+        self.emit("return;")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("// Special case: uuid property")
+        self.emit("if (propName.toLowerCase() === 'uuid') {")
+        self.indent_level += 1
+        self.emit("if (obj._rosh_uuid) {")
+        self.indent_level += 1
+        self.emit("this.log(obj._rosh_uuid, 'success');")
+        self.indent_level -= 1
+        self.emit("} else {")
+        self.indent_level += 1
+        self.emit("throw new Error(`Object '${foundName}' has no UUID`);")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("return;")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("// Get the property value")
+        self.emit("const value = obj[propName];")
+        self.emit("if (value === undefined) {")
+        self.indent_level += 1
+        self.emit("// Suggest available properties")
+        self.emit("const props = Object.keys(obj).filter(k => !k.startsWith('_') && typeof obj[k] !== 'function');")
+        self.emit("throw new Error(`Property '${propName}' not found on '${foundName}'. Available: ${props.slice(0, 5).join(', ')}`);")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("// Display the value")
+        self.emit("const displayValue = typeof value === 'number' ? value.toFixed(2) : JSON.stringify(value);")
+        self.emit("this.log(displayValue, 'success');")
         self.indent_level -= 1
         self.emit("}")
         self.emit_blank()
@@ -2091,6 +2184,13 @@ class PhaserTranspiler(BaseTranspiler):
         self.emit("}")
         self.emit_blank()
         self.emit("this.scene[name] = this.scene.add.rectangle(xPos, yPos, 50, 50, 0xff00ff);")
+        self.emit("// Assign UUID to console-created objects")
+        self.emit("this.scene[name]._rosh_uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {")
+        self.indent_level += 1
+        self.emit("const r = Math.random() * 16 | 0;")
+        self.emit("return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);")
+        self.indent_level -= 1
+        self.emit("});")
         self.emit("this.log(`✓ Created object '${name}' at (${xPos}, ${yPos})`, 'success');")
         self.indent_level -= 1
         self.emit("}")

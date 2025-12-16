@@ -87,6 +87,10 @@ logo._text = 'rosh';
 logo._fontSize = 72;
 logo._color = '#00ffff';
 scene.add(logo);
+logo.userData._rosh_uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+});
 
 // Object: tagline
 // Text sprite: tagline
@@ -112,6 +116,10 @@ tagline._text = 'one language. many worlds.';
 tagline._fontSize = 18;
 tagline._color = '#888888';
 scene.add(tagline);
+tagline.userData._rosh_uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+});
 
 
 // Animation Loop
@@ -253,12 +261,15 @@ function execCommand(cmd) {
 
         if (parts[0] === 'help') {
             log('Commands:', 'info');
-            log('  list objects     - Show all objects in scene');
-            log('  inspect <name>   - Show object properties');
-            log('  set <obj>.<prop> to <value>  - Change property');
-            log('  camera reset     - Reset camera to default view');
+            log('  list objects      - Show all objects in scene');
+            log('  examine/look/inspect <name> - Show object properties');
+            log('  get <obj>         - Get object (display)');
+            log('  get <obj> <prop>  - Get property value');
+            log('  get <uuid>        - Get by UUID (8+ chars)');
+            log('  set <obj> <prop> to <value> - Change property');
+            log('  camera reset      - Reset camera to default view');
             log('  camera <x> <y> <z> - Move camera to position');
-            log('  clear            - Clear console');
+            log('  clear             - Clear console');
         }
 
         else if (parts[0] === 'list') {
@@ -287,7 +298,7 @@ function execCommand(cmd) {
             }
         }
 
-        else if (parts[0] === 'inspect' && parts[1]) {
+        else if ((parts[0] === 'inspect' || parts[0] === 'examine' || parts[0] === 'look' || parts[0] === 'x') && parts[1]) {
             const obj = scene.getObjectByName(parts[1]);
             if (obj) {
                 log(`${parts[1]}:`, 'info');
@@ -309,6 +320,77 @@ function execCommand(cmd) {
             } else {
                 log(`Object '${parts[1]}' not found`, 'err');
             }
+        }
+
+        // Get command - unified get (space syntax, dot syntax, UUID)
+        else if (parts[0] === 'get' && parts.length >= 2) {
+            // Parse: 'get book', 'get book color', 'get book.color', or 'get <uuid>'
+            const targetStr = cmd.slice(4).trim();
+            const targetParts = targetStr.split(/[\s.]+/);
+            const objName = targetParts[0];
+            const propName = targetParts[1] || null;
+
+            // Find object by name or UUID
+            let obj = scene.getObjectByName(objName);
+            let foundName = objName;
+
+            // If not found by name, try UUID lookup (8+ chars)
+            if (!obj && objName.length >= 8) {
+                scene.traverse(child => {
+                    if (!obj && child.userData && child.userData._rosh_uuid && child.userData._rosh_uuid.startsWith(objName)) {
+                        obj = child;
+                        foundName = child.name || objName;
+                    }
+                });
+            }
+
+            if (!obj) {
+                // List available objects
+                const available = [];
+                scene.traverse(child => { if (child.name && !child.name.startsWith('_')) available.push(child.name); });
+                if (available.length > 0) {
+                    log(`Object '${objName}' not found. Available: ${available.slice(0, 5).join(', ')}`, 'err');
+                } else {
+                    log(`Object '${objName}' not found`, 'err');
+                }
+                return;
+            }
+
+            // If no property requested, display the object
+            if (!propName) {
+                const objType = obj.isMesh ? 'mesh' : obj.isSprite ? 'sprite' : obj.isLight ? 'light' : 'object';
+                log(`<${objType}: ${foundName}>`, 'ok');
+                return;
+            }
+
+            // Special case: uuid property
+            if (propName.toLowerCase() === 'uuid') {
+                if (obj.userData && obj.userData._rosh_uuid) {
+                    log(obj.userData._rosh_uuid, 'ok');
+                } else {
+                    log(`Object '${foundName}' has no UUID`, 'err');
+                }
+                return;
+            }
+
+            // Get the property value
+            let value;
+            if (propName === 'x') value = obj.position.x;
+            else if (propName === 'y') value = obj.position.y;
+            else if (propName === 'z') value = obj.position.z;
+            else if (propName === 'visible') value = obj.visible;
+            else if (propName === 'color' && obj.material && obj.material.color) value = '#' + obj.material.color.getHexString();
+            else if (propName === 'scale') value = obj.scale.x;
+            else if (obj.userData && obj.userData[propName] !== undefined) value = obj.userData[propName];
+            else if (obj['_' + propName] !== undefined) value = obj['_' + propName];
+            else {
+                log(`Property '${propName}' not found on '${foundName}'`, 'err');
+                return;
+            }
+
+            // Display the value
+            const displayValue = typeof value === 'number' ? value.toFixed(2) : JSON.stringify(value);
+            log(displayValue, 'ok');
         }
 
         else if (parts[0] === 'set' && cmd.includes(' to ')) {
