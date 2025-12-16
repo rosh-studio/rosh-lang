@@ -5,13 +5,49 @@
 
 ---
 
-## 🏗 Language Design Principles
+## 🏗 Language Design Philosophy
 
-1. **Spoken-first** - Optimize for dictation
+### What Rosh Is
+
+Rosh is a **modern, AI-native control language for live worlds**.
+
+It sits in the tradition of older control languages rather than modern application languages:
+
+| Tradition | What Rosh Inherits |
+|-----------|-------------------|
+| **Smalltalk, Emacs Lisp** | Live systems that can be inspected and changed while running |
+| **Logo, HyperTalk** | Human-readable, intent-focused commands |
+| **Tcl, Unix shells** | Glue layer embedded in larger systems |
+| **PostScript, SQL** | Describes *what* should change, not *how* |
+| **LPC, Inform** | Meaning-first, world-centric, hot-modifiable |
+
+**Key insight:** Rosh is not a replacement for game engines or systems languages.
+It is a **semantic layer** that lets humans and AI safely reshape running environments.
+
+### Design Principles
+
+1. **Spoken-first** - Optimize for dictation and voice input
 2. **Natural English** - Sounds like talking to a person
-3. **Minimal punctuation** - Voice-friendly
-4. **AI-native** - `prompt` command as first-class citizen
-5. **Educational** - Teaching programming through storytelling
+3. **Minimal punctuation** - Voice-friendly, no brackets or semicolons
+4. **AI-native** - Works seamlessly with AI assistants
+5. **Live worlds** - Inspect and modify running systems in real-time
+6. **Engine-agnostic** - Same Rosh code runs in Phaser, Pygame, Unity, etc.
+7. **Computers do the work** - Guess intelligently, ask if uncertain, never block on ambiguity
+
+### The "Computers Do The Work" Rule
+
+If Rosh isn't sure what to do:
+- Make a reasonable guess
+- Inform the user what was assumed
+- Offer to change if they disagree
+- Never block on uncertainty if a safe default exists
+
+Examples:
+- Missing asset? Use placeholder + warning (already implemented)
+- Ambiguous syntax? Pick most likely interpretation, suggest correction
+- Type mismatch? Coerce if safe, warn if risky
+
+**Philosophy:** Optimize for user flow, not language purity.
 
 ---
 
