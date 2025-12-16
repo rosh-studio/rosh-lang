@@ -285,6 +285,112 @@ def _fuzzy_match_object(interpreter, obj_name: str) -> str:
     return matches[0] if matches else None
 
 
+def _get_command(interpreter, out, identifier: str, prop_name: str = None):
+    """Unified get command - get object or property, push to stack, display.
+
+    Supports:
+    - get <name> - get object by name
+    - get <uuid> - get object by UUID (partial match, 8+ chars)
+    - get <obj> <prop> - get property value
+    """
+    from .values import RoshObject, rosh_to_python
+    import difflib
+
+    # First, try to find the object by name
+    obj = None
+    obj_name_found = None
+
+    if interpreter.current_env.exists(identifier):
+        obj = interpreter.current_env.get(identifier)
+        obj_name_found = identifier
+    else:
+        # Try to find by UUID (partial match, 8+ chars)
+        if len(identifier) >= 8:
+            for name in interpreter.current_env.bindings.keys():
+                try:
+                    value = interpreter.current_env.get(name)
+                    if isinstance(value, RoshObject):
+                        if hasattr(value, 'uuid') and value.uuid:
+                            if value.uuid.startswith(identifier) or value.uuid == identifier:
+                                obj = value
+                                obj_name_found = name
+                                break
+                except:
+                    pass
+
+    if obj is None:
+        # Object not found - suggest alternatives
+        all_objects = []
+        for name in interpreter.current_env.bindings.keys():
+            try:
+                value = interpreter.current_env.get(name)
+                if isinstance(value, RoshObject):
+                    all_objects.append(name)
+            except:
+                pass
+
+        out.error(f"Object '{identifier}' not found.")
+
+        if all_objects:
+            matches = difflib.get_close_matches(identifier, all_objects, n=3, cutoff=0.4)
+            if matches:
+                out.print(f"Did you mean: {', '.join(matches)}?", style="yellow")
+            else:
+                out.print(f"Available: {', '.join(all_objects)}", style="dim")
+        else:
+            out.dim("No objects defined yet.")
+        return
+
+    # If no property requested, return the object itself
+    if prop_name is None:
+        # Push object to stack
+        interpreter.data_stack.append(obj)
+        # Display it
+        if isinstance(obj, RoshObject):
+            obj_type = obj.name if hasattr(obj, 'name') and obj.name else "object"
+            out.print(f"<{obj_type}: {obj_name_found}>", style="cyan")
+        else:
+            out.print(f"{rosh_to_python(obj)}", style="cyan")
+        return
+
+    # Property requested - get it from the object
+    if not isinstance(obj, RoshObject):
+        out.error(f"'{identifier}' is not an object, cannot get property '{prop_name}'")
+        return
+
+    # Special case: uuid property
+    if prop_name.lower() == 'uuid':
+        if hasattr(obj, 'uuid') and obj.uuid:
+            interpreter.data_stack.append(obj.uuid)
+            out.print(f"{obj.uuid}", style="cyan")
+        else:
+            out.error(f"Object '{obj_name_found}' has no UUID")
+        return
+
+    # Check if property exists
+    if not obj.has(prop_name):
+        # Property not found - suggest alternatives
+        available_props = list(obj.property_stacks.keys()) if hasattr(obj, 'property_stacks') else []
+        out.error(f"Property '{prop_name}' not found on '{obj_name_found}'")
+        if available_props:
+            matches = difflib.get_close_matches(prop_name, available_props, n=3, cutoff=0.4)
+            if matches:
+                out.print(f"Did you mean: {', '.join(matches)}?", style="yellow")
+            else:
+                out.print(f"Available: {', '.join(available_props)}", style="dim")
+        return
+
+    # Get the property value
+    prop_value = obj.get(prop_name)
+    py_value = rosh_to_python(prop_value)
+
+    # Push to stack
+    interpreter.data_stack.append(prop_value)
+
+    # Display it
+    out.print(f"{py_value}", style="cyan")
+
+
 def run_file(filepath: str, toml_output: bool = False, toon_output: bool = False, test_inputs: list = None):
     """Run a Rosh program from a file
 
@@ -577,6 +683,13 @@ def run_repl(interpreter: Interpreter = None):
             if stripped in ('clear', 'cls'):
                 import subprocess
                 subprocess.run('clear' if sys.platform != 'win32' else 'cls', shell=True)
+                continue
+
+            # get <obj> or get <obj> <prop> - unified get command (#017)
+            if len(parts) >= 2 and parts[0].lower() == 'get':
+                identifier = parts[1]
+                prop_name = parts[2] if len(parts) >= 3 else None
+                _get_command(interpreter, out, identifier, prop_name)
                 continue
 
             # Add line to buffer
