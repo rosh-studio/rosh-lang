@@ -113,11 +113,14 @@ class ThreeJSTranspiler(BaseTranspiler):
                 self.emit_create_object(statement)
         self.emit_blank()
 
-        # 7. Generate event handlers
+        # 7. Generate user-defined functions
+        self.emit_functions(program)
+
+        # 8. Generate event handlers
         if self.event_handlers:
             self.emit_event_handlers(program)
 
-        # 8. Generate animation loop
+        # 9. Generate animation loop
         self.emit_animation_loop()
 
         # 9. Generate resize handler
@@ -308,6 +311,10 @@ class ThreeJSTranspiler(BaseTranspiler):
         x = props.get('x', 0)
         y = props.get('y', 0)
         z = props.get('z', 0)
+
+        # Convert percentage strings to actual values
+        x = self._resolve_position(x, self.CANVAS_WIDTH)
+        y = self._resolve_position(y, self.CANVAS_HEIGHT)
 
         # Convert 2D screen coordinates to 3D world coordinates
         # In 2D: y increases downward, origin at top-left
@@ -528,6 +535,32 @@ class ThreeJSTranspiler(BaseTranspiler):
             return str(value_node)
         return None
 
+    def _resolve_position(self, value, canvas_dimension: float) -> float:
+        """Convert position value to pixels, handling percentages.
+
+        Args:
+            value: Position value (int, float, or string like "50%")
+            canvas_dimension: The canvas width or height to use for percentage
+
+        Returns:
+            Position in pixels as a float
+        """
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            value = value.strip()
+            if value.endswith('%'):
+                try:
+                    percent = float(value[:-1])
+                    return (percent / 100.0) * canvas_dimension
+                except ValueError:
+                    return 0.0
+            try:
+                return float(value)
+            except ValueError:
+                return 0.0
+        return 0.0
+
     def _resolve_color(self, color_value) -> int:
         """Resolve a color value to hex int
 
@@ -551,6 +584,22 @@ class ThreeJSTranspiler(BaseTranspiler):
             if color_lower.startswith('#'):
                 return int(color_lower[1:], 16)
         return None
+
+    def emit_functions(self, program: Program) -> None:
+        """Generate user-defined functions"""
+        functions = [s for s in program.statements if isinstance(s, FunctionDef)]
+        if not functions:
+            return
+
+        self.emit_comment("User-defined Functions")
+        for func in functions:
+            self.emit(f"function {func.name}() {{")
+            self.indent_level += 1
+            for stmt in func.body:
+                self._emit_event_statement(stmt)
+            self.indent_level -= 1
+            self.emit("}")
+            self.emit_blank()
 
     def emit_event_handlers(self, program: Program) -> None:
         """Generate event handler code
@@ -586,6 +635,20 @@ class ThreeJSTranspiler(BaseTranspiler):
             self._emit_if_statement(stmt)
         elif isinstance(stmt, Print):
             self._emit_print_statement(stmt)
+        elif isinstance(stmt, FunctionCall):
+            self._emit_function_call(stmt)
+        elif isinstance(stmt, PlaySound):
+            self._emit_play_sound(stmt)
+
+    def _emit_function_call(self, stmt: FunctionCall) -> None:
+        """Emit a function call statement"""
+        func_name = stmt.name
+        self.emit(f"{func_name}();")
+
+    def _emit_play_sound(self, stmt: PlaySound) -> None:
+        """Emit a play sound statement (stub for now)"""
+        # Three.js audio requires more setup - just log for now
+        self.emit(f"console.log('🔊 Play sound: {stmt.filename}');")
 
     def _emit_set_property(self, stmt: SetProperty) -> None:
         """Emit a set property statement
@@ -787,6 +850,12 @@ class ThreeJSTranspiler(BaseTranspiler):
             }
             op = op_map.get(value_node.operator, value_node.operator)
             return f"({left} {op} {right})"
+        elif isinstance(value_node, UnaryOp):
+            operand = self._emit_value(value_node.operand)
+            if value_node.operator == 'minus':
+                return f"(-{operand})"
+            else:
+                return f"({value_node.operator}{operand})"
         else:
             return str(value_node)
 
@@ -813,6 +882,25 @@ class ThreeJSTranspiler(BaseTranspiler):
             for i in range(len(self.event_handlers['update'])):
                 func_name = "handle_update" if i == 0 else f"handle_update_{i}"
                 self.emit(f"{func_name}();")
+            self.emit_blank()
+
+        # Call while_key handlers for held keys
+        while_key_events = [e for e in self.event_handlers.keys() if e.startswith('while_key_')]
+        if while_key_events:
+            self.emit("// Continuous key handlers")
+            for event_name in while_key_events:
+                # Extract key name from event: while_key_left -> ArrowLeft
+                key_part = event_name.replace('while_key_', '')
+                key_code = {
+                    'left': 'ArrowLeft',
+                    'right': 'ArrowRight',
+                    'up': 'ArrowUp',
+                    'down': 'ArrowDown',
+                    'space': 'Space',
+                }.get(key_part, f'Key{key_part.upper()}')
+                for i in range(len(self.event_handlers[event_name])):
+                    func_name = f"handle_{event_name}" if i == 0 else f"handle_{event_name}_{i}"
+                    self.emit(f"if (keys['{key_code}']) {func_name}();")
             self.emit_blank()
 
         # Intro zoom animation
@@ -1493,6 +1581,23 @@ class ThreeJSTranspiler(BaseTranspiler):
         self.emit("document.addEventListener('keydown', e => {")
         self.indent_level += 1
         self.emit("if (e.key === '`') { e.preventDefault(); toggleConsole(); }")
+
+        # Add game key press handlers
+        key_press_events = [e for e in self.event_handlers.keys()
+                           if e.startswith('key_') or e == 'space_pressed']
+        for event_name in key_press_events:
+            if event_name == 'space_pressed':
+                key_check = "e.code === 'Space'"
+            elif event_name.startswith('key_'):
+                key_letter = event_name.replace('key_', '')
+                key_check = f"e.key === '{key_letter}' || e.key === '{key_letter.upper()}'"
+            else:
+                continue
+
+            for i in range(len(self.event_handlers[event_name])):
+                func_name = f"handle_{event_name}" if i == 0 else f"handle_{event_name}_{i}"
+                self.emit(f"if ({key_check}) {{ {func_name}(); }}")
+
         self.indent_level -= 1
         self.emit("});")
         self.emit_blank()

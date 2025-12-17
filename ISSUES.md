@@ -19,7 +19,15 @@ When reporting an issue, please include:
 
 ## Open Issues
 
-*No user-reported issues yet.*
+### ISSUE-001: Three.js transpiler - 2D games use wrong coordinate system at runtime
+**Status:** 🔶 Known limitation
+**Target:** Three.js
+
+2D games (designed for Phaser/Pygame) compile to Three.js but gameplay doesn't work correctly because runtime position updates use 2D pixel coordinates instead of 3D world coordinates.
+
+**Workaround:** Use Three.js transpiler for native 3D scenes, not 2D game ports. The rosh-intro Three.js demo works correctly because it was designed for 3D.
+
+**See:** rosh-dev/BUGS.md BUG-005 for full details.
 
 ---
 
