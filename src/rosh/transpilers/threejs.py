@@ -912,7 +912,7 @@ class ThreeJSTranspiler(BaseTranspiler):
         self.emit("#rosh-output .cmd { color: #ffff00; }")
         self.emit("#rosh-output .ok { color: #33ff33; }")
         self.emit("#rosh-output .err { color: #ff3333; }")
-        self.emit("#rosh-output .info { color: #00ffff; }")
+        self.emit("#rosh-output .cyan { color: #00ffff; }")
         self.emit("#rosh-input-line {")
         self.emit("    padding: 10px;")
         self.emit("    border-top: 1px solid #00ff00;")
@@ -938,7 +938,7 @@ class ThreeJSTranspiler(BaseTranspiler):
         self.emit("consoleDiv.id = 'rosh-console';")
         self.emit("consoleDiv.innerHTML = `")
         self.emit("    <div style='padding:8px;background:#111;border-bottom:1px solid #00ff00'>")
-        self.emit("        <strong>🎮 ROSH CONSOLE</strong> <small style='color:#888'>Press \` to toggle | Commands: list, set, inspect, help</small>")
+        self.emit("        <strong>🎮 ROSH CONSOLE</strong> <small style='color:#888'>Press \\` to toggle | Commands: list, set, inspect, help</small>")
         self.emit("    </div>")
         self.emit("    <div id='rosh-output'></div>")
         self.emit("    <div id='rosh-input-line'>")
@@ -977,6 +977,11 @@ class ThreeJSTranspiler(BaseTranspiler):
         self.emit("}")
         self.emit_blank()
 
+        # Current object context (set by 'get' command)
+        self.emit("let currentObject = null;")
+        self.emit("let currentObjectName = null;")
+        self.emit_blank()
+
         # Execute command function
         self.emit("function execCommand(cmd) {")
         self.indent_level += 1
@@ -989,13 +994,17 @@ class ThreeJSTranspiler(BaseTranspiler):
         # Help command
         self.emit("if (parts[0] === 'help') {")
         self.indent_level += 1
-        self.emit("log('Commands:', 'info');")
+        self.emit("log('Commands:', 'cyan');")
         self.emit("log('  list objects      - Show all objects in scene');")
         self.emit("log('  examine/look/inspect <name> - Show object properties');")
         self.emit("log('  get <obj>         - Get object (display)');")
         self.emit("log('  get <obj> <prop>  - Get property value');")
         self.emit("log('  get <uuid>        - Get by UUID (8+ chars)');")
-        self.emit("log('  set <obj> <prop> to <value> - Change property');")
+        self.emit("log('  set <prop> <value>    - Set property on current object');")
+        self.emit("log('  set <obj> <prop> <val> - Set property (to optional)');")
+        self.emit("log('  create object <name>  - Create new object (cube default)');")
+        self.emit("log('  create object <name> with type sphere color blue - With properties');")
+        self.emit("log('  prompt <description>  - AI creates object from description');")
         self.emit("log('  camera reset      - Reset camera to default view');")
         self.emit("log('  camera <x> <y> <z> - Move camera to position');")
         self.emit("log('  clear             - Clear console');")
@@ -1006,7 +1015,7 @@ class ThreeJSTranspiler(BaseTranspiler):
         # List objects command
         self.emit("else if (parts[0] === 'list') {")
         self.indent_level += 1
-        self.emit("log('Objects in scene:', 'info');")
+        self.emit("log('Objects in scene:', 'cyan');")
         self.emit("scene.traverse(obj => {")
         self.indent_level += 1
         self.emit("if (obj.name && !obj.name.startsWith('_')) {")
@@ -1040,7 +1049,7 @@ class ThreeJSTranspiler(BaseTranspiler):
         self.indent_level -= 1
         self.emit("} else {")
         self.indent_level += 1
-        self.emit("log(`Camera at [${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}]`, 'info');")
+        self.emit("log(`Camera at [${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}]`, 'cyan');")
         self.indent_level -= 1
         self.emit("}")
         self.indent_level -= 1
@@ -1053,7 +1062,7 @@ class ThreeJSTranspiler(BaseTranspiler):
         self.emit("const obj = scene.getObjectByName(parts[1]);")
         self.emit("if (obj) {")
         self.indent_level += 1
-        self.emit("log(`${parts[1]}:`, 'info');")
+        self.emit("log(`${parts[1]}:`, 'cyan');")
         self.emit("log(`  position: [${obj.position.x.toFixed(2)}, ${obj.position.y.toFixed(2)}, ${obj.position.z.toFixed(2)}]`);")
         self.emit("log(`  visible: ${obj.visible}`);")
         self.emit("if (obj.material && obj.material.color) {")
@@ -1133,11 +1142,14 @@ class ThreeJSTranspiler(BaseTranspiler):
         self.indent_level -= 1
         self.emit("}")
         self.emit_blank()
-        self.emit("// If no property requested, display the object")
+        self.emit("// If no property requested, display the object and set as current")
         self.emit("if (!propName) {")
         self.indent_level += 1
         self.emit("const objType = obj.isMesh ? 'mesh' : obj.isSprite ? 'sprite' : obj.isLight ? 'light' : 'object';")
         self.emit("log(`<${objType}: ${foundName}>`, 'ok');")
+        self.emit("// Set as current object for subsequent commands")
+        self.emit("currentObject = obj;")
+        self.emit("currentObjectName = foundName;")
         self.emit("return;")
         self.indent_level -= 1
         self.emit("}")
@@ -1182,15 +1194,50 @@ class ThreeJSTranspiler(BaseTranspiler):
         self.emit("}")
         self.emit_blank()
 
-        # Set command - supports both "set logo.color to red" and "set logo color to red"
-        self.emit("else if (parts[0] === 'set' && cmd.includes(' to ')) {")
+        # Set command - flexible syntax
+        # Supports: set prop value, set prop to value, set obj prop value, set obj.prop to value
+        self.emit("else if (parts[0] === 'set') {")
         self.indent_level += 1
-        self.emit("// Match both dot syntax (logo.color) and natural language (logo color)")
-        self.emit("const match = cmd.match(/set\\s+(\\w+)(?:\\.|\\s+)(\\w+)\\s+to\\s+(.+)/i);")
-        self.emit("if (match) {")
+        self.emit("// Parse set command - multiple formats supported")
+        self.emit("let obj, objName, prop, valueStr;")
+        self.emit_blank()
+        self.emit("// Remove 'to' if present and normalize")
+        self.emit("const cmdNorm = cmd.replace(/\\s+to\\s+/i, ' ');")
+        self.emit("const setParts = cmdNorm.slice(4).trim().split(/[\\s.]+/);")
+        self.emit_blank()
+        self.emit("// Format: set prop value (use currentObject)")
+        self.emit("if (setParts.length === 2 && currentObject) {")
         self.indent_level += 1
-        self.emit("const [_, objName, prop, valueStr] = match;")
-        self.emit("const obj = scene.getObjectByName(objName);")
+        self.emit("obj = currentObject;")
+        self.emit("objName = currentObjectName;")
+        self.emit("prop = setParts[0];")
+        self.emit("valueStr = setParts[1];")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("// Format: set obj prop value")
+        self.emit("else if (setParts.length >= 3) {")
+        self.indent_level += 1
+        self.emit("objName = setParts[0];")
+        self.emit("prop = setParts[1];")
+        self.emit("valueStr = setParts.slice(2).join(' ');")
+        self.emit("obj = scene.getObjectByName(objName);")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("// Format: set prop value (no current object)")
+        self.emit("else if (setParts.length === 2 && !currentObject) {")
+        self.indent_level += 1
+        self.emit("log('No object selected. Use: get <object> first, or: set <object> <property> <value>', 'err');")
+        self.emit("return;")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("else {")
+        self.indent_level += 1
+        self.emit("log('Usage: set <property> <value>  (after get <object>)', 'err');")
+        self.emit("log('   or: set <object> <property> <value>', 'err');")
+        self.emit("return;")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
         self.emit("if (!obj) { log(`Object '${objName}' not found`, 'err'); return; }")
         self.emit("// Security: check if object is locked")
         self.emit("if (obj.userData && obj.userData.locked) {")
@@ -1274,9 +1321,141 @@ class ThreeJSTranspiler(BaseTranspiler):
         self.indent_level -= 1
         self.emit("}")
         self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        # Create object command
+        # Supports: create object ball, create object ball with type sphere color blue
+        self.emit("else if (parts[0] === 'create' && parts[1] === 'object' && parts[2]) {")
+        self.indent_level += 1
+        self.emit("const objName = parts[2];")
+        self.emit_blank()
+        self.emit("// Check if object already exists")
+        self.emit("if (scene.getObjectByName(objName)) {")
+        self.indent_level += 1
+        self.emit("log(`Object '${objName}' already exists`, 'err');")
+        self.emit("return;")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("// Parse properties from 'with' clause")
+        self.emit("let type = 'cube', color = '#4488ff', radius = 1, width = 1, height = 1, depth = 1;")
+        self.emit("let x = 0, y = 0, z = 0;")
+        self.emit_blank()
+        self.emit("// Extract properties after 'with'")
+        self.emit("const withIdx = cmd.toLowerCase().indexOf(' with ');")
+        self.emit("if (withIdx !== -1) {")
+        self.indent_level += 1
+        self.emit("const propsStr = cmd.slice(withIdx + 6);")
+        self.emit("// Parse key-value pairs (comma or space separated)")
+        self.emit("const propPairs = propsStr.split(/[,\\s]+/);")
+        self.emit("for (let i = 0; i < propPairs.length; i++) {")
+        self.indent_level += 1
+        self.emit("const key = propPairs[i].toLowerCase();")
+        self.emit("const val = propPairs[i + 1];")
+        self.emit("if (key === 'type' && val) { type = val.toLowerCase(); i++; }")
+        self.emit("else if (key === 'color' && val) { color = val; i++; }")
+        self.emit("else if (key === 'radius' && val) { radius = parseFloat(val) || 1; i++; }")
+        self.emit("else if (key === 'width' && val) { width = parseFloat(val) || 1; i++; }")
+        self.emit("else if (key === 'height' && val) { height = parseFloat(val) || 1; i++; }")
+        self.emit("else if (key === 'depth' && val) { depth = parseFloat(val) || 1; i++; }")
+        self.emit("else if (key === 'x' && val) { x = parseFloat(val) || 0; i++; }")
+        self.emit("else if (key === 'y' && val) { y = parseFloat(val) || 0; i++; }")
+        self.emit("else if (key === 'z' && val) { z = parseFloat(val) || 0; i++; }")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("// Create geometry based on type")
+        self.emit("let geometry;")
+        self.emit("if (type === 'sphere') {")
+        self.indent_level += 1
+        self.emit("geometry = new THREE.SphereGeometry(radius, 32, 32);")
+        self.indent_level -= 1
+        self.emit("} else if (type === 'plane') {")
+        self.indent_level += 1
+        self.emit("geometry = new THREE.PlaneGeometry(width, height);")
+        self.indent_level -= 1
         self.emit("} else {")
         self.indent_level += 1
-        self.emit("log('Usage: set <object>.<property> to <value>', 'err');")
+        self.emit("// Default: cube")
+        self.emit("geometry = new THREE.BoxGeometry(width, height, depth);")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("// Create material with color")
+        self.emit("const material = new THREE.MeshStandardMaterial({ color: color });")
+        self.emit_blank()
+        self.emit("// Create mesh and add to scene")
+        self.emit("const mesh = new THREE.Mesh(geometry, material);")
+        self.emit("mesh.position.set(x, y, z);")
+        self.emit("mesh.name = objName;")
+        self.emit("mesh.userData._rosh_uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {")
+        self.indent_level += 1
+        self.emit("const r = Math.random() * 16 | 0;")
+        self.emit("return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);")
+        self.indent_level -= 1
+        self.emit("});")
+        self.emit("scene.add(mesh);")
+        self.emit_blank()
+        self.emit("// Set as current object")
+        self.emit("currentObject = mesh;")
+        self.emit("currentObjectName = objName;")
+        self.emit_blank()
+        self.emit("log(`✓ Created ${type} '${objName}'`, 'ok');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+
+        # Prompt command (AI demo - Phase 1: hardcoded responses)
+        self.emit("else if (parts[0] === 'prompt') {")
+        self.indent_level += 1
+        self.emit("const promptText = cmd.slice(7).trim().toLowerCase();")
+        self.emit("log('🤖 Thinking...', 'cyan');")
+        self.emit_blank()
+        self.emit("// Phase 1: Hardcoded responses for demo")
+        self.emit("let roshCommand = null;")
+        self.emit_blank()
+        self.emit("// Match common patterns")
+        self.emit("if (promptText.includes('big') && promptText.includes('blue') && (promptText.includes('ball') || promptText.includes('sphere'))) {")
+        self.indent_level += 1
+        self.emit("roshCommand = 'create object ball with type sphere color blue radius 2';")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("else if (promptText.includes('red') && (promptText.includes('ball') || promptText.includes('sphere'))) {")
+        self.indent_level += 1
+        self.emit("roshCommand = 'create object ball with type sphere color red radius 1';")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("else if (promptText.includes('green') && promptText.includes('cube')) {")
+        self.indent_level += 1
+        self.emit("roshCommand = 'create object cube with type cube color green';")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("else if (promptText.includes('sphere') || promptText.includes('ball')) {")
+        self.indent_level += 1
+        self.emit("roshCommand = 'create object ball with type sphere color orange radius 1';")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit("else if (promptText.includes('cube') || promptText.includes('box')) {")
+        self.indent_level += 1
+        self.emit("roshCommand = 'create object box with type cube color purple';")
+        self.indent_level -= 1
+        self.emit("}")
+        self.emit_blank()
+        self.emit("if (roshCommand) {")
+        self.indent_level += 1
+        self.emit("setTimeout(() => {")
+        self.indent_level += 1
+        self.emit("log(`→ ${roshCommand}`, 'cyan');")
+        self.emit("execCommand(roshCommand);")
+        self.indent_level -= 1
+        self.emit("}, 500);")
+        self.indent_level -= 1
+        self.emit("} else {")
+        self.indent_level += 1
+        self.emit("log('Try: prompt create a big blue ball', 'cyan');")
         self.indent_level -= 1
         self.emit("}")
         self.indent_level -= 1
@@ -1359,4 +1538,4 @@ class ThreeJSTranspiler(BaseTranspiler):
         self.emit("});")
         self.emit_blank()
 
-        self.emit("log('🎮 Rosh Console ready! Press ` to toggle.', 'info');")
+        self.emit("log('🎮 Rosh Console ready! Press ` to toggle.', 'cyan');")

@@ -11,7 +11,7 @@ from typing import Any, List, Callable
 from .ast_nodes import *
 from .environment import Environment
 from .values import RoshObject, RoshFunction, rosh_to_python, is_truthy
-from .errors import RoshRuntimeError, RoshTypeError
+from .errors import RoshRuntimeError, RoshTypeError, RoshNameError
 from .config import get_config
 from .ai_provider import get_provider
 
@@ -82,6 +82,10 @@ class Interpreter:
 
         # Security flags (v0.0.4+)
         # Remote imports removed for security (offline-first for VR/AR)
+
+        # Current object context (v0.2.6+) - for contextual set/get commands
+        self.current_object = None
+        self.current_object_name = None
 
     def execute(self, program: Program):
         """Execute a program (list of statements)"""
@@ -617,10 +621,16 @@ class Interpreter:
         target = node.target
 
         if isinstance(target, Identifier):
-            # Setting a simple variable
-            if self.current_env.exists(target.name):
+            # Check if we have a current object context (set via 'get')
+            if self.current_object is not None:
+                # Set property on current object
+                self.current_object.set(target.name, value)
+                self.color_out.success(f"{self.current_object_name}.{target.name} = {value}")
+            elif self.current_env.exists(target.name):
+                # Setting an existing variable
                 self.current_env.set(target.name, value)
             else:
+                # Define a new variable
                 self.current_env.define(target.name, value)
 
         elif isinstance(target, ListIndex):
@@ -937,6 +947,11 @@ class Interpreter:
                 value = self.current_env.get(target.name)
                 self.data_stack.append(value)
 
+                # Set as current object for contextual commands
+                if isinstance(value, RoshObject):
+                    self.current_object = value
+                    self.current_object_name = target.name
+
                 # Show feedback if this is an instance of a type with multiple instances
                 if isinstance(value, RoshObject) and value.id:
                     # Extract type from ID (e.g., "ball-1" → "ball")
@@ -1168,23 +1183,41 @@ Then try again! See AI_SETUP.md for full guide.
         except Exception as e:
             raise RoshRuntimeError(f"Failed to initialize AI provider: {e}")
 
+        # Add Rosh context to prompt
+        rosh_system_context = """You are helping a user with Rosh, a programming language for creating games and simulations.
+
+Rosh is an English-like language where code sounds like talking to a person. Key features:
+- create object <name> ... end - creates game objects with properties
+- set <property> to <value> - sets properties on objects
+- Transpiles to Phaser (browser), Pygame (desktop), Three.js (3D), and Unity
+
+IMPORTANT: Rosh uses spaces, NOT commas. No punctuation in values.
+
+Example Rosh code:
+```rosh
+create object ball
+    set color to "blue"
+    set radius to 2
+    set x to 100
+    set y to 200
+end
+```
+
+"""
+
         # Enhance prompt for code generation in exec mode
         if node.exec_mode:
-            code_gen_prompt = f"""You are a Rosh code generator. Generate ONLY valid Rosh code, no explanations or markdown.
-
-Rosh syntax examples:
-- Create variables: create number x as 42
-- Create strings: create string name as "Hero"
-- Create objects: create object player / set health to 100 / end
-- Set properties: set player.health to 50
-- Print: print x
-- Stack: get x / get y / add / print
-- Conditionals: if x is below 10 then / print "low" / end
+            code_gen_prompt = f"""{rosh_system_context}Generate ONLY valid Rosh code, no explanations or markdown.
 
 User request: {message}
 
 Generate executable Rosh code (no markdown fences):"""
             message = code_gen_prompt
+        else:
+            # For regular prompts, still add Rosh context
+            message = f"""{rosh_system_context}User asks: {message}
+
+If they're asking about creating something in a game, respond with Rosh code examples. Be concise and helpful."""
 
         # Make the prompt call
         try:

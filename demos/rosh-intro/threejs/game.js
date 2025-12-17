@@ -91,6 +91,10 @@ logo.userData._rosh_uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/
     const r = Math.random() * 16 | 0;
     return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
 });
+logo.userData._rosh_uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+});
 
 // Object: tagline
 // Text sprite: tagline
@@ -116,6 +120,10 @@ tagline._text = 'one language. many worlds.';
 tagline._fontSize = 18;
 tagline._color = '#888888';
 scene.add(tagline);
+tagline.userData._rosh_uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+});
 tagline.userData._rosh_uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = Math.random() * 16 | 0;
     return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
@@ -200,7 +208,7 @@ consoleStyle.textContent = `
 #rosh-output .cmd { color: #ffff00; }
 #rosh-output .ok { color: #33ff33; }
 #rosh-output .err { color: #ff3333; }
-#rosh-output .info { color: #00ffff; }
+#rosh-output .cyan { color: #00ffff; }
 #rosh-input-line {
     padding: 10px;
     border-top: 1px solid #00ff00;
@@ -254,26 +262,33 @@ function toggleConsole() {
     if (consoleVisible) input.focus();
 }
 
+let currentObject = null;
+let currentObjectName = null;
+
 function execCommand(cmd) {
     log('> ' + cmd, 'cmd');
     try {
         const parts = cmd.trim().toLowerCase().split(/\s+/);
 
         if (parts[0] === 'help') {
-            log('Commands:', 'info');
+            log('Commands:', 'cyan');
             log('  list objects      - Show all objects in scene');
             log('  examine/look/inspect <name> - Show object properties');
             log('  get <obj>         - Get object (display)');
             log('  get <obj> <prop>  - Get property value');
             log('  get <uuid>        - Get by UUID (8+ chars)');
-            log('  set <obj> <prop> to <value> - Change property');
+            log('  set <prop> <value>    - Set property on current object');
+            log('  set <obj> <prop> <val> - Set property (to optional)');
+            log('  create object <name>  - Create new object (cube default)');
+            log('  create object <name> with type sphere color blue - With properties');
+            log('  prompt <description>  - AI creates object from description');
             log('  camera reset      - Reset camera to default view');
             log('  camera <x> <y> <z> - Move camera to position');
             log('  clear             - Clear console');
         }
 
         else if (parts[0] === 'list') {
-            log('Objects in scene:', 'info');
+            log('Objects in scene:', 'cyan');
             scene.traverse(obj => {
                 if (obj.name && !obj.name.startsWith('_')) {
                     const type = obj.isMesh ? 'mesh' : obj.isSprite ? 'sprite' : obj.isLight ? 'light' : 'object';
@@ -294,14 +309,14 @@ function execCommand(cmd) {
                 camera.position.set(x, y, z);
                 log(`✓ Camera moved to [${x}, ${y}, ${z}]`, 'ok');
             } else {
-                log(`Camera at [${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}]`, 'info');
+                log(`Camera at [${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}]`, 'cyan');
             }
         }
 
         else if ((parts[0] === 'inspect' || parts[0] === 'examine' || parts[0] === 'look' || parts[0] === 'x') && parts[1]) {
             const obj = scene.getObjectByName(parts[1]);
             if (obj) {
-                log(`${parts[1]}:`, 'info');
+                log(`${parts[1]}:`, 'cyan');
                 log(`  position: [${obj.position.x.toFixed(2)}, ${obj.position.y.toFixed(2)}, ${obj.position.z.toFixed(2)}]`);
                 log(`  visible: ${obj.visible}`);
                 if (obj.material && obj.material.color) {
@@ -356,10 +371,13 @@ function execCommand(cmd) {
                 return;
             }
 
-            // If no property requested, display the object
+            // If no property requested, display the object and set as current
             if (!propName) {
                 const objType = obj.isMesh ? 'mesh' : obj.isSprite ? 'sprite' : obj.isLight ? 'light' : 'object';
                 log(`<${objType}: ${foundName}>`, 'ok');
+                // Set as current object for subsequent commands
+                currentObject = obj;
+                currentObjectName = foundName;
                 return;
             }
 
@@ -393,76 +411,199 @@ function execCommand(cmd) {
             log(displayValue, 'ok');
         }
 
-        else if (parts[0] === 'set' && cmd.includes(' to ')) {
-            // Match both dot syntax (logo.color) and natural language (logo color)
-            const match = cmd.match(/set\s+(\w+)(?:\.|\s+)(\w+)\s+to\s+(.+)/i);
-            if (match) {
-                const [_, objName, prop, valueStr] = match;
-                const obj = scene.getObjectByName(objName);
-                if (!obj) { log(`Object '${objName}' not found`, 'err'); return; }
-                // Security: check if object is locked
-                if (obj.userData && obj.userData.locked) {
-                    log(`🔒 Security: '${objName}' is locked and cannot be modified`, 'err');
-                    return;
-                }
+        else if (parts[0] === 'set') {
+            // Parse set command - multiple formats supported
+            let obj, objName, prop, valueStr;
 
-                let value = valueStr.trim();
-                // Parse value
-                if (value === 'true') value = true;
-                else if (value === 'false') value = false;
-                else if (!isNaN(value)) value = parseFloat(value);
+            // Remove 'to' if present and normalize
+            const cmdNorm = cmd.replace(/\s+to\s+/i, ' ');
+            const setParts = cmdNorm.slice(4).trim().split(/[\s.]+/);
 
-                // Apply property
-                if (prop === 'x') { obj.position.x = value; log(`✓ ${objName}.x = ${value}`, 'ok'); }
-                else if (prop === 'y') { obj.position.y = value; log(`✓ ${objName}.y = ${value}`, 'ok'); }
-                else if (prop === 'z') { obj.position.z = value; log(`✓ ${objName}.z = ${value}`, 'ok'); }
-                else if (prop === 'visible') { obj.visible = value; log(`✓ ${objName}.visible = ${value}`, 'ok'); }
-                else if (prop === 'scale') { obj.scale.set(value, value, value); log(`✓ ${objName}.scale = ${value}`, 'ok'); }
-                else if (prop === 'font_size') {
-                    if (obj._ctx) {
-                        obj._fontSize = value;
-                        obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);
-                        obj._ctx.fillStyle = obj._color || '#ffffff';
-                        obj._ctx.font = 'bold ' + value + 'px Arial';
-                        obj._ctx.textAlign = 'center';
-                        obj._ctx.textBaseline = 'middle';
-                        obj._ctx.fillText(obj._text || '', obj._canvas.width/2, obj._canvas.height/2);
-                        obj.material.map.needsUpdate = true;
-                        log(`✓ ${objName}.font_size = ${value}`, 'ok');
-                    } else {
-                        log(`Cannot set font_size on ${objName} (not a text object)`, 'err');
-                    }
+            // Format: set prop value (use currentObject)
+            if (setParts.length === 2 && currentObject) {
+                obj = currentObject;
+                objName = currentObjectName;
+                prop = setParts[0];
+                valueStr = setParts[1];
+            }
+            // Format: set obj prop value
+            else if (setParts.length >= 3) {
+                objName = setParts[0];
+                prop = setParts[1];
+                valueStr = setParts.slice(2).join(' ');
+                obj = scene.getObjectByName(objName);
+            }
+            // Format: set prop value (no current object)
+            else if (setParts.length === 2 && !currentObject) {
+                log('No object selected. Use: get <object> first, or: set <object> <property> <value>', 'err');
+                return;
+            }
+            else {
+                log('Usage: set <property> <value>  (after get <object>)', 'err');
+                log('   or: set <object> <property> <value>', 'err');
+                return;
+            }
+
+            if (!obj) { log(`Object '${objName}' not found`, 'err'); return; }
+            // Security: check if object is locked
+            if (obj.userData && obj.userData.locked) {
+                log(`🔒 Security: '${objName}' is locked and cannot be modified`, 'err');
+                return;
+            }
+
+            let value = valueStr.trim();
+            // Parse value
+            if (value === 'true') value = true;
+            else if (value === 'false') value = false;
+            else if (!isNaN(value)) value = parseFloat(value);
+
+            // Apply property
+            if (prop === 'x') { obj.position.x = value; log(`✓ ${objName}.x = ${value}`, 'ok'); }
+            else if (prop === 'y') { obj.position.y = value; log(`✓ ${objName}.y = ${value}`, 'ok'); }
+            else if (prop === 'z') { obj.position.z = value; log(`✓ ${objName}.z = ${value}`, 'ok'); }
+            else if (prop === 'visible') { obj.visible = value; log(`✓ ${objName}.visible = ${value}`, 'ok'); }
+            else if (prop === 'scale') { obj.scale.set(value, value, value); log(`✓ ${objName}.scale = ${value}`, 'ok'); }
+            else if (prop === 'font_size') {
+                if (obj._ctx) {
+                    obj._fontSize = value;
+                    obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);
+                    obj._ctx.fillStyle = obj._color || '#ffffff';
+                    obj._ctx.font = 'bold ' + value + 'px Arial';
+                    obj._ctx.textAlign = 'center';
+                    obj._ctx.textBaseline = 'middle';
+                    obj._ctx.fillText(obj._text || '', obj._canvas.width/2, obj._canvas.height/2);
+                    obj.material.map.needsUpdate = true;
+                    log(`✓ ${objName}.font_size = ${value}`, 'ok');
+                } else {
+                    log(`Cannot set font_size on ${objName} (not a text object)`, 'err');
                 }
-                else if (prop === 'color') {
-                    // Handle text sprites (canvas-based)
-                    if (obj._ctx && obj._canvas) {
-                        obj._color = value;
-                        obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);
-                        obj._ctx.fillStyle = value;
-                        obj._ctx.font = 'bold ' + (obj._fontSize || 48) + 'px Arial';
-                        obj._ctx.textAlign = 'center';
-                        obj._ctx.textBaseline = 'middle';
-                        obj._ctx.fillText(obj._text || objName, obj._canvas.width/2, obj._canvas.height/2);
-                        obj.material.map.needsUpdate = true;
-                        log(`✓ ${objName}.color = ${value}`, 'ok');
-                    }
-                    // Handle meshes with material
-                    else if (obj.material && obj.material.color) {
-                        obj.material.color.set(value);
-                        log(`✓ ${objName}.color = ${value}`, 'ok');
-                    }
-                    else { log(`Cannot set color on ${objName}`, 'err'); }
+            }
+            else if (prop === 'color') {
+                // Handle text sprites (canvas-based)
+                if (obj._ctx && obj._canvas) {
+                    obj._color = value;
+                    obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);
+                    obj._ctx.fillStyle = value;
+                    obj._ctx.font = 'bold ' + (obj._fontSize || 48) + 'px Arial';
+                    obj._ctx.textAlign = 'center';
+                    obj._ctx.textBaseline = 'middle';
+                    obj._ctx.fillText(obj._text || objName, obj._canvas.width/2, obj._canvas.height/2);
+                    obj.material.map.needsUpdate = true;
+                    log(`✓ ${objName}.color = ${value}`, 'ok');
                 }
-                else {
-                    const knownProps = ['x', 'y', 'z', 'visible', 'scale', 'color', 'font_size', 'text'];
-                    if (knownProps.some(p => prop.toLowerCase().includes(p.replace('_','')))) {
-                        log(`Unknown property '${prop}'. Did you mean: ${knownProps.join(', ')}?`, 'err');
-                    } else {
-                        log(`Unknown property '${prop}' on ${objName}`, 'err');
-                    }
+                // Handle meshes with material
+                else if (obj.material && obj.material.color) {
+                    obj.material.color.set(value);
+                    log(`✓ ${objName}.color = ${value}`, 'ok');
                 }
+                else { log(`Cannot set color on ${objName}`, 'err'); }
+            }
+            else {
+                const knownProps = ['x', 'y', 'z', 'visible', 'scale', 'color', 'font_size', 'text'];
+                if (knownProps.some(p => prop.toLowerCase().includes(p.replace('_','')))) {
+                    log(`Unknown property '${prop}'. Did you mean: ${knownProps.join(', ')}?`, 'err');
+                } else {
+                    log(`Unknown property '${prop}' on ${objName}`, 'err');
+                }
+            }
+        }
+
+        else if (parts[0] === 'create' && parts[1] === 'object' && parts[2]) {
+            const objName = parts[2];
+
+            // Check if object already exists
+            if (scene.getObjectByName(objName)) {
+                log(`Object '${objName}' already exists`, 'err');
+                return;
+            }
+
+            // Parse properties from 'with' clause
+            let type = 'cube', color = '#4488ff', radius = 1, width = 1, height = 1, depth = 1;
+            let x = 0, y = 0, z = 0;
+
+            // Extract properties after 'with'
+            const withIdx = cmd.toLowerCase().indexOf(' with ');
+            if (withIdx !== -1) {
+                const propsStr = cmd.slice(withIdx + 6);
+                // Parse key-value pairs (comma or space separated)
+                const propPairs = propsStr.split(/[,\s]+/);
+                for (let i = 0; i < propPairs.length; i++) {
+                    const key = propPairs[i].toLowerCase();
+                    const val = propPairs[i + 1];
+                    if (key === 'type' && val) { type = val.toLowerCase(); i++; }
+                    else if (key === 'color' && val) { color = val; i++; }
+                    else if (key === 'radius' && val) { radius = parseFloat(val) || 1; i++; }
+                    else if (key === 'width' && val) { width = parseFloat(val) || 1; i++; }
+                    else if (key === 'height' && val) { height = parseFloat(val) || 1; i++; }
+                    else if (key === 'depth' && val) { depth = parseFloat(val) || 1; i++; }
+                    else if (key === 'x' && val) { x = parseFloat(val) || 0; i++; }
+                    else if (key === 'y' && val) { y = parseFloat(val) || 0; i++; }
+                    else if (key === 'z' && val) { z = parseFloat(val) || 0; i++; }
+                }
+            }
+
+            // Create geometry based on type
+            let geometry;
+            if (type === 'sphere') {
+                geometry = new THREE.SphereGeometry(radius, 32, 32);
+            } else if (type === 'plane') {
+                geometry = new THREE.PlaneGeometry(width, height);
             } else {
-                log('Usage: set <object>.<property> to <value>', 'err');
+                // Default: cube
+                geometry = new THREE.BoxGeometry(width, height, depth);
+            }
+
+            // Create material with color
+            const material = new THREE.MeshStandardMaterial({ color: color });
+
+            // Create mesh and add to scene
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y, z);
+            mesh.name = objName;
+            mesh.userData._rosh_uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = Math.random() * 16 | 0;
+                return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+            });
+            scene.add(mesh);
+
+            // Set as current object
+            currentObject = mesh;
+            currentObjectName = objName;
+
+            log(`✓ Created ${type} '${objName}'`, 'ok');
+        }
+
+        else if (parts[0] === 'prompt') {
+            const promptText = cmd.slice(7).trim().toLowerCase();
+            log('🤖 Thinking...', 'cyan');
+
+            // Phase 1: Hardcoded responses for demo
+            let roshCommand = null;
+
+            // Match common patterns
+            if (promptText.includes('big') && promptText.includes('blue') && (promptText.includes('ball') || promptText.includes('sphere'))) {
+                roshCommand = 'create object ball with type sphere color blue radius 2';
+            }
+            else if (promptText.includes('red') && (promptText.includes('ball') || promptText.includes('sphere'))) {
+                roshCommand = 'create object ball with type sphere color red radius 1';
+            }
+            else if (promptText.includes('green') && promptText.includes('cube')) {
+                roshCommand = 'create object cube with type cube color green';
+            }
+            else if (promptText.includes('sphere') || promptText.includes('ball')) {
+                roshCommand = 'create object ball with type sphere color orange radius 1';
+            }
+            else if (promptText.includes('cube') || promptText.includes('box')) {
+                roshCommand = 'create object box with type cube color purple';
+            }
+
+            if (roshCommand) {
+                setTimeout(() => {
+                    log(`→ ${roshCommand}`, 'cyan');
+                    execCommand(roshCommand);
+                }, 500);
+            } else {
+                log('Try: prompt create a big blue ball', 'cyan');
             }
         }
 
@@ -508,4 +649,4 @@ input.addEventListener('keydown', e => {
     }
 });
 
-log('🎮 Rosh Console ready! Press ` to toggle.', 'info');
+log('🎮 Rosh Console ready! Press ` to toggle.', 'cyan');

@@ -1690,6 +1690,8 @@ class PhaserTranspiler(BaseTranspiler):
         self.emit("this.consoleVisible = false;")
         self.emit("this.commandHistory = [];")
         self.emit("this.historyIndex = -1;")
+        self.emit("this.currentObject = null;")
+        self.emit("this.currentObjectName = null;")
         self.emit("this.setupKeyboard();")
         self.emit("this.setupInput();")
         self.emit("this.log('🎮 Rosh Console ready! Type \"help\" for commands.', 'info');")
@@ -1851,12 +1853,41 @@ class PhaserTranspiler(BaseTranspiler):
         self.emit("this.cmdListObjects();")
         self.indent_level -= 1
         self.emit("}")
-        self.emit("// Set command: set object.property to value")
+        self.emit("// Set command: set [object.]property [to] value")
         self.emit("else if (lower.startsWith('set ')) {")
         self.indent_level += 1
-        self.emit("const match = cmd.match(/^set\\s+([\\w.]+)\\s+to\\s+(.+)$/i);")
-        self.emit("if (match) this.cmdSet(match[1], match[2]);")
-        self.emit("else throw new Error('Usage: set object.property to value');")
+        self.emit("// Try 'set obj.prop to value' or 'set obj prop to value' or 'set prop to value' or 'set prop value'")
+        self.emit("const cmdNorm = cmd.replace(/\\s+to\\s+/i, ' ');")
+        self.emit("const setParts = cmdNorm.slice(4).trim().split(/[\\s.]+/);")
+        self.emit("if (setParts.length >= 2) {")
+        self.indent_level += 1
+        self.emit("// Check if first part is an object name or a property")
+        self.emit("const firstPart = setParts[0];")
+        self.emit("if (this.scene[firstPart]) {")
+        self.indent_level += 1
+        self.emit("// obj.prop value or obj prop value")
+        self.emit("const target = setParts.length >= 3 ? firstPart + '.' + setParts[1] : firstPart;")
+        self.emit("const value = setParts.slice(setParts.length >= 3 ? 2 : 1).join(' ');")
+        self.emit("this.cmdSet(target, value);")
+        self.indent_level -= 1
+        self.emit("} else if (this.currentObject) {")
+        self.indent_level += 1
+        self.emit("// prop value (use current object)")
+        self.emit("const target = this.currentObjectName + '.' + firstPart;")
+        self.emit("const value = setParts.slice(1).join(' ');")
+        self.emit("this.cmdSet(target, value);")
+        self.indent_level -= 1
+        self.emit("} else {")
+        self.indent_level += 1
+        self.emit("throw new Error('Usage: set <property> <value> (after get <object>) or set <object>.<property> <value>');")
+        self.indent_level -= 1
+        self.emit("}")
+        self.indent_level -= 1
+        self.emit("} else {")
+        self.indent_level += 1
+        self.emit("throw new Error('Usage: set <property> <value>');")
+        self.indent_level -= 1
+        self.emit("}")
         self.indent_level -= 1
         self.emit("}")
         self.emit("// Get command: get object.property (alias: show)")
@@ -2114,9 +2145,11 @@ class PhaserTranspiler(BaseTranspiler):
         self.indent_level -= 1
         self.emit("}")
         self.emit_blank()
-        self.emit("// If no property requested, return the object")
+        self.emit("// If no property requested, return the object and set as current")
         self.emit("if (!propName) {")
         self.indent_level += 1
+        self.emit("this.currentObject = obj;")
+        self.emit("this.currentObjectName = foundName;")
         self.emit("const objType = obj.type || 'object';")
         self.emit("this.log(`<${objType}: ${foundName}>`, 'success');")
         self.emit("return;")

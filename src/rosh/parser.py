@@ -718,7 +718,13 @@ class Parser:
         return Load(filepath=filepath_expr, line=line)
 
     def parse_prompt(self) -> Prompt:
-        """Parse: prompt [exec] <message> [using <vars>] [into <target>]"""
+        """Parse: prompt [exec] <message> [using <vars>] [into <target>]
+
+        Message can be:
+        - A quoted string: prompt "create a ball"
+        - Unquoted text: prompt create a big blue ball
+        """
+        from .ast_nodes import Literal
         line = self.current_token().line
         self.expect(TokenType.PROMPT)
 
@@ -728,8 +734,17 @@ class Parser:
             exec_mode = True
             self.advance()
 
-        # Parse the message expression
-        message_expr = self.parse_expression()
+        # If the next token is a string, parse normally
+        if self.current_token().type == TokenType.STRING:
+            message_expr = self.parse_expression()
+        else:
+            # Collect all tokens until using/into/newline/EOF as raw text
+            words = []
+            stop_types = {TokenType.USING, TokenType.INTO, TokenType.NEWLINE, TokenType.EOF}
+            while self.current_token().type not in stop_types:
+                words.append(str(self.current_token().value))
+                self.advance()
+            message_expr = Literal(value=' '.join(words), type_name='string', line=line)
 
         # Optional: using <var1> <var2> ...
         context_vars = None

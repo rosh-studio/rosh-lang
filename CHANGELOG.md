@@ -8,22 +8,72 @@
 
 ## [Unreleased]
 
-### In Progress
-- v0.0.8 - Infrastructure & Tooling
-  - ✅ TOML support (--toml flag)
-  - ✅ Test mode for CI/CD (--test flag)
-  - ✅ Program metadata system (meta keyword)
-  - ✅ AI ticket/review system
-  - ⏳ BACKLOG.md for deferred features
-
 ### Next Steps
-- In-game REPL Phase 2 (WebSocket server with full Rosh syntax) - Pending decision
-- Audio & animation for Phaser (v0.1.8)
-- Game state management (pause/resume/restart)
-- Multiple scenes/levels
-- Second transpiler target (Godot GDScript)
-- Function support in Phaser transpiler (v0.1.6+)
-- Meta settings support
+- Record 60-second demo video ("Actual footage. Not faked.")
+- ~~Simple landing page (slogan + signup only)~~ ✅ Done
+- Outreach to contacts (Gregor Hofer, Soluis, etc.)
+- Phase 2: Real AI in transpilers (currently only fuzzy matching in Three.js)
+
+---
+
+## [2025-12-17] - AI Prompt & Context-Aware Commands
+
+### Added
+- **🤖 AI Prompt Command (Main REPL)** - Natural language with real AI
+  - `prompt exec create a goblin` → generates Rosh code, asks confirmation, executes
+  - `prompt create a goblin` → shows AI suggestion (no execution)
+  - Works without quotes: `prompt create a big blue ball` (no need for `"..."`)
+  - Rosh-aware system prompt - AI knows Rosh syntax, generates valid code
+  - Safety: requires user confirmation before executing AI-generated code
+
+- **🤖 AI Prompt Command (Three.js)** - Phase 1 demo with fuzzy matching
+  - `prompt create a big blue ball` → creates blue sphere
+  - Fuzzy keyword matching for demo ("big", "blue", "ball" → sphere)
+  - Shows generated Rosh command before execution
+  - Hardcoded responses for video demo (Phase 2 will add real AI)
+
+- **Runtime Object Creation** - `create object` command in Three.js console
+  - `create object ball` (default cube)
+  - `create object ball with type sphere color blue radius 2`
+  - Supports: cube, sphere, plane
+  - Properties: type, color, radius, width, height, depth, x, y, z
+  - Auto-generates UUID for each object
+
+- **Context-Aware Commands** - `get` sets current object for subsequent commands
+  - Works in: Main REPL, Three.js console, Phaser REPL
+  - `get logo` → sets logo as current object
+  - `set color green` → applies to current object (no need to specify)
+  - Matches natural command flow
+
+- **Flexible `set` Syntax** - `to` keyword now optional
+  - `set logo color green` works (without "to")
+  - `set logo color to green` also works (with "to")
+  - `set color green` works after `get logo`
+
+- **Simple Homepage** - rosh.cloud landing page
+  - Logo + tagline "One language. Many worlds."
+  - Email signup form (Buttondown integration)
+  - Minimalist design, mobile-friendly
+
+### Fixed
+- **BUG-001:** Main REPL `set` now updates object properties after `get`
+- **BUG-002:** Three.js console `set` command now works
+- **BUG-003:** `get <object>` now sets current context (all REPLs)
+- **BUG-004:** `set` no longer requires `to` keyword (all REPLs)
+- **JS Syntax Error:** Escaped backtick in template literal
+- **Prompt parsing:** `prompt` command now accepts unquoted text
+
+### Technical
+- Modified: `src/rosh/interpreter.py`
+  - Added `current_object` and `current_object_name` tracking
+  - Added Rosh-aware system prompt for AI responses
+- Modified: `src/rosh/parser.py`
+  - `prompt` command now collects unquoted text as message
+- Modified: `src/rosh/transpilers/threejs.py`
+  - Added `currentObject` tracking, `create object`, `prompt` commands
+  - Changed CSS class `info` → `cyan` to avoid conflicts
+- Modified: `src/rosh/transpilers/phaser.py`
+  - Added `currentObject` tracking, flexible `set` syntax
 
 ---
 
