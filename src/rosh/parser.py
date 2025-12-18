@@ -725,8 +725,9 @@ class Parser:
         return Save(filepath=filepath_expr, line=line)
 
     def parse_load(self):
-        """Parse: load [game [slot]] | load <filepath>
+        """Parse: load [game [slot]] | load [filepath]
 
+        load                       - Load from default file (interpreter)
         load game                  - Load from default slot (transpiler)
         load game "adventure1"     - Load from named slot (transpiler)
         load "state.json"          - Load from file (interpreter)
@@ -746,8 +747,10 @@ class Parser:
                 self.advance()
             return LoadGame(slot=slot, line=line)
 
-        # Original file-based load
-        filepath_expr = self.parse_expression()
+        # Original file-based load - filepath is now optional
+        filepath_expr = None
+        if self.current_token().type in (TokenType.STRING, TokenType.IDENTIFIER):
+            filepath_expr = self.parse_expression()
 
         return Load(filepath=filepath_expr, line=line)
 
