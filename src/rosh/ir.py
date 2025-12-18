@@ -167,6 +167,7 @@ class IR_Object:
     scene: Optional[str] = None  # Named scene (None = always visible)
     level: Optional[int] = None  # Level number (None = all levels)
     saveable: bool = True  # Whether object is saved (False for particles, etc.)
+    engine_capabilities: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def create(cls, name: str, **kwargs) -> "IR_Object":

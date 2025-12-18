@@ -1065,7 +1065,7 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             )
             emitter = ThreeJSEmitter(ir, meta=meta)
             js_code = emitter.emit()
-            generate_threejs_output(js_code, output_dir)
+            generate_threejs_output(js_code, output_dir, emitter.capability_manifest)
 
             # Copy assets if requested
             if copy_assets and emitter.sprite_assets:
@@ -1140,7 +1140,7 @@ def generate_pygame_output(py_code: str, output_dir: str):
     (output_path / "assets").mkdir(exist_ok=True)
 
 
-def generate_threejs_output(js_code: str, output_dir: str):
+def generate_threejs_output(js_code: str, output_dir: str, capabilities: dict | None = None):
     """Generate Three.js output files
 
     Creates:
@@ -1154,6 +1154,7 @@ def generate_threejs_output(js_code: str, output_dir: str):
     """
     from pathlib import Path
     import shutil
+    import json
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -1168,6 +1169,11 @@ def generate_threejs_output(js_code: str, output_dir: str):
 
     # Create assets directory
     (output_path / "assets").mkdir(exist_ok=True)
+
+    # Write capability manifest if provided
+    if capabilities:
+        with open(output_path / "capabilities.json", "w") as f:
+            json.dump(capabilities, f, indent=2)
 
 
 def main():

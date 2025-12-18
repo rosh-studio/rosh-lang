@@ -40,6 +40,10 @@ class BaseEmitter(ABC):
         self.output: List[str] = []
         self.indent_level = 0
         self.indent_str = "    "  # 4 spaces
+        self.capability_manifest: Dict[str, Any] = {
+            "schema_version": 1,
+            "capabilities": []
+        }
 
     # =========================================================================
     # Public API

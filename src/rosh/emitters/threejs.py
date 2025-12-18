@@ -14,6 +14,7 @@ Usage:
 See: rosh-dev/proposals/ROSH-IR-SPECIFICATION.md
 """
 
+import json
 from typing import Dict, Any, Set, List
 from .base import BaseEmitter
 from ..ir import (
@@ -73,6 +74,14 @@ class ThreeJSEmitter(BaseEmitter):
 
         # Scan IR to detect features
         self._detect_features()
+        # Capability bridge metadata
+        self.capability_manifest = {
+            "schema_version": 1,
+            "capabilities": []
+        }
+        self.capability_handler_defs: Dict[str, str] = {}
+        self.capability_policy = self._build_capability_policy()
+        self._register_default_capabilities()
 
     def _detect_features(self):
         """Scan IR to detect what features are needed."""
@@ -133,6 +142,87 @@ class ThreeJSEmitter(BaseEmitter):
         # Also scan init actions for sounds
         self._scan_actions_for_sounds(self.ir.init_actions)
 
+    def _build_capability_policy(self) -> Dict[str, Any]:
+        """Build capability policy from project meta."""
+        policy = self.meta.get('engine_capabilities', {}) or {}
+        allow_tags = policy.get('allow', ['safe'])
+        deny_tags = policy.get('deny', [])
+        allow_capabilities = policy.get('allow_capabilities', [])
+        deny_capabilities = policy.get('deny_capabilities', [])
+        allow_passthrough = policy.get('allow_passthrough', False)
+        return {
+            "allow_tags": allow_tags,
+            "deny_tags": deny_tags,
+            "allow_capabilities": allow_capabilities,
+            "deny_capabilities": deny_capabilities,
+            "allow_passthrough": allow_passthrough
+        }
+
+    def _register_capability(self, name: str, handler: str = None, applies_to=None,
+                              tags=None, args=None, description: str = ""):
+        """Register a capability entry and associate it with a runtime handler."""
+        handler = handler or name
+        entry = {
+            "name": name,
+            "handler": handler,
+            "applies_to": applies_to or [],
+            "tags": tags or [],
+            "args": args or [],
+            "doc": description
+        }
+        self.capability_manifest["capabilities"].append(entry)
+
+    def _register_default_capabilities(self):
+        """Register built-in capability metadata."""
+        self._register_capability(
+            "color",
+            handler="color",
+            applies_to=["mesh", "text", "sprite", "hud"],
+            tags=["safe"],
+            args=["css_or_hex"],
+            description="Change mesh or text color."
+        )
+        self._register_capability(
+            "font_size",
+            handler="font_size",
+            applies_to=["text", "hud"],
+            tags=["safe"],
+            args=["pixels"],
+            description="Adjust text sprite font size."
+        )
+        self._register_capability(
+            "text",
+            handler="text",
+            applies_to=["text", "hud"],
+            tags=["safe"],
+            args=["value"],
+            description="Update HUD/text sprite contents."
+        )
+        self._register_capability(
+            "scale",
+            handler="scale",
+            applies_to=["mesh", "sprite"],
+            tags=["safe"],
+            args=["uniform|x y z"],
+            description="Scale objects uniformly or per-axis."
+        )
+        self._register_capability(
+            "spin",
+            handler="spin",
+            applies_to=["mesh", "sprite"],
+            tags=["safe"],
+            args=["xSpeed ySpeed zSpeed"],
+            description="Rotate objects continuously (degrees per second)."
+        )
+        self._register_capability(
+            "bounce",
+            handler="bounce",
+            applies_to=["mesh", "sprite"],
+            tags=["safe"],
+            args=["amplitude frequency"],
+            description="Apply vertical bounce animation (frequency per second)."
+        )
+
     def _scan_actions_for_sounds(self, actions):
         """Scan actions for sound assets."""
         for action in actions:
@@ -165,6 +255,7 @@ class ThreeJSEmitter(BaseEmitter):
             self._emit_save_load_functions()
         self._emit_functions()
         self._emit_event_handlers()
+        self._emit_capability_runtime()
         self._emit_animation_loop()
         self._emit_resize_handler()
         self._emit_repl_console()
@@ -382,16 +473,20 @@ class ThreeJSEmitter(BaseEmitter):
 
         self.write_comment(f"Object: {name}")
 
+        object_kind = 'mesh'
         if is_hud:
             # HUD objects are text sprites that display lives/score
             target = next((t for h, t in self.hud_objects if h == name), 'player')
             self._emit_hud_sprite(name, target, world_x, world_y, world_z)
+            object_kind = 'hud'
         elif is_text:
             text = self._get_prop_string(obj, 'text', name)
             self._emit_text_sprite(name, text, color, world_x, world_y, world_z)
+            object_kind = 'text'
         elif 'sprite' in obj.properties:
             sprite = obj.properties['sprite'].value
             self._emit_textured_plane(name, sprite, world_x, world_y, world_z, width, height)
+            object_kind = 'sprite'
         elif shape == 'sphere':
             self.write(f"const {name}Geometry = new THREE.SphereGeometry({radius}, 32, 32);")
             self.write(f"const {name}Material = new THREE.MeshStandardMaterial({{ color: 0x{color:06x} }});")
@@ -414,6 +509,8 @@ class ThreeJSEmitter(BaseEmitter):
             self.write(f"{name}.position.set({world_x:.2f}, {world_y:.2f}, {world_z:.2f});")
             self.write(f"{name}.name = '{name}';")
             self.write(f"scene.add({name});")
+
+        self.write(f"{name}.userData._rosh_kind = '{object_kind}';")
 
         # Apply initial visible property if set to false
         if 'visible' in obj.properties:
@@ -585,6 +682,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write(f"{name}._text = '{text}';")
         self.write(f"{name}._color = '{css_color}';")
         self.write(f"scene.add({name});")
+        self.write(f"{name}.userData.font_size = 48;")
 
     def _emit_textured_plane(self, name: str, image: str, x: float, y: float, z: float, w: float, h: float):
         """Emit a textured plane for 2D sprites."""
@@ -616,6 +714,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write(f"{name}._ctx = {name}Ctx;")
         self.write(f"{name}._color = '#ffffff';")
         self.write(f"scene.add({name});")
+        self.write(f"{name}.userData.font_size = 32;")
 
     # =========================================================================
     # Functions and Events
@@ -661,16 +760,240 @@ class ThreeJSEmitter(BaseEmitter):
             self.write("}")
             self.write_blank()
 
+    def _emit_capability_runtime(self):
+        """Emit manifest + runtime helpers for engine capabilities."""
+        manifest_js = json.dumps(self.capability_manifest)
+        policy_js = json.dumps(self.capability_policy)
+
+        self.write_comment("Engine capability manifest + runtime bridge")
+        self.write(f"let CAPABILITY_MANIFEST = {manifest_js};")
+        self.write("const CAPABILITY_INDEX = {};")
+        self.write("const CAPABILITY_RUNTIME = {};")
+        self.write(f"const CAPABILITY_POLICY = {policy_js};")
+        self.write("CAPABILITY_POLICY.allowTags = new Set(CAPABILITY_POLICY.allow_tags || []);")
+        self.write("CAPABILITY_POLICY.denyTags = new Set(CAPABILITY_POLICY.deny_tags || []);")
+        self.write("CAPABILITY_POLICY.allowCapabilities = new Set(CAPABILITY_POLICY.allow_capabilities || []);")
+        self.write("CAPABILITY_POLICY.denyCapabilities = new Set(CAPABILITY_POLICY.deny_capabilities || []);")
+        self.write("const capabilityState = { spin: new Map(), bounce: new Map() };")
+        self.write_blank()
+
+        # Index rebuild + optional fetch
+        self.write("function rebuildCapabilityIndex() {")
+        self.indent()
+        self.write("for (const key of Object.keys(CAPABILITY_INDEX)) delete CAPABILITY_INDEX[key];")
+        self.write("for (const cap of CAPABILITY_MANIFEST.capabilities || []) { CAPABILITY_INDEX[cap.name] = cap; }")
+        self.dedent()
+        self.write("}")
+        self.write("rebuildCapabilityIndex();")
+        self.write("if (typeof window !== 'undefined' && window.fetch) {")
+        self.indent()
+        self.write("fetch('capabilities.json').then(r => r.json()).then(data => {")
+        self.indent()
+        self.write("if (data && data.capabilities) { CAPABILITY_MANIFEST = data; rebuildCapabilityIndex(); }")
+        self.dedent()
+        self.write("}).catch(() => { console.warn('Capability manifest not found (capabilities.json)'); });")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+        # Helper functions
+        self.write("function getObjectKind(obj) {")
+        self.indent()
+        self.write("if (!obj || !obj.userData) return 'mesh';")
+        self.write("return obj.userData._rosh_kind || 'mesh';")
+        self.dedent()
+        self.write("}")
+
+        self.write("function capabilityAllowed(cap) {")
+        self.indent()
+        self.write("if (CAPABILITY_POLICY.denyCapabilities.has(cap.name)) return false;")
+        self.write("if (CAPABILITY_POLICY.allowCapabilities.size && !CAPABILITY_POLICY.allowCapabilities.has(cap.name)) return false;")
+        self.write("for (const tag of cap.tags || []) { if (CAPABILITY_POLICY.denyTags.has(tag)) return false; }")
+        self.write("if (!cap.tags || !cap.tags.length) return true;")
+        self.write("return cap.tags.some(tag => CAPABILITY_POLICY.allowTags.has(tag));")
+        self.dedent()
+        self.write("}")
+
+        self.write("function capabilityAppliesTo(cap, obj) {")
+        self.indent()
+        self.write("if (!cap.applies_to || !cap.applies_to.length) return true;")
+        self.write("const kind = getObjectKind(obj);")
+        self.write("return cap.applies_to.includes(kind);")
+        self.dedent()
+        self.write("}")
+
+        self.write("function availableCapabilitiesFor(obj) {")
+        self.indent()
+        self.write("const kind = getObjectKind(obj);")
+        self.write("return (CAPABILITY_MANIFEST.capabilities || []).filter(cap => capabilityAllowed(cap) && (!cap.applies_to || cap.applies_to.includes(kind))).map(cap => cap.name);")
+        self.dedent()
+        self.write("}")
+
+        self.write("function coerceSingleValue(tokens) {")
+        self.indent()
+        self.write("if (!tokens || !tokens.length) return null;")
+        self.write("if (tokens.length === 1) {")
+        self.indent()
+        self.write("const raw = tokens[0];")
+        self.write("if (raw === 'true') return true;")
+        self.write("if (raw === 'false') return false;")
+        self.write("const n = parseFloat(raw);")
+        self.write("if (!Number.isNaN(n)) return n;")
+        self.write("return raw;")
+        self.dedent()
+        self.write("}")
+        self.write("return tokens.join(' ');")
+        self.dedent()
+        self.write("}")
+
+        self.write("function coerceNumbers(tokens) {")
+        self.indent()
+        self.write("if (!tokens || !tokens.length) return [];")
+        self.write("return tokens.map(t => parseFloat(t)).filter(v => !Number.isNaN(v));")
+        self.dedent()
+        self.write("}")
+
+        self.write("function handleCoreSet(obj, prop, tokens) {")
+        self.indent()
+        self.write("const value = coerceSingleValue(tokens);")
+        self.write("if (value === null || value === undefined) return { ok: false };")
+        self.write("const numVal = typeof value === 'number' ? value : parseFloat(value);")
+        self.write("if (prop === 'x' && !Number.isNaN(numVal)) { obj.position.x = numVal; return { ok: true }; }")
+        self.write("if (prop === 'y' && !Number.isNaN(numVal)) { obj.position.y = numVal; return { ok: true }; }")
+        self.write("if (prop === 'z' && !Number.isNaN(numVal)) { obj.position.z = numVal; return { ok: true }; }")
+        self.write("if (prop === 'visible') { obj.visible = value === true || value === 'true'; return { ok: true }; }")
+        self.write("return { ok: false };")
+        self.dedent()
+        self.write("}")
+
+        self.write("function redrawTextSprite(obj, textOverride) {")
+        self.indent()
+        self.write("if (!obj || !obj._ctx) return;")
+        self.write("const fontSize = obj.userData.font_size || 48;")
+        self.write("obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);")
+        self.write("obj._ctx.font = 'bold ' + fontSize + 'px Arial';")
+        self.write("obj._ctx.textAlign = 'center';")
+        self.write("obj._ctx.textBaseline = 'middle';")
+        self.write("obj._ctx.fillStyle = obj._color || '#ffffff';")
+        self.write("obj._ctx.fillText(textOverride || obj._text || '', obj._canvas.width / 2, obj._canvas.height / 2);")
+        self.write("if (obj.material && obj.material.map) obj.material.map.needsUpdate = true;")
+        self.dedent()
+        self.write("}")
+
+        self.write("function applyCapabilityBridge(obj, prop, tokens) {")
+        self.indent()
+        self.write("const cap = CAPABILITY_INDEX[prop];")
+        self.write("if (!cap) {")
+        self.indent()
+        self.write("return { ok: false, reason: 'unknown', message: \"Unknown property '\" + prop + \"'.\", suggestion: availableCapabilitiesFor(obj).join(', ') || null };")
+        self.dedent()
+        self.write("}")
+        self.write("if (!capabilityAllowed(cap)) { return { ok: false, reason: 'denied', message: \"Capability '\" + prop + \"' is disabled.\" }; }")
+        self.write("if (!capabilityAppliesTo(cap, obj)) { return { ok: false, reason: 'not_applicable', message: \"'\" + prop + \"' not supported for this object.\" }; }")
+        self.write("const handler = CAPABILITY_RUNTIME[prop];")
+        self.write("if (!handler) { return { ok: false, reason: 'missing_handler', message: \"No handler for '\" + prop + \"'.\" }; }")
+        self.write("try {")
+        self.indent()
+        self.write("handler({ object: obj, tokens, raw: tokens.join(' '), numbers: coerceNumbers(tokens) });")
+        self.write("return { ok: true };")
+        self.dedent()
+        self.write("} catch (err) {")
+        self.indent()
+        self.write("const msg = err && err.message ? err.message : String(err);")
+        self.write("return { ok: false, reason: 'error', message: msg };")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+
+        # Handler implementations
+        self.write("CAPABILITY_RUNTIME['color'] = function(ctx) {")
+        self.indent()
+        self.write("const val = ctx.raw || '#ffffff';")
+        self.write("if (ctx.object._ctx) {")
+        self.indent()
+        self.write("ctx.object._color = val;")
+        self.write("redrawTextSprite(ctx.object);")
+        self.dedent()
+        self.write("} else if (ctx.object.material && ctx.object.material.color) {")
+        self.indent()
+        self.write("ctx.object.material.color.set(val);")
+        self.dedent()
+        self.write("} else { throw new Error('Color not supported for this object'); }")
+        self.dedent()
+        self.write("};")
+
+        self.write("CAPABILITY_RUNTIME['font_size'] = function(ctx) {")
+        self.indent()
+        self.write("if (!ctx.object._ctx) throw new Error('Only text sprites support font_size');")
+        self.write("const n = parseFloat(ctx.tokens[0]);")
+        self.write("if (Number.isNaN(n)) throw new Error('Provide a numeric font size');")
+        self.write("ctx.object.userData.font_size = n;")
+        self.write("redrawTextSprite(ctx.object);")
+        self.dedent()
+        self.write("};")
+
+        self.write("CAPABILITY_RUNTIME['text'] = function(ctx) {")
+        self.indent()
+        self.write("if (!ctx.object._ctx) throw new Error('Only text sprites support text updates');")
+        self.write("ctx.object._text = ctx.raw;")
+        self.write("redrawTextSprite(ctx.object, ctx.raw);")
+        self.dedent()
+        self.write("};")
+
+        self.write("CAPABILITY_RUNTIME['scale'] = function(ctx) {")
+        self.indent()
+        self.write("if (!ctx.object.scale) throw new Error('Scale not supported');")
+        self.write("const nums = ctx.numbers;")
+        self.write("if (!nums.length) throw new Error('Provide numeric scale values');")
+        self.write("if (nums.length === 1) { ctx.object.scale.set(nums[0], nums[0], nums[0]); }")
+        self.write("else { ctx.object.scale.set(nums[0], nums[1] ?? nums[0], nums[2] ?? nums[0]); }")
+        self.dedent()
+        self.write("};")
+
+        self.write("CAPABILITY_RUNTIME['spin'] = function(ctx) {")
+        self.indent()
+        self.write("if (!ctx.object) throw new Error('No object to spin');")
+        self.write("const raw = ctx.raw.trim();")
+        self.write("if (!raw || raw === 'off') { capabilityState.spin.delete(ctx.object); delete ctx.object.userData._spin; return; }")
+        self.write("const nums = ctx.numbers;")
+        self.write("if (!nums.length) throw new Error('Provide rotation speed(s)');")
+        self.write("const speeds = [nums[0] || 0, nums[1] ?? nums[0] ?? 0, nums[2] ?? 0].map(v => v * Math.PI / 180);")
+        self.write("if (speeds.every(v => v === 0)) { capabilityState.spin.delete(ctx.object); delete ctx.object.userData._spin; return; }")
+        self.write("capabilityState.spin.set(ctx.object, { x: speeds[0], y: speeds[1], z: speeds[2] });")
+        self.write("ctx.object.userData._spin = speeds;")
+        self.dedent()
+        self.write("};")
+
+        self.write("CAPABILITY_RUNTIME['bounce'] = function(ctx) {")
+        self.indent()
+        self.write("if (!ctx.object) throw new Error('No object to bounce');")
+        self.write("const raw = ctx.raw.trim();")
+        self.write("if (!raw || raw === 'off') { capabilityState.bounce.delete(ctx.object); delete ctx.object.userData._bounce; return; }")
+        self.write("const nums = ctx.numbers;")
+        self.write("if (!nums.length) throw new Error('Provide amplitude and optional frequency');")
+        self.write("const amplitude = nums[0];")
+        self.write("const freq = nums[1] || 1;")
+        self.write("if (amplitude === 0) { capabilityState.bounce.delete(ctx.object); delete ctx.object.userData._bounce; return; }")
+        self.write("capabilityState.bounce.set(ctx.object, { amplitude, frequency: freq * Math.PI * 2, base: ctx.object.position.y, elapsed: 0 });")
+        self.write("ctx.object.userData._bounce = { amplitude, freq };")
+        self.dedent()
+        self.write("};")
+        self.write_blank()
     # =========================================================================
     # Animation Loop
     # =========================================================================
 
     def _emit_animation_loop(self):
         """Emit the Three.js animation loop."""
+        self.write("let _roshLastFrame = performance.now();")
         self.write_comment("Animation Loop")
         self.write("function animate() {")
         self.indent()
         self.write("requestAnimationFrame(animate);")
+        self.write("const now = performance.now();")
+        self.write("const delta = (now - _roshLastFrame) / 1000;")
+        self.write("_roshLastFrame = now;")
         self.write_blank()
 
         # Call update handlers
@@ -708,6 +1031,26 @@ class ThreeJSEmitter(BaseEmitter):
                 self.dedent()
                 self.write("}")
             self.write_blank()
+
+        # Capability-driven animations
+        self.write_comment("Engine capability-driven transforms")
+        self.write("capabilityState.spin.forEach((state, target) => {")
+        self.indent()
+        self.write("if (!target) return;")
+        self.write("target.rotation.x += state.x * delta;")
+        self.write("target.rotation.y += state.y * delta;")
+        self.write("target.rotation.z += state.z * delta;")
+        self.dedent()
+        self.write("});")
+        self.write("capabilityState.bounce.forEach((state, target) => {")
+        self.indent()
+        self.write("if (!target) return;")
+        self.write("state.elapsed = (state.elapsed || 0) + delta;")
+        self.write("const offset = Math.sin(state.elapsed * state.frequency) * state.amplitude;")
+        self.write("target.position.y = state.base + offset;")
+        self.dedent()
+        self.write("});")
+        self.write_blank()
 
         # HUD updates
         if self.hud_objects:
@@ -876,7 +1219,19 @@ class ThreeJSEmitter(BaseEmitter):
         self.indent()
 
         # Help
-        self.write("if (parts[0] === 'help') {")
+        self.write("if (parts[0] === 'help' && parts[1]) {")
+        self.indent()
+        self.write("const obj = scene.getObjectByName(parts[1]);")
+        self.write("if (obj) {")
+        self.indent()
+        self.write("const caps = availableCapabilitiesFor(obj);")
+        self.write("if (caps.length) log('Capabilities for ' + parts[1] + ': ' + caps.join(', '), 'cyan');")
+        self.write("else log('No engine capabilities for ' + parts[1], 'dim');")
+        self.dedent()
+        self.write("} else { log('Not found: ' + parts[1], 'err'); }")
+        self.dedent()
+        self.write("}")
+        self.write("else if (parts[0] === 'help') {")
         self.indent()
         self.write("log('Commands: list, get, set, look/examine, create, delete, clone, prompt, save, load, camera reset', 'cyan');")
         self.dedent()
@@ -980,45 +1335,51 @@ class ThreeJSEmitter(BaseEmitter):
         # Set - handles: set obj prop val, set obj prop to val, set prop val (with current obj)
         self.write("else if (parts[0] === 'set' && parts.length >= 3) {")
         self.indent()
-        self.write("let obj, prop, val, p = parts.filter(x => x !== 'to');")  # Remove 'to' keyword
-        self.write("if (p.length === 3 && currentObject) { obj = currentObject; prop = p[1]; val = p[2]; }")
-        self.write("else { obj = scene.getObjectByName(p[1]); prop = p[2]; val = p[3]; }")
-        self.write("if (!obj) { log('No object', 'err'); return; }")
-        self.write("if (!isNaN(val)) val = parseFloat(val);")
-        self.write("if (prop === 'x') obj.position.x = val;")
-        self.write("else if (prop === 'y') obj.position.y = val;")
-        self.write("else if (prop === 'z') obj.position.z = val;")
-        self.write("else if (prop === 'visible') obj.visible = val === 'true';")
-        self.write("else if (prop === 'color') {")
+        self.write("const filtered = parts.filter(x => x !== 'to');")
+        self.write("let obj = null;")
+        self.write("let prop = null;")
+        self.write("let valueTokens = [];")
+        self.write("if (filtered.length >= 4) {")
         self.indent()
-        self.write("if (obj._ctx) {")
+        self.write("const candidate = scene.getObjectByName(filtered[1]);")
+        self.write("if (candidate) {")
         self.indent()
-        self.write("obj._color = val; obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);")
-        self.write("obj._ctx.font = 'bold ' + (obj.userData.font_size || 48) + 'px Arial'; obj._ctx.textAlign = 'center'; obj._ctx.textBaseline = 'middle';")
-        self.write("obj._ctx.fillStyle = val; obj._ctx.fillText(obj._text, obj._canvas.width/2, obj._canvas.height/2);")
-        self.write("obj.material.map.needsUpdate = true;")
+        self.write("obj = candidate;")
+        self.write("prop = filtered[2];")
+        self.write("valueTokens = filtered.slice(3);")
         self.dedent()
-        self.write("} else if (obj.material && obj.material.color) obj.material.color.set(val);")
-        self.dedent()
-        self.write("}")
-        self.write("else if (prop === 'font_size' && obj._ctx) {")
+        self.write("} else if (currentObject) {")
         self.indent()
-        self.write("obj.userData.font_size = val; obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);")
-        self.write("obj._ctx.font = 'bold ' + val + 'px Arial'; obj._ctx.textAlign = 'center'; obj._ctx.textBaseline = 'middle';")
-        self.write("obj._ctx.fillStyle = obj._color || '#ffffff'; obj._ctx.fillText(obj._text, obj._canvas.width/2, obj._canvas.height/2);")
-        self.write("obj.material.map.needsUpdate = true;")
+        self.write("obj = currentObject;")
+        self.write("prop = filtered[1];")
+        self.write("valueTokens = filtered.slice(2);")
         self.dedent()
         self.write("}")
-        self.write("else if (prop === 'text' && obj._ctx) {")
+        self.dedent()
+        self.write("} else if (currentObject && filtered.length >= 3) {")
         self.indent()
-        self.write("obj._text = val; obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);")
-        self.write("obj._ctx.font = 'bold ' + (obj.userData.font_size || 48) + 'px Arial'; obj._ctx.textAlign = 'center'; obj._ctx.textBaseline = 'middle';")
-        self.write("obj._ctx.fillStyle = obj._color || '#ffffff'; obj._ctx.fillText(obj._text, obj._canvas.width/2, obj._canvas.height/2);")
-        self.write("obj.material.map.needsUpdate = true;")
+        self.write("obj = currentObject;")
+        self.write("prop = filtered[1];")
+        self.write("valueTokens = filtered.slice(2);")
         self.dedent()
         self.write("}")
-        self.write("else obj.userData[prop] = val;")
-        self.write("log('OK', 'ok');")
+        self.write("if (!obj || !prop || !valueTokens.length) { log('Usage: set <object> <property> to <value>', 'err'); return; }")
+        self.write("const coreResult = handleCoreSet(obj, prop, valueTokens);")
+        self.write("if (coreResult.ok) { log('OK', 'ok'); return; }")
+        self.write("const capResult = applyCapabilityBridge(obj, prop, valueTokens);")
+        self.write("if (capResult.ok) { log('OK', 'ok'); return; }")
+        self.write("if (capResult.reason === 'unknown' && CAPABILITY_POLICY.allow_passthrough) {")
+        self.indent()
+        self.write("const passthroughValue = coerceSingleValue(valueTokens);")
+        self.write("obj.userData[prop] = passthroughValue;")
+        self.write("log('Stored on userData.' + prop, 'ok');")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("log(capResult.message || ('Could not set ' + prop), 'err');")
+        self.write("if (capResult.suggestion) log('Try: ' + capResult.suggestion, 'cyan');")
+        self.dedent()
+        self.write("}")
         self.dedent()
         self.write("}")
 
@@ -1035,6 +1396,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("if (obj._text) log('  text: ' + obj._text);")
         self.write("log('  visible: ' + obj.visible);")
         self.write("for (const [k, v] of Object.entries(obj.userData)) { if (!k.startsWith('_')) log('  ' + k + ': ' + v); }")
+        self.write("const caps = availableCapabilitiesFor(obj);")
+        self.write("if (caps.length) log('  capabilities: ' + caps.join(', '), 'cyan');")
         self.dedent()
         self.write("} else log('Not found', 'err');")
         self.dedent()
