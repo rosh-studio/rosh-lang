@@ -3,15 +3,16 @@
 # Deploy Demos Script
 # =============================================================================
 #
-# Builds all demos for Phaser (web) and Pygame (desktop).
+# Builds all demos for Phaser (web), Three.js (web 3D), and Pygame (desktop).
 #
 # USAGE:
 #   cd rosh-lang
 #   ./scripts/deploy-demos.sh
 #
 # WHAT IT DOES:
-#   Phaser (browser) → rosh.cloud/demos/*-phaser/  (for web upload)
-#   Pygame (desktop) → rosh.cloud/dist/*-pygame/   (local testing only)
+#   Phaser (browser)  → rosh.cloud/demos/*-phaser/     (for web upload)
+#   Three.js (browser) → rosh.cloud/demos/*-threejs/   (for web upload)
+#   Pygame (desktop)  → rosh.cloud/dist/*-pygame/      (local testing only)
 #
 # AFTER RUNNING:
 #   Upload rosh.cloud/demos/ to your web server (not dist/)
@@ -57,6 +58,34 @@ uv run rosh build demos/block-pusher/game.rosh \
     --copy-assets
 
 # =============================================================================
+# THREE.JS BUILDS (Browser 3D - for web upload)
+# =============================================================================
+
+echo ""
+echo "🌌 THREE.JS BUILDS (for web upload)"
+echo ""
+
+echo "📦 Building rosh-intro (Three.js)..."
+uv run rosh build demos/rosh-intro/game.rosh \
+    --target threejs \
+    --output "$ROSH_CLOUD/demos/rosh-intro-threejs/" \
+    --copy-assets
+
+echo ""
+echo "📦 Building space-shooter (Three.js)..."
+uv run rosh build demos/space-shooter/game.rosh \
+    --target threejs \
+    --output "$ROSH_CLOUD/demos/space-shooter-threejs/" \
+    --copy-assets
+
+echo ""
+echo "📦 Building block-pusher (Three.js)..."
+uv run rosh build demos/block-pusher/game.rosh \
+    --target threejs \
+    --output "$ROSH_CLOUD/demos/block-pusher-threejs/" \
+    --copy-assets
+
+# =============================================================================
 # PYGAME BUILDS (Desktop - local testing only)
 # =============================================================================
 
@@ -94,6 +123,11 @@ echo "Phaser (upload these):"
 echo "  $ROSH_CLOUD/demos/rosh-intro-phaser/"
 echo "  $ROSH_CLOUD/demos/space-shooter-phaser/"
 echo "  $ROSH_CLOUD/demos/block-pusher-phaser/"
+echo ""
+echo "Three.js (upload these):"
+echo "  $ROSH_CLOUD/demos/rosh-intro-threejs/"
+echo "  $ROSH_CLOUD/demos/space-shooter-threejs/"
+echo "  $ROSH_CLOUD/demos/block-pusher-threejs/"
 echo ""
 echo "Pygame (local testing - don't upload):"
 echo "  $ROSH_CLOUD/dist/rosh-intro-pygame/"

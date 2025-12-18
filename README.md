@@ -142,6 +142,33 @@ rosh -c 'prompt exec "Create a game character"'
 
 **See full guide:** [AI_SETUP.md](AI_SETUP.md)
 
+## Three.js Console Capabilities
+
+Every Three.js build ships with the in-scene Rosh console (press `` ` ``). You can inspect and animate objects at runtime:
+
+- `help ball` lists every engine capability (spin, bounce, pulse, orbit, scale, color, …) with argument hints.
+- `help spin` (or any capability name) shows usage plus whether it’s enabled by your project policy.
+- Example commands:
+  - `set ball spin 0 45 0` — rotate around the Y axis at 45°/sec.
+  - `set ball bounce 2 0.5` — bounce 2 units high at 0.5 Hz.
+  - `set ball pulse 0.2 2` — grow/shrink ±20% twice per second.
+  - `set ball orbit 5 30` — orbit around the starting point with radius 5 at 30°/sec.
+- `capabilities` shows which manifest tags are enabled and how to edit `_meta/threejs.toml`.
+
+Control what’s allowed via project meta:
+
+```toml
+# _meta/threejs.toml
+[engine_capabilities]
+allow = ["safe", "experimental"]
+deny = ["destructive"]
+allow_capabilities = ["spin", "pulse"]
+deny_capabilities = ["orbit"]
+allow_passthrough = false
+```
+
+If a capability is disabled, the console explains how to enable its tag or individual name. This keeps demos safe by default while making advanced effects a single command away.
+
 ## Learning Rosh
 
 **Start here:** Run the comprehensive Rosh manual:

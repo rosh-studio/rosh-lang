@@ -740,6 +740,11 @@ def run_repl(interpreter: Interpreter = None):
             stripped = line.strip().lower()
             parts = line.strip().split()
 
+            # version (no args) - show interpreter version
+            if stripped == 'version':
+                out.print(f"Rosh v{__version__}", style="cyan")
+                continue
+
             # Provide friendlier guidance for commands missing arguments
             if len(parts) == 1 and _show_command_usage(out, parts[0].lower()):
                 continue

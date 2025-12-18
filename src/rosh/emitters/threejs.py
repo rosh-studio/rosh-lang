@@ -21,6 +21,7 @@ from ..ir import (
     IR_Program, IR_Object, IR_Event, IR_Action, IR_Function,
     IR_Value, IR_Expression, IR_Conditional, IR_Loop
 )
+from .. import __version__
 
 
 class ThreeJSEmitter(BaseEmitter):
@@ -221,6 +222,22 @@ class ThreeJSEmitter(BaseEmitter):
             tags=["safe"],
             args=["amplitude frequency"],
             description="Apply vertical bounce animation (frequency per second)."
+        )
+        self._register_capability(
+            "pulse",
+            handler="pulse",
+            applies_to=["mesh", "sprite", "text", "hud"],
+            tags=["safe"],
+            args=["amplitude frequency"],
+            description="Scale object in/out with a sine wave (amplitude multiplier, frequency in Hz)."
+        )
+        self._register_capability(
+            "orbit",
+            handler="orbit",
+            applies_to=["mesh", "sprite"],
+            tags=["safe"],
+            args=["radius speed [height]"],
+            description="Orbit around the object's starting point (radius in world units, speed in degrees/sec, optional height override)."
         )
 
     def _scan_actions_for_sounds(self, actions):
@@ -574,6 +591,18 @@ class ThreeJSEmitter(BaseEmitter):
 
         self.dedent()
         self.write("}")
+        self.write("else if (parts[0] === 'capabilities') {")
+        self.indent()
+        self.write("const allowedTags = Array.from(CAPABILITY_POLICY.allowTags);")
+        self.write("const deniedTags = Array.from(CAPABILITY_POLICY.denyTags);")
+        self.write("const allowedCaps = Array.from(CAPABILITY_POLICY.allowCapabilities || []);")
+        self.write("log('Enabled capability tags: ' + (allowedTags.length ? allowedTags.join(', ') : 'safe (default)'), 'cyan');")
+        self.write("if (deniedTags.length) log('Denied tags: ' + deniedTags.join(', '), 'cyan');")
+        self.write("if (allowedCaps.length) log('Explicit allowlist: ' + allowedCaps.join(', '), 'cyan');")
+        self.write("log('Use help <object> or help <capability> for details.', 'dim');")
+        self.write("log('Configure via _meta/threejs.toml [engine_capabilities] allow = [\"safe\",\"experimental\"], deny = [\"destructive\"], etc.', 'dim');")
+        self.dedent()
+        self.write("}")
         self.write_blank()
 
         # Call initially
@@ -774,7 +803,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("CAPABILITY_POLICY.denyTags = new Set(CAPABILITY_POLICY.deny_tags || []);")
         self.write("CAPABILITY_POLICY.allowCapabilities = new Set(CAPABILITY_POLICY.allow_capabilities || []);")
         self.write("CAPABILITY_POLICY.denyCapabilities = new Set(CAPABILITY_POLICY.deny_capabilities || []);")
-        self.write("const capabilityState = { spin: new Map(), bounce: new Map() };")
+        self.write("const capabilityState = { spin: new Map(), bounce: new Map(), pulse: new Map(), orbit: new Map() };")
         self.write_blank()
 
         # Index rebuild + optional fetch
@@ -822,10 +851,36 @@ class ThreeJSEmitter(BaseEmitter):
         self.dedent()
         self.write("}")
 
+        self.write("function describeCapability(cap) {")
+        self.indent()
+        self.write("if (!cap) return '';")
+        self.write("const args = cap.args && cap.args.length ? ' (' + cap.args.join(', ') + ')' : '';")
+        self.write("const doc = cap.doc ? ' - ' + cap.doc : '';")
+        self.write("return cap.name + args + doc;")
+        self.dedent()
+        self.write("}")
+
+        self.write("function logCapabilityHelp(cap) {")
+        self.indent()
+        self.write("if (!cap) { log('Unknown capability.', 'err'); return; }")
+        self.write("const status = capabilityAllowed(cap) ? 'enabled' : 'disabled by policy';")
+        self.write("log(describeCapability(cap), capabilityAllowed(cap) ? 'cyan' : 'err');")
+        self.write("if (cap.tags && cap.tags.length) log('  Tags: ' + cap.tags.join(', '), 'dim');")
+        self.write("log('  Status: ' + status, capabilityAllowed(cap) ? 'dim' : 'err');")
+        self.write("if (cap.args && cap.args.length) log('  Usage: ' + cap.name + ' ' + cap.args.join(' '), 'dim');")
+        self.write("if (!capabilityAllowed(cap) && cap.tags && cap.tags.length) {")
+        self.indent()
+        self.write("const tagHint = cap.tags.map(t => '\"' + t + '\"').join(', ');")
+        self.write("log('  Enable via _meta/threejs.toml [engine_capabilities] allow = [' + tagHint + ']', 'dim');")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+
         self.write("function availableCapabilitiesFor(obj) {")
         self.indent()
         self.write("const kind = getObjectKind(obj);")
-        self.write("return (CAPABILITY_MANIFEST.capabilities || []).filter(cap => capabilityAllowed(cap) && (!cap.applies_to || cap.applies_to.includes(kind))).map(cap => cap.name);")
+        self.write("return (CAPABILITY_MANIFEST.capabilities || []).filter(cap => capabilityAllowed(cap) && (!cap.applies_to || cap.applies_to.includes(kind)));")
         self.dedent()
         self.write("}")
 
@@ -885,7 +940,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const cap = CAPABILITY_INDEX[prop];")
         self.write("if (!cap) {")
         self.indent()
-        self.write("return { ok: false, reason: 'unknown', message: \"Unknown property '\" + prop + \"'.\", suggestion: availableCapabilitiesFor(obj).join(', ') || null };")
+        self.write("const options = availableCapabilitiesFor(obj).map(entry => entry.name).join(', ') || null;")
+        self.write("return { ok: false, reason: 'unknown', message: \"Unknown property '\" + prop + \"'.\", suggestion: options };")
         self.dedent()
         self.write("}")
         self.write("if (!capabilityAllowed(cap)) { return { ok: false, reason: 'denied', message: \"Capability '\" + prop + \"' is disabled.\" }; }")
@@ -979,6 +1035,67 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("ctx.object.userData._bounce = { amplitude, freq };")
         self.dedent()
         self.write("};")
+
+        self.write("CAPABILITY_RUNTIME['pulse'] = function(ctx) {")
+        self.indent()
+        self.write("if (!ctx.object || !ctx.object.scale) throw new Error('Pulse requires scale support');")
+        self.write("const raw = ctx.raw.trim();")
+        self.write("if (!raw || raw === 'off') {")
+        self.indent()
+        self.write("const prev = capabilityState.pulse.get(ctx.object);")
+        self.write("if (prev && prev.base) ctx.object.scale.set(prev.base.x, prev.base.y, prev.base.z);")
+        self.write("capabilityState.pulse.delete(ctx.object);")
+        self.write("delete ctx.object.userData._pulse;")
+        self.write("return;")
+        self.dedent()
+        self.write("}")
+        self.write("const nums = ctx.numbers;")
+        self.write("if (!nums.length) throw new Error('Provide amplitude (scale delta) and optional frequency');")
+        self.write("const amplitude = nums[0];")
+        self.write("const freq = nums[1] || 1;")
+        self.write("if (amplitude === 0) {")
+        self.indent()
+        self.write("const prev = capabilityState.pulse.get(ctx.object);")
+        self.write("if (prev && prev.base) ctx.object.scale.set(prev.base.x, prev.base.y, prev.base.z);")
+        self.write("capabilityState.pulse.delete(ctx.object);")
+        self.write("delete ctx.object.userData._pulse;")
+        self.write("return;")
+        self.dedent()
+        self.write("}")
+        self.write("capabilityState.pulse.set(ctx.object, { amplitude, frequency: freq * Math.PI * 2, elapsed: 0, base: { x: ctx.object.scale.x, y: ctx.object.scale.y, z: ctx.object.scale.z } });")
+        self.write("ctx.object.userData._pulse = { amplitude, freq };")
+        self.dedent()
+        self.write("};")
+
+        self.write("CAPABILITY_RUNTIME['orbit'] = function(ctx) {")
+        self.indent()
+        self.write("if (!ctx.object) throw new Error('No object to orbit');")
+        self.write("const raw = ctx.raw.trim();")
+        self.write("if (!raw || raw === 'off') {")
+        self.indent()
+        self.write("capabilityState.orbit.delete(ctx.object);")
+        self.write("delete ctx.object.userData._orbit;")
+        self.write("return;")
+        self.dedent()
+        self.write("}")
+        self.write("const nums = ctx.numbers;")
+        self.write("if (!nums.length) throw new Error('Provide radius and optional speed/height');")
+        self.write("const radius = nums[0];")
+        self.write("if (radius <= 0) throw new Error('Radius must be positive');")
+        self.write("const speedDeg = nums[1] || 30;")
+        self.write("const height = nums[2];")
+        self.write("capabilityState.orbit.set(ctx.object, {")
+        self.indent()
+        self.write("center: { x: ctx.object.position.x, z: ctx.object.position.z },")
+        self.write("radius,")
+        self.write("speed: speedDeg * Math.PI / 180,")
+        self.write("angle: 0,")
+        self.write("height: Number.isFinite(height) ? height : ctx.object.position.y")
+        self.dedent()
+        self.write("});")
+        self.write("ctx.object.userData._orbit = { radius, speed: speedDeg, height: Number.isFinite(height) ? height : ctx.object.position.y };")
+        self.dedent()
+        self.write("};")
         self.write_blank()
     # =========================================================================
     # Animation Loop
@@ -1048,6 +1165,23 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("state.elapsed = (state.elapsed || 0) + delta;")
         self.write("const offset = Math.sin(state.elapsed * state.frequency) * state.amplitude;")
         self.write("target.position.y = state.base + offset;")
+        self.dedent()
+        self.write("});")
+        self.write("capabilityState.pulse.forEach((state, target) => {")
+        self.indent()
+        self.write("if (!target || !target.scale || !state.base) return;")
+        self.write("state.elapsed = (state.elapsed || 0) + delta;")
+        self.write("const factor = 1 + Math.sin(state.elapsed * state.frequency) * state.amplitude;")
+        self.write("target.scale.set(state.base.x * factor, state.base.y * factor, state.base.z * factor);")
+        self.dedent()
+        self.write("});")
+        self.write("capabilityState.orbit.forEach((state, target) => {")
+        self.indent()
+        self.write("if (!target) return;")
+        self.write("state.angle = (state.angle || 0) + state.speed * delta;")
+        self.write("target.position.x = state.center.x + Math.cos(state.angle) * state.radius;")
+        self.write("target.position.z = state.center.z + Math.sin(state.angle) * state.radius;")
+        self.write("target.position.y = state.height;")
         self.dedent()
         self.write("});")
         self.write_blank()
@@ -1207,7 +1341,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("});")
         self.write_blank()
 
-        self.write("log('Rosh Console ready! Type help for commands.', 'cyan');")
+        self.write(f"log('Rosh Console ready! Rosh v{__version__}. Type help for commands.', 'cyan');")
 
     def _emit_exec_command(self):
         """Emit the execCommand function for REPL."""
@@ -1225,15 +1359,24 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("if (obj) {")
         self.indent()
         self.write("const caps = availableCapabilitiesFor(obj);")
-        self.write("if (caps.length) log('Capabilities for ' + parts[1] + ': ' + caps.join(', '), 'cyan');")
-        self.write("else log('No engine capabilities for ' + parts[1], 'dim');")
+        self.write("if (caps.length) {")
+        self.indent()
+        self.write("log('Capabilities for ' + parts[1] + ':', 'cyan');")
+        self.write("caps.forEach(cap => log('  ' + describeCapability(cap), 'cyan'));")
         self.dedent()
-        self.write("} else { log('Not found: ' + parts[1], 'err'); }")
+        self.write("} else log('No engine capabilities for ' + parts[1], 'dim');")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("const cap = CAPABILITY_INDEX[parts[1]];")
+        self.write("if (cap) logCapabilityHelp(cap); else log('Not found: ' + parts[1], 'err');")
+        self.dedent()
+        self.write("}")
         self.dedent()
         self.write("}")
         self.write("else if (parts[0] === 'help') {")
         self.indent()
-        self.write("log('Commands: list, get, set, look/examine, create, delete, clone, prompt, save, load, camera reset', 'cyan');")
+        self.write("log('Commands: list, get, set, look/examine, create, delete, clone, prompt, save, load, camera reset, capabilities', 'cyan');")
         self.dedent()
         self.write("}")
 
@@ -1397,7 +1540,12 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("log('  visible: ' + obj.visible);")
         self.write("for (const [k, v] of Object.entries(obj.userData)) { if (!k.startsWith('_')) log('  ' + k + ': ' + v); }")
         self.write("const caps = availableCapabilitiesFor(obj);")
-        self.write("if (caps.length) log('  capabilities: ' + caps.join(', '), 'cyan');")
+        self.write("if (caps.length) {")
+        self.indent()
+        self.write("log('  capabilities:', 'cyan');")
+        self.write("caps.forEach(cap => log('    ' + describeCapability(cap), 'cyan'));")
+        self.dedent()
+        self.write("}")
         self.dedent()
         self.write("} else log('Not found', 'err');")
         self.dedent()
