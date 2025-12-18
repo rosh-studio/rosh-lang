@@ -158,6 +158,7 @@ class ThreeJSEmitter(BaseEmitter):
         self._emit_header()
         self._emit_scene_setup()
         self._emit_objects()
+        self._emit_init_actions()  # Emit top-level set statements
         if self.uses_scenes:
             self._emit_scene_visibility_function()
         if self.uses_save_load:
@@ -193,6 +194,11 @@ class ThreeJSEmitter(BaseEmitter):
         self.write_comment("Scene Setup")
         self.write("const scene = new THREE.Scene();")
         self.write("scene.background = new THREE.Color(0x1a1a2e);")
+        self.write_blank()
+
+        # Implicit meta object for game state (v0.2.7+)
+        self.write_comment("Meta object for game state")
+        self.write("const meta = { userData: {} };")
         self.write_blank()
 
         # Camera
@@ -437,6 +443,18 @@ class ThreeJSEmitter(BaseEmitter):
         self.write(f"{name}.userData._rosh_uuid = crypto.randomUUID();")
         self.write_blank()
         self.color_index += 1
+
+    def _emit_init_actions(self):
+        """Emit initialization actions (top-level set statements like set meta.phase to 1)."""
+        if not self.ir.init_actions:
+            return
+
+        self.write_comment("Initialization")
+        for action in self.ir.init_actions:
+            code = self.emit_action(action)
+            if code:
+                self.write(code)
+        self.write_blank()
 
     def _emit_scene_visibility_function(self):
         """Emit updateSceneVisibility helper function."""
@@ -860,7 +878,60 @@ class ThreeJSEmitter(BaseEmitter):
         # Help
         self.write("if (parts[0] === 'help') {")
         self.indent()
-        self.write("log('Commands: list, get, set, inspect, save, load, camera reset', 'cyan');")
+        self.write("log('Commands: list, get, set, look/examine, create, prompt, save, load, camera reset', 'cyan');")
+        self.dedent()
+        self.write("}")
+
+        # Create - parse natural language like "create big yellow ball"
+        self.write("else if (parts[0] === 'create') {")
+        self.indent()
+        self.write("const desc = parts.slice(1).join(' ').toLowerCase();")
+        self.write("const colors = {red:0xff0000, green:0x00ff00, blue:0x0000ff, yellow:0xffff00, cyan:0x00ffff, magenta:0xff00ff, white:0xffffff, orange:0xff8800, purple:0x8800ff, pink:0xff88ff, gray:0x888888, black:0x111111};")
+        self.write("let color = 0x00ff00, size = 1, shape = 'box', name = 'object';")
+        self.write("for (const [c, hex] of Object.entries(colors)) if (desc.includes(c)) color = hex;")
+        self.write("if (desc.includes('big') || desc.includes('large')) size = 2;")
+        self.write("if (desc.includes('small') || desc.includes('tiny')) size = 0.5;")
+        self.write("if (desc.includes('ball')) { shape = 'sphere'; name = 'ball'; }")
+        self.write("else if (desc.includes('sphere')) { shape = 'sphere'; name = 'sphere'; }")
+        self.write("else if (desc.includes('cube')) { shape = 'box'; name = 'cube'; }")
+        self.write("else if (desc.includes('box')) { shape = 'box'; name = 'box'; }")
+        self.write("else if (desc.includes('cylinder')) { shape = 'cylinder'; name = 'cylinder'; }")
+        self.write("else if (desc.includes('tube')) { shape = 'cylinder'; name = 'tube'; }")
+        # Check if name exists and append number if needed
+        self.write("let finalName = name; let n = 1;")
+        self.write("while (scene.getObjectByName(finalName)) { finalName = name + n; n++; }")
+        self.write("let geom = shape === 'sphere' ? new THREE.SphereGeometry(size) : shape === 'cylinder' ? new THREE.CylinderGeometry(size, size, size*2) : new THREE.BoxGeometry(size, size, size);")
+        self.write("const mat = new THREE.MeshStandardMaterial({color: color});")
+        self.write("const mesh = new THREE.Mesh(geom, mat);")
+        self.write("mesh.name = finalName;")
+        self.write("mesh.position.set((Math.random()-0.5)*10, size, (Math.random()-0.5)*10);")
+        self.write("scene.add(mesh);")
+        self.write("log('Created ' + shape + ': ' + mesh.name, 'ok');")
+        self.dedent()
+        self.write("}")
+
+        # Prompt - interpret natural language and execute as Rosh
+        self.write("else if (parts[0] === 'prompt') {")
+        self.indent()
+        self.write("const desc = parts.slice(1).join(' ').toLowerCase();")
+        self.write("// Simple pattern matching for common requests")
+        self.write("if (desc.includes('create')) { execCommand('create ' + desc.replace('create', '')); }")
+        self.write("else if (desc.match(/set\\s+(\\w+)\\s+(\\w+)\\s+to\\s+(\\w+)/)) {")
+        self.indent()
+        self.write("const m = desc.match(/set\\s+(\\w+)\\s+(\\w+)\\s+to\\s+(\\w+)/);")
+        self.write("execCommand('set ' + m[1] + ' ' + m[2] + ' to ' + m[3]);")
+        self.dedent()
+        self.write("}")
+        self.write("else if (desc.match(/move\\s+(\\w+)/)) {")
+        self.indent()
+        self.write("const obj = desc.match(/move\\s+(\\w+)/)[1];")
+        self.write("const x = desc.includes('left') ? -2 : desc.includes('right') ? 2 : 0;")
+        self.write("const y = desc.includes('up') ? 2 : desc.includes('down') ? -2 : 0;")
+        self.write("execCommand('set ' + obj + ' x to ' + x);")
+        self.write("if (y !== 0) execCommand('set ' + obj + ' y to ' + y);")
+        self.dedent()
+        self.write("}")
+        self.write("else { log('Could not interpret: ' + desc, 'err'); log('Try: create big yellow ball, set logo color to red', 'cyan'); }")
         self.dedent()
         self.write("}")
 
@@ -898,11 +969,19 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("if (obj._ctx) {")
         self.indent()
         self.write("obj._color = val; obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);")
-        self.write("obj._ctx.font = 'bold 48px Arial'; obj._ctx.textAlign = 'center'; obj._ctx.textBaseline = 'middle';")
+        self.write("obj._ctx.font = 'bold ' + (obj.userData.font_size || 48) + 'px Arial'; obj._ctx.textAlign = 'center'; obj._ctx.textBaseline = 'middle';")
         self.write("obj._ctx.fillStyle = val; obj._ctx.fillText(obj._text, obj._canvas.width/2, obj._canvas.height/2);")
         self.write("obj.material.map.needsUpdate = true;")
         self.dedent()
         self.write("} else if (obj.material && obj.material.color) obj.material.color.set(val);")
+        self.dedent()
+        self.write("}")
+        self.write("else if (prop === 'font_size' && obj._ctx) {")
+        self.indent()
+        self.write("obj.userData.font_size = val; obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);")
+        self.write("obj._ctx.font = 'bold ' + val + 'px Arial'; obj._ctx.textAlign = 'center'; obj._ctx.textBaseline = 'middle';")
+        self.write("obj._ctx.fillStyle = obj._color || '#ffffff'; obj._ctx.fillText(obj._text, obj._canvas.width/2, obj._canvas.height/2);")
+        self.write("obj.material.map.needsUpdate = true;")
         self.dedent()
         self.write("}")
         self.write("else obj.userData[prop] = val;")
@@ -910,15 +989,19 @@ class ThreeJSEmitter(BaseEmitter):
         self.dedent()
         self.write("}")
 
-        # Inspect
-        self.write("else if ((parts[0] === 'inspect' || parts[0] === 'look') && parts[1]) {")
+        # Inspect/Look/Examine
+        self.write("else if ((parts[0] === 'inspect' || parts[0] === 'look' || parts[0] === 'examine') && parts[1]) {")
         self.indent()
         self.write("const obj = scene.getObjectByName(parts[1]);")
         self.write("if (obj) {")
         self.indent()
         self.write("log(parts[1] + ':', 'cyan');")
         self.write("log('  pos: [' + obj.position.x.toFixed(1) + ',' + obj.position.y.toFixed(1) + ',' + obj.position.z.toFixed(1) + ']');")
-        self.write("if (obj.material && obj.material.color) log('  color: #' + obj.material.color.getHexString());")
+        self.write("if (obj._color) log('  color: ' + obj._color);")  # Text sprite color
+        self.write("else if (obj.material && obj.material.color) log('  color: #' + obj.material.color.getHexString());")
+        self.write("if (obj._text) log('  text: ' + obj._text);")
+        self.write("log('  visible: ' + obj.visible);")
+        self.write("for (const [k, v] of Object.entries(obj.userData)) { if (!k.startsWith('_')) log('  ' + k + ': ' + v); }")
         self.dedent()
         self.write("} else log('Not found', 'err');")
         self.dedent()
@@ -1071,6 +1154,9 @@ class ThreeJSEmitter(BaseEmitter):
             return f"{target}.visible = {val_str};"
         elif prop == 'color':
             return f"{target}.material.color.set({val_str});"
+        elif prop == 'font_size':
+            # Update font_size and redraw text sprite
+            return f"{target}.userData.font_size = {val_str}; if ({target}._ctx) {{ {target}._ctx.clearRect(0, 0, {target}._canvas.width, {target}._canvas.height); {target}._ctx.font = 'bold ' + {target}.userData.font_size + 'px Arial'; {target}._ctx.fillStyle = {target}._color || '#ffffff'; {target}._ctx.textAlign = 'center'; {target}._ctx.textBaseline = 'middle'; {target}._ctx.fillText({target}._text, {target}._canvas.width/2, {target}._canvas.height/2); {target}.material.map.needsUpdate = true; }}"
         else:
             return f"{target}.userData.{prop} = {val_str};"
 

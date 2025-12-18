@@ -16,6 +16,34 @@
 
 ---
 
+## [0.1.12] - 2025-12-18 - Three.js Console Fixes & Meta Tests
+
+### Added
+- **Three.js Console Commands**
+  - `create <description>` - Natural language object creation ("create big yellow ball")
+  - `prompt <description>` - AI-style command interpretation
+  - `examine` as alias for `look`/`inspect`
+  - Object naming: created objects get meaningful names (ball, cube, sphere) with auto-increment
+
+- **Implicit Meta Object Tests** (`tests/test_implicit_meta.py`)
+  - 10 tests covering meta object behavior
+  - Tests for: exists implicitly, set properties, nested properties, cannot create/delete, conditions
+  - Protection is at parser level (syntax error, not runtime)
+
+### Fixed
+- **Three.js Emitter**
+  - `meta` object now initialized (`const meta = { userData: {} }`)
+  - `init_actions` now emitted (e.g., `set meta.phase to 1`)
+  - `font_size` changes redraw text sprites in animation loop
+  - `font_size` changes work in REPL console (`set logo font_size to 20`)
+  - `color` changes preserve current font_size when redrawing
+  - `look`/`examine` shows all userData properties including font_size
+
+### Changed
+- Help text updated to show `look/examine` instead of just `inspect`
+
+---
+
 ## [2025-12-18] - Invisible State Objects & Save/Load
 
 ### Added
