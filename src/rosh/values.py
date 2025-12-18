@@ -79,6 +79,7 @@ class RoshObject:
         _seen.add(id(self))
 
         result = {
+            "_type": "object",  # Type marker for deserialization
             "_uuid": self.uuid,  # Include UUID for identity
             "_name": self.name,  # Include object name
         }

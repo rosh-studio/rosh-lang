@@ -425,7 +425,8 @@ class Parser:
         self.expect(TokenType.SET)
 
         # Check for type annotation: set x: number to 42 OR set x as number to 42
-        if self.current_token().type == TokenType.IDENTIFIER:
+        # Also handle META token as a valid target (set meta ... )
+        if self.current_token().type in (TokenType.IDENTIFIER, TokenType.META):
             name_token = self.current_token()
             next_token = self.peek_token()
 
@@ -448,30 +449,37 @@ class Parser:
                 )
 
             # Check for natural language property access: set book color to red
-            # Pattern: IDENTIFIER IDENTIFIER TO (where second identifier is property name)
-            if next_token.type == TokenType.IDENTIFIER:
-                # Peek further to see if there's a TO after the second identifier
-                # This distinguishes "set book color to red" from "set x 42" (no to)
+            # Also supports multi-level: set meta game title to "x" (becomes meta.game.title)
+            # Pattern: IDENTIFIER IDENTIFIER+ TO (where identifiers are property chain)
+            if next_token.type in (TokenType.IDENTIFIER, TokenType.META):
+                # Look ahead to find where TO appears in the sequence
+                # Save position so we can backtrack if needed
+                saved_pos = self.pos
                 self.advance()  # consume first identifier (object name)
-                prop_token = self.current_token()
-                after_prop = self.peek_token()
 
-                if after_prop.type == TokenType.TO:
-                    # Natural language: set book color to red
-                    self.advance()  # consume property name
+                # Collect property identifiers until we hit TO or non-identifier
+                prop_tokens = []
+                while self.current_token().type == TokenType.IDENTIFIER:
+                    prop_tokens.append(self.current_token())
+                    self.advance()
+
+                if self.current_token().type == TokenType.TO and len(prop_tokens) > 0:
+                    # Natural language: set book color to red OR set meta game title to "x"
                     self.advance()  # consume TO
                     value = self.parse_expression()
 
-                    target = PropertyAccess(
-                        object=Identifier(name=name_token.value, line=name_token.line),
-                        property=prop_token.value,
-                        line=prop_token.line
-                    )
+                    # Build the property chain
+                    target = Identifier(name=name_token.value, line=name_token.line)
+                    for prop_token in prop_tokens:
+                        target = PropertyAccess(
+                            object=target,
+                            property=prop_token.value,
+                            line=prop_token.line
+                        )
                     return SetProperty(target=target, value=value, line=line)
                 else:
                     # Not natural language syntax, backtrack
-                    # Put back the position - we consumed one token too many
-                    self.pos -= 1  # go back to first identifier
+                    self.pos = saved_pos
 
         # Otherwise parse as normal set/assignment
         target = self.parse_target()

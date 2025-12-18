@@ -87,6 +87,25 @@ class Interpreter:
         self.current_object = None
         self.current_object_name = None
 
+        # Implicit meta object (v0.2.7+) - always exists, holds game state
+        self._init_meta_object()
+
+    def _init_meta_object(self):
+        """Initialize the implicit meta object
+
+        The meta object:
+        - Always exists
+        - Never renders (has no visual properties)
+        - Holds game state (meta.level, meta.score, etc.)
+        - Supports nested properties (meta.game.title, meta.config.difficulty)
+        - Is included in save/load
+        - Cannot be created or deleted by user code
+        """
+        meta = RoshObject(name='meta')
+        meta._is_meta = True  # Mark as special meta object
+        self.global_env.define('meta', meta)
+        self.register_instance(meta, type_name='meta', explicit_name='meta')
+
     def execute(self, program: Program):
         """Execute a program (list of statements)"""
         for statement in program.statements:
@@ -259,11 +278,8 @@ class Interpreter:
         def serialize_value(value):
             """Convert Rosh values to JSON-serializable format"""
             if isinstance(value, RoshObject):
-                return {
-                    "_type": "object",
-                    "_name": value.name,
-                    **value.to_json()
-                }
+                # to_json() now includes _type, _name, _uuid, _id
+                return value.to_json()
             elif isinstance(value, RoshFunction):
                 # TODO(v0.1.0): Function body serialization
                 #   Options:
@@ -516,6 +532,10 @@ class Interpreter:
 
     def eval_create_object(self, node: CreateObject) -> None:
         """Execute: create object <name> [from parent1, parent2] ... end"""
+        # Block reserved object names
+        if node.name == 'meta':
+            raise RoshRuntimeError("Cannot create object 'meta': meta is a reserved implicit object")
+
         # Look up parent objects from environment
         parent_objects = []
         if node.parents:
@@ -828,14 +848,62 @@ class Interpreter:
 
         return obj_value.get(node.property)
 
+    def _is_meta_path(self, node) -> bool:
+        """Check if this property access path starts from the meta object"""
+        if isinstance(node, Identifier):
+            return node.name == 'meta'
+        elif isinstance(node, PropertyAccess):
+            return self._is_meta_path(node.object)
+        return False
+
+    def _get_or_create_nested(self, node: PropertyAccess) -> RoshObject:
+        """Get a nested property, auto-creating intermediate objects for meta paths.
+
+        For meta objects, this enables: set meta.game.title to "X"
+        where meta.game is auto-created as a RoshObject if it doesn't exist.
+        """
+        is_meta = self._is_meta_path(node)
+
+        if isinstance(node.object, Identifier):
+            obj_value = self.current_env.get(node.object.name)
+        elif isinstance(node.object, PropertyAccess):
+            obj_value = self._get_or_create_nested(node.object)
+        else:
+            raise RoshRuntimeError(f"Cannot set property on: {type(node.object).__name__}")
+
+        if not isinstance(obj_value, RoshObject):
+            raise RoshTypeError(f"Cannot set property of non-object: {type(obj_value).__name__}")
+
+        # Check if property exists
+        prop_value = obj_value.get(node.property)
+
+        # Auto-create nested objects for meta paths
+        if prop_value is None and is_meta:
+            nested_obj = RoshObject(name=node.property)
+            nested_obj._is_meta = True  # Mark as part of meta tree
+            obj_value.set(node.property, nested_obj)
+            return nested_obj
+        elif prop_value is None:
+            raise RoshTypeError(f"Cannot set property of non-object: NoneType")
+
+        if not isinstance(prop_value, RoshObject):
+            raise RoshTypeError(f"Cannot set property of non-object: {type(prop_value).__name__}")
+
+        return prop_value
+
     def eval_property_set(self, node: PropertyAccess, value: Any, base_obj: RoshObject = None) -> None:
-        """Set a property: obj.property = value or obj.prop1.prop2 = value"""
+        """Set a property: obj.property = value or obj.prop1.prop2 = value
+
+        For meta objects, auto-creates intermediate objects:
+            set meta.game.title to "X" creates meta.game if needed
+        """
         if base_obj is None:
             # Get the base object from the environment
             if isinstance(node.object, Identifier):
                 obj_value = self.current_env.get(node.object.name)
             elif isinstance(node.object, PropertyAccess):
-                obj_value = self.eval_property_access(node.object)
+                # Use special handling for meta paths (auto-create intermediates)
+                obj_value = self._get_or_create_nested(node.object)
             else:
                 raise RoshRuntimeError(f"Cannot set property on: {type(node.object).__name__}")
         else:
@@ -844,7 +912,7 @@ class Interpreter:
                 # This is the base object
                 obj_value = base_obj
             elif isinstance(node.object, PropertyAccess):
-                obj_value = self.eval_property_access(node.object)
+                obj_value = self._get_or_create_nested(node.object)
             else:
                 raise RoshRuntimeError(f"Cannot set property on: {type(node.object).__name__}")
 
@@ -2385,6 +2453,10 @@ Focus on the specific syntax or concept they need to correct."""
 
     def eval_delete_object(self, node: DeleteObject) -> None:
         """Execute: delete <name> - Remove an object from environment"""
+        # Block deletion of reserved objects
+        if node.name == 'meta':
+            raise RoshRuntimeError("Cannot delete 'meta': meta is a reserved implicit object")
+
         # Check if the object exists
         if not self.current_env.exists(node.name):
             raise RoshRuntimeError(f"Cannot delete: '{node.name}' does not exist")

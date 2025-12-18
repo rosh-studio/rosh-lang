@@ -239,6 +239,12 @@ class PygameEmitter(BaseEmitter):
             self.write(f"pygame.mixer.music.load(os.path.join('assets', '{self.music_file}'))")
             self.write_blank()
 
+        # Initialize implicit meta object (v0.2.7+)
+        # meta holds game state and never renders
+        self.write_comment("Initialize meta object (game state)")
+        self.write("self.meta = type('Meta', (), {})()")
+        self.write_blank()
+
         # Create objects
         self.write_comment("Create objects")
         for obj in self.ir.objects:
