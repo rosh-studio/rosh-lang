@@ -96,6 +96,7 @@ class IR_Action:
         - "return": value (optional)
         - "break": (no params)
         - "continue": (no params)
+        - "goto": scene (optional), level (optional) - scene/level navigation
     """
     type: str
     params: Dict[str, Any] = field(default_factory=dict)
@@ -149,6 +150,11 @@ class IR_Object:
         - color: 0xRRGGBB
         - Other properties: native Python types
 
+    Scene/Level (Roshonic "Dimensions, Not Modes"):
+        - scene: Named area (None = always visible)
+        - level: Numbered progression within scene (None = all levels)
+        - Objects without scene/level are always visible (HUD, etc.)
+
     The UUID is stable across save/load and enables:
         - `get` command works by name OR UUID
         - Object identity preserved across targets/sessions
@@ -158,6 +164,8 @@ class IR_Object:
     type: str = "shape"  # "sprite", "text", "shape", "group"
     parent_type: Optional[str] = None  # For inheritance ("player", "enemy")
     properties: Dict[str, IR_Value] = field(default_factory=dict)
+    scene: Optional[str] = None  # Named scene (None = always visible)
+    level: Optional[int] = None  # Level number (None = all levels)
 
     @classmethod
     def create(cls, name: str, **kwargs) -> "IR_Object":
@@ -227,6 +235,9 @@ class IR_Metadata:
     version: Optional[str] = None
     canvas_width: int = 800   # Logical canvas size (Rosh coordinates)
     canvas_height: int = 600
+    # Scene/Level defaults (Roshonic "Dimensions, Not Modes")
+    initial_scene: Optional[str] = None  # None = show all scenes
+    initial_level: int = 1  # Default level
     # Additional metadata from _meta/project.toml
     extra: Dict[str, Any] = field(default_factory=dict)
 
@@ -358,6 +369,8 @@ def serialize_ir_program(program: IR_Program) -> dict:
                 "name": obj.name,
                 "type": obj.type,
                 "parent_type": obj.parent_type,
+                "scene": obj.scene,
+                "level": obj.level,
                 "properties": {
                     k: {"type": v.type, "value": v.value}
                     for k, v in obj.properties.items()
@@ -384,6 +397,8 @@ def deserialize_ir_objects(data: dict) -> List[IR_Object]:
             name=obj_data["name"],
             type=obj_data.get("type", "shape"),
             parent_type=obj_data.get("parent_type"),
-            properties=properties
+            properties=properties,
+            scene=obj_data.get("scene"),
+            level=obj_data.get("level"),
         ))
     return objects

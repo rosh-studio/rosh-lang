@@ -435,6 +435,21 @@ class GotoRoom(ASTNode):
 
 
 @dataclass
+class GotoScene(ASTNode):
+    """goto scene <name> [level <n>] - Navigate to scene and/or level
+
+    Roshonic "Dimensions, Not Modes" - scene/level are coordinates.
+    Examples:
+        goto scene shop           # change scene, level resets to 1
+        goto level 2              # change level within current scene
+        goto scene game level 2   # change both
+    """
+    scene: Optional[str] = None  # Scene name (None = don't change)
+    level: Optional[int] = None  # Level number (None = don't change)
+    line: int = 0
+
+
+@dataclass
 class LookCommand(ASTNode):
     """look [object] - Display current room or examine object"""
     target: Optional[str] = None  # Object to examine (None = look at room)

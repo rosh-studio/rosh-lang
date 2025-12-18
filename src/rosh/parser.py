@@ -1425,15 +1425,53 @@ class Parser:
 
         return PropertiesCommand(target=target, line=line)
 
-    def parse_goto(self) -> GotoRoom:
-        """Parse: goto <room> or go <room>"""
+    def parse_goto(self):
+        """Parse goto commands:
+        - goto <room>                    # legacy room navigation
+        - goto scene <name>              # change scene
+        - goto level <number>            # change level
+        - goto scene <name> level <n>    # change both
+        """
         line = self.current_token().line
         self.expect(TokenType.GOTO)
 
-        room_token = self.expect(TokenType.IDENTIFIER)
-        room = room_token.value
+        next_token = self.current_token()
 
-        return GotoRoom(room=room, line=line)
+        # Check for "goto scene" or "goto level"
+        if next_token.type == TokenType.IDENTIFIER:
+            keyword = next_token.value.lower()
+
+            if keyword == "scene":
+                self.advance()  # consume "scene"
+                scene_token = self.expect(TokenType.IDENTIFIER)
+                scene_name = scene_token.value
+
+                # Check for optional "level <n>"
+                level_num = None
+                if (self.current_token().type == TokenType.IDENTIFIER and
+                    self.current_token().value.lower() == "level"):
+                    self.advance()  # consume "level"
+                    level_token = self.expect(TokenType.NUMBER)
+                    level_num = int(level_token.value)
+
+                return GotoScene(scene=scene_name, level=level_num, line=line)
+
+            elif keyword == "level":
+                self.advance()  # consume "level"
+                level_token = self.expect(TokenType.NUMBER)
+                level_num = int(level_token.value)
+
+                return GotoScene(scene=None, level=level_num, line=line)
+
+            else:
+                # Legacy: goto <room>
+                room = next_token.value
+                self.advance()
+                return GotoRoom(room=room, line=line)
+
+        # Fallback: expect identifier for room name
+        room_token = self.expect(TokenType.IDENTIFIER)
+        return GotoRoom(room=room_token.value, line=line)
 
     def parse_look(self) -> LookCommand:
         """Parse: look [object] - Show current room or examine object"""

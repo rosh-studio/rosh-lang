@@ -23,7 +23,7 @@ from .ast_nodes import (
     FunctionDef, FunctionCall, Return, Break, Continue,
     Print, PlaySound, PlayMusic, StopMusic, Save, Load,
     CloneObject, DeleteObject, Increment, Decrement, Random, Length,
-    ListLiteral, ListIndex, Append, Remove, Get
+    ListLiteral, ListIndex, Append, Remove, Get, GotoScene
 )
 from .ir import (
     IR_Program, IR_Object, IR_Event, IR_Action, IR_Function,
@@ -159,12 +159,23 @@ class IRTransformer:
         if 'y' not in properties:
             properties['y'] = IR_Value('percentage', 0.5)
 
+        # Extract scene/level from properties (Roshonic "Dimensions, Not Modes")
+        scene = None
+        level = None
+        if 'scene' in properties:
+            scene = properties.pop('scene').value  # Extract and remove from properties
+        if 'level' in properties:
+            level_val = properties.pop('level').value
+            level = int(level_val) if level_val is not None else None
+
         return IR_Object(
             uuid=str(uuid.uuid4()),
             name=node.name.lower(),
             type=obj_type,
             parent_type=parent_type,
-            properties=properties
+            properties=properties,
+            scene=scene,
+            level=level
         )
 
     def extract_property(self, stmt: SetProperty) -> tuple:
@@ -495,6 +506,12 @@ class IRTransformer:
                 'target': self.transform_expression(stmt.target),
                 'index': stmt.instance_index,
                 'all': stmt.get_all
+            })
+
+        elif isinstance(stmt, GotoScene):
+            return IR_Action('goto', {
+                'scene': stmt.scene,
+                'level': stmt.level
             })
 
         else:

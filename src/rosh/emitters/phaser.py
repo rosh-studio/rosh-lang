@@ -52,12 +52,17 @@ class PhaserEmitter(BaseEmitter):
         self.hud_objects: list = []  # [(hud_name, target_name), ...]
         self.continuous_key_events: list = []  # [(key, handler_code), ...]
 
+        # Scene/Level support (Roshonic "Dimensions, Not Modes")
+        self.uses_scenes = False  # True if any object has scene/level
+        self.scene_objects: Dict[str, list] = {}  # scene_name -> [obj_names]
+        self.level_objects: Dict[int, list] = {}  # level_num -> [obj_names]
+
         # Scan IR to detect features
         self._detect_features()
 
     def _detect_features(self):
         """Scan IR to detect what features are needed."""
-        # Check objects for player type, sprites, and HUD
+        # Check objects for player type, sprites, HUD, and scene/level
         for obj in self.ir.objects:
             if obj.parent_type == 'player':
                 self.player_objects.add(obj.name)
@@ -75,6 +80,18 @@ class PhaserEmitter(BaseEmitter):
                 target_name = target_val.value if hasattr(target_val, 'value') else str(target_val)
                 self.hud_objects.append((obj.name, target_name))
                 self.needs_update = True  # HUD needs update loop
+
+            # Scene/Level tracking (Roshonic "Dimensions, Not Modes")
+            if obj.scene is not None or obj.level is not None:
+                self.uses_scenes = True
+                if obj.scene is not None:
+                    if obj.scene not in self.scene_objects:
+                        self.scene_objects[obj.scene] = []
+                    self.scene_objects[obj.scene].append(obj.name)
+                if obj.level is not None:
+                    if obj.level not in self.level_objects:
+                        self.level_objects[obj.level] = []
+                    self.level_objects[obj.level].append(obj.name)
 
         # Check events
         for event in self.ir.events:
@@ -165,6 +182,13 @@ class PhaserEmitter(BaseEmitter):
         self.write("super({ key: 'GameScene' });")
         if self.ir.events or self.player_objects:
             self.write("this.eventHandlers = {};")
+        # Scene/Level state (Roshonic "Dimensions, Not Modes")
+        if self.uses_scenes:
+            initial_scene = self.ir.metadata.initial_scene
+            initial_level = self.ir.metadata.initial_level
+            scene_str = f"'{initial_scene}'" if initial_scene else "null"
+            self.write(f"this.currentScene = {scene_str};")
+            self.write(f"this.currentLevel = {initial_level};")
         self.dedent()
         self.write("}")
         self.write_blank()
@@ -218,6 +242,12 @@ class PhaserEmitter(BaseEmitter):
                 code = self.emit_action(action)
                 if code:
                     self.write(code)
+
+        # Set initial scene/level visibility
+        if self.uses_scenes:
+            self.write_blank()
+            self.write("// Set initial scene/level visibility")
+            self.write("this.updateSceneVisibility();")
 
         self.dedent()
         self.write("}")
@@ -317,6 +347,10 @@ class PhaserEmitter(BaseEmitter):
         if self.collision_events:
             self._emit_collision_helper()
 
+        # updateSceneVisibility (if using scenes/levels)
+        if self.uses_scenes:
+            self._emit_scene_visibility_helper()
+
     def _emit_player_input_method(self):
         """Emit player input handling method."""
         self.write("handlePlayerInput(player) {")
@@ -361,6 +395,28 @@ class PhaserEmitter(BaseEmitter):
         self.write("       a.x + aw/2 > b.x - bw/2 &&")
         self.write("       a.y - ah/2 < b.y + bh/2 &&")
         self.write("       a.y + ah/2 > b.y - bh/2;")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+    def _emit_scene_visibility_helper(self):
+        """Emit helper to update object visibility based on current scene/level."""
+        self.write("updateSceneVisibility() {")
+        self.indent()
+        self.write("// Roshonic \"Dimensions, Not Modes\" - scene/level as coordinates")
+
+        # For each object with scene/level, generate visibility check
+        for obj in self.ir.objects:
+            if obj.scene is not None or obj.level is not None:
+                checks = []
+                if obj.scene is not None:
+                    checks.append(f"this.currentScene === '{obj.scene}'")
+                if obj.level is not None:
+                    checks.append(f"this.currentLevel === {obj.level}")
+
+                condition = " && ".join(checks)
+                self.write(f"if (this.{obj.name}) this.{obj.name}.visible = ({condition});")
+
         self.dedent()
         self.write("}")
         self.write_blank()
@@ -525,6 +581,7 @@ class PhaserEmitter(BaseEmitter):
                 self.write(f"this.registerEvent('update', function() {{ {handler_code} }});")
             elif event.trigger.startswith('keydown:'):
                 key = event.trigger.split(':')[1].upper()
+                key = self._map_phaser_key(key)
                 self.write(f"this.input.keyboard.on('keydown-{key}', () => {{ {handler_code} }});")
             elif event.trigger.startswith('continuous:'):
                 # Store for polling in update loop
@@ -612,6 +669,17 @@ class PhaserEmitter(BaseEmitter):
             args = params.get('args', [])
             arg_strs = [self.emit_expression(a) for a in args]
             return f"this.{func_name}({', '.join(arg_strs)});"
+        elif action_type == 'goto':
+            # Scene/Level navigation (Roshonic "Dimensions, Not Modes")
+            scene = params.get('scene')
+            level = params.get('level')
+            code_parts = []
+            if scene is not None:
+                code_parts.append(f"this.currentScene = '{scene}';")
+            if level is not None:
+                code_parts.append(f"this.currentLevel = {level};")
+            code_parts.append("this.updateSceneVisibility();")
+            return " ".join(code_parts)
 
         return f"// TODO: {action_type}"
 
@@ -784,7 +852,7 @@ class PhaserEmitter(BaseEmitter):
         Returns:
             JavaScript condition string
         """
-        # Map key names to Phaser cursor/key checks
+        key = key.upper()
         key_mapping = {
             'LEFT': 'this.cursors.left.isDown',
             'RIGHT': 'this.cursors.right.isDown',
@@ -802,6 +870,17 @@ class PhaserEmitter(BaseEmitter):
 
         # Fallback to input keyboard check
         return f"this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.{key}).isDown"
+
+    def _map_phaser_key(self, key: str) -> str:
+        """Map key name to Phaser keydown event name."""
+        # Number keys need word names in Phaser
+        number_map = {
+            '0': 'ZERO', '1': 'ONE', '2': 'TWO', '3': 'THREE', '4': 'FOUR',
+            '5': 'FIVE', '6': 'SIX', '7': 'SEVEN', '8': 'EIGHT', '9': 'NINE',
+        }
+        if key in number_map:
+            return number_map[key]
+        return key
 
     def _asset_key(self, filename: str) -> str:
         """Convert filename to Phaser asset key."""
