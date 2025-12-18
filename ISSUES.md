@@ -65,30 +65,6 @@ end
 
 Logged for future tinkering:
 
-### ISSUE-003: Add `text` command to console
-**Status:** 🔄 In Progress
-**Target:** Three.js (then Phaser)
-**Effort:** Low
-
-Allow changing text sprite content at runtime:
-```
-> set logo text to "hello world"
-```
-
----
-
-### ISSUE-004: Add `delete` command to console
-**Status:** 📋 Planned
-**Target:** All
-**Effort:** Low
-
-Remove objects at runtime:
-```
-> delete ball
-```
-
----
-
 ### ISSUE-005: Add animation commands
 **Status:** 📋 Planned
 **Target:** Three.js
@@ -125,19 +101,6 @@ Move objects relative to current position:
 
 ---
 
-### ISSUE-008: Object duplication (clone)
-**Status:** 📋 Planned
-**Target:** Three.js
-**Effort:** Low
-
-Duplicate existing objects:
-```
-> clone ball
-> copy ball as ball2
-```
-
----
-
 ### ISSUE-009: Screenshot command
 **Status:** 📋 Planned
 **Target:** Three.js
@@ -152,4 +115,24 @@ Export current view as PNG:
 
 ## Resolved Issues
 
-*None yet.*
+### ISSUE-003: Add `text` command to console ✅
+**Resolved:** 2025-12-18
+**Target:** Three.js
+
+Changed text sprite content at runtime via `set logo text to "hello"`.
+
+---
+
+### ISSUE-004: Add `delete` command to console ✅
+**Resolved:** 2025-12-18
+**Target:** Three.js, Main REPL
+
+Remove objects at runtime with confirmation.
+
+---
+
+### ISSUE-008: Object duplication (clone) ✅
+**Resolved:** 2025-12-18
+**Target:** Three.js, Main REPL
+
+Clone objects with `clone ball` (auto-name) or `clone ball as newball`.
