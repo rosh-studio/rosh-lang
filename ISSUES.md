@@ -19,6 +19,36 @@ When reporting an issue, please include:
 
 ## Open Issues
 
+### ISSUE-002: No way to configure engine-specific input controls
+**Status:** 🔶 Enhancement request
+**Target:** All (Three.js, Phaser, Pygame)
+
+**Problem:** Input controls (keyboard mappings) are hardcoded in each emitter. Users cannot customize which keys control player movement, camera, or other actions.
+
+**Current defaults:**
+
+| Engine | Player Movement | Rise/Fall | Camera | Console |
+|--------|-----------------|-----------|--------|---------|
+| Three.js | Arrow keys | . / | WASD + QE | ` |
+| Phaser | Arrow keys | N/A (2D) | N/A | N/A |
+| Pygame | Arrow keys | N/A (2D) | N/A | N/A |
+
+**Desired:** Allow configuration in Rosh code, e.g.:
+```rosh
+config threejs
+    set player_rise_key to "r"
+    set camera_enabled to false
+end
+```
+
+**Architecture note:** The IR is intentionally target-agnostic. Engine-specific config should go in `_meta/` or a `config` block, not pollute the core IR.
+
+**Workaround:** Edit generated code, or modify emitter source.
+
+**Priority:** Low - current defaults work well for demos.
+
+---
+
 ### ISSUE-001: Three.js transpiler - 2D games use wrong coordinate system at runtime
 **Status:** 🔶 Known limitation
 **Target:** Three.js

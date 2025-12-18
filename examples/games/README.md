@@ -397,7 +397,7 @@ rosh build game.rosh --target phaser --output dist/  # No REPL
 
 ### Demo
 
-See `demos/repl-demo/` for a polished example demonstrating the Rosh Console with professional graphics.
+See https://rosh.cloud/demos/ for live demos demonstrating Rosh features.
 
 ### Limitations (Phase 1)
 

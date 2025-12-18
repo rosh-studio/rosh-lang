@@ -12,7 +12,131 @@
 - Record 60-second demo video ("Actual footage. Not faked.")
 - ~~Simple landing page (slogan + signup only)~~ ✅ Done
 - Outreach to contacts (Gregor Hofer, Soluis, etc.)
-- Phase 2: Real AI in transpilers (currently only fuzzy matching in Three.js)
+- ~~Update existing demos to use percentage-based coordinates~~ ✅ Done
+
+---
+
+## [2025-12-18] - Pygame Emitter Polish & Demo Fixes
+
+### Added
+- **Pygame Emitter Improvements** - Full feature parity with Phaser
+  - `_write_with_markers()` helper for proper Python indentation
+  - `call` action support for function invocations
+  - Sprite scaling via `pygame.transform.scale()` to match object dimensions
+  - Text rendering with `pygame.font.Font` (was colored rectangles)
+  - Visibility checks (`obj_visible`) for all game objects
+  - Update event handlers (`when update then`)
+  - Player detection via both `parent_type` and object name
+
+- **Sound Asset Support** - Complete audio handling
+  - CLI now copies both `sprite_assets` and `sound_assets`
+  - Emitter scans function bodies for asset references
+  - Finds assets like `laser1.ogg` inside `fire_bullet` function
+
+- **Deploy Script** - `scripts/deploy-demos.sh`
+  - Phaser builds → `rosh.cloud/demos/*-phaser/` (for web upload)
+  - Pygame builds → `rosh.cloud/dist/*-pygame/` (local testing only)
+  - Clear separation of web-ready and development builds
+
+### Fixed
+- **Pygame coordinate conversion** - Percentage values now convert to pixels
+  - `_format_value()` accepts `context` parameter (x, y, width, height)
+  - `set x to 50` correctly becomes `400` pixels, not `0.5`
+
+- **Multiple key handlers** - Same key can have multiple event handlers
+  - Changed `keydown_events` from `Dict[str, list]` to `Dict[str, List[list]]`
+  - SPACE key can trigger both title→game and level1→level2 transitions
+
+- **Block-pusher movement after level complete** - BUG-018
+  - Added `if win_text.visible is equal to false then` to all movement handlers
+  - Player can no longer move after "Level Complete!" message
+
+- **Block-pusher sprite** - Restored correct player sprite
+  - Found original 40x40 green smiley from git history (cd4aa24)
+  - Replaced incorrect spaceship sprite
+
+### Changed
+- `demos/index.html` updated to point to `block-pusher-phaser/`
+- Removed old `block-pusher/` folder (without suffix)
+- `demos/rosh-intro/game.rosh` updated to use explicit `%` for centered text
+
+### Removed
+- **Dead Transpiler Code** - 200KB of legacy code removed
+  - Deleted `src/rosh/transpilers/` folder entirely
+  - Old files: `phaser.py` (97KB), `pygame_transpiler.py` (30KB), `threejs.py` (72KB), `base.py` (2KB)
+  - Templates moved to `src/rosh/emitters/templates/`
+  - CLI updated to use emitters path for templates
+  - All targets now use clean IR-based emitter architecture
+
+### Documentation
+- **Coordinate Semantics Clarified** - Pixels by default, percentages explicit
+  - Bare numbers are pixels: `set x to 400` = 400 pixels
+  - Explicit percentages: `set x to 50%` = center of screen
+  - Recommended pattern:
+    - Use `%` for UI elements that should adapt to screen size
+    - Use bare numbers for game logic with fixed coordinates (grids, etc.)
+- **CLAUDE.md Updated** - Now defers to `rosh-dev/ROADMAP.md` for priorities
+- **ROADMAP.md Updated** - Added v0.1.11 milestone, marked landing page complete
+
+---
+
+## [2025-12-18] - IR Architecture & Percentage Coordinates
+
+### Added
+- **Rosh IR (Intermediate Representation)** - LLVM-inspired architecture
+  - `src/rosh/ir.py` - IR node dataclasses (IR_Program, IR_Object, IR_Event, etc.)
+  - `src/rosh/ir_transformer.py` - AST → IR transformation with normalization
+  - `src/rosh/emitters/` - New emitter package for IR → target code
+  - `src/rosh/emitters/phaser.py` - Phaser 3 emitter (now used by CLI!)
+  - Objects get UUIDs for stable identity across save/load
+  - Coordinates normalized to 0.0-1.0 in IR, denormalized by emitters
+
+- **IR Emitter Wired to CLI** - `rosh build --target phaser` now uses IR path
+  - Flow: Parser → AST → IR Transformer → IR → Phaser Emitter → JavaScript
+  - While loops now supported in Phaser builds (was unsupported before)
+  - String interpolation `{var}` → JavaScript template literal `${this.var}`
+  - Simple AABB collision detection (no Phaser physics needed)
+
+- **Pygame IR Emitter** - `rosh build --target pygame` now uses IR path
+  - `src/rosh/emitters/pygame.py` - Complete Pygame emitter from IR
+  - Same IR produces both Phaser (JavaScript) and Pygame (Python)
+  - Player movement, collision detection, HUD, sound all working
+
+- **Three.js IR Emitter** - `rosh build --target threejs` now uses IR path
+  - `src/rosh/emitters/threejs.py` - Complete Three.js emitter from IR
+  - 3D scene with camera, lights, OrbitControls
+  - Objects as 3D meshes (cubes, spheres, planes)
+  - Player movement: Arrow keys (XZ) + . / (Y rise/fall)
+  - Camera movement: WASD + QE (up/down)
+  - Collision detection (distance-based)
+  - HUD display (canvas text sprites)
+  - Sound support (Three.js AudioListener)
+  - In-game REPL console (press ` to toggle)
+  - All three targets now use unified IR architecture
+
+- **Percentage-Based Coordinates** - Engine-agnostic by default
+  - `set x to 50` now means 50% (center), not 50 pixels
+  - Same Rosh code works on Phaser (800px), Three.js (16 units), Unity, etc.
+  - `set x to 400px` for explicit pixels when needed
+  - `set x to 50%` also works (explicit percentage)
+  - Both `400px` and `400 px` accepted (formatter normalizes to `400px`)
+
+- **Natural Syntax Preferred** - Documented design decision
+  - Prefer `set player color to green` over `set player.color to green`
+  - Both parse identically, but natural form is spoken-friendly
+  - AI-generated code should use natural form
+
+### Changed
+- Lexer now tokenizes `NUMBER_PX` (400px) and `NUMBER_PERCENT` (50%)
+- Parser creates Literal nodes with type 'pixel' or 'percentage'
+- IR transformer interprets bare numbers as percentages for coordinates
+- Updated example files to use percentage-based coordinates:
+  - `examples/games/simple-game.rosh` - uses bare numbers as percentages
+  - `examples/games/hero-game.rosh` - uses bare numbers as percentages
+  - `examples/tests/test-percentages.rosh` - demonstrates all syntax options
+
+### Tests
+- 283 tests passing (+52 new IR/emitter tests)
 
 ---
 

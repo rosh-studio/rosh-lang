@@ -1331,7 +1331,8 @@ class Parser:
 
         # Check if there's an expression to return
         token = self.current_token()
-        if token.type in (TokenType.IDENTIFIER, TokenType.NUMBER, TokenType.STRING,
+        if token.type in (TokenType.IDENTIFIER, TokenType.NUMBER, TokenType.NUMBER_PX,
+                         TokenType.NUMBER_PERCENT, TokenType.STRING,
                          TokenType.TRUE, TokenType.FALSE, TokenType.NULL, TokenType.MINUS):
             value = self.parse_expression()
         else:
@@ -1378,6 +1379,7 @@ class Parser:
         # Parse arguments (simple expressions)
         arguments = []
         while self.current_token().type in (TokenType.IDENTIFIER, TokenType.NUMBER,
+                                             TokenType.NUMBER_PX, TokenType.NUMBER_PERCENT,
                                              TokenType.STRING, TokenType.TRUE,
                                              TokenType.FALSE, TokenType.NULL, TokenType.MINUS):
             arg = self.parse_expression()
@@ -1540,7 +1542,7 @@ class Parser:
         self.expect(TokenType.RANDOM)
 
         # Check if there's a range (min to max)
-        if self.current_token().type == TokenType.NUMBER:
+        if self.current_token().type in (TokenType.NUMBER, TokenType.NUMBER_PX, TokenType.NUMBER_PERCENT):
             min_val = self.parse_primary()  # Parse min value
 
             if self.current_token().type == TokenType.TO:
@@ -1708,6 +1710,16 @@ class Parser:
         if token.type == TokenType.NUMBER:
             self.advance()
             return Literal(value=token.value, type_name='number', line=token.line)
+
+        elif token.type == TokenType.NUMBER_PX:
+            # Pixel value: 400px - store as number with 'pixel' type
+            self.advance()
+            return Literal(value=token.value, type_name='pixel', line=token.line)
+
+        elif token.type == TokenType.NUMBER_PERCENT:
+            # Percentage value: 50% - store as number with 'percentage' type
+            self.advance()
+            return Literal(value=token.value, type_name='percentage', line=token.line)
 
         elif token.type == TokenType.STRING:
             self.advance()

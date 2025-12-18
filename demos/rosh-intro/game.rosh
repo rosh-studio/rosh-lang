@@ -1,31 +1,65 @@
 # =============================================================================
-# Rosh Intro - Simple Logo Demo
+# Rosh Intro - Animated Loading Screen Demo
 # =============================================================================
 #
-# The "rosh" logo - works in Phaser, Pygame, AND Three.js!
-# "One language. Many worlds."
+# A simple demo showing the "Rosh" logo zooming from small to large.
+# Works in both Phaser and Pygame!
 #
-# BUILD FOR ALL TARGETS:
+# RUN IN PHASER:
 #   rosh build demos/rosh-intro/game.rosh --target phaser --output demos/rosh-intro/phaser/
-#   rosh build demos/rosh-intro/game.rosh --target pygame --output demos/rosh-intro/pygame/
-#   rosh build demos/rosh-intro/game.rosh --target threejs --output demos/rosh-intro/threejs/
+#   cd demos/rosh-intro/phaser && python3 -m http.server 8000
+#   open http://localhost:8000
+#
+# RUN IN PYGAME:
+#   python demos/rosh-intro/pygame/game.py
 #
 # =============================================================================
 
-# The logo
+# Main logo - starts small, zooms to large
 create object logo
     set text to "rosh"
-    set x to 400
-    set y to 300
-    set font_size to 72
+    set x to 50%
+    set y to 42%
+    set font_size to 8
     set color to "cyan"
 end
 
-# Tagline
+# Tagline - appears after logo zoom completes
 create object tagline
-    set text to "one language. many worlds."
-    set x to 400
-    set y to 380
-    set font_size to 18
+    set text to "happy coding"
+    set x to 50%
+    set y to 63%
+    set font_size to 1
     set color to "gray"
+    set visible to false
+end
+
+# State tracking
+create object state
+    set phase to 1
+    set logo_done to false
+    set tagline_done to false
+    set visible to false
+end
+
+# Animation loop - runs every frame
+when update then
+    # Phase 1: Zoom the logo
+    if state.phase is equal to 1 then
+        if logo.font_size is below 128 then
+            set logo.font_size to logo.font_size plus 3
+        else
+            set state.phase to 2
+            set tagline.visible to true
+        end
+    end
+
+    # Phase 2: Fade in tagline
+    if state.phase is equal to 2 then
+        if tagline.font_size is below 28 then
+            set tagline.font_size to tagline.font_size plus 1
+        else
+            set state.phase to 3
+        end
+    end
 end

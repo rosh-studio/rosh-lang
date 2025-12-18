@@ -861,7 +861,15 @@ def copy_sprite_assets(source_path: Path, output_dir: Path, sprite_assets: dict)
         Path('examples/games/assets'),
     ]
 
-    for obj_name, sprite_file in sprite_assets.items():
+    # Handle both dict (old transpilers) and set (new emitters)
+    if isinstance(sprite_assets, dict):
+        files_to_copy = sprite_assets.values()
+    else:
+        files_to_copy = sprite_assets
+
+    for sprite_file in files_to_copy:
+        if not sprite_file:
+            continue
         # Try each search path
         for search_path in search_paths:
             sprite_path = search_path / sprite_file
@@ -904,9 +912,10 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
     import shutil
     from .lexer import Lexer
     from .parser import Parser
-    from .transpilers.phaser import PhaserTranspiler
-    from .transpilers.pygame_transpiler import PygameTranspiler
-    from .transpilers.threejs import ThreeJSTranspiler
+    from .ir_transformer import transform_ast_to_ir
+    from .emitters.phaser import PhaserEmitter
+    from .emitters.pygame import PygameEmitter
+    from .emitters.threejs import ThreeJSEmitter
     from .errors import RoshError
 
     try:
@@ -939,17 +948,28 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
         parser = Parser(tokens)
         program = parser.parse()
 
-        # Transpile based on target
+        # Emit based on target (IR-based architecture)
         if target == 'phaser':
-            transpiler = PhaserTranspiler(meta=meta)
-            js_code = transpiler.transpile(program, enable_repl=enable_repl)
+            # Transform AST to IR, then emit Phaser code
+            ir = transform_ast_to_ir(
+                program,
+                canvas_width=meta.get('canvas', {}).get('width', 800),
+                canvas_height=meta.get('canvas', {}).get('height', 600)
+            )
+            emitter = PhaserEmitter(ir, meta=meta)
+            js_code = emitter.emit()
+
+            # TODO: Add REPL support to IR emitter
+            if enable_repl:
+                print(f"Warning: --repl not yet supported with IR emitter", file=sys.stderr)
+
             generate_phaser_output(js_code, output_dir)
 
-            # Copy assets if requested (v0.1.7)
-            if copy_assets and transpiler.sprite_assets:
-                copy_sprite_assets(path, Path(output_dir), transpiler.sprite_assets)
+            # Copy assets if requested
+            if copy_assets and emitter.sprite_assets:
+                copy_sprite_assets(path, Path(output_dir), emitter.sprite_assets)
 
-            print(f"✅ Transpilation successful!", file=sys.stderr)
+            print(f"✅ Build successful!", file=sys.stderr)
             print(f"📁 Output: {output_dir}", file=sys.stderr)
 
             # Show dev mode warning if REPL enabled
@@ -963,29 +983,47 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             print(f"   open http://localhost:8000", file=sys.stderr)
 
         elif target == 'pygame':
-            transpiler = PygameTranspiler(meta=meta)
-            py_code = transpiler.transpile(program)
+            # Transform AST to IR, then emit Pygame code
+            ir = transform_ast_to_ir(
+                program,
+                canvas_width=meta.get('canvas', {}).get('width', 800),
+                canvas_height=meta.get('canvas', {}).get('height', 600)
+            )
+            emitter = PygameEmitter(ir, meta=meta)
+            py_code = emitter.emit()
             generate_pygame_output(py_code, output_dir)
 
             # Copy assets if requested
-            if copy_assets and transpiler.sprite_assets:
-                copy_sprite_assets(path, Path(output_dir), transpiler.sprite_assets)
+            if copy_assets:
+                all_assets = set()
+                if emitter.sprite_assets:
+                    all_assets.update(emitter.sprite_assets)
+                if emitter.sound_assets:
+                    all_assets.update(emitter.sound_assets)
+                if all_assets:
+                    copy_sprite_assets(path, Path(output_dir), all_assets)
 
-            print(f"✅ Transpilation successful!", file=sys.stderr)
+            print(f"✅ Build successful!", file=sys.stderr)
             print(f"📁 Output: {output_dir}", file=sys.stderr)
             print(f"🎮 To run:", file=sys.stderr)
             print(f"   python3 {output_dir}/game.py", file=sys.stderr)
 
         elif target == 'threejs':
-            transpiler = ThreeJSTranspiler(meta=meta)
-            js_code = transpiler.transpile(program)
+            # Transform AST to IR, then emit Three.js code
+            ir = transform_ast_to_ir(
+                program,
+                canvas_width=meta.get('canvas', {}).get('width', 800),
+                canvas_height=meta.get('canvas', {}).get('height', 600)
+            )
+            emitter = ThreeJSEmitter(ir, meta=meta)
+            js_code = emitter.emit()
             generate_threejs_output(js_code, output_dir)
 
             # Copy assets if requested
-            if copy_assets and transpiler.sprite_assets:
-                copy_sprite_assets(path, Path(output_dir), transpiler.sprite_assets)
+            if copy_assets and emitter.sprite_assets:
+                copy_sprite_assets(path, Path(output_dir), emitter.sprite_assets)
 
-            print(f"✅ Transpilation successful!", file=sys.stderr)
+            print(f"✅ Build successful!", file=sys.stderr)
             print(f"📁 Output: {output_dir}", file=sys.stderr)
             print(f"🎮 To run:", file=sys.stderr)
             print(f"   cd {output_dir} && python3 -m http.server 8000", file=sys.stderr)
@@ -1023,7 +1061,7 @@ def generate_phaser_output(js_code: str, output_dir: str):
         f.write(js_code)
 
     # Copy HTML template
-    template_dir = Path(__file__).parent / "transpilers" / "templates"
+    template_dir = Path(__file__).parent / "emitters" / "templates"
     shutil.copy(template_dir / "phaser_index.html", output_path / "index.html")
 
     # Create assets directory
@@ -1077,7 +1115,7 @@ def generate_threejs_output(js_code: str, output_dir: str):
         f.write(js_code)
 
     # Copy HTML template
-    template_dir = Path(__file__).parent / "transpilers" / "templates"
+    template_dir = Path(__file__).parent / "emitters" / "templates"
     shutil.copy(template_dir / "threejs_index.html", output_path / "index.html")
 
     # Create assets directory

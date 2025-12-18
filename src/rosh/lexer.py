@@ -11,6 +11,8 @@ from .errors import RoshSyntaxError
 class TokenType(Enum):
     # Literals
     NUMBER = auto()
+    NUMBER_PX = auto()      # Pixel value: 400px (explicit pixels, not percentage)
+    NUMBER_PERCENT = auto() # Percentage: 50% (explicit percentage)
     STRING = auto()
     TRUE = auto()
     FALSE = auto()
@@ -229,7 +231,17 @@ class Lexer:
         return result
 
     def read_number(self) -> Token:
-        """Read a number literal (supports percentages like 50%)"""
+        """Read a number literal with optional suffix.
+
+        Supports:
+        - Bare numbers: 50 (interpreted as percentage for coordinates)
+        - Percentage: 50% (explicit percentage)
+        - Pixels: 400px or 400 px (explicit pixels)
+
+        Design Decision (2025-12-18):
+        Bare numbers for coordinates are percentages (0-100 scale).
+        Use 'px' suffix for explicit pixel values.
+        """
         start_line, start_col = self.line, self.column
         num_str = ''
         has_dot = False
@@ -242,14 +254,47 @@ class Lexer:
             num_str += self.current_char()
             self.advance()
 
-        # Check for percentage sign
-        if self.current_char() == '%':
-            num_str += '%'
-            self.advance()
-            # Return as identifier so it can be handled specially
-            return Token(TokenType.IDENTIFIER, num_str, start_line, start_col)
-
         value = float(num_str) if has_dot else int(num_str)
+
+        # Check for percentage sign: 50%
+        if self.current_char() == '%':
+            self.advance()
+            return Token(TokenType.NUMBER_PERCENT, value, start_line, start_col)
+
+        # Check for pixel suffix: 400px (no space)
+        if self.current_char() == 'p' and self.peek_char() == 'x':
+            self.advance()  # skip 'p'
+            self.advance()  # skip 'x'
+            return Token(TokenType.NUMBER_PX, value, start_line, start_col)
+
+        # Check for pixel suffix with space: 400 px
+        # Look ahead past whitespace
+        saved_pos = self.pos
+        saved_line = self.line
+        saved_col = self.column
+
+        # Skip any spaces
+        while self.current_char() == ' ':
+            self.advance()
+
+        if self.current_char() == 'p' and self.peek_char() == 'x':
+            # Check it's not part of a longer identifier
+            self.advance()  # skip 'p'
+            self.advance()  # skip 'x'
+            next_char = self.current_char()
+            if next_char is None or not (next_char.isalnum() or next_char == '_'):
+                return Token(TokenType.NUMBER_PX, value, start_line, start_col)
+            # It was part of a longer word, restore position
+            self.pos = saved_pos
+            self.line = saved_line
+            self.column = saved_col
+        else:
+            # Not 'px', restore position
+            self.pos = saved_pos
+            self.line = saved_line
+            self.column = saved_col
+
+        # Plain number (will be interpreted as percentage for coordinates)
         return Token(TokenType.NUMBER, value, start_line, start_col)
 
     def read_string(self) -> Token:

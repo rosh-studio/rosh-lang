@@ -24,15 +24,15 @@
 # =============================================================================
 
 create object goblin
-    set x to 100
-    set y to 200
+    set x to 12       # 12% from left edge
+    set y to 33       # 33% from top
 end
 
 create object chest
-    set x to 400
-    set y to 200
+    set x to 50       # 50% = center
+    set y to 33       # 33% from top
 end
 
 print "Game created!"
-print "Goblin at ({goblin.x}, {goblin.y})"
-print "Chest at ({chest.x}, {chest.y})"
+print "Goblin at 12%, 33%"
+print "Chest at 50%, 33%"

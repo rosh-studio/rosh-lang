@@ -13,12 +13,12 @@ class TestTranspilerCLI(unittest.TestCase):
     def test_build_command_basic(self):
         """Test 'rosh build' command creates output files"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create test Rosh file
+            # Create test Rosh file (coordinates are percentages now)
             rosh_file = Path(tmpdir) / "test.rosh"
             rosh_file.write_text("""
             create object goblin
-                set x to 100
-                set y to 200
+                set x to 50
+                set y to 50
             end
 
             print "Game created"
@@ -36,7 +36,7 @@ class TestTranspilerCLI(unittest.TestCase):
 
             # Verify success
             self.assertEqual(result.returncode, 0)
-            self.assertIn("✅ Transpilation successful!", result.stderr)
+            self.assertIn("✅ Build successful!", result.stderr)
 
             # Verify output files exist
             self.assertTrue((output_dir / "game.js").exists(), "game.js should exist")
@@ -47,12 +47,13 @@ class TestTranspilerCLI(unittest.TestCase):
     def test_build_command_with_content_verification(self):
         """Test build command generates correct JavaScript content"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create test Rosh file
+            # Create test Rosh file (coordinates are percentages now)
+            # 50% = 400px on 800 width, 50% = 300px on 600 height
             rosh_file = Path(tmpdir) / "test.rosh"
             rosh_file.write_text("""
             create object goblin
-                set x to 100
-                set y to 200
+                set x to 50
+                set y to 50
             end
             """)
 
@@ -68,21 +69,21 @@ class TestTranspilerCLI(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0)
 
-            # Verify game.js content
+            # Verify game.js content (50% = 400.0 x, 300.0 y on 800x600 canvas)
             js_content = (output_dir / "game.js").read_text()
-            self.assertIn("this.goblin = this.add.rectangle(100, 200", js_content)
+            self.assertIn("this.goblin = this.add.rectangle(400.0, 300.0", js_content)
             self.assertIn("class GameScene extends Phaser.Scene", js_content)
             self.assertIn("const game = new Phaser.Game(config)", js_content)
 
     def test_javascript_syntax_validation(self):
         """Test that generated JavaScript has valid syntax (using Node.js)"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create test Rosh file
+            # Create test Rosh file (coordinates are percentages now)
             rosh_file = Path(tmpdir) / "test.rosh"
             rosh_file.write_text("""
             create object goblin
-                set x to 100
-                set y to 200
+                set x to 50
+                set y to 50
             end
             """)
 
@@ -119,10 +120,10 @@ class TestTranspilerCLI(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("File not found", result.stderr)
 
-    def test_build_with_unsupported_feature(self):
-        """Test build command fails gracefully on unsupported features"""
+    def test_build_with_while_loop(self):
+        """Test build command handles while loops (now supported via IR emitter)"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create Rosh file with unsupported feature (while loop)
+            # Create Rosh file with while loop (now supported by IR emitter)
             rosh_file = Path(tmpdir) / "test.rosh"
             rosh_file.write_text("""
             while true then
@@ -130,15 +131,18 @@ class TestTranspilerCLI(unittest.TestCase):
             end
             """)
 
-            # Build should fail
+            output_dir = Path(tmpdir) / "dist"
+
+            # Build should succeed (IR emitter supports while loops)
             result = subprocess.run(
-                ["rosh", "build", str(rosh_file), "--target", "phaser"],
+                ["rosh", "build", str(rosh_file), "--target", "phaser",
+                 "--output", str(output_dir)],
                 capture_output=True,
                 text=True
             )
 
-            self.assertEqual(result.returncode, 1)
-            self.assertIn("does not support 'while loops'", result.stderr)
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("✅ Build successful!", result.stderr)
 
     def test_html_template_content(self):
         """Test that HTML template includes Phaser CDN"""

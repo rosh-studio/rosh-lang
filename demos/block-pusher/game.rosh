@@ -221,7 +221,8 @@ end
 when key_left then
     if state.level is above 0 then
         if state.level is below 3 then
-            if player.x is above 250 then
+            if win_text.visible is equal to false then
+                if player.x is above 250 then
                 # Check if player destination is blocked by wall
                 set state.can_move to 1
                 if player.x minus 50 is equal to wall1.x then
@@ -256,6 +257,7 @@ when key_left then
                     end
                 end
             end
+            end
         end
     end
 end
@@ -264,7 +266,8 @@ end
 when key_right then
     if state.level is above 0 then
         if state.level is below 3 then
-            if player.x is below 550 then
+            if win_text.visible is equal to false then
+                if player.x is below 550 then
                 # Check if player destination is blocked by wall
                 set state.can_move to 1
                 if player.x plus 50 is equal to wall1.x then
@@ -299,6 +302,7 @@ when key_right then
                     end
                 end
             end
+            end
         end
     end
 end
@@ -307,7 +311,8 @@ end
 when key_up then
     if state.level is above 0 then
         if state.level is below 3 then
-            if player.y is above 200 then
+            if win_text.visible is equal to false then
+                if player.y is above 200 then
                 # Check if player destination is blocked by wall
                 set state.can_move to 1
                 if player.y minus 50 is equal to wall1.y then
@@ -342,6 +347,7 @@ when key_up then
                     end
                 end
             end
+            end
         end
     end
 end
@@ -350,7 +356,8 @@ end
 when key_down then
     if state.level is above 0 then
         if state.level is below 3 then
-            if player.y is below 400 then
+            if win_text.visible is equal to false then
+                if player.y is below 400 then
                 # Check if player destination is blocked by wall
                 set state.can_move to 1
                 if player.y plus 50 is equal to wall1.y then
@@ -384,6 +391,7 @@ when key_down then
                         set state.moves to state.moves plus 1
                     end
                 end
+            end
             end
         end
     end

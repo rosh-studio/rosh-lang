@@ -29,22 +29,22 @@
 
 # Player character with inheritance
 create object hero from player
-    set x to 400
-    set y to 300
+    set x to 50       # 50% = center
+    set y to 50       # 50% = center
     set lives to 3
     set score to 0
 end
 
 # Enemy (no inheritance - uses defaults)
 create object enemy
-    set x to 100
-    set y to 100
+    set x to 12       # 12% from left
+    set y to 17       # 17% from top
 end
 
 # Immovable chest (fixed property)
 create object chest
-    set x to 700
-    set y to 300
+    set x to 88       # 88% = right side
+    set y to 50       # 50% = center
     set fixed to true
 end
 
