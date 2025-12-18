@@ -160,13 +160,16 @@ class IRTransformer:
             properties['y'] = IR_Value('percentage', 0.5)
 
         # Extract scene/level from properties (Roshonic "Dimensions, Not Modes")
+        # Note: 'level' alone is just a regular property (e.g., game state)
+        # Only treat 'level' as a coordinate if 'scene' is also present
         scene = None
         level = None
         if 'scene' in properties:
             scene = properties.pop('scene').value  # Extract and remove from properties
-        if 'level' in properties:
-            level_val = properties.pop('level').value
-            level = int(level_val) if level_val is not None else None
+            # Only extract level as coordinate if scene is set
+            if 'level' in properties:
+                level_val = properties.pop('level').value
+                level = int(level_val) if level_val is not None else None
 
         return IR_Object(
             uuid=str(uuid.uuid4()),
