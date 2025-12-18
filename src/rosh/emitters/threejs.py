@@ -1651,10 +1651,11 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("if (data.x !== undefined) obj.position.x = data.x;")
         self.write("if (data.y !== undefined) obj.position.y = data.y;")
         self.write("if (data.z !== undefined) obj.position.z = data.z;")
+        self.write("const fontSize = data.font_size || (obj.userData && obj.userData.font_size) || 48;")
         self.write("if (data._textColor !== undefined && obj._ctx) {")  # Text sprite
         self.indent()
         self.write("obj._color = data._textColor; obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);")
-        self.write("obj._ctx.font = 'bold 48px Arial'; obj._ctx.textAlign = 'center'; obj._ctx.textBaseline = 'middle';")
+        self.write("obj._ctx.font = 'bold ' + fontSize + 'px Arial'; obj._ctx.textAlign = 'center'; obj._ctx.textBaseline = 'middle';")
         self.write("obj._ctx.fillStyle = data._textColor; obj._ctx.fillText(obj._text, obj._canvas.width/2, obj._canvas.height/2);")
         self.write("obj.material.map.needsUpdate = true;")
         self.dedent()
