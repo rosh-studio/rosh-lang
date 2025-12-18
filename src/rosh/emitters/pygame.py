@@ -52,6 +52,11 @@ class PygameEmitter(BaseEmitter):
         self.keydown_events: Dict[str, List[list]] = {}  # key -> [handler_lines, ...]
         self.update_handlers: List[list] = []  # List of update event handler code
 
+        # Scene/level system
+        self.uses_scenes = False
+        self.scene_objects: Dict[str, list] = {}  # scene_name -> [object_names]
+        self.level_objects: Dict[int, list] = {}  # level_num -> [object_names]
+
         # Scan IR to detect features
         self._detect_features()
 
@@ -62,6 +67,18 @@ class PygameEmitter(BaseEmitter):
             if obj.parent_type == 'player' or obj.name == 'player':
                 self.player_objects.add(obj.name)
                 self.needs_keyboard = True
+
+            # Scene/level detection
+            if obj.scene is not None:
+                self.uses_scenes = True
+                if obj.scene not in self.scene_objects:
+                    self.scene_objects[obj.scene] = []
+                self.scene_objects[obj.scene].append(obj.name)
+            if obj.level is not None:
+                self.uses_scenes = True
+                if obj.level not in self.level_objects:
+                    self.level_objects[obj.level] = []
+                self.level_objects[obj.level].append(obj.name)
 
             if 'sprite' in obj.properties:
                 sprite_val = obj.properties['sprite']
@@ -184,6 +201,17 @@ class PygameEmitter(BaseEmitter):
         self.write("self.clock = pygame.time.Clock()")
         self.write("self.running = True")
         self.write("self.font = pygame.font.Font(None, 24)")
+
+        # Scene/level state
+        if self.uses_scenes:
+            initial_scene = self.ir.metadata.initial_scene
+            initial_level = self.ir.metadata.initial_level
+            if initial_scene:
+                self.write(f"self.current_scene = '{initial_scene}'")
+            else:
+                self.write("self.current_scene = None")
+            self.write(f"self.current_level = {initial_level}")
+
         self.write_blank()
 
         # Load assets
@@ -222,6 +250,12 @@ class PygameEmitter(BaseEmitter):
                     code = self.emit_action(action)
                     if code:
                         self._write_with_markers(code)
+
+        # Set initial scene/level visibility
+        if self.uses_scenes:
+            self.write_blank()
+            self.write_comment("Set initial scene/level visibility")
+            self.write("self.update_scene_visibility()")
 
         self.dedent()
         self.write_blank()
@@ -271,6 +305,12 @@ class PygameEmitter(BaseEmitter):
             sprite = obj.properties['sprite'].value
             key = self._asset_key(sprite)
             self.write(f"self.{obj.name}_sprite = '{key}'")
+
+        # Scene/level membership
+        if obj.scene is not None:
+            self.write(f"self.{obj.name}_scene = '{obj.scene}'")
+        if obj.level is not None:
+            self.write(f"self.{obj.name}_level = {obj.level}")
 
     def _emit_run(self):
         """Emit run method (main game loop)."""
@@ -447,7 +487,30 @@ class PygameEmitter(BaseEmitter):
 
     def _emit_helper_methods(self):
         """Emit any helper methods needed."""
-        pass  # Pygame doesn't need as many helpers
+        if self.uses_scenes:
+            self._emit_scene_visibility_method()
+
+    def _emit_scene_visibility_method(self):
+        """Emit update_scene_visibility helper method."""
+        self.write("def update_scene_visibility(self):")
+        self.indent()
+        self.write_comment("Roshonic \"Dimensions, Not Modes\" - scene/level as coordinates")
+
+        for obj in self.ir.objects:
+            if obj.scene is None and obj.level is None:
+                continue  # Always visible, skip
+
+            conditions = []
+            if obj.scene is not None:
+                conditions.append(f"self.current_scene == '{obj.scene}'")
+            if obj.level is not None:
+                conditions.append(f"self.current_level == {obj.level}")
+
+            condition = " and ".join(conditions)
+            self.write(f"self.{obj.name}_visible = ({condition})")
+
+        self.dedent()
+        self.write_blank()
 
     def _write_with_markers(self, code: str):
         """Write code that may contain relative indentation markers.
@@ -541,6 +604,16 @@ class PygameEmitter(BaseEmitter):
             args = params.get('args', [])
             arg_strs = [self.emit_expression(a) for a in args]
             return f"self.{func_name}({', '.join(arg_strs)})"
+        elif action_type == 'goto':
+            scene = params.get('scene')
+            level = params.get('level')
+            code_parts = []
+            if scene is not None:
+                code_parts.append(f"self.current_scene = '{scene}'")
+            if level is not None:
+                code_parts.append(f"self.current_level = {level}")
+            code_parts.append("self.update_scene_visibility()")
+            return "\n".join(code_parts)
 
         return f"pass  # TODO: {action_type}"
 

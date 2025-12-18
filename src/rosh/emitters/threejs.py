@@ -63,6 +63,11 @@ class ThreeJSEmitter(BaseEmitter):
         self.update_handlers: List[IR_Event] = []
         self.key_handlers: Dict[str, List] = {}  # key -> list of handlers
 
+        # Scene/level system
+        self.uses_scenes = False
+        self.scene_objects: Dict[str, list] = {}  # scene_name -> [object_names]
+        self.level_objects: Dict[int, list] = {}  # level_num -> [object_names]
+
         # Scan IR to detect features
         self._detect_features()
 
@@ -73,6 +78,18 @@ class ThreeJSEmitter(BaseEmitter):
             if obj.parent_type == 'player':
                 self.player_objects.add(obj.name)
                 self.needs_keyboard = True
+
+            # Scene/level detection
+            if obj.scene is not None:
+                self.uses_scenes = True
+                if obj.scene not in self.scene_objects:
+                    self.scene_objects[obj.scene] = []
+                self.scene_objects[obj.scene].append(obj.name)
+            if obj.level is not None:
+                self.uses_scenes = True
+                if obj.level not in self.level_objects:
+                    self.level_objects[obj.level] = []
+                self.level_objects[obj.level].append(obj.name)
 
             # Sprites
             if 'sprite' in obj.properties:
@@ -138,6 +155,8 @@ class ThreeJSEmitter(BaseEmitter):
         self._emit_header()
         self._emit_scene_setup()
         self._emit_objects()
+        if self.uses_scenes:
+            self._emit_scene_visibility_function()
         self._emit_functions()
         self._emit_event_handlers()
         self._emit_animation_loop()
@@ -200,6 +219,19 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("document.addEventListener('keydown', (e) => {")
         self.indent()
         self.write("if (consoleVisible) return;")
+
+        # Game keydown events
+        if self.keydown_events:
+            self.write_comment("Game key events")
+            for key, handler_lines in self.keydown_events.items():
+                js_key = self._js_key(key)
+                self.write(f"if ({js_key}) {{")
+                self.indent()
+                for line in handler_lines:
+                    self.write(line)
+                self.dedent()
+                self.write("}")
+
         self.write_comment("WASD + QE for camera")
         self.write("if (e.key === 'w' || e.key === 'W') moveState.forward = true;")
         self.write("if (e.key === 's' || e.key === 'S') moveState.backward = true;")
@@ -252,6 +284,17 @@ class ThreeJSEmitter(BaseEmitter):
 
         # Console state
         self.write("let consoleVisible = false;")
+
+        # Scene/level state
+        if self.uses_scenes:
+            initial_scene = self.ir.metadata.initial_scene
+            initial_level = self.ir.metadata.initial_level
+            if initial_scene:
+                self.write(f"let currentScene = '{initial_scene}';")
+            else:
+                self.write("let currentScene = null;")
+            self.write(f"let currentLevel = {initial_level};")
+
         self.write_blank()
 
         # Texture loader if needed
@@ -373,10 +416,44 @@ class ThreeJSEmitter(BaseEmitter):
                 else:
                     self.write(f"{name}.userData.{prop_name} = {val};")
 
+        # Scene/level membership
+        if obj.scene is not None:
+            self.write(f"{name}.userData._scene = '{obj.scene}';")
+        if obj.level is not None:
+            self.write(f"{name}.userData._level = {obj.level};")
+
         # UUID for REPL
         self.write(f"{name}.userData._rosh_uuid = crypto.randomUUID();")
         self.write_blank()
         self.color_index += 1
+
+    def _emit_scene_visibility_function(self):
+        """Emit updateSceneVisibility helper function."""
+        self.write_comment("Scene/Level Visibility - Roshonic \"Dimensions, Not Modes\"")
+        self.write("function updateSceneVisibility() {")
+        self.indent()
+
+        for obj in self.ir.objects:
+            if obj.scene is None and obj.level is None:
+                continue  # Always visible, skip
+
+            conditions = []
+            if obj.scene is not None:
+                conditions.append(f"currentScene === '{obj.scene}'")
+            if obj.level is not None:
+                conditions.append(f"currentLevel === {obj.level}")
+
+            condition = " && ".join(conditions)
+            self.write(f"if ({obj.name}) {obj.name}.visible = ({condition});")
+
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+        # Call initially
+        self.write_comment("Set initial scene/level visibility")
+        self.write("updateSceneVisibility();")
+        self.write_blank()
 
     def _emit_text_sprite(self, name: str, text: str, color: int, x: float, y: float, z: float):
         """Emit a text sprite using canvas texture."""
@@ -781,6 +858,16 @@ class ThreeJSEmitter(BaseEmitter):
             asset = params.get('asset', '')
             safe_name = asset.replace('.', '_').replace('-', '_').replace('/', '_')
             return f"if (sounds['{safe_name}']) {{ sounds['{safe_name}'].stop(); sounds['{safe_name}'].play(); }}"
+        elif action_type == 'goto':
+            scene = params.get('scene')
+            level = params.get('level')
+            code_parts = []
+            if scene is not None:
+                code_parts.append(f"currentScene = '{scene}';")
+            if level is not None:
+                code_parts.append(f"currentLevel = {level};")
+            code_parts.append("updateSceneVisibility();")
+            return " ".join(code_parts)
 
         return f"// TODO: {action_type}"
 
@@ -930,3 +1017,25 @@ class ThreeJSEmitter(BaseEmitter):
                     return self.CSS_COLORS[color_name]
         # Default color
         return self.DEFAULT_COLORS[self.color_index % len(self.DEFAULT_COLORS)]
+
+    def _js_key(self, key: str) -> str:
+        """Convert Rosh key name to JavaScript key comparison."""
+        key_map = {
+            'space': "e.key === ' ' || e.code === 'Space'",
+            'enter': "e.key === 'Enter'",
+            'escape': "e.key === 'Escape'",
+            'left': "e.key === 'ArrowLeft'",
+            'right': "e.key === 'ArrowRight'",
+            'up': "e.key === 'ArrowUp'",
+            'down': "e.key === 'ArrowDown'",
+        }
+        # Check special keys
+        if key.lower() in key_map:
+            return key_map[key.lower()]
+        # Number keys
+        if key.isdigit():
+            return f"e.key === '{key}'"
+        # Letter keys
+        if len(key) == 1:
+            return f"e.key === '{key.lower()}' || e.key === '{key.upper()}'"
+        return f"e.key === '{key}'"
