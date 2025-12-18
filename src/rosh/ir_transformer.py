@@ -241,12 +241,9 @@ class IRTransformer:
 
         Design Decision (2025-12-18):
         For ALL coordinate properties (x, y, width, height):
-        - Bare numbers are PIXELS: `set x to 400` = 400 pixels
+        - Bare numbers are percentages (0-100): `set x to 50` = 50%
         - Explicit percentages: `set x to 50%` = 50% of canvas
-
-        Recommended usage:
-        - Use `%` for UI elements (centered text, responsive positioning)
-        - Use bare numbers for game logic (grid positions, fixed layouts)
+        - Use `px` suffix (`400px`) for absolute pixels
         """
         value = node.value
         type_name = node.type_name
@@ -254,12 +251,8 @@ class IRTransformer:
         # Handle coordinate properties
         if context_prop in self.coordinate_props:
             if type_name == 'number':
-                # ALL bare numbers are treated as pixels for legacy compatibility
-                # This ensures demos like space-shooter work correctly
-                if context_prop in ('x', 'width'):
-                    normalized = value / self.canvas_width
-                else:  # y, height
-                    normalized = value / self.canvas_height
+                # Design decision (2025-12-18): bare numbers = percentages (0-100 scale)
+                normalized = value / 100.0
                 return IR_Value('percentage', normalized)
 
             elif type_name == 'pixel':
@@ -654,18 +647,18 @@ class IRTransformer:
             trigger = 'update'
         elif event_name == 'space_pressed':
             # Space bar pressed
-            trigger = 'keydown:SPACE'
+            trigger = 'keydown:space'
         elif event_name.startswith('while_key_'):
             # Continuous key polling (while_key_left, while_key_right, etc.)
-            key = event_name.replace('while_key_', '').upper()
+            key = event_name.replace('while_key_', '')
             trigger = f"continuous:{key}"
         elif event_name.startswith('key_'):
             # Single key press (key_r, key_space, etc.)
-            key = event_name.replace('key_', '').upper()
+            key = event_name.replace('key_', '')
             trigger = f"keydown:{key}"
         elif event_name.startswith('keydown') or event_name.startswith('keyup'):
             # keydown, keyup with parameter
-            key = stmt.parameters[0].upper() if stmt.parameters else 'ANY'
+            key = stmt.parameters[0].lower() if stmt.parameters else 'any'
             trigger = f"{event_name}:{key}"
         elif event_name == 'collision':
             # Collision between two objects

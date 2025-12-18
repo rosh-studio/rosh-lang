@@ -1637,6 +1637,8 @@ If they're asking about creating something in a game, respond with Rosh code exa
                 f"For shared code, use git submodules or local package directories."
             )
 
+        rosh_install_dir = Path(__file__).parent.parent.parent
+
         # If it's an absolute path or has path separators, treat as file path
         if os.path.isabs(module_path) or '/' in module_path or '\\' in module_path:
             # Resolve relative to current directory
@@ -1655,10 +1657,20 @@ If they're asking about creating something in a game, respond with Rosh code exa
             if candidate.exists():
                 return str(candidate.resolve())
 
-        # Otherwise, look in package directories
-        # Find the rosh installation directory (where this file is)
-        rosh_install_dir = Path(__file__).parent.parent.parent
+            # Also try relative to the Rosh installation directory (handles 'stdlib/...').
+            candidate = rosh_install_dir / module_path
+            if candidate.exists():
+                return str(candidate.resolve())
+            if not module_path.endswith('.rosh'):
+                candidate = rosh_install_dir / f"{module_path}.rosh"
+                if candidate.exists():
+                    return str(candidate.resolve())
+            if not module_path.endswith('.toml'):
+                candidate = rosh_install_dir / f"{module_path}.toml"
+                if candidate.exists():
+                    return str(candidate.resolve())
 
+        # Otherwise, look in package directories
         package_dirs = [
             Path.home() / '.rosh' / 'packages',  # User packages
             Path.cwd(),  # Current directory
