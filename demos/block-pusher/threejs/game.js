@@ -265,8 +265,6 @@ gridHelper.position.y = -1;
 scene.add(gridHelper);
 
 let consoleVisible = false;
-let currentScene = null;
-let currentLevel = 1;
 
 // Texture loader
 const textureLoader = new THREE.TextureLoader();
@@ -508,19 +506,11 @@ const state = new THREE.Mesh(stateGeometry, stateMaterial);
 state.position.set(-8.00, 6.00, 0.00);
 state.name = 'state';
 scene.add(state);
+state.userData.level = 0;
 state.userData.moves = 0;
 state.userData.can_move = 1;
-state.userData._level = 0;
 state.userData._rosh_uuid = crypto.randomUUID();
 
-
-// Scene/Level Visibility - Roshonic "Dimensions, Not Modes"
-function updateSceneVisibility() {
-    if (state) state.visible = (currentLevel === 0);
-}
-
-// Set initial scene/level visibility
-updateSceneVisibility();
 
 // User Functions
 function start_level_1() {
@@ -676,7 +666,7 @@ function execCommand(cmd) {
     const parts = cmd.trim().toLowerCase().split(/\s+/);
     try {
         if (parts[0] === 'help') {
-            log('Commands: list, get <obj>, set <obj> <prop> <val>, inspect <obj>, camera reset', 'cyan');
+            log('Commands: list, get, set, inspect, save, load, camera reset', 'cyan');
         }
         else if (parts[0] === 'list') {
             log('Objects:', 'cyan');
@@ -711,6 +701,33 @@ function execCommand(cmd) {
         }
         else if (parts[0] === 'camera' && parts[1] === 'reset') {
             camera.position.set(0, 5, 50); controls.target.set(0, 0, 0); log('Camera reset', 'ok');
+        }
+        else if (parts[0] === 'save') {
+            const slot = parts[1] || 'default';
+            const saveData = {};
+            scene.traverse(o => {
+                if (o.name && !o.name.startsWith('_')) {
+                    saveData[o.name] = { x: o.position.x, y: o.position.y, z: o.position.z, ...o.userData };
+                }
+            });
+            localStorage.setItem('rosh_save_' + slot, JSON.stringify(saveData));
+            log('Game saved to slot: ' + slot, 'ok');
+        }
+        else if (parts[0] === 'load') {
+            const slot = parts[1] || 'default';
+            const json = localStorage.getItem('rosh_save_' + slot);
+            if (!json) { log('No save found in slot: ' + slot, 'err'); return; }
+            const saveData = JSON.parse(json);
+            for (const [name, data] of Object.entries(saveData)) {
+                const obj = scene.getObjectByName(name);
+                if (obj) {
+                    if (data.x !== undefined) obj.position.x = data.x;
+                    if (data.y !== undefined) obj.position.y = data.y;
+                    if (data.z !== undefined) obj.position.z = data.z;
+                    Object.assign(obj.userData, data);
+                }
+            }
+            log('Game loaded from slot: ' + slot, 'ok');
         }
         else if (parts[0] === 'clear') { output.innerHTML = ''; }
         else if (cmd.trim()) log('Unknown: ' + parts[0], 'err');

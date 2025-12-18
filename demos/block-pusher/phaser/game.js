@@ -5,8 +5,6 @@ class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
         this.eventHandlers = {};
-        this.currentScene = null;
-        this.currentLevel = 1;
     }
 
     preload() {
@@ -68,6 +66,7 @@ class GameScene extends Phaser.Scene {
         this.next_level_text.visible = false;
 
         this.state = this.add.rectangle(0.0, 0.0, 1.0, 1.0, 0xffff00);
+        this.state.level = 0;
         this.state.moves = 0;
         this.state.can_move = 1;
         this.state.visible = false;
@@ -84,9 +83,6 @@ class GameScene extends Phaser.Scene {
         this.input.keyboard.on('keydown-DOWN', () => { this.check_win(); this.update_display(); });
         this.input.keyboard.on('keydown-R', () => { this.restart_level(); });
 
-
-        // Set initial scene/level visibility
-        this.updateSceneVisibility();
     }
 
     update() {
@@ -106,11 +102,6 @@ class GameScene extends Phaser.Scene {
                 handler.call(this, ...args);
             }
         }
-    }
-
-    updateSceneVisibility() {
-        // Roshonic "Dimensions, Not Modes" - scene/level as coordinates
-        if (this.state) this.state.visible = (this.currentLevel === 0);
     }
 
     start_level_1() {
