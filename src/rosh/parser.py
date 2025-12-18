@@ -696,11 +696,13 @@ class Parser:
         return Dump(line=line)
 
     def parse_save(self):
-        """Parse: save [game [slot]] | save [filepath]
+        """Parse: save [game [slot]] | save [as toon|json] [filepath]
 
         save game                  - Save to default slot (transpiler)
         save game "adventure1"     - Save to named slot (transpiler)
-        save "state.json"          - Save to file (interpreter)
+        save "state.json"          - Save to file as JSON (interpreter)
+        save as toon               - Save to default file as TOON (interpreter)
+        save as json "state.json"  - Save to file as JSON (interpreter)
         """
         from .ast_nodes import SaveGame
         line = self.current_token().line
@@ -717,12 +719,24 @@ class Parser:
                 self.advance()
             return SaveGame(slot=slot, line=line)
 
+        # Check for "save as toon|json" syntax
+        format_type = None
+        if self.current_token().type == TokenType.AS:
+            self.advance()  # consume 'as'
+            if self.current_token().type == TokenType.IDENTIFIER:
+                format_type = self.current_token().value.lower()
+                if format_type not in ('toon', 'json'):
+                    raise RoshSyntaxError(f"Unknown format: {format_type}. Use 'toon' or 'json'", line)
+                self.advance()
+            else:
+                raise RoshSyntaxError("Expected format type after 'as'", line)
+
         # Original file-based save
         filepath_expr = None
         if self.current_token().type in (TokenType.STRING, TokenType.IDENTIFIER):
             filepath_expr = self.parse_expression()
 
-        return Save(filepath=filepath_expr, line=line)
+        return Save(filepath=filepath_expr, format=format_type, line=line)
 
     def parse_load(self):
         """Parse: load [game [slot]] | load [filepath]

@@ -985,13 +985,18 @@ class Interpreter:
         print(json_output, file=self.output_stream)
 
     def eval_save(self, node: Save) -> None:
-        """Execute: save [filepath] - saves state to file (default: rosh-state.json)
+        """Execute: save [as toon|json] [filepath] - saves state to file
 
         Supports multiple formats:
-        - .json: JSON format (default, human-readable)
-        - .toon: TOON format (Token-Oriented Object Notation, LLM-optimized)
+        - json: JSON format (default, human-readable)
+        - toon: TOON format (Token-Oriented Object Notation, LLM-optimized)
+
+        Format can be specified with 'as toon' or 'as json', or inferred from extension.
         """
         import json
+
+        # Determine format (explicit > extension > default)
+        format_type = node.format  # May be 'toon', 'json', or None
 
         # Determine filepath
         if node.filepath:
@@ -999,16 +1004,26 @@ class Interpreter:
             filepath = rosh_to_python(filepath_value)
             if not isinstance(filepath, str):
                 raise RoshTypeError(f"save requires a string filepath, got {type(filepath).__name__}")
+            # Infer format from extension if not explicitly specified
+            if format_type is None:
+                if filepath.endswith('.toon'):
+                    format_type = 'toon'
+                else:
+                    format_type = 'json'
         else:
-            # Default filename
-            filepath = "rosh-state.json"
+            # Default filename based on format
+            if format_type == 'toon':
+                filepath = "rosh-state.toon"
+            else:
+                filepath = "rosh-state.json"
+                format_type = 'json'
 
         # Get state
         state = self.get_state()
 
-        # Determine format based on file extension
+        # Save in appropriate format
         try:
-            if filepath.endswith('.toon'):
+            if format_type == 'toon':
                 # Save as TOON format
                 from .toon_encoder import save_as_toon
                 save_as_toon(filepath, state)

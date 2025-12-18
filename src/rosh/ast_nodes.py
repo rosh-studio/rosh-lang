@@ -199,8 +199,9 @@ class Dump(ASTNode):
 
 @dataclass
 class Save(ASTNode):
-    """save [filepath] - saves state to file (default: rosh-state.json)"""
+    """save [as toon|json] [filepath] - saves state to file (default: rosh-state.json)"""
     filepath: Optional[ASTNode] = None  # expression that evaluates to a string path
+    format: Optional[str] = None  # 'toon' or 'json' (default: json)
     line: int = 0
 
 
