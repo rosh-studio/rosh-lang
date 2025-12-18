@@ -682,9 +682,54 @@ print stack
 print
 
 # ========================================
-# 28. ADVANCED FEATURES (Reference)
+# 28. SCENES AND LEVELS (Transpiler)
 # ========================================
-print "=== 28. Advanced Features ==="
+print "=== 28. Scenes and Levels ==="
+
+# Roshonic "Dimensions, Not Modes" - treat scenes/levels as coordinates
+# Objects can belong to scenes (named) and levels (numbered)
+# Objects without scene/level are always visible (HUD, backgrounds)
+
+print "Scene/Level Syntax (for transpiled games):"
+print "  set scene to \"title\"    # Object only visible in title scene"
+print "  set level to 1          # Object only visible in level 1"
+print "  goto scene game         # Navigate to game scene"
+print "  goto level 2            # Navigate to level 2"
+print "  goto scene game level 1 # Navigate to both"
+print
+
+print "Example game structure:"
+print "  # Title screen (scene=\"title\")"
+print "  create object title_text"
+print "      set scene to \"title\""
+print "      set text to \"My Game\""
+print "  end"
+print
+print "  # Game objects (scene=\"game\", level=1)"
+print "  create object player"
+print "      set scene to \"game\""
+print "      set level to 1"
+print "  end"
+print
+print "  # HUD (no scene/level = always visible)"
+print "  create object score_display"
+print "      set text to \"Score: 0\""
+print "  end"
+print
+print "  # Navigation"
+print "  when space_pressed then"
+print "      goto scene game level 1"
+print "  end"
+print
+
+print "Note: 'level' alone is a regular property."
+print "Only 'level' with 'scene' is treated as a coordinate."
+print
+
+# ========================================
+# 29. ADVANCED FEATURES (Reference)
+# ========================================
+print "=== 29. Advanced Features ==="
 
 print "TOML Support:"
 print "  import \"config.toml\"   # Load as Rosh object"
@@ -713,6 +758,7 @@ print "Control: if/else, while, for loops, break/continue"
 print "Functions: define function name params ... end"
 print "Lists: [1,2,3], append, remove, slicing"
 print "Events: when event then ... end; trigger event"
+print "Scenes: set scene to \"title\"; goto scene game level 1"
 print "Stack: get, stack, dup, swap, drop, math ops"
 print "Strings: concatenation, contains, interpolation"
 print "Math: abs, min, max, round, floor, ceil, random"

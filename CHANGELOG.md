@@ -16,6 +16,37 @@
 
 ---
 
+## [2025-12-18] - Scene/Level System ("Dimensions, Not Modes")
+
+### Added
+- **Scene/Level Coordinates** - Roshonic "Dimensions, Not Modes" pattern
+  - Objects can belong to scenes (named) and levels (numbered)
+  - `set scene to "title"` - Object only visible in title scene
+  - `set level to 1` - Object only visible in level 1
+  - Objects without scene/level are always visible (HUD, backgrounds)
+  - Syntax: `goto scene <name>`, `goto level <n>`, `goto scene <name> level <n>`
+
+- **Scene/Level in All Emitters** - Same code works everywhere
+  - Phaser: `this.currentScene`, `this.currentLevel`, `updateSceneVisibility()`
+  - Pygame: `self.current_scene`, `self.current_level`, `update_scene_visibility()`
+  - Three.js: `currentScene`, `currentLevel`, `updateSceneVisibility()`
+
+- **GotoScene AST Node** - New AST node for scene navigation
+  - Parser handles: `goto scene X`, `goto level Y`, `goto scene X level Y`
+  - IR transformer creates goto action with scene/level params
+
+### Changed
+- **Level Property Semantics** - `level` alone is a regular property
+  - Only treat `level` as coordinate when `scene` is also present
+  - Allows games to use `level` for game state (e.g., space-shooter)
+  - Roshonic: "Computers Do The Work" - guess intent from context
+
+### Documentation
+- Updated ROSHONIC.md with "Dimensions, Not Modes" principle
+- Added scene/level spec to IDEAS.md
+
+---
+
 ## [2025-12-18] - Pygame Emitter Polish & Demo Fixes
 
 ### Added
