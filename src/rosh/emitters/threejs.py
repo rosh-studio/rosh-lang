@@ -409,8 +409,14 @@ class ThreeJSEmitter(BaseEmitter):
             self.write(f"{name}.name = '{name}';")
             self.write(f"scene.add({name});")
 
+        # Apply initial visible property if set to false
+        if 'visible' in obj.properties:
+            vis_val = self.get_value(obj.properties['visible'])
+            if vis_val is False or vis_val == 'false':
+                self.write(f"{name}.visible = false;")
+
         # Custom properties in userData
-        known = {'x', 'y', 'z', 'width', 'height', 'depth', 'color', 'shape', 'radius', 'text', 'sprite', 'visible'}
+        known = {'x', 'y', 'z', 'width', 'height', 'depth', 'color', 'shape', 'radius', 'text', 'sprite', 'visible', 'saveable', 'type'}
         for prop_name, prop_value in obj.properties.items():
             if prop_name not in known:
                 val = self.get_value(prop_value)
