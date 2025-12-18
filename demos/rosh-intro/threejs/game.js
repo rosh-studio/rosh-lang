@@ -284,7 +284,8 @@ function execCommand(cmd) {
             scene.traverse(o => {
                 if (o.name && !o.name.startsWith('_')) {
                     const data = { x: o.position.x, y: o.position.y, z: o.position.z, ...o.userData };
-                    if (o.material && o.material.color) data._color = o.material.color.getHex();
+                    if (o._color) data._textColor = o._color;
+                    else if (o.material && o.material.color) data._color = o.material.color.getHex();
                     if (o.scale) { data._sx = o.scale.x; data._sy = o.scale.y; data._sz = o.scale.z; }
                     if (o.visible !== undefined) data._visible = o.visible;
                     saveData[o.name] = data;
@@ -304,7 +305,12 @@ function execCommand(cmd) {
                     if (data.x !== undefined) obj.position.x = data.x;
                     if (data.y !== undefined) obj.position.y = data.y;
                     if (data.z !== undefined) obj.position.z = data.z;
-                    if (data._color !== undefined && obj.material) obj.material.color.setHex(data._color);
+                    if (data._textColor !== undefined && obj._ctx) {
+                        obj._color = data._textColor; obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);
+                        obj._ctx.font = 'bold 48px Arial'; obj._ctx.textAlign = 'center'; obj._ctx.textBaseline = 'middle';
+                        obj._ctx.fillStyle = data._textColor; obj._ctx.fillText(obj._text, obj._canvas.width/2, obj._canvas.height/2);
+                        obj.material.map.needsUpdate = true;
+                    } else if (data._color !== undefined && obj.material && obj.material.color) obj.material.color.setHex(data._color);
                     if (data._sx !== undefined && obj.scale) { obj.scale.x = data._sx; obj.scale.y = data._sy; obj.scale.z = data._sz; }
                     if (data._visible !== undefined) obj.visible = data._visible;
                     Object.assign(obj.userData, data);
