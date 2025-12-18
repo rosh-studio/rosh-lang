@@ -16,6 +16,31 @@
 
 ---
 
+## [2025-12-18] - Invisible State Objects & Save/Load
+
+### Added
+- **Save/Load Commands** - Persistence in REPL and console
+  - Interpreter: `save`, `load`, `save as toon`, `save as json`
+  - Three.js console: `save [slot]`, `load [slot]` using localStorage
+  - Text sprite colors properly saved and restored
+
+- **Console Improvements** (Three.js in-game REPL)
+  - Command history with up/down arrows
+  - `to` keyword optional in set command (`set logo color to yellow`)
+  - Text color changes now work (`set logo color red`)
+
+### Changed
+- **Implicit `meta` Object** (Planned)
+  - Global game state via `meta.property` syntax
+  - Never rendered, always inspectable
+  - No need to create fake state objects
+
+### Fixed
+- Cycle detection in `RoshObject.to_json()` prevents recursion errors
+- Initial `visible: false` now applied at object creation in Three.js
+
+---
+
 ## [2025-12-18] - Scene/Level System ("Dimensions, Not Modes")
 
 ### Added

@@ -596,8 +596,14 @@ class PhaserEmitter(BaseEmitter):
             color = self._get_color(obj)
             self.write(f"this.{obj.name} = this.add.rectangle({px}, {py}, {pw}, {ph}, {self.format_color(color)});")
 
+        # Apply initial visible property if set to false
+        if 'visible' in obj.properties:
+            vis_val = self.get_value(obj.properties['visible'])
+            if vis_val is False or vis_val == 'false':
+                self.write(f"this.{obj.name}.visible = false;")
+
         # Set additional properties
-        skip_props = {'x', 'y', 'width', 'height', 'color', 'sprite', 'text', 'font_size'}
+        skip_props = {'x', 'y', 'width', 'height', 'color', 'sprite', 'text', 'font_size', 'visible', 'target', 'saveable', 'type'}
         for prop_name, prop_value in obj.properties.items():
             if prop_name not in skip_props:
                 val = self.get_value(prop_value)
