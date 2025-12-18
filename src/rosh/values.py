@@ -65,8 +65,19 @@ class RoshObject:
 
         return False
 
-    def to_json(self) -> Dict[str, Any]:
-        """Convert to JSON-serializable dict (flattens stacks, includes inherited)"""
+    def to_json(self, _seen: set = None) -> Dict[str, Any]:
+        """Convert to JSON-serializable dict (flattens stacks, includes inherited)
+
+        Args:
+            _seen: Internal set for cycle detection (don't pass this manually)
+        """
+        # Cycle detection
+        if _seen is None:
+            _seen = set()
+        if id(self) in _seen:
+            return {"_ref": self.uuid, "_circular": True}
+        _seen.add(id(self))
+
         result = {
             "_uuid": self.uuid,  # Include UUID for identity
             "_name": self.name,  # Include object name
@@ -79,9 +90,9 @@ class RoshObject:
         # Get all properties (own + inherited)
         # Start with parents (so own properties override)
         for parent in self.parents:
-            parent_json = parent.to_json()
+            parent_json = parent.to_json(_seen)
             # Don't inherit metadata fields
-            for key in ["_uuid", "_name", "_id"]:
+            for key in ["_uuid", "_name", "_id", "_ref", "_circular"]:
                 parent_json.pop(key, None)
             result.update(parent_json)
 
@@ -91,7 +102,7 @@ class RoshObject:
                 value = stack[-1]
                 # Recursively convert RoshObjects
                 if isinstance(value, RoshObject):
-                    result[key] = value.to_json()
+                    result[key] = value.to_json(_seen)
                 else:
                     result[key] = value
 
