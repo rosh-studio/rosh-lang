@@ -1119,6 +1119,10 @@ class Interpreter:
                 deserialized = self._deserialize_value(value)
                 self.data_stack.append(deserialized)
 
+        # Success message
+        if hasattr(self, 'color_out') and self.color_out:
+            self.color_out.success(f"State loaded from {filepath}")
+
     def eval_prompt(self, node: Prompt) -> None:
         """Execute: prompt [exec] <message> [using <vars>] [into <target>]"""
         # Evaluate the message expression
