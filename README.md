@@ -4,8 +4,11 @@
 
 > 🤖 **Rosh** - Programming that sounds like talking to a person!
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT (planned)](https://img.shields.io/badge/license-MIT--planned-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+
+> **Availability:** Rosh is currently a closed-source, invite-only project while we stabilize the core language and tooling.  
+> We intend to release it publicly under the MIT license once the v1 toolchain is production-ready.
 
 ## Overview
 
@@ -19,6 +22,9 @@ Rosh is designed to be:
 - **MUD-focused**: Built-in primitives for interactive worlds & storytelling
 
 ## Installation
+
+> ⚠️ **Private Preview**  
+> Until the open-source release, only collaborators with repository access can install Rosh from source.
 
 ```bash
 # Install uv (modern Python package manager)

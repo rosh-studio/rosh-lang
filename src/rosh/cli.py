@@ -315,6 +315,50 @@ def _fuzzy_match_object(interpreter, obj_name: str) -> str:
     return matches[0] if matches else None
 
 
+COMMAND_USAGE_HINTS = {
+    'create': {
+        'message': "Tell me what to create.",
+        'examples': [
+            "create object <name> ... end",
+            "create <name> to <value>",
+            "create number <name> as <value>",
+            "create string <name> as <value>",
+            "create <template> <name>  # clone template with custom name",
+            "create <template>         # clone template with auto name",
+        ],
+    },
+    'clone': {
+        'message': "Tell me what to clone.",
+        'examples': [
+            "clone <source> as <target>",
+            "clone <source>  # auto-named copy",
+        ],
+    },
+    'delete': {
+        'message': "Tell me what to delete.",
+        'examples': [
+            "delete <object name>",
+            "delete <property> from <object>",
+        ],
+    },
+}
+
+
+def _show_command_usage(out, command: str) -> bool:
+    """Display friendly guidance when a command is missing its arguments."""
+    info = COMMAND_USAGE_HINTS.get(command)
+    if not info:
+        return False
+
+    out.warning(info.get('message', f"{command.title()} needs details."))
+    examples = info.get('examples', [])
+    if examples:
+        out.print("Try one of these:", style="bold cyan")
+        for example in examples:
+            out.print(f"  {example}", style="green")
+    return True
+
+
 def _get_command(interpreter, out, identifier: str, prop_name: str = None):
     """Unified get command - get object or property, push to stack, display.
 
@@ -695,6 +739,10 @@ def run_repl(interpreter: Interpreter = None):
             # "If it works somewhere, it should work everywhere"
             stripped = line.strip().lower()
             parts = line.strip().split()
+
+            # Provide friendlier guidance for commands missing arguments
+            if len(parts) == 1 and _show_command_usage(out, parts[0].lower()):
+                continue
 
             # list / ls / objects (no args) - show all objects
             if stripped in ('list', 'ls', 'objects', 'list objects'):
