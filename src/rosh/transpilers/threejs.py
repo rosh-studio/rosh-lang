@@ -72,8 +72,8 @@ class ThreeJSTranspiler(BaseTranspiler):
     CANVAS_WIDTH = 800
     CANVAS_HEIGHT = 600
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, meta: Dict[str, Any] = None):
+        super().__init__(meta)
         self.object_counter = 0
         self.object_properties: Dict[str, Dict[str, Any]] = {}
         self.event_handlers: Dict[str, list] = {}
@@ -81,6 +81,11 @@ class ThreeJSTranspiler(BaseTranspiler):
         self.needs_keyboard_input = False
         self.sprite_assets: Dict[str, str] = {}  # object_name -> texture filename
         self.text_objects: List[str] = []  # Objects with text (need special handling)
+
+        # Apply meta settings for canvas dimensions
+        canvas_meta = self.meta.get('canvas', {})
+        self.canvas_width = canvas_meta.get('width', self.CANVAS_WIDTH)
+        self.canvas_height = canvas_meta.get('height', self.CANVAS_HEIGHT)
 
     def transpile(self, program: Program) -> str:
         """Convert Rosh Program AST to Three.js JavaScript
@@ -204,7 +209,7 @@ class ThreeJSTranspiler(BaseTranspiler):
 
         # Camera - starts far away for zoom-in effect
         self.emit_comment("Camera (auto-generated, use OrbitControls to navigate)")
-        self.emit(f"const camera = new THREE.PerspectiveCamera(50, {self.CANVAS_WIDTH} / {self.CANVAS_HEIGHT}, 0.1, 1000);")
+        self.emit(f"const camera = new THREE.PerspectiveCamera(50, {self.canvas_width} / {self.canvas_height}, 0.1, 1000);")
         self.emit("camera.position.set(0, 5, 150);  // Start far for zoom-in effect")
         self.emit("camera.lookAt(0, 0, 0);")
         self.emit("let cameraZoomTarget = 50;  // Target z position")
@@ -313,8 +318,8 @@ class ThreeJSTranspiler(BaseTranspiler):
         z = props.get('z', 0)
 
         # Convert percentage strings to actual values
-        x = self._resolve_position(x, self.CANVAS_WIDTH)
-        y = self._resolve_position(y, self.CANVAS_HEIGHT)
+        x = self._resolve_position(x, self.canvas_width)
+        y = self._resolve_position(y, self.canvas_height)
 
         # Convert 2D screen coordinates to 3D world coordinates
         # In 2D: y increases downward, origin at top-left
@@ -322,9 +327,9 @@ class ThreeJSTranspiler(BaseTranspiler):
         # Map screen center (400, 300) to 3D (0, 2, 0) - above ground
         if 'z' not in props:
             # 2D mode: convert screen coords to world coords
-            x = (x - self.CANVAS_WIDTH / 2) / 50  # Scale down and center
+            x = (x - self.canvas_width / 2) / 50  # Scale down and center
             # Map Y so screen center is at y=2 (above ground), higher on screen = higher in 3D
-            y = (self.CANVAS_HEIGHT / 2 - y) / 50 + 2  # Flip Y, scale, offset above ground
+            y = (self.canvas_height / 2 - y) / 50 + 2  # Flip Y, scale, offset above ground
             z = 0
 
         # Get size (scale down 2D pixel sizes to 3D units)

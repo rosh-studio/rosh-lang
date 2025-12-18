@@ -16,6 +16,36 @@
 
 ---
 
+## [2025-12-18] - Case Insensitivity, main.rosh & Architecture Planning
+
+### Added
+- **Case-Insensitive Language** - Rosh now ignores case for keywords and identifiers
+  - `CREATE OBJECT Hero` and `create object hero` are equivalent
+  - `SET`, `Set`, `set` all work the same
+  - Object names normalized to lowercase for consistent access
+  - String literals preserve original case (only identifiers/keywords normalized)
+  - Enables spoken-first/dictation-friendly coding
+
+- **main.rosh Convention** - Run projects from directories
+  - `rosh run my-game/` now runs `my-game/main.rosh` automatically
+  - `rosh build my-game/ --target phaser` builds from main.rosh
+  - Clear error message if directory has no main.rosh
+  - Standard convention like package.json, main.py, etc.
+
+- **_meta/ Folder Configuration** - Project settings via TOML files
+  - `_meta/project.toml` for general project settings
+  - `_meta/{target}.toml` for target-specific overrides (e.g., `phaser.toml`)
+  - Canvas dimensions configurable: `[canvas] width = 1024, height = 768`
+  - Target settings merge with project settings (deep merge)
+  - Works with all transpilers (Phaser, Pygame, Three.js)
+
+### Documentation
+- Added `LANGUAGE-ARCHITECTURE-DISCUSSION.md` - Future architecture vision
+- Added `IMPLEMENTATION-PLAN-PHASE1.md` - Quick wins roadmap
+- Demos moved to `rosh.cloud/demos/` (hosted, password-protected)
+
+---
+
 ## [2025-12-17] - AI Prompt & Context-Aware Commands
 
 ### Added

@@ -72,8 +72,8 @@ class PygameTranspiler(BaseTranspiler):
         'object': {}
     }
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, meta: Dict[str, Any] = None):
+        super().__init__(meta)
         self.object_counter = 0
         self.object_properties: Dict[str, Dict[str, Any]] = {}
         self.event_handlers: Dict[str, list] = {}
@@ -85,6 +85,11 @@ class PygameTranspiler(BaseTranspiler):
         self.uses_sound = False
         self.uses_music = False
         self.sound_files: List[str] = []
+
+        # Apply meta settings for canvas dimensions
+        canvas_meta = self.meta.get('canvas', {})
+        self.game_width = canvas_meta.get('width', self.GAME_WIDTH)
+        self.game_height = canvas_meta.get('height', self.GAME_HEIGHT)
 
     def emit_comment(self, comment: str) -> None:
         """Override for Python-style comments"""
@@ -129,7 +134,7 @@ class PygameTranspiler(BaseTranspiler):
         # Initialize mixer for sound/music support
         if self.uses_sound or self.uses_music:
             self.emit("pygame.mixer.init()")
-        self.emit(f"screen = pygame.display.set_mode(({self.GAME_WIDTH}, {self.GAME_HEIGHT}))")
+        self.emit(f"screen = pygame.display.set_mode(({self.game_width}, {self.game_height}))")
         self.emit("pygame.display.set_caption('Rosh Game')")
         self.emit("clock = pygame.time.Clock()")
         self.emit_blank()
@@ -521,9 +526,9 @@ class PygameTranspiler(BaseTranspiler):
         """Convert percentage to pixel value"""
         if isinstance(value, dict) and value.get('type') == 'percentage':
             if axis in ['x', 'width']:
-                return (value['value'] / 100) * self.GAME_WIDTH
+                return (value['value'] / 100) * self.game_width
             else:
-                return (value['value'] / 100) * self.GAME_HEIGHT
+                return (value['value'] / 100) * self.game_height
         return float(value) if value is not None else 0
 
     def hex_to_rgb(self, hex_color: int) -> tuple:

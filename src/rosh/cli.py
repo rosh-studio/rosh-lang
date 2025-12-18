@@ -21,6 +21,36 @@ except ImportError:
     READLINE_AVAILABLE = False
 
 
+def resolve_rosh_path(path: str) -> str:
+    """Resolve a path to a .rosh file.
+
+    If path is a directory, looks for main.rosh inside it.
+    Otherwise returns the path as-is.
+
+    Args:
+        path: File or directory path
+
+    Returns:
+        Resolved path to .rosh file
+
+    Raises:
+        FileNotFoundError: If directory has no main.rosh
+    """
+    from pathlib import Path
+
+    p = Path(path)
+    if p.is_dir():
+        main_path = p / "main.rosh"
+        if main_path.exists():
+            return str(main_path)
+        else:
+            raise FileNotFoundError(
+                f"No main.rosh found in {path}. "
+                f"Create {main_path} or specify a .rosh file directly."
+            )
+    return path
+
+
 def _parse_test_input(input_string: str) -> list:
     """Parse comma-separated test inputs with escape support
 
@@ -404,6 +434,9 @@ def run_file(filepath: str, toml_output: bool = False, toon_output: bool = False
         Interpreter: The interpreter with the script's final state
     """
     try:
+        # Resolve directory to main.rosh if needed
+        filepath = resolve_rosh_path(filepath)
+
         path = Path(filepath)
         if not path.exists():
             print(f"Error: File not found: {filepath}", file=sys.stderr)
@@ -877,6 +910,9 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
     from .errors import RoshError
 
     try:
+        # Resolve directory to main.rosh if needed
+        filepath = resolve_rosh_path(filepath)
+
         # Read source file
         path = Path(filepath)
         if not path.exists():
@@ -892,6 +928,11 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             print(f"       To use REPL: rosh build {filepath} --target phaser --repl", file=sys.stderr)
             sys.exit(1)
 
+        # Load meta settings from project directory
+        from .meta import load_meta
+        project_dir = str(path.parent)
+        meta = load_meta(project_dir, target=target)
+
         # Lex and parse
         lexer = Lexer(source)
         tokens = lexer.tokenize()
@@ -900,7 +941,7 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
 
         # Transpile based on target
         if target == 'phaser':
-            transpiler = PhaserTranspiler()
+            transpiler = PhaserTranspiler(meta=meta)
             js_code = transpiler.transpile(program, enable_repl=enable_repl)
             generate_phaser_output(js_code, output_dir)
 
@@ -922,7 +963,7 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             print(f"   open http://localhost:8000", file=sys.stderr)
 
         elif target == 'pygame':
-            transpiler = PygameTranspiler()
+            transpiler = PygameTranspiler(meta=meta)
             py_code = transpiler.transpile(program)
             generate_pygame_output(py_code, output_dir)
 
@@ -936,7 +977,7 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             print(f"   python3 {output_dir}/game.py", file=sys.stderr)
 
         elif target == 'threejs':
-            transpiler = ThreeJSTranspiler()
+            transpiler = ThreeJSTranspiler(meta=meta)
             js_code = transpiler.transpile(program)
             generate_threejs_output(js_code, output_dir)
 

@@ -404,7 +404,9 @@ class Lexer:
         }
 
         token_type = keyword_map.get(identifier_lower, TokenType.IDENTIFIER)
-        value = identifier if token_type == TokenType.IDENTIFIER else identifier_lower
+        # Always normalize to lowercase (case-insensitive language)
+        # String literals preserve case, but identifiers/keywords do not
+        value = identifier_lower
 
         return Token(token_type, value, start_line, start_col)
 

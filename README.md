@@ -1,6 +1,6 @@
 # 🤖 Rosh Programming Language
 
-**v0.1.10** - A spoken-language-first, stack-based, AI-native programming language for games and interactive storytelling.
+**v0.1.11** - A spoken-language-first, stack-based, AI-native programming language for games and interactive storytelling.
 
 > 🤖 **Rosh** - Programming that sounds like talking to a person!
 
@@ -11,6 +11,7 @@
 
 Rosh is designed to be:
 - **Spoken-friendly**: Optimized for dictation with minimal punctuation
+- **Case-insensitive**: `CREATE OBJECT Hero` = `create object hero` (string literals preserve case)
 - **Stack-based**: Powerful compositional semantics
 - **Format-flexible**: JSON, TOML, and TOON support for state serialization
 - **AI-native**: First-class `prompt` primitive for AI integration
@@ -273,6 +274,25 @@ rosh build examples/games/sprite-demo.rosh --target phaser --output dist/ --copy
 - ✅ Background music: `play music "theme.ogg"` / `stop music`
 - ✅ Automatic asset caching and preloading
 - ✅ Works in both Phaser (Web Audio) and Pygame (mixer)
+
+**v0.1.11 - Language Polish** ✅ (2025-12-18)
+- ✅ **Case-insensitive language** - `CREATE OBJECT Hero` = `create object hero`
+- ✅ **main.rosh convention** - Run projects from directories: `rosh run my-game/`
+- ✅ **_meta/ configuration** - Project settings via TOML files
+  - `_meta/project.toml` for general settings (canvas size, title, etc.)
+  - `_meta/phaser.toml` for target-specific overrides
+
+**Example:**
+```bash
+# Run a project directory (looks for main.rosh)
+rosh run my-game/
+
+# Build with custom canvas size via _meta/project.toml
+# [canvas]
+# width = 1024
+# height = 768
+rosh build my-game/ --target phaser --output dist/
+```
 
 **v0.1.10 - Demo & Polish** ✅ (2025-12-15)
 - ✅ Dynamic `font_size` animation support

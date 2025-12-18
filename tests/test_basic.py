@@ -182,5 +182,54 @@ class TestUUIDSystem(unittest.TestCase):
         self.assertEqual(len(new_interp.instances['ball']), 3)
 
 
+class TestCaseInsensitivity(unittest.TestCase):
+    """Test that Rosh is case-insensitive for keywords and identifiers"""
+
+    def setUp(self):
+        self.interp = Interpreter()
+
+    def execute(self, code: str):
+        lexer = Lexer(code)
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        ast = parser.parse()
+        self.interp.execute(ast)
+
+    def test_keywords_any_case(self):
+        """Keywords work in any case"""
+        # All these should be equivalent
+        self.execute("SET x TO 42")
+        self.assertEqual(self.interp.global_env.get('x'), 42)
+
+        self.execute("Set y To 100")
+        self.assertEqual(self.interp.global_env.get('y'), 100)
+
+    def test_object_names_normalized(self):
+        """Object names are normalized to lowercase"""
+        self.execute("create object Hero\nend")
+        # Should be accessible as lowercase
+        hero = self.interp.global_env.get('hero')
+        self.assertIsNotNone(hero)
+
+    def test_object_access_any_case(self):
+        """Can access objects regardless of case"""
+        self.execute("create object Player\n    set health to 100\nend")
+        self.execute("set PLAYER.health to 50")
+        player = self.interp.global_env.get('player')
+        self.assertEqual(player.get('health'), 50)
+
+    def test_string_literals_preserve_case(self):
+        """String literals should preserve their original case"""
+        self.execute('set name to "Hello World"')
+        self.assertEqual(self.interp.global_env.get('name'), "Hello World")
+
+    def test_mixed_case_create_and_access(self):
+        """Create with one case, access with another"""
+        self.execute("CREATE OBJECT enemy\n    SET health TO 50\nEND")
+        self.execute("set Enemy.health to 25")
+        enemy = self.interp.global_env.get('enemy')
+        self.assertEqual(enemy.get('health'), 25)
+
+
 if __name__ == '__main__':
     unittest.main()

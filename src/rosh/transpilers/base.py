@@ -3,7 +3,7 @@ Base transpiler class for all Rosh transpilers
 """
 
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Dict, Any, Optional
 from ..ast_nodes import ASTNode, Program
 
 
@@ -14,15 +14,17 @@ class BaseTranspiler(ABC):
     - Code emission with indentation
     - Code accumulation
     - Comment generation
+    - Meta settings (from _meta/ folder)
 
     Subclasses must implement:
     - transpile(): Convert Rosh AST to target language
     - validate_ast(): Validate AST contains only supported features
     """
 
-    def __init__(self):
+    def __init__(self, meta: Optional[Dict[str, Any]] = None):
         self.output_lines: List[str] = []
         self.indent_level: int = 0
+        self.meta: Dict[str, Any] = meta or {}
 
     @abstractmethod
     def transpile(self, program: Program) -> str:

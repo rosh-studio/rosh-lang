@@ -86,8 +86,8 @@ class PhaserTranspiler(BaseTranspiler):
         }
     }
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, meta: Dict[str, Any] = None):
+        super().__init__(meta)
         self.object_counter = 0
         self.object_properties: Dict[str, Dict[str, Any]] = {}
         # v0.1.6: Event system tracking
@@ -101,6 +101,11 @@ class PhaserTranspiler(BaseTranspiler):
         # v0.1.10: Sound/music tracking
         self.sound_assets: list = []  # List of sound filenames to preload
         self.music_file: str = None  # Background music filename (if any)
+
+        # Apply meta settings for canvas dimensions
+        canvas_meta = self.meta.get('canvas', {})
+        self.game_width = canvas_meta.get('width', self.GAME_WIDTH)
+        self.game_height = canvas_meta.get('height', self.GAME_HEIGHT)
 
     def transpile(self, program: Program, enable_repl: bool = False) -> str:
         """Convert Rosh Program AST to Phaser JavaScript
@@ -404,9 +409,9 @@ class PhaserTranspiler(BaseTranspiler):
         if isinstance(value, dict) and value.get('type') == 'percentage':
             percent = value['value']
             if dimension in ['x', 'width']:
-                return (percent / 100.0) * self.GAME_WIDTH
+                return (percent / 100.0) * self.game_width
             else:  # y or height
-                return (percent / 100.0) * self.GAME_HEIGHT
+                return (percent / 100.0) * self.game_height
         return value
 
     def emit_create_object(self, node: CreateObject) -> None:
@@ -1082,11 +1087,11 @@ class PhaserTranspiler(BaseTranspiler):
             # Left edge
             self.emit(f"if (this.{obj_name}.x < 0) {{")
             self.indent_level += 1
-            self.emit(f"this.{obj_name}.x = {self.GAME_WIDTH};")
+            self.emit(f"this.{obj_name}.x = {self.game_width};")
             self.indent_level -= 1
             self.emit("}")
             # Right edge
-            self.emit(f"if (this.{obj_name}.x > {self.GAME_WIDTH}) {{")
+            self.emit(f"if (this.{obj_name}.x > {self.game_width}) {{")
             self.indent_level += 1
             self.emit(f"this.{obj_name}.x = 0;")
             self.indent_level -= 1
@@ -1094,11 +1099,11 @@ class PhaserTranspiler(BaseTranspiler):
             # Top edge
             self.emit(f"if (this.{obj_name}.y < 0) {{")
             self.indent_level += 1
-            self.emit(f"this.{obj_name}.y = {self.GAME_HEIGHT};")
+            self.emit(f"this.{obj_name}.y = {self.game_height};")
             self.indent_level -= 1
             self.emit("}")
             # Bottom edge
-            self.emit(f"if (this.{obj_name}.y > {self.GAME_HEIGHT}) {{")
+            self.emit(f"if (this.{obj_name}.y > {self.game_height}) {{")
             self.indent_level += 1
             self.emit(f"this.{obj_name}.y = 0;")
             self.indent_level -= 1
@@ -1110,9 +1115,9 @@ class PhaserTranspiler(BaseTranspiler):
             self.emit(f"const halfWidth = (this.{obj_name}.width || 50) / 2;")
             self.emit(f"const halfHeight = (this.{obj_name}.height || 50) / 2;")
             # Clamp x
-            self.emit(f"this.{obj_name}.x = Math.max(halfWidth, Math.min({self.GAME_WIDTH} - halfWidth, this.{obj_name}.x));")
+            self.emit(f"this.{obj_name}.x = Math.max(halfWidth, Math.min({self.game_width} - halfWidth, this.{obj_name}.x));")
             # Clamp y
-            self.emit(f"this.{obj_name}.y = Math.max(halfHeight, Math.min({self.GAME_HEIGHT} - halfHeight, this.{obj_name}.y));")
+            self.emit(f"this.{obj_name}.y = Math.max(halfHeight, Math.min({self.game_height} - halfHeight, this.{obj_name}.y));")
         self.emit_blank()
 
     def emit_text_object(self, name: str, properties: Dict[str, Any], x: float, y: float) -> None:
@@ -2059,11 +2064,11 @@ class PhaserTranspiler(BaseTranspiler):
         self.emit("const prop = target.split('.').pop();")
         self.emit("if (prop === 'x' || prop === 'width') {")
         self.indent_level += 1
-        self.emit(f"evaluatedValue = (percent / 100) * {self.GAME_WIDTH};")
+        self.emit(f"evaluatedValue = (percent / 100) * {self.game_width};")
         self.indent_level -= 1
         self.emit("} else if (prop === 'y' || prop === 'height') {")
         self.indent_level += 1
-        self.emit(f"evaluatedValue = (percent / 100) * {self.GAME_HEIGHT};")
+        self.emit(f"evaluatedValue = (percent / 100) * {self.game_height};")
         self.indent_level -= 1
         self.emit("} else {")
         self.indent_level += 1
@@ -2207,12 +2212,12 @@ class PhaserTranspiler(BaseTranspiler):
         self.emit("let yPos = parseInt(y);")
         self.emit("if (typeof x === 'string' && x.endsWith('%')) {")
         self.indent_level += 1
-        self.emit(f"xPos = (parseFloat(x.slice(0, -1)) / 100) * {self.GAME_WIDTH};")
+        self.emit(f"xPos = (parseFloat(x.slice(0, -1)) / 100) * {self.game_width};")
         self.indent_level -= 1
         self.emit("}")
         self.emit("if (typeof y === 'string' && y.endsWith('%')) {")
         self.indent_level += 1
-        self.emit(f"yPos = (parseFloat(y.slice(0, -1)) / 100) * {self.GAME_HEIGHT};")
+        self.emit(f"yPos = (parseFloat(y.slice(0, -1)) / 100) * {self.game_height};")
         self.indent_level -= 1
         self.emit("}")
         self.emit_blank()

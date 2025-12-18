@@ -37,11 +37,43 @@ rosh
 # Run a script
 rosh examples/hello.rosh
 
-# Run script then enter REPL with state preserved (v0.0.6 new!)
+# Run a project directory (looks for main.rosh)
+rosh my-game/
+
+# Run script then enter REPL with state preserved
 rosh -i examples/hello.rosh
 
 # Run the manual (see all features)
 rosh ROSH-MANUAL.rosh
+```
+
+## Project Structure (v0.1.11+)
+
+Rosh supports a standard project layout:
+
+```
+my-game/
+├── main.rosh           # Entry point (required)
+├── player.rosh         # Additional modules
+├── _meta/              # Project configuration
+│   ├── project.toml    # General settings
+│   └── phaser.toml     # Target-specific overrides
+└── assets/             # Sprites, sounds, etc.
+```
+
+**Example `_meta/project.toml`:**
+```toml
+title = "My Awesome Game"
+
+[canvas]
+width = 1024
+height = 768
+```
+
+**Run or build the project:**
+```bash
+rosh run my-game/           # Runs main.rosh
+rosh build my-game/ --target phaser --output dist/
 ```
 
 ## Try It
