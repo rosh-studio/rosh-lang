@@ -1075,6 +1075,7 @@ document.body.appendChild(consoleDiv);
 const output = document.getElementById('rosh-output');
 const input = document.getElementById('rosh-input');
 let currentObject = null, currentObjectName = null;
+const cmdHistory = []; let historyIdx = -1;
 
 function log(msg, cls='') {
     const div = document.createElement('div'); div.className = cls;
@@ -1113,7 +1114,14 @@ function execCommand(cmd) {
             else if (prop === 'y') obj.position.y = val;
             else if (prop === 'z') obj.position.z = val;
             else if (prop === 'visible') obj.visible = val === 'true';
-            else if (prop === 'color' && obj.material) obj.material.color.set(val);
+            else if (prop === 'color') {
+                if (obj._ctx) {
+                    obj._color = val; obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);
+                    obj._ctx.font = 'bold 48px Arial'; obj._ctx.textAlign = 'center'; obj._ctx.textBaseline = 'middle';
+                    obj._ctx.fillStyle = val; obj._ctx.fillText(obj._text, obj._canvas.width/2, obj._canvas.height/2);
+                    obj.material.map.needsUpdate = true;
+                } else if (obj.material && obj.material.color) obj.material.color.set(val);
+            }
             else obj.userData[prop] = val;
             log('OK', 'ok');
         }
@@ -1173,7 +1181,15 @@ document.addEventListener('keydown', e => {
 
 input.addEventListener('keydown', e => {
     if (e.key === 'Enter' && input.value.trim()) {
+        cmdHistory.unshift(input.value); historyIdx = -1;
         execCommand(input.value); input.value = '';
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (historyIdx < cmdHistory.length - 1) { historyIdx++; input.value = cmdHistory[historyIdx]; }
+    } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (historyIdx > 0) { historyIdx--; input.value = cmdHistory[historyIdx]; }
+        else if (historyIdx === 0) { historyIdx = -1; input.value = ''; }
     }
 });
 
