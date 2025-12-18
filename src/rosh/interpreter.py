@@ -1022,21 +1022,27 @@ class Interpreter:
             raise RoshRuntimeError(f"Failed to save state to {filepath}: {e}")
 
     def eval_load(self, node: Load) -> None:
-        """Execute: load <filepath> - restores state from file
+        """Execute: load [filepath] - restores state from file
 
         Supports:
         - .json: JSON format (default)
         - .toon: TOON format (Token-Oriented Object Notation)
+
+        If no filepath provided, defaults to rosh-state.json
         """
         import json
         from .values import RoshObject
 
-        # Evaluate the filepath expression to get the path string
-        filepath_value = self.eval_expression(node.filepath)
-        filepath = rosh_to_python(filepath_value)
+        # Default filepath if none provided
+        if node.filepath is None:
+            filepath = "rosh-state.json"
+        else:
+            # Evaluate the filepath expression to get the path string
+            filepath_value = self.eval_expression(node.filepath)
+            filepath = rosh_to_python(filepath_value)
 
-        if not isinstance(filepath, str):
-            raise RoshTypeError(f"load requires a string filepath, got {type(filepath).__name__}")
+            if not isinstance(filepath, str):
+                raise RoshTypeError(f"load requires a string filepath, got {type(filepath).__name__}")
 
         # Load based on file extension
         try:
