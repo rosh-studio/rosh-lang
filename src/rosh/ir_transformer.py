@@ -23,7 +23,7 @@ from .ast_nodes import (
     FunctionDef, FunctionCall, Return, Break, Continue,
     Print, PlaySound, PlayMusic, StopMusic, Save, Load,
     CloneObject, DeleteObject, Increment, Decrement, Random, Length,
-    ListLiteral, ListIndex, Append, Remove, Get, GotoScene
+    ListLiteral, ListIndex, Append, Remove, Get, GotoScene, SaveGame, LoadGame
 )
 from .ir import (
     IR_Program, IR_Object, IR_Event, IR_Action, IR_Function,
@@ -171,12 +171,19 @@ class IRTransformer:
                 level_val = properties.pop('level').value
                 level = int(level_val) if level_val is not None else None
 
+        # Extract saveable (default True, can be set to False)
+        saveable = True
+        if 'saveable' in properties:
+            saveable_val = properties.pop('saveable').value
+            saveable = bool(saveable_val) if saveable_val is not None else True
+
         return IR_Object(
             uuid=str(uuid.uuid4()),
             name=node.name.lower(),
             type=obj_type,
             parent_type=parent_type,
             properties=properties,
+            saveable=saveable,
             scene=scene,
             level=level
         )
@@ -515,6 +522,16 @@ class IRTransformer:
             return IR_Action('goto', {
                 'scene': stmt.scene,
                 'level': stmt.level
+            })
+
+        elif isinstance(stmt, SaveGame):
+            return IR_Action('save_game', {
+                'slot': stmt.slot
+            })
+
+        elif isinstance(stmt, LoadGame):
+            return IR_Action('load_game', {
+                'slot': stmt.slot
             })
 
         else:

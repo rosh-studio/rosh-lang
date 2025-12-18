@@ -68,6 +68,9 @@ class ThreeJSEmitter(BaseEmitter):
         self.scene_objects: Dict[str, list] = {}  # scene_name -> [object_names]
         self.level_objects: Dict[int, list] = {}  # level_num -> [object_names]
 
+        # Save/Load support
+        self.uses_save_load = False
+
         # Scan IR to detect features
         self._detect_features()
 
@@ -157,6 +160,8 @@ class ThreeJSEmitter(BaseEmitter):
         self._emit_objects()
         if self.uses_scenes:
             self._emit_scene_visibility_function()
+        if self.uses_save_load:
+            self._emit_save_load_functions()
         self._emit_functions()
         self._emit_event_handlers()
         self._emit_animation_loop()
@@ -453,6 +458,83 @@ class ThreeJSEmitter(BaseEmitter):
         # Call initially
         self.write_comment("Set initial scene/level visibility")
         self.write("updateSceneVisibility();")
+        self.write_blank()
+
+    def _emit_save_load_functions(self):
+        """Emit save/load game functions using localStorage."""
+        saveable_objects = [obj for obj in self.ir.objects if obj.saveable]
+
+        # saveGame function
+        self.write_comment("Save/Load - Roshonic \"Save Everything by Default\"")
+        self.write("function saveGame(slot) {")
+        self.indent()
+        self.write("const saveData = {")
+        self.indent()
+        self.write("version: '1.0',")
+        self.write("timestamp: new Date().toISOString(),")
+        if self.uses_scenes:
+            self.write("scene: currentScene,")
+            self.write("level: currentLevel,")
+        self.write("objects: {}")
+        self.dedent()
+        self.write("};")
+        self.write_blank()
+
+        for obj in saveable_objects:
+            self.write(f"if ({obj.name}) {{")
+            self.indent()
+            self.write(f"saveData.objects['{obj.name}'] = {{")
+            self.indent()
+            self.write(f"x: {obj.name}.position.x,")
+            self.write(f"y: {obj.name}.position.y,")
+            self.write(f"z: {obj.name}.position.z,")
+            for prop_name in obj.properties:
+                if prop_name not in ('x', 'y', 'z', 'width', 'height', 'depth', 'sprite', 'color', 'text', 'saveable', 'type', 'radius'):
+                    self.write(f"{prop_name}: {obj.name}.userData.{prop_name},")
+            self.dedent()
+            self.write("};")
+            self.dedent()
+            self.write("}")
+
+        self.write_blank()
+        self.write("localStorage.setItem('rosh_save_' + slot, JSON.stringify(saveData));")
+        self.write("console.log('Game saved to slot:', slot);")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+        # loadGame function
+        self.write("function loadGame(slot) {")
+        self.indent()
+        self.write("const json = localStorage.getItem('rosh_save_' + slot);")
+        self.write("if (!json) { console.log('No save found in slot:', slot); return; }")
+        self.write("const saveData = JSON.parse(json);")
+        self.write_blank()
+
+        if self.uses_scenes:
+            self.write("if (saveData.scene !== undefined) currentScene = saveData.scene;")
+            self.write("if (saveData.level !== undefined) currentLevel = saveData.level;")
+            self.write("updateSceneVisibility();")
+            self.write_blank()
+
+        self.write("const objects = saveData.objects || {};")
+        for obj in saveable_objects:
+            self.write(f"if (objects['{obj.name}'] && {obj.name}) {{")
+            self.indent()
+            self.write(f"const data = objects['{obj.name}'];")
+            self.write(f"if (data.x !== undefined) {obj.name}.position.x = data.x;")
+            self.write(f"if (data.y !== undefined) {obj.name}.position.y = data.y;")
+            self.write(f"if (data.z !== undefined) {obj.name}.position.z = data.z;")
+            for prop_name in obj.properties:
+                if prop_name not in ('x', 'y', 'z', 'width', 'height', 'depth', 'sprite', 'color', 'text', 'saveable', 'type', 'radius'):
+                    self.write(f"if (data.{prop_name} !== undefined) {obj.name}.userData.{prop_name} = data.{prop_name};")
+            self.dedent()
+            self.write("}")
+
+        self.write_blank()
+        self.write("console.log('Game loaded from slot:', slot);")
+        self.dedent()
+        self.write("}")
         self.write_blank()
 
     def _emit_text_sprite(self, name: str, text: str, color: int, x: float, y: float, z: float):
@@ -868,6 +950,16 @@ class ThreeJSEmitter(BaseEmitter):
                 code_parts.append(f"currentLevel = {level};")
             code_parts.append("updateSceneVisibility();")
             return " ".join(code_parts)
+
+        elif action_type == 'save_game':
+            slot = params.get('slot') or 'default'
+            self.uses_save_load = True
+            return f"saveGame('{slot}');"
+
+        elif action_type == 'load_game':
+            slot = params.get('slot') or 'default'
+            self.uses_save_load = True
+            return f"loadGame('{slot}');"
 
         return f"// TODO: {action_type}"
 

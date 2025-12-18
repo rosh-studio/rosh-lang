@@ -695,24 +695,58 @@ class Parser:
         self.expect(TokenType.DUMP)
         return Dump(line=line)
 
-    def parse_save(self) -> Save:
-        """Parse: save [filepath] - saves state to file (default: rosh-state.json)"""
+    def parse_save(self):
+        """Parse: save [game [slot]] | save [filepath]
+
+        save game                  - Save to default slot (transpiler)
+        save game "adventure1"     - Save to named slot (transpiler)
+        save "state.json"          - Save to file (interpreter)
+        """
+        from .ast_nodes import SaveGame
         line = self.current_token().line
         self.expect(TokenType.SAVE)
 
-        # Optional filepath expression
+        # Check for "save game" syntax
+        if (self.current_token().type == TokenType.IDENTIFIER and
+            self.current_token().value.lower() == 'game'):
+            self.advance()  # consume 'game'
+            # Optional slot name
+            slot = None
+            if self.current_token().type == TokenType.STRING:
+                slot = self.current_token().value
+                self.advance()
+            return SaveGame(slot=slot, line=line)
+
+        # Original file-based save
         filepath_expr = None
         if self.current_token().type in (TokenType.STRING, TokenType.IDENTIFIER):
             filepath_expr = self.parse_expression()
 
         return Save(filepath=filepath_expr, line=line)
 
-    def parse_load(self) -> Load:
-        """Parse: load <filepath> - restores state from JSON file"""
+    def parse_load(self):
+        """Parse: load [game [slot]] | load <filepath>
+
+        load game                  - Load from default slot (transpiler)
+        load game "adventure1"     - Load from named slot (transpiler)
+        load "state.json"          - Load from file (interpreter)
+        """
+        from .ast_nodes import LoadGame
         line = self.current_token().line
         self.expect(TokenType.LOAD)
 
-        # Parse the filepath expression (typically a string literal)
+        # Check for "load game" syntax
+        if (self.current_token().type == TokenType.IDENTIFIER and
+            self.current_token().value.lower() == 'game'):
+            self.advance()  # consume 'game'
+            # Optional slot name
+            slot = None
+            if self.current_token().type == TokenType.STRING:
+                slot = self.current_token().value
+                self.advance()
+            return LoadGame(slot=slot, line=line)
+
+        # Original file-based load
         filepath_expr = self.parse_expression()
 
         return Load(filepath=filepath_expr, line=line)

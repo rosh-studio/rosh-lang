@@ -450,6 +450,35 @@ class GotoScene(ASTNode):
 
 
 @dataclass
+class SaveGame(ASTNode):
+    """save game [slot_name] - Save game state
+
+    Roshonic "Save Everything by Default" - all saveable objects serialized.
+    Objects with saveable=false are excluded.
+
+    Examples:
+        save game                  # saves to default slot
+        save game "adventure1"     # saves to named slot
+    """
+    slot: Optional[str] = None  # Slot name (None = default slot)
+    line: int = 0
+
+
+@dataclass
+class LoadGame(ASTNode):
+    """load game [slot_name] - Load game state
+
+    Restores all object properties from saved state.
+
+    Examples:
+        load game                  # loads from default slot
+        load game "adventure1"     # loads from named slot
+    """
+    slot: Optional[str] = None  # Slot name (None = default slot)
+    line: int = 0
+
+
+@dataclass
 class LookCommand(ASTNode):
     """look [object] - Display current room or examine object"""
     target: Optional[str] = None  # Object to examine (None = look at room)

@@ -166,6 +166,7 @@ class IR_Object:
     properties: Dict[str, IR_Value] = field(default_factory=dict)
     scene: Optional[str] = None  # Named scene (None = always visible)
     level: Optional[int] = None  # Level number (None = all levels)
+    saveable: bool = True  # Whether object is saved (False for particles, etc.)
 
     @classmethod
     def create(cls, name: str, **kwargs) -> "IR_Object":
@@ -354,6 +355,8 @@ def serialize_ir_program(program: IR_Program) -> dict:
 
     Used for save/load functionality. Includes UUIDs and names
     so `get` command works across sessions.
+
+    Objects with saveable=False are excluded from serialization.
     """
     return {
         "version": "0.1",
@@ -362,6 +365,8 @@ def serialize_ir_program(program: IR_Program) -> dict:
             "version": program.metadata.version,
             "canvas_width": program.metadata.canvas_width,
             "canvas_height": program.metadata.canvas_height,
+            "scene": program.metadata.initial_scene,
+            "level": program.metadata.initial_level,
         },
         "objects": [
             {
@@ -377,6 +382,7 @@ def serialize_ir_program(program: IR_Program) -> dict:
                 }
             }
             for obj in program.objects
+            if obj.saveable  # Only save objects with saveable=True
         ]
     }
 

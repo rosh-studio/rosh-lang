@@ -57,6 +57,9 @@ class PhaserEmitter(BaseEmitter):
         self.scene_objects: Dict[str, list] = {}  # scene_name -> [obj_names]
         self.level_objects: Dict[int, list] = {}  # level_num -> [obj_names]
 
+        # Save/Load support
+        self.uses_save_load = False  # True if save/load commands used
+
         # Scan IR to detect features
         self._detect_features()
 
@@ -351,6 +354,10 @@ class PhaserEmitter(BaseEmitter):
         if self.uses_scenes:
             self._emit_scene_visibility_helper()
 
+        # Save/Load helpers
+        if self.uses_save_load:
+            self._emit_save_load_helpers()
+
     def _emit_player_input_method(self):
         """Emit player input handling method."""
         self.write("handlePlayerInput(player) {")
@@ -417,6 +424,86 @@ class PhaserEmitter(BaseEmitter):
                 condition = " && ".join(checks)
                 self.write(f"if (this.{obj.name}) this.{obj.name}.visible = ({condition});")
 
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+    def _emit_save_load_helpers(self):
+        """Emit save/load game methods using localStorage."""
+        # Get list of saveable objects
+        saveable_objects = [obj for obj in self.ir.objects if obj.saveable]
+
+        # saveGame method
+        self.write("saveGame(slot) {")
+        self.indent()
+        self.write("const saveData = {")
+        self.indent()
+        self.write("version: '1.0',")
+        self.write("timestamp: new Date().toISOString(),")
+        if self.uses_scenes:
+            self.write("scene: this.currentScene,")
+            self.write("level: this.currentLevel,")
+        self.write("objects: {}")
+        self.dedent()
+        self.write("};")
+        self.write_blank()
+
+        # Save each saveable object's properties
+        for obj in saveable_objects:
+            self.write(f"if (this.{obj.name}) {{")
+            self.indent()
+            self.write(f"saveData.objects['{obj.name}'] = {{")
+            self.indent()
+            self.write(f"x: this.{obj.name}.x,")
+            self.write(f"y: this.{obj.name}.y,")
+            # Save custom properties
+            for prop_name in obj.properties:
+                if prop_name not in ('x', 'y', 'width', 'height', 'sprite', 'color', 'text', 'saveable'):
+                    self.write(f"{prop_name}: this.{obj.name}.{prop_name},")
+            self.dedent()
+            self.write("};")
+            self.dedent()
+            self.write("}")
+
+        self.write_blank()
+        self.write("localStorage.setItem('rosh_save_' + slot, JSON.stringify(saveData));")
+        self.write("console.log('Game saved to slot:', slot);")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+        # loadGame method
+        self.write("loadGame(slot) {")
+        self.indent()
+        self.write("const json = localStorage.getItem('rosh_save_' + slot);")
+        self.write("if (!json) { console.log('No save found in slot:', slot); return; }")
+        self.write("const saveData = JSON.parse(json);")
+        self.write_blank()
+
+        # Restore scene/level
+        if self.uses_scenes:
+            self.write("if (saveData.scene !== undefined) this.currentScene = saveData.scene;")
+            self.write("if (saveData.level !== undefined) this.currentLevel = saveData.level;")
+            self.write("this.updateSceneVisibility();")
+            self.write_blank()
+
+        # Restore each object's properties
+        self.write("const objects = saveData.objects || {};")
+        for obj in saveable_objects:
+            self.write(f"if (objects['{obj.name}'] && this.{obj.name}) {{")
+            self.indent()
+            self.write(f"const data = objects['{obj.name}'];")
+            self.write(f"if (data.x !== undefined) this.{obj.name}.x = data.x;")
+            self.write(f"if (data.y !== undefined) this.{obj.name}.y = data.y;")
+            # Restore custom properties
+            for prop_name in obj.properties:
+                if prop_name not in ('x', 'y', 'width', 'height', 'sprite', 'color', 'text', 'saveable'):
+                    self.write(f"if (data.{prop_name} !== undefined) this.{obj.name}.{prop_name} = data.{prop_name};")
+            self.dedent()
+            self.write("}")
+
+        self.write_blank()
+        self.write("console.log('Game loaded from slot:', slot);")
         self.dedent()
         self.write("}")
         self.write_blank()
@@ -680,6 +767,16 @@ class PhaserEmitter(BaseEmitter):
                 code_parts.append(f"this.currentLevel = {level};")
             code_parts.append("this.updateSceneVisibility();")
             return " ".join(code_parts)
+
+        elif action_type == 'save_game':
+            slot = params.get('slot') or 'default'
+            self.uses_save_load = True
+            return f"this.saveGame('{slot}');"
+
+        elif action_type == 'load_game':
+            slot = params.get('slot') or 'default'
+            self.uses_save_load = True
+            return f"this.loadGame('{slot}');"
 
         return f"// TODO: {action_type}"
 

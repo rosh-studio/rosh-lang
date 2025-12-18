@@ -57,6 +57,9 @@ class PygameEmitter(BaseEmitter):
         self.scene_objects: Dict[str, list] = {}  # scene_name -> [object_names]
         self.level_objects: Dict[int, list] = {}  # level_num -> [object_names]
 
+        # Save/Load support
+        self.uses_save_load = False
+
         # Scan IR to detect features
         self._detect_features()
 
@@ -489,6 +492,8 @@ class PygameEmitter(BaseEmitter):
         """Emit any helper methods needed."""
         if self.uses_scenes:
             self._emit_scene_visibility_method()
+        if self.uses_save_load:
+            self._emit_save_load_methods()
 
     def _emit_scene_visibility_method(self):
         """Emit update_scene_visibility helper method."""
@@ -509,6 +514,92 @@ class PygameEmitter(BaseEmitter):
             condition = " and ".join(conditions)
             self.write(f"self.{obj.name}_visible = ({condition})")
 
+        self.dedent()
+        self.write_blank()
+
+    def _emit_save_load_methods(self):
+        """Emit save/load game methods using JSON files."""
+        saveable_objects = [obj for obj in self.ir.objects if obj.saveable]
+
+        # save_game method
+        self.write("def save_game(self, slot):")
+        self.indent()
+        self.write("import json")
+        self.write("import os")
+        self.write("save_data = {")
+        self.indent()
+        self.write("'version': '1.0',")
+        if self.uses_scenes:
+            self.write("'scene': self.current_scene,")
+            self.write("'level': self.current_level,")
+        self.write("'objects': {}")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+        for obj in saveable_objects:
+            self.write(f"save_data['objects']['{obj.name}'] = {{")
+            self.indent()
+            self.write(f"'x': self.{obj.name}_x,")
+            self.write(f"'y': self.{obj.name}_y,")
+            for prop_name in obj.properties:
+                if prop_name not in ('x', 'y', 'width', 'height', 'sprite', 'color', 'text', 'saveable'):
+                    self.write(f"'{prop_name}': self.{obj.name}_{prop_name},")
+            self.dedent()
+            self.write("}")
+
+        self.write_blank()
+        self.write("os.makedirs('saves', exist_ok=True)")
+        self.write("with open(f'saves/{slot}.json', 'w') as f:")
+        self.indent()
+        self.write("json.dump(save_data, f)")
+        self.dedent()
+        self.write("print(f'Game saved to slot: {slot}')")
+        self.dedent()
+        self.write_blank()
+
+        # load_game method
+        self.write("def load_game(self, slot):")
+        self.indent()
+        self.write("import json")
+        self.write("import os")
+        self.write("filepath = f'saves/{slot}.json'")
+        self.write("if not os.path.exists(filepath):")
+        self.indent()
+        self.write("print(f'No save found in slot: {slot}')")
+        self.write("return")
+        self.dedent()
+        self.write("with open(filepath, 'r') as f:")
+        self.indent()
+        self.write("save_data = json.load(f)")
+        self.dedent()
+        self.write_blank()
+
+        if self.uses_scenes:
+            self.write("if 'scene' in save_data:")
+            self.indent()
+            self.write("self.current_scene = save_data['scene']")
+            self.dedent()
+            self.write("if 'level' in save_data:")
+            self.indent()
+            self.write("self.current_level = save_data['level']")
+            self.dedent()
+            self.write("self.update_scene_visibility()")
+            self.write_blank()
+
+        self.write("objects = save_data.get('objects', {})")
+        for obj in saveable_objects:
+            self.write(f"if '{obj.name}' in objects:")
+            self.indent()
+            self.write(f"data = objects['{obj.name}']")
+            self.write(f"if 'x' in data: self.{obj.name}_x = data['x']")
+            self.write(f"if 'y' in data: self.{obj.name}_y = data['y']")
+            for prop_name in obj.properties:
+                if prop_name not in ('x', 'y', 'width', 'height', 'sprite', 'color', 'text', 'saveable'):
+                    self.write(f"if '{prop_name}' in data: self.{obj.name}_{prop_name} = data['{prop_name}']")
+            self.dedent()
+
+        self.write("print(f'Game loaded from slot: {slot}')")
         self.dedent()
         self.write_blank()
 
@@ -614,6 +705,16 @@ class PygameEmitter(BaseEmitter):
                 code_parts.append(f"self.current_level = {level}")
             code_parts.append("self.update_scene_visibility()")
             return "\n".join(code_parts)
+
+        elif action_type == 'save_game':
+            slot = params.get('slot') or 'default'
+            self.uses_save_load = True
+            return f"self.save_game('{slot}')"
+
+        elif action_type == 'load_game':
+            slot = params.get('slot') or 'default'
+            self.uses_save_load = True
+            return f"self.load_game('{slot}')"
 
         return f"pass  # TODO: {action_type}"
 
