@@ -241,9 +241,12 @@ class IRTransformer:
 
         Design Decision (2025-12-18):
         For ALL coordinate properties (x, y, width, height):
-        - Bare numbers are percentages (0-100): `set x to 50` = 50%
+        - Bare numbers are PIXELS: `set x to 400` = 400 pixels
         - Explicit percentages: `set x to 50%` = 50% of canvas
-        - Use `px` suffix (`400px`) for absolute pixels
+
+        Recommended usage:
+        - Use `%` for UI elements (centered text, responsive positioning)
+        - Use bare numbers for game logic (grid positions, fixed layouts)
         """
         value = node.value
         type_name = node.type_name
@@ -251,8 +254,11 @@ class IRTransformer:
         # Handle coordinate properties
         if context_prop in self.coordinate_props:
             if type_name == 'number':
-                # Design decision (2025-12-18): bare numbers = percentages (0-100 scale)
-                normalized = value / 100.0
+                # Bare numbers are pixels - normalize to 0-1 range for emitters
+                if context_prop in ('x', 'width'):
+                    normalized = value / self.canvas_width
+                else:  # y, height
+                    normalized = value / self.canvas_height
                 return IR_Value('percentage', normalized)
 
             elif type_name == 'pixel':
