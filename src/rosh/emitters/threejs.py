@@ -875,12 +875,12 @@ class ThreeJSEmitter(BaseEmitter):
         self.dedent()
         self.write("}")
 
-        # Set
+        # Set - handles: set obj prop val, set obj prop to val, set prop val (with current obj)
         self.write("else if (parts[0] === 'set' && parts.length >= 3) {")
         self.indent()
-        self.write("let obj, prop, val;")
-        self.write("if (parts.length === 3 && currentObject) { obj = currentObject; prop = parts[1]; val = parts[2]; }")
-        self.write("else { obj = scene.getObjectByName(parts[1]); prop = parts[2]; val = parts[3]; }")
+        self.write("let obj, prop, val, p = parts.filter(x => x !== 'to');")  # Remove 'to' keyword
+        self.write("if (p.length === 3 && currentObject) { obj = currentObject; prop = p[1]; val = p[2]; }")
+        self.write("else { obj = scene.getObjectByName(p[1]); prop = p[2]; val = p[3]; }")
         self.write("if (!obj) { log('No object', 'err'); return; }")
         self.write("if (!isNaN(val)) val = parseFloat(val);")
         self.write("if (prop === 'x') obj.position.x = val;")

@@ -247,9 +247,9 @@ function execCommand(cmd) {
             else log('Not found: ' + parts[1], 'err');
         }
         else if (parts[0] === 'set' && parts.length >= 3) {
-            let obj, prop, val;
-            if (parts.length === 3 && currentObject) { obj = currentObject; prop = parts[1]; val = parts[2]; }
-            else { obj = scene.getObjectByName(parts[1]); prop = parts[2]; val = parts[3]; }
+            let obj, prop, val, p = parts.filter(x => x !== 'to');
+            if (p.length === 3 && currentObject) { obj = currentObject; prop = p[1]; val = p[2]; }
+            else { obj = scene.getObjectByName(p[1]); prop = p[2]; val = p[3]; }
             if (!obj) { log('No object', 'err'); return; }
             if (!isNaN(val)) val = parseFloat(val);
             if (prop === 'x') obj.position.x = val;
