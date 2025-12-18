@@ -878,7 +878,7 @@ class ThreeJSEmitter(BaseEmitter):
         # Help
         self.write("if (parts[0] === 'help') {")
         self.indent()
-        self.write("log('Commands: list, get, set, look/examine, create, prompt, save, load, camera reset', 'cyan');")
+        self.write("log('Commands: list, get, set, look/examine, create, delete, clone, prompt, save, load, camera reset', 'cyan');")
         self.dedent()
         self.write("}")
 
@@ -943,6 +943,31 @@ class ThreeJSEmitter(BaseEmitter):
         self.dedent()
         self.write("}")
 
+        # Delete
+        self.write("else if (parts[0] === 'delete' && parts[1]) {")
+        self.indent()
+        self.write("const obj = scene.getObjectByName(parts[1]);")
+        self.write("if (obj) { scene.remove(obj); log(\"Deleted '\" + parts[1] + \"'\", 'ok'); }")
+        self.write("else log('Not found: ' + parts[1], 'err');")
+        self.dedent()
+        self.write("}")
+
+        # Clone
+        self.write("else if (parts[0] === 'clone' && parts[1]) {")
+        self.indent()
+        self.write("const src = scene.getObjectByName(parts[1]);")
+        self.write("if (!src) { log('Not found: ' + parts[1], 'err'); return; }")
+        # Determine target name - use 'as' keyword or auto-generate
+        self.write("let targetName = parts[3] && (parts[2] === 'as' || parts[2] === 'to') ? parts[3] : null;")
+        self.write("if (!targetName) { let n = 1; while (scene.getObjectByName(parts[1] + n)) n++; targetName = parts[1] + n; }")
+        self.write("const clone = src.clone();")
+        self.write("clone.name = targetName;")
+        self.write("clone.position.x += 2;")  # Offset so it's visible
+        self.write("scene.add(clone);")
+        self.write("log(\"Cloned '\" + parts[1] + \"' as '\" + targetName + \"'\", 'ok');")
+        self.dedent()
+        self.write("}")
+
         # Get
         self.write("else if (parts[0] === 'get' && parts[1]) {")
         self.indent()
@@ -980,6 +1005,14 @@ class ThreeJSEmitter(BaseEmitter):
         self.indent()
         self.write("obj.userData.font_size = val; obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);")
         self.write("obj._ctx.font = 'bold ' + val + 'px Arial'; obj._ctx.textAlign = 'center'; obj._ctx.textBaseline = 'middle';")
+        self.write("obj._ctx.fillStyle = obj._color || '#ffffff'; obj._ctx.fillText(obj._text, obj._canvas.width/2, obj._canvas.height/2);")
+        self.write("obj.material.map.needsUpdate = true;")
+        self.dedent()
+        self.write("}")
+        self.write("else if (prop === 'text' && obj._ctx) {")
+        self.indent()
+        self.write("obj._text = val; obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);")
+        self.write("obj._ctx.font = 'bold ' + (obj.userData.font_size || 48) + 'px Arial'; obj._ctx.textAlign = 'center'; obj._ctx.textBaseline = 'middle';")
         self.write("obj._ctx.fillStyle = obj._color || '#ffffff'; obj._ctx.fillText(obj._text, obj._canvas.width/2, obj._canvas.height/2);")
         self.write("obj.material.map.needsUpdate = true;")
         self.dedent()
@@ -1157,6 +1190,9 @@ class ThreeJSEmitter(BaseEmitter):
         elif prop == 'font_size':
             # Update font_size and redraw text sprite
             return f"{target}.userData.font_size = {val_str}; if ({target}._ctx) {{ {target}._ctx.clearRect(0, 0, {target}._canvas.width, {target}._canvas.height); {target}._ctx.font = 'bold ' + {target}.userData.font_size + 'px Arial'; {target}._ctx.fillStyle = {target}._color || '#ffffff'; {target}._ctx.textAlign = 'center'; {target}._ctx.textBaseline = 'middle'; {target}._ctx.fillText({target}._text, {target}._canvas.width/2, {target}._canvas.height/2); {target}.material.map.needsUpdate = true; }}"
+        elif prop == 'text':
+            # Update text content and redraw text sprite
+            return f"{target}._text = {val_str}; if ({target}._ctx) {{ {target}._ctx.clearRect(0, 0, {target}._canvas.width, {target}._canvas.height); {target}._ctx.font = 'bold ' + ({target}.userData.font_size || 48) + 'px Arial'; {target}._ctx.fillStyle = {target}._color || '#ffffff'; {target}._ctx.textAlign = 'center'; {target}._ctx.textBaseline = 'middle'; {target}._ctx.fillText({target}._text, {target}._canvas.width/2, {target}._canvas.height/2); {target}.material.map.needsUpdate = true; }}"
         else:
             return f"{target}.userData.{prop} = {val_str};"
 

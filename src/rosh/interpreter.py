@@ -2455,13 +2455,15 @@ Focus on the specific syntax or concept they need to correct."""
         # Define the new object in the environment
         self.current_env.define(var_name, cloned_obj)
 
-        # Print feedback for anonymous instances
+        # Print feedback
         if is_anonymous:
             instances = self.instances.get(node.source, [])
             count = len(instances)
             # Get the instance number from the ID (e.g., "thing-3" → 3)
             instance_num = int(cloned_obj.id.split('-')[-1])
-            self.color_out.success(f"Created {cloned_obj.id} ({instance_num} of {count})")
+            self.color_out.success(f"Cloned '{node.source}' as '{cloned_obj.id}'")
+        else:
+            self.color_out.success(f"Cloned '{node.source}' as '{node.target}'")
 
     def eval_delete_object(self, node: DeleteObject) -> None:
         """Execute: delete <name> - Remove an object from environment"""
@@ -2507,6 +2509,7 @@ Focus on the specific syntax or concept they need to correct."""
         # Remove from environment
         if node.name in self.current_env.bindings:
             del self.current_env.bindings[node.name]
+            self.color_out.success(f"Deleted '{node.name}'")
         else:
             raise RoshRuntimeError(f"Cannot delete: '{node.name}' is not in current scope")
 

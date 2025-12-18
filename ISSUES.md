@@ -61,6 +61,95 @@ end
 
 ---
 
+## Enhancement Ideas (2025-12-18)
+
+Logged for future tinkering:
+
+### ISSUE-003: Add `text` command to console
+**Status:** 🔄 In Progress
+**Target:** Three.js (then Phaser)
+**Effort:** Low
+
+Allow changing text sprite content at runtime:
+```
+> set logo text to "hello world"
+```
+
+---
+
+### ISSUE-004: Add `delete` command to console
+**Status:** 📋 Planned
+**Target:** All
+**Effort:** Low
+
+Remove objects at runtime:
+```
+> delete ball
+```
+
+---
+
+### ISSUE-005: Add animation commands
+**Status:** 📋 Planned
+**Target:** Three.js
+**Effort:** Medium
+
+Simple animation verbs:
+```
+> spin ball
+> pulse logo
+> bounce cube
+```
+
+---
+
+### ISSUE-006: Save meta object state
+**Status:** 📋 Planned
+**Target:** All
+**Effort:** Low
+
+Currently save/load only captures scene objects, not `meta.phase`, `meta.score` etc.
+
+---
+
+### ISSUE-007: Relative positioning commands
+**Status:** 📋 Planned
+**Target:** All
+**Effort:** Low
+
+Move objects relative to current position:
+```
+> move ball up 2
+> move ball left 5
+```
+
+---
+
+### ISSUE-008: Object duplication (clone)
+**Status:** 📋 Planned
+**Target:** Three.js
+**Effort:** Low
+
+Duplicate existing objects:
+```
+> clone ball
+> copy ball as ball2
+```
+
+---
+
+### ISSUE-009: Screenshot command
+**Status:** 📋 Planned
+**Target:** Three.js
+**Effort:** Medium
+
+Export current view as PNG:
+```
+> screenshot
+```
+
+---
+
 ## Resolved Issues
 
 *None yet.*

@@ -1447,20 +1447,19 @@ class Parser:
         return FunctionCall(name=name, arguments=arguments, line=line)
 
     def parse_clone(self) -> CloneObject:
-        """Parse: clone <source> as <target>"""
+        """Parse: clone <source> [as <target>]"""
         line = self.current_token().line
         self.expect(TokenType.CLONE)
 
         source_token = self.expect(TokenType.IDENTIFIER)
         source = source_token.value
 
-        # Accept both 'as' and 'to'
-        if self.current_token().type not in (TokenType.AS, TokenType.TO):
-            self.error(f"Expected 'as' or 'to', got {self.current_token().type.name}")
-        self.advance()
-
-        target_token = self.expect(TokenType.IDENTIFIER)
-        target = target_token.value
+        # 'as <target>' is optional - if not provided, target=None means auto-generate
+        target = None
+        if self.current_token().type in (TokenType.AS, TokenType.TO):
+            self.advance()
+            target_token = self.expect(TokenType.IDENTIFIER)
+            target = target_token.value
 
         return CloneObject(source=source, target=target, line=line)
 
