@@ -1,6 +1,9 @@
 # Space Shooter - Classic Arcade Game
 # Horizontal movement, multiple bullets, multiple enemies, 3 lives
 
+# Render as 2D arcade screen in Three.js
+set _meta mode to "arcade"
+
 # === GAME CONFIGURATION ===
 # Canvas: 800x600
 # Player: bottom center, moves left/right

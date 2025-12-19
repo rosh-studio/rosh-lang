@@ -120,6 +120,15 @@ class IRTransformer:
         # Third pass: collect init actions (top-level statements)
         for stmt in program.statements:
             if not isinstance(stmt, (CreateObject, WhenStatement, FunctionDef)):
+                # Check for set _meta X to Y - store in metadata.extra
+                if isinstance(stmt, SetProperty):
+                    if isinstance(stmt.target, PropertyAccess):
+                        target_name = self.get_object_name(stmt.target.object)
+                        if target_name == '_meta':
+                            prop_name = stmt.target.property.lower()
+                            value = self.transform_value(stmt.value, prop_name)
+                            ir_program.metadata.extra[prop_name] = value.value if hasattr(value, 'value') else str(value)
+                            continue  # Don't add to init_actions
                 action = self.transform_statement(stmt)
                 if action:
                     ir_program.init_actions.append(action)

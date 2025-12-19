@@ -73,6 +73,9 @@ class ThreeJSEmitter(BaseEmitter):
         # Save/Load support
         self.uses_save_load = False
 
+        # Arcade mode (2D game on 3D plane)
+        self.arcade_mode = self.ir.metadata.extra.get('mode') == 'arcade'
+
         # Scan IR to detect features
         self._detect_features()
         # Capability bridge metadata
@@ -270,6 +273,9 @@ class ThreeJSEmitter(BaseEmitter):
 
     def emit(self) -> str:
         """Generate complete Three.js JavaScript code."""
+        if self.arcade_mode:
+            return self._emit_arcade_mode()
+
         self._emit_header()
         self._emit_scene_setup()
         self._emit_objects()
@@ -286,6 +292,433 @@ class ThreeJSEmitter(BaseEmitter):
         self._emit_repl_console()
 
         return self.get_code()
+
+    def _emit_arcade_mode(self) -> str:
+        """Emit arcade mode - 2D game rendered on a 3D plane."""
+        width = self.ir.metadata.canvas_width
+        height = self.ir.metadata.canvas_height
+
+        self._emit_header()
+        self.write_comment("=== ARCADE MODE: 2D game on 3D plane ===")
+        self.write_blank()
+
+        # Collect sprite assets for loading
+        for obj in self.ir.objects:
+            sprite = obj.get_property('sprite')
+            if sprite:
+                self.sprite_assets.add(sprite)
+        # Check for sounds in events
+        for event in self.ir.events:
+            for action in event.handler:
+                if hasattr(action, 'action_type') and action.action_type == 'play_sound':
+                    sound = action.params.get('sound', '')
+                    if sound:
+                        self.sound_assets.add(sound)
+
+        # Scene setup
+        self.write_comment("3D Scene Setup")
+        self.write("const scene = new THREE.Scene();")
+        self.write("scene.background = new THREE.Color(0x1a1a2e);")
+        self.write_blank()
+
+        self.write_comment("Camera - looking at arcade screen")
+        self.write(f"const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);")
+        self.write("camera.position.set(0, 0, 600);")
+        self.write("camera.lookAt(0, 0, 0);")
+        self.write_blank()
+
+        self.write_comment("Renderer")
+        self.write("const renderer = new THREE.WebGLRenderer({ antialias: true });")
+        self.write("renderer.setSize(window.innerWidth, window.innerHeight);")
+        self.write("renderer.setPixelRatio(window.devicePixelRatio);")
+        self.write("document.body.appendChild(renderer.domElement);")
+        self.write_blank()
+
+        self.write_comment("OrbitControls for zoom/pan")
+        self.write("const controls = new THREE.OrbitControls(camera, renderer.domElement);")
+        self.write("controls.enableDamping = true;")
+        self.write("controls.dampingFactor = 0.05;")
+        self.write("controls.minDistance = 300;")
+        self.write("controls.maxDistance = 1200;")
+        self.write_blank()
+
+        # 2D Canvas for the game
+        self.write_comment("2D Game Canvas (off-screen)")
+        self.write(f"const gameCanvas = document.createElement('canvas');")
+        self.write(f"gameCanvas.width = {width};")
+        self.write(f"gameCanvas.height = {height};")
+        self.write("const ctx = gameCanvas.getContext('2d');")
+        self.write_blank()
+
+        # Arcade screen plane
+        self.write_comment("Arcade Screen Plane")
+        self.write(f"const screenGeometry = new THREE.PlaneGeometry({width}, {height});")
+        self.write("const screenTexture = new THREE.CanvasTexture(gameCanvas);")
+        self.write("screenTexture.minFilter = THREE.LinearFilter;")
+        self.write("const screenMaterial = new THREE.MeshBasicMaterial({ map: screenTexture });")
+        self.write("const arcadeScreen = new THREE.Mesh(screenGeometry, screenMaterial);")
+        self.write("scene.add(arcadeScreen);")
+        self.write_blank()
+
+        # Add subtle glow/frame effect
+        self.write_comment("Arcade Cabinet Frame")
+        self.write(f"const frameGeometry = new THREE.PlaneGeometry({width + 40}, {height + 40});")
+        self.write("const frameMaterial = new THREE.MeshBasicMaterial({ color: 0x333333 });")
+        self.write("const frame = new THREE.Mesh(frameGeometry, frameMaterial);")
+        self.write("frame.position.z = -1;")
+        self.write("scene.add(frame);")
+        self.write_blank()
+
+        # Asset loading
+        self._emit_arcade_asset_loading()
+
+        # Game state object registry
+        self.write_comment("Game Objects Registry")
+        self.write("const ROSH_OBJECTS = {};")
+        self.write("const meta = { userData: {} };")
+        self.write_blank()
+
+        # Emit 2D game objects as data
+        self._emit_arcade_objects()
+
+        # Emit functions
+        self._emit_arcade_functions()
+
+        # Emit event handlers
+        self._emit_arcade_event_handlers()
+
+        # 2D Render function
+        self._emit_arcade_render()
+
+        # Animation loop
+        self._emit_arcade_animation_loop()
+
+        # Resize handler
+        self._emit_resize_handler()
+
+        # REPL Console
+        self._emit_repl_console()
+
+        # Arcade mode REPL overrides
+        self._emit_arcade_repl_overrides()
+
+        return self.get_code()
+
+    def _emit_arcade_repl_overrides(self):
+        """Override REPL commands for arcade mode (2D objects)."""
+        width = self.ir.metadata.canvas_width
+        height = self.ir.metadata.canvas_height
+
+        self.write_blank()
+        self.write_comment("Arcade Mode REPL Overrides")
+        # Override scene.getObjectByName to use ROSH_OBJECTS
+        self.write("scene.getObjectByName = (name) => ROSH_OBJECTS[name];")
+        # Override scene.traverse to iterate ROSH_OBJECTS
+        self.write("scene.traverse = (fn) => { for (const name in ROSH_OBJECTS) { const o = ROSH_OBJECTS[name]; o.name = name; fn(o); } };")
+        # Map position property access to x/y with normalized-to-pixel conversion
+        self.write("for (const name in ROSH_OBJECTS) {")
+        self.indent()
+        self.write("const obj = ROSH_OBJECTS[name];")
+        # Position proxy: converts normalized (0-1) to pixels, passes through pixel values
+        self.write(f"obj.position = {{")
+        self.indent()
+        self.write(f"get x() {{ return obj.x; }},")
+        self.write(f"set x(v) {{ obj.x = (v >= 0 && v <= 1) ? v * {width} : v; }},")
+        self.write(f"get y() {{ return obj.y; }},")
+        self.write(f"set y(v) {{ obj.y = (v >= 0 && v <= 1) ? v * {height} : v; }},")
+        self.write(f"z: 0")
+        self.dedent()
+        self.write("};")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+    def _emit_arcade_asset_loading(self):
+        """Emit asset loading for arcade mode."""
+        self.write_comment("Asset Loading")
+        self.write("const assets = {};")
+        self.write("let assetsLoaded = 0;")
+        self.write(f"const totalAssets = {len(self.sprite_assets)};")
+        self.write_blank()
+
+        if self.sprite_assets:
+            self.write("function loadAssets(callback) {")
+            self.indent()
+            self.write("if (totalAssets === 0) { callback(); return; }")
+            for sprite in self.sprite_assets:
+                self.write(f"const img_{sprite.replace('.', '_').replace('-', '_')} = new Image();")
+                self.write(f"img_{sprite.replace('.', '_').replace('-', '_')}.onload = () => {{ assetsLoaded++; if (assetsLoaded >= totalAssets) callback(); }};")
+                self.write(f"img_{sprite.replace('.', '_').replace('-', '_')}.src = 'assets/{sprite}';")
+                self.write(f"assets['{sprite}'] = img_{sprite.replace('.', '_').replace('-', '_')};")
+            self.dedent()
+            self.write("}")
+        else:
+            self.write("function loadAssets(callback) { callback(); }")
+        self.write_blank()
+
+    def _arcade_get_value(self, val, canvas_dim=None):
+        """Convert IR value/expression to a simple Python value for arcade mode."""
+        if val is None:
+            return 0
+        if isinstance(val, (int, float, bool)):
+            # Convert normalized (0-1) to pixels if needed
+            if canvas_dim and isinstance(val, float) and 0 <= val <= 1:
+                return int(canvas_dim * val)
+            return val
+        if isinstance(val, str):
+            return val
+        if isinstance(val, IR_Expression):
+            # Try to evaluate simple expressions
+            if val.type == 'literal' and hasattr(val, 'value'):
+                return self._arcade_get_value(val.value.value if hasattr(val.value, 'value') else val.value, canvas_dim)
+            if val.type == 'unary_op' and val.operator == '-':
+                inner = self._arcade_get_value(val.left, canvas_dim) if val.left else self._arcade_get_value(val.right, canvas_dim)
+                if isinstance(inner, (int, float)):
+                    return -inner
+            # Fall back to emitting as JS expression
+            return self.emit_expression(val)
+        if isinstance(val, IR_Value):
+            return self._arcade_get_value(val.value, canvas_dim)
+        return val
+
+    def _emit_arcade_objects(self):
+        """Emit 2D game objects as JavaScript data."""
+        self.write_comment("Game Objects")
+        width = self.ir.metadata.canvas_width
+        height = self.ir.metadata.canvas_height
+
+        for obj in self.ir.objects:
+            name = obj.name
+
+            # Get properties using get_property and convert to simple values
+            x = self._arcade_get_value(obj.get_property('x', 0), width)
+            y = self._arcade_get_value(obj.get_property('y', 0), height)
+            w = self._arcade_get_value(obj.get_property('width', 50), width)
+            h = self._arcade_get_value(obj.get_property('height', 50), height)
+            visible = obj.get_property('visible', True)
+            color_raw = obj.get_property('color', 0x00ff00)
+            sprite = obj.get_property('sprite')
+            text = obj.get_property('text')
+            font_size = self._arcade_get_value(obj.get_property('font_size', 16))
+
+            # Convert color to CSS hex string
+            if isinstance(color_raw, int):
+                color = f"#{color_raw:06x}"
+            elif isinstance(color_raw, str) and color_raw.startswith('#'):
+                color = color_raw
+            else:
+                color = f"#{self.CSS_COLORS.get(str(color_raw).lower(), 0x00ff00):06x}"
+
+            # Collect custom properties
+            custom_props = {}
+            for key, ir_val in obj.properties.items():
+                if key not in ('x', 'y', 'width', 'height', 'visible', 'color', 'sprite', 'text', 'font_size'):
+                    val = ir_val.value
+                    if isinstance(val, str):
+                        custom_props[key] = f"'{val}'"
+                    elif isinstance(val, bool):
+                        custom_props[key] = str(val).lower()
+                    else:
+                        custom_props[key] = val
+
+            self.write(f"const {name} = {{")
+            self.indent()
+            self.write(f"x: {x},")
+            self.write(f"y: {y},")
+            self.write(f"width: {w},")
+            self.write(f"height: {h},")
+            self.write(f"visible: {str(visible).lower()},")
+            self.write(f"color: '{color}',")
+            if sprite:
+                self.write(f"sprite: '{sprite}',")
+            if text:
+                self.write(f"text: '{text}',")
+                self.write(f"font_size: {font_size},")
+            # userData with custom properties (matching 3D mode structure)
+            if custom_props:
+                props_str = ", ".join(f"{k}: {v}" for k, v in custom_props.items())
+                self.write(f"userData: {{ {props_str} }}")
+            else:
+                self.write(f"userData: {{}}")
+            self.dedent()
+            self.write("};")
+            self.write(f"ROSH_OBJECTS['{name}'] = {name};")
+        self.write_blank()
+
+    def _emit_arcade_functions(self):
+        """Emit user-defined functions for arcade mode."""
+        self.write_comment("User Functions")
+        for func in self.ir.functions:
+            self.write(f"function {func.name}() {{")
+            self.indent()
+            for action in func.body:
+                code = self.emit_action(action)
+                if code:
+                    self.write(code)
+            self.dedent()
+            self.write("}")
+        self.write_blank()
+
+    def _emit_arcade_event_handlers(self):
+        """Emit event handlers for arcade mode."""
+        self.write_comment("Keyboard State")
+        self.write("const keyState = {};")
+        self.write("let consoleVisible = false;")
+        self.write_blank()
+
+        # Collect handlers by type
+        update_actions = []
+        keydown_handlers = {}
+        while_key_handlers = {}
+
+        for event in self.ir.events:
+            trigger = event.trigger
+            if trigger == 'update':
+                update_actions.extend(event.handler)
+            elif trigger.startswith('keydown:'):
+                key = trigger.split(':')[1]
+                if key not in keydown_handlers:
+                    keydown_handlers[key] = []
+                keydown_handlers[key].extend(event.handler)
+            elif trigger.startswith('while_key:') or trigger.startswith('continuous:'):
+                key = trigger.split(':')[1]
+                if key not in while_key_handlers:
+                    while_key_handlers[key] = []
+                while_key_handlers[key].extend(event.handler)
+
+        # Store update actions for animation loop
+        self._arcade_update_actions = update_actions
+        self._arcade_while_key_handlers = while_key_handlers
+
+        # Keyboard event listeners
+        self.write("document.addEventListener('keydown', (e) => {")
+        self.indent()
+        self.write("if (consoleVisible) return;")
+        self.write("keyState[e.code] = true;")
+
+        for key, actions in keydown_handlers.items():
+            key_code = self._get_key_code(key)
+            self.write(f"if (e.code === '{key_code}') {{")
+            self.indent()
+            for action in actions:
+                code = self.emit_action(action)
+                if code:
+                    self.write(code)
+            self.dedent()
+            self.write("}")
+
+        self.dedent()
+        self.write("});")
+        self.write_blank()
+
+        self.write("document.addEventListener('keyup', (e) => {")
+        self.indent()
+        self.write("keyState[e.code] = false;")
+        self.dedent()
+        self.write("});")
+        self.write_blank()
+
+    def _get_key_code(self, key: str) -> str:
+        """Convert Rosh key name to JavaScript key code."""
+        key_map = {
+            'space': 'Space',
+            'left': 'ArrowLeft',
+            'right': 'ArrowRight',
+            'up': 'ArrowUp',
+            'down': 'ArrowDown',
+            'r': 'KeyR',
+            'p': 'KeyP',
+        }
+        return key_map.get(key.lower(), f'Key{key.upper()}')
+
+    def _emit_arcade_render(self):
+        """Emit 2D rendering function."""
+        self.write_comment("2D Render Function")
+        self.write("function render2D() {")
+        self.indent()
+        self.write("ctx.fillStyle = '#1a1a2e';")
+        self.write(f"ctx.fillRect(0, 0, {self.ir.metadata.canvas_width}, {self.ir.metadata.canvas_height});")
+        self.write_blank()
+
+        self.write("// Render all visible objects")
+        self.write("for (const name in ROSH_OBJECTS) {")
+        self.indent()
+        self.write("const obj = ROSH_OBJECTS[name];")
+        self.write("if (!obj.visible) continue;")
+        self.write_blank()
+
+        self.write("// Draw sprite or shape")
+        self.write("if (obj.sprite && assets[obj.sprite]) {")
+        self.indent()
+        self.write("ctx.drawImage(assets[obj.sprite], obj.x - obj.width/2, obj.y - obj.height/2, obj.width, obj.height);")
+        self.dedent()
+        self.write("} else if (obj.text) {")
+        self.indent()
+        self.write("ctx.fillStyle = obj.color || '#ffffff';")
+        self.write("ctx.font = (obj.font_size || 16) + 'px Arial';")
+        self.write("ctx.textAlign = 'center';")
+        self.write("ctx.fillText(obj.text, obj.x, obj.y);")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("ctx.fillStyle = obj.color || '#00ff00';")
+        self.write("ctx.fillRect(obj.x - obj.width/2, obj.y - obj.height/2, obj.width, obj.height);")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+        self.write("// Update texture")
+        self.write("screenTexture.needsUpdate = true;")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+    def _emit_arcade_animation_loop(self):
+        """Emit animation loop for arcade mode."""
+        self.write_comment("Animation Loop")
+        self.write("function animate() {")
+        self.indent()
+        self.write("requestAnimationFrame(animate);")
+        self.write_blank()
+
+        # While-key handlers
+        if hasattr(self, '_arcade_while_key_handlers'):
+            for key, actions in self._arcade_while_key_handlers.items():
+                key_code = self._get_key_code(key)
+                self.write(f"if (keyState['{key_code}']) {{")
+                self.indent()
+                for action in actions:
+                    code = self.emit_action(action)
+                    if code:
+                        self.write(code)
+                self.dedent()
+                self.write("}")
+
+        # Update handlers
+        if hasattr(self, '_arcade_update_actions'):
+            for action in self._arcade_update_actions:
+                code = self.emit_action(action)
+                if code:
+                    self.write(code)
+
+        self.write_blank()
+        self.write("render2D();")
+        self.write("controls.update();")
+        self.write("renderer.render(scene, camera);")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+        self.write("// Start after assets loaded")
+        self.write("loadAssets(() => {")
+        self.indent()
+        self.write("console.log('Assets loaded, starting game');")
+        self.write("animate();")
+        self.dedent()
+        self.write("});")
+        self.write_blank()
 
     def write_comment(self, text: str):
         """JavaScript-style comments."""
@@ -1880,6 +2313,10 @@ class ThreeJSEmitter(BaseEmitter):
             self.uses_save_load = True
             return f"loadGame('{slot}');"
 
+        elif action_type == 'call':
+            func_name = params.get('function', params.get('name', ''))
+            return f"{func_name}();"
+
         return f"// TODO: {action_type}"
 
     def _emit_set_property(self, params: Dict) -> str:
@@ -1960,6 +2397,9 @@ class ThreeJSEmitter(BaseEmitter):
             right = self.emit_expression(expr.right)
             op = '&&' if expr.operator == 'and' else '||' if expr.operator == 'or' else expr.operator
             return f"({left} {op} {right})"
+        elif expr.type == 'unary_op':
+            operand = self.emit_expression(expr.left) if expr.left else self.emit_expression(expr.right)
+            return f"({expr.operator}{operand})"
 
         return str(expr)
 
