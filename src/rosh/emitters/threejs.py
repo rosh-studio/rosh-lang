@@ -192,6 +192,14 @@ class ThreeJSEmitter(BaseEmitter):
             description="Adjust text sprite font size."
         )
         self._register_capability(
+            "font",
+            handler="font",
+            applies_to=["text", "hud"],
+            tags=["safe"],
+            args=["font_family"],
+            description="Set font family (default: Inter). Examples: 'Arial', 'Georgia', 'Courier New'."
+        )
+        self._register_capability(
             "text",
             handler="text",
             applies_to=["text", "hud"],
@@ -710,6 +718,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write(f"{name}._ctx = {name}Ctx;")
         self.write(f"{name}._text = '{text}';")
         self.write(f"{name}._color = '{css_color}';")
+        self.write(f"{name}._font = 'Inter';")
         self.write(f"scene.add({name});")
         self.write(f"{name}.userData.font_size = 48;")
 
@@ -742,6 +751,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write(f"{name}._canvas = {name}Canvas;")
         self.write(f"{name}._ctx = {name}Ctx;")
         self.write(f"{name}._color = '#ffffff';")
+        self.write(f"{name}._font = 'Inter';")
         self.write(f"scene.add({name});")
         self.write(f"{name}.userData.font_size = 32;")
 
@@ -925,8 +935,9 @@ class ThreeJSEmitter(BaseEmitter):
         self.indent()
         self.write("if (!obj || !obj._ctx) return;")
         self.write("const fontSize = obj.userData.font_size || 48;")
+        self.write("const fontFamily = obj._font || 'Inter';")
         self.write("obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);")
-        self.write("obj._ctx.font = 'bold ' + fontSize + 'px Arial';")
+        self.write("obj._ctx.font = 'bold ' + fontSize + 'px ' + fontFamily;")
         self.write("obj._ctx.textAlign = 'center';")
         self.write("obj._ctx.textBaseline = 'middle';")
         self.write("obj._ctx.fillStyle = obj._color || '#ffffff';")
@@ -985,6 +996,15 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const n = parseFloat(ctx.tokens[0]);")
         self.write("if (Number.isNaN(n)) throw new Error('Provide a numeric font size');")
         self.write("ctx.object.userData.font_size = n;")
+        self.write("redrawTextSprite(ctx.object);")
+        self.dedent()
+        self.write("};")
+
+        self.write("CAPABILITY_RUNTIME['font'] = function(ctx) {")
+        self.indent()
+        self.write("if (!ctx.object._ctx) throw new Error('Only text sprites support font');")
+        self.write("if (!ctx.raw || !ctx.raw.trim()) throw new Error('Provide a font family name');")
+        self.write("ctx.object._font = ctx.raw.trim();")
         self.write("redrawTextSprite(ctx.object);")
         self.dedent()
         self.write("};")
@@ -1297,9 +1317,13 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("#rosh-output { flex: 1; overflow-y: auto; padding: 10px; }")
         self.write("#rosh-output .cmd { color: #ff0; } #rosh-output .ok { color: #3f3; }")
         self.write("#rosh-output .err { color: #f33; } #rosh-output .cyan { color: #0ff; }")
-        self.write("#rosh-input-line { padding: 10px; border-top: 1px solid #0f0; display: flex; gap: 8px; }")
+        self.write("#rosh-input-line { padding: 10px; border-top: 1px solid #0f0; display: flex; gap: 8px; align-items: center; }")
         self.write("#rosh-input-line input { flex: 1; background: #111; border: 1px solid #0f0;")
         self.write("  color: #0f0; padding: 8px; font-family: inherit; }")
+        self.write("#rosh-voice { width: 24px; height: 24px; cursor: pointer; opacity: 0.5; transition: all 0.2s; }")
+        self.write("#rosh-voice:hover { opacity: 0.8; }")
+        self.write("#rosh-voice.listening { opacity: 1; animation: pulse 1s infinite; }")
+        self.write("@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.2); } }")
         self.write("`;")
         self.write("document.head.appendChild(consoleStyle);")
         self.write_blank()
@@ -1314,7 +1338,10 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("  <div id='rosh-output'></div>")
         self.write("  <div id='rosh-input-line'>")
         self.write("    <span style='color:#0f0'>rosh></span>")
-        self.write("    <input type='text' id='rosh-input' placeholder='help for commands' autocomplete='off'>")
+        self.write("    <input type='text' id='rosh-input' placeholder='type or hold Space for voice' autocomplete='off'>")
+        self.write("    <svg id='rosh-voice' viewBox='0 0 24 24' fill='#0f0' title='Click or hold Space to speak'>")
+        self.write("      <path d='M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z'/>")
+        self.write("    </svg>")
         self.write("  </div>`;")
         self.write("document.body.appendChild(consoleDiv);")
         self.write_blank()
@@ -1378,13 +1405,129 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("});")
         self.write_blank()
 
+        # Voice input
+        self._emit_voice_input()
+        self.write_blank()
+
         self.write(f"log('Rosh Console ready! Rosh v{__version__}. Type help for commands.', 'cyan');")
+
+    def _emit_voice_input(self):
+        """Emit Web Speech API voice input with push-to-talk."""
+        self.write_comment("Voice Input - Hold V to speak (Chrome/Edge)")
+        self.write("const voiceBtn = document.getElementById('rosh-voice');")
+        self.write("let recognition = null;")
+        self.write("let isListening = false;")
+        self.write_blank()
+
+        # Check for browser support
+        self.write("const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;")
+        self.write("if (SpeechRecognition) {")
+        self.indent()
+        self.write("recognition = new SpeechRecognition();")
+        self.write("recognition.continuous = false;")
+        self.write("recognition.interimResults = false;")
+        self.write("recognition.lang = 'en-US';")
+        self.write_blank()
+
+        # On result - execute command
+        self.write("recognition.onresult = (event) => {")
+        self.indent()
+        self.write("const transcript = event.results[0][0].transcript;")
+        self.write("log('[voice] ' + transcript, 'cyan');")
+        self.write("execCommand(transcript);")
+        self.dedent()
+        self.write("};")
+        self.write_blank()
+
+        # On end - reset state
+        self.write("recognition.onend = () => {")
+        self.indent()
+        self.write("isListening = false;")
+        self.write("voiceBtn.classList.remove('listening');")
+        self.dedent()
+        self.write("};")
+        self.write_blank()
+
+        # On error
+        self.write("recognition.onerror = (event) => {")
+        self.indent()
+        self.write("log('[voice error] ' + event.error, 'err');")
+        self.write("isListening = false;")
+        self.write("voiceBtn.classList.remove('listening');")
+        self.dedent()
+        self.write("};")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("voiceBtn.style.display = 'none';")
+        self.write("log('[voice] Not supported in this browser', 'dim');")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+        # Start voice function
+        self.write("function startVoice() {")
+        self.indent()
+        self.write("if (!recognition || isListening) return;")
+        self.write("try {")
+        self.indent()
+        self.write("recognition.start();")
+        self.write("isListening = true;")
+        self.write("voiceBtn.classList.add('listening');")
+        self.write("log('[voice] Listening...', 'dim');")
+        self.dedent()
+        self.write("} catch(e) { log('[voice] ' + e.message, 'err'); }")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+        # Stop voice function
+        self.write("function stopVoice() {")
+        self.indent()
+        self.write("if (!recognition || !isListening) return;")
+        self.write("recognition.stop();")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+        # Space key push-to-talk (only when console visible and input not focused)
+        self.write("document.addEventListener('keydown', e => {")
+        self.indent()
+        self.write("if (e.code === 'Space' && consoleVisible && document.activeElement !== input && !e.repeat) {")
+        self.indent()
+        self.write("e.preventDefault();")
+        self.write("startVoice();")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("});")
+        self.write_blank()
+
+        self.write("document.addEventListener('keyup', e => {")
+        self.indent()
+        self.write("if (e.code === 'Space' && document.activeElement !== input) {")
+        self.indent()
+        self.write("stopVoice();")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("});")
+        self.write_blank()
+
+        # Click to toggle voice
+        self.write("voiceBtn.addEventListener('click', () => {")
+        self.indent()
+        self.write("if (isListening) stopVoice(); else startVoice();")
+        self.dedent()
+        self.write("});")
 
     def _emit_exec_command(self):
         """Emit the execCommand function for REPL."""
         self.write("function execCommand(cmd) {")
         self.indent()
         self.write("log('> ' + cmd, 'cmd');")
+        # Normalize British spellings and common voice recognition errors
+        self.write("cmd = cmd.replace(/colour/gi, 'color').replace(/centre/gi, 'center');")
         self.write("const parts = cmd.trim().toLowerCase().split(/\\s+/);")
         self.write("try {")
         self.indent()
