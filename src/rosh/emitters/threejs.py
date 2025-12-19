@@ -1338,8 +1338,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("  <div id='rosh-output'></div>")
         self.write("  <div id='rosh-input-line'>")
         self.write("    <span style='color:#0f0'>rosh></span>")
-        self.write("    <input type='text' id='rosh-input' placeholder='type or hold Space for voice' autocomplete='off'>")
-        self.write("    <svg id='rosh-voice' viewBox='0 0 24 24' fill='#0f0' title='Click or hold Space to speak'>")
+        self.write("    <input type='text' id='rosh-input' placeholder='type or hold / for voice' autocomplete='off'>")
+        self.write("    <svg id='rosh-voice' viewBox='0 0 24 24' fill='#0f0' title='Click or hold / to speak'>")
         self.write("      <path d='M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z'/>")
         self.write("    </svg>")
         self.write("  </div>`;")
@@ -1413,7 +1413,7 @@ class ThreeJSEmitter(BaseEmitter):
 
     def _emit_voice_input(self):
         """Emit Web Speech API voice input with push-to-talk."""
-        self.write_comment("Voice Input - Hold V to speak (Chrome/Edge)")
+        self.write_comment("Voice Input - Hold / to speak (Chrome/Edge)")
         self.write("const voiceBtn = document.getElementById('rosh-voice');")
         self.write("let recognition = null;")
         self.write("let isListening = false;")
@@ -1432,9 +1432,14 @@ class ThreeJSEmitter(BaseEmitter):
         # On result - execute command
         self.write("recognition.onresult = (event) => {")
         self.indent()
-        self.write("const transcript = event.results[0][0].transcript;")
-        self.write("log('[voice] ' + transcript, 'cyan');")
-        self.write("execCommand(transcript);")
+        self.write("let cmd = event.results[0][0].transcript.toLowerCase();")
+        # British spelling normalization
+        self.write("cmd = cmd.replace(/colour/gi, 'color').replace(/centre/gi, 'center');")
+        # Word to number conversion
+        self.write("const numWords = {zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10};")
+        self.write("cmd = cmd.replace(/\\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\\b/gi, m => numWords[m.toLowerCase()]);")
+        self.write("log('[voice] ' + cmd, 'cyan');")
+        self.write("execCommand(cmd);")
         self.dedent()
         self.write("};")
         self.write_blank()
@@ -1490,10 +1495,10 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("}")
         self.write_blank()
 
-        # Space key push-to-talk (only when console visible and input not focused)
+        # Slash key push-to-talk (only when console visible and input not focused)
         self.write("document.addEventListener('keydown', e => {")
         self.indent()
-        self.write("if (e.code === 'Space' && consoleVisible && document.activeElement !== input && !e.repeat) {")
+        self.write("if (e.key === '/' && consoleVisible && document.activeElement !== input && !e.repeat) {")
         self.indent()
         self.write("e.preventDefault();")
         self.write("startVoice();")
@@ -1505,7 +1510,7 @@ class ThreeJSEmitter(BaseEmitter):
 
         self.write("document.addEventListener('keyup', e => {")
         self.indent()
-        self.write("if (e.code === 'Space' && document.activeElement !== input) {")
+        self.write("if (e.key === '/' && document.activeElement !== input) {")
         self.indent()
         self.write("stopVoice();")
         self.dedent()
