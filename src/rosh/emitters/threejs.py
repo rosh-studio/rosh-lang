@@ -2081,7 +2081,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("recognition.lang = 'en-US';")
         self.write_blank()
 
-        # On result - execute command
+        # On result - execute command and add to history
         self.write("recognition.onresult = (event) => {")
         self.indent()
         self.write("let cmd = event.results[0][0].transcript.toLowerCase();")
@@ -2091,6 +2091,9 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const numWords = {zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10};")
         self.write("cmd = cmd.replace(/\\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\\b/gi, m => numWords[m.toLowerCase()]);")
         self.write("log('[voice] ' + cmd, 'cyan');")
+        # Apply fuzzy correction and add corrected command to history
+        self.write("const corrected = fuzzyCorrectCommand(cmd);")
+        self.write("cmdHistory.unshift(corrected.cmd); historyIdx = -1;")
         self.write("execCommand(cmd);")
         self.dedent()
         self.write("};")
