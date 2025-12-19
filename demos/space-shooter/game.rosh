@@ -22,7 +22,7 @@ end
 create object instructions
     set x to 50%
     set y to 45%
-    set text to "Arrow keys to move, SPACE to fire"
+    set text to "O/P to move, SPACE to fire"
     set color to "white"
     set font_size to 18
 end
@@ -365,8 +365,8 @@ when space_pressed then
     end
 end
 
-# Smooth continuous movement (runs every frame while key held)
-when while_key_left then
+# Smooth continuous movement (O and P keys in arcade mode)
+when while_key_o then
     if state.level is above 0 then
         if player.x is above 30 then
             set player.x to player.x minus 5
@@ -374,7 +374,7 @@ when while_key_left then
     end
 end
 
-when while_key_right then
+when while_key_p then
     if state.level is above 0 then
         if player.x is below 770 then
             set player.x to player.x plus 5
