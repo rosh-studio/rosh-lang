@@ -1931,6 +1931,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("'scale': 'scale', 'skill': 'scale',")
         self.write("'polls': 'pulse', 'pulls': 'pulse', 'pals': 'pulse',")
         self.write("'logo': 'logo', 'lego': 'logo', 'local': 'logo',")
+        self.write("'rush': 'rosh', 'rash': 'rosh', 'ross': 'rosh', 'roush': 'rosh',")
         self.dedent()
         self.write("};")
         self.write_blank()
