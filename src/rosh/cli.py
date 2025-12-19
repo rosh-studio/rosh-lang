@@ -184,6 +184,7 @@ def _fuzzy_match_command(word: str, interpreter=None):
         'goto', 'go', 'connect', 'link',
         # AI commands
         'prompt',
+        'undo', 'redo',
         # Help
         'help',
     ]
@@ -590,7 +591,7 @@ def run_repl(interpreter: Interpreter = None):
     out.print()
 
     out.print("Commands:", style="bold")
-    out.print("  create, get, set, print, clone, delete, properties, undo", style="cyan")
+    out.print("  create, get, set, print, clone, delete, properties, undo, redo", style="cyan")
     out.print("  look, goto, connect, prompt, import, save, load, dump", style="cyan")
     out.print()
 
@@ -778,6 +779,27 @@ def run_repl(interpreter: Interpreter = None):
                             out.warning("Usage: undo [count]")
                             steps = 1
                     interpreter.perform_undo(max(1, steps))
+                continue
+
+            if parts and parts[0].lower() == 'redo':
+                if len(parts) >= 2 and parts[1].lower() == 'stack':
+                    count = 5
+                    if len(parts) >= 3:
+                        try:
+                            count = int(parts[2])
+                        except ValueError:
+                            out.warning("Usage: redo stack [count]")
+                            count = 5
+                    interpreter.describe_redo_stack(max(1, count))
+                else:
+                    steps = 1
+                    if len(parts) >= 2:
+                        try:
+                            steps = int(parts[1])
+                        except ValueError:
+                            out.warning("Usage: redo [count]")
+                            steps = 1
+                    interpreter.perform_redo(max(1, steps))
                 continue
 
             # look <obj> / examine <obj> / inspect <obj> / x <obj> - show object properties

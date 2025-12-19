@@ -78,8 +78,9 @@ class Interpreter:
         self.test_inputs = test_inputs or []
         self.test_input_index = 0
 
-        # Undo stack (CLI + interpreters)
+        # Undo/Redo stacks (CLI + interpreters)
         self.undo_stack = []
+        self.redo_stack = []
         self.undo_limit = 100
         self._undo_enabled = False  # Enabled after meta initialization
 
@@ -114,17 +115,19 @@ class Interpreter:
         self.global_env.define('meta', meta)
         self.register_instance(meta, type_name='meta', explicit_name='meta')
 
-    def push_undo(self, description: str, inverse: Callable[[], None]):
+    def push_undo(self, description: str, inverse: Callable[[], None], redo: Optional[Callable[[], None]] = None):
         """Push an undo entry onto the stack."""
         if not self._undo_enabled or not callable(inverse):
             return
         entry = {
             'description': description or 'change',
-            'inverse': inverse,
+            'undo': inverse,
+            'redo': redo,
         }
         self.undo_stack.append(entry)
         if len(self.undo_stack) > self.undo_limit:
             self.undo_stack.pop(0)
+        self.redo_stack.clear()
 
     def perform_undo(self, count: int = 1):
         """Execute one or more undo operations."""
@@ -135,10 +138,14 @@ class Interpreter:
         for _ in range(steps):
             entry = self.undo_stack.pop()
             try:
-                entry['inverse']()
+                entry['undo']()
                 self.color_out.success(f"Undo: {entry['description']}")
+                if entry.get('redo'):
+                    self.redo_stack.append(entry)
             except Exception as exc:
                 self.color_out.error(f"Undo failed: {exc}")
+                # Put entry back if undo failed
+                self.undo_stack.append(entry)
                 break
 
     def describe_undo_stack(self, limit: int = 5):
@@ -148,6 +155,34 @@ class Interpreter:
             return
         self.color_out.print("Recent undo entries:", style="cyan")
         for idx, entry in enumerate(reversed(self.undo_stack[-limit:]), 1):
+            self.color_out.dim(f"  #{idx} {entry['description']}")
+
+    def perform_redo(self, count: int = 1):
+        """Reapply one or more actions."""
+        if not self.redo_stack:
+            self.color_out.warning("Nothing to redo")
+            return
+        steps = max(1, min(count, len(self.redo_stack)))
+        for _ in range(steps):
+            entry = self.redo_stack.pop()
+            if not entry.get('redo'):
+                self.color_out.warning(f"No redo available for {entry['description']}")
+                continue
+            try:
+                entry['redo']()
+                self.color_out.success(f"Redo: {entry['description']}")
+                self.undo_stack.append(entry)
+            except Exception as exc:
+                self.color_out.error(f"Redo failed: {exc}")
+                break
+
+    def describe_redo_stack(self, limit: int = 5):
+        """Print redo history."""
+        if not self.redo_stack:
+            self.color_out.dim("Redo stack is empty")
+            return
+        self.color_out.print("Pending redo entries:", style="cyan")
+        for idx, entry in enumerate(reversed(self.redo_stack[-limit:]), 1):
             self.color_out.dim(f"  #{idx} {entry['description']}")
 
     @contextmanager
@@ -166,17 +201,16 @@ class Interpreter:
             return value
         return copy.deepcopy(value)
 
-    def _capture_property_stack(self, obj: RoshObject, prop: str):
-        """Capture an object's property stack for undo."""
-        prev_stack = copy.deepcopy(obj.property_stacks.get(prop, []))
+    def _snapshot_property_stack(self, obj: RoshObject, prop: str):
+        """Capture an object's property stack."""
+        return copy.deepcopy(obj.property_stacks.get(prop, []))
 
-        def restore():
-            if prev_stack:
-                obj.property_stacks[prop] = copy.deepcopy(prev_stack)
-            else:
-                obj.property_stacks.pop(prop, None)
-
-        return restore
+    def _restore_property_stack(self, obj: RoshObject, prop: str, stack: List[Any]):
+        """Restore an object's property stack."""
+        if stack:
+            obj.property_stacks[prop] = copy.deepcopy(stack)
+        else:
+            obj.property_stacks.pop(prop, None)
 
     def _describe_property_path(self, node) -> str:
         """Render human-readable property path for undo messages."""
@@ -706,6 +740,7 @@ class Interpreter:
         self.current_env.define(node.name, obj)
         binding_env = self.current_env
         name = node.name
+        binding_type = binding_env.bindings[name]['type']
 
         def undo_create():
             if name in binding_env.bindings:
@@ -714,7 +749,14 @@ class Interpreter:
                     self._detach_object_instance(obj)
                     del binding_env.bindings[name]
 
-        self.push_undo(f"create {node.name}", undo_create)
+        def redo_create():
+            binding_env.bindings[name] = {
+                'value': obj,
+                'type': binding_type
+            }
+            self._attach_object_instance(obj)
+
+        self.push_undo(f"create {node.name}", undo_create, redo_create)
 
     def eval_create_value(self, node: CreateValue) -> None:
         """Execute: create x to 5  OR  create x: number to 5"""
@@ -738,12 +780,20 @@ class Interpreter:
 
         self.current_env.define(node.name, value)
         env = self.current_env
+        value_snapshot = self._snapshot_value(value)
+        value_type = env.bindings[node.name]['type']
 
         def undo_create_value():
             if node.name in env.bindings:
                 del env.bindings[node.name]
 
-        self.push_undo(f"create {node.name}", undo_create_value)
+        def redo_create_value():
+            env.bindings[node.name] = {
+                'value': self._snapshot_value(value_snapshot),
+                'type': value_type
+            }
+
+        self.push_undo(f"create {node.name}", undo_create_value, redo_create_value)
 
     def _types_match(self, annotated, inferred):
         """Check if annotated type matches inferred type"""
@@ -791,31 +841,52 @@ class Interpreter:
             # Check if we have a current object context (set via 'get')
             if self.current_object is not None:
                 # Set property on current object
-                restore = self._capture_property_stack(self.current_object, name)
+                prev_stack = self._snapshot_property_stack(self.current_object, name)
                 self.current_object.set(name, value)
-                self.push_undo(f"{self.current_object_name}.{name}", restore)
+                new_stack = self._snapshot_property_stack(self.current_object, name)
+
+                def undo_prop():
+                    self._restore_property_stack(self.current_object, name, prev_stack)
+
+                def redo_prop():
+                    self._restore_property_stack(self.current_object, name, new_stack)
+
+                self.push_undo(f"{self.current_object_name}.{name}", undo_prop, redo_prop)
                 self.color_out.success(f"{self.current_object_name}.{name} = {value}")
             elif self.current_env.exists(target.name):
                 # Setting an existing variable
                 binding_env = self._find_env_for_binding(name) or self.current_env
                 prev_value = self._snapshot_value(binding_env.bindings[name]['value'])
                 self.current_env.set(name, value)
+                new_value = self._snapshot_value(value)
 
                 def undo_assign(env=binding_env, var=name, previous=prev_value):
                     if var in env.bindings:
                         env.bindings[var]['value'] = self._snapshot_value(previous)
 
-                self.push_undo(f"set {name}", undo_assign)
+                def redo_assign(env=binding_env, var=name, nxt=new_value):
+                    if var in env.bindings:
+                        env.bindings[var]['value'] = self._snapshot_value(nxt)
+
+                self.push_undo(f"set {name}", undo_assign, redo_assign)
             else:
                 # Define a new variable
                 self.current_env.define(name, value)
                 binding_env = self.current_env
+                value_snapshot = self._snapshot_value(value)
+                value_type = binding_env.bindings[name]['type']
 
                 def undo_define(env=binding_env, var=name):
                     if var in env.bindings:
                         del env.bindings[var]
 
-                self.push_undo(f"define {name}", undo_define)
+                def redo_define(env=binding_env, var=name, val=value_snapshot, typ=value_type):
+                    env.bindings[var] = {
+                        'value': self._snapshot_value(val),
+                        'type': typ
+                    }
+
+                self.push_undo(f"define {name}", undo_define, redo_define)
 
         elif isinstance(target, ListIndex):
             # Setting a list element
@@ -836,6 +907,7 @@ class Interpreter:
 
             prev_value = self._snapshot_value(list_val[index])
             list_val[index] = value
+            new_value = self._snapshot_value(value)
 
             desc = "list"
             if isinstance(target.list_expr, Identifier):
@@ -844,7 +916,10 @@ class Interpreter:
             def undo_list_assignment(lst=list_val, idx=index, prev=prev_value):
                 lst[idx] = self._snapshot_value(prev)
 
-            self.push_undo(f"{desc}[{index}]", undo_list_assignment)
+            def redo_list_assignment(lst=list_val, idx=index, nxt=new_value):
+                lst[idx] = self._snapshot_value(nxt)
+
+            self.push_undo(f"{desc}[{index}]", undo_list_assignment, redo_list_assignment)
 
         elif isinstance(target, PropertyAccess):
             # Setting an object property
@@ -1093,10 +1168,19 @@ class Interpreter:
         if not isinstance(obj_value, RoshObject):
             raise RoshTypeError(f"Cannot set property of non-object: {type(obj_value).__name__}")
 
-        restore = self._capture_property_stack(obj_value, node.property)
+        prev_stack = self._snapshot_property_stack(obj_value, node.property)
         obj_value.set(node.property, value)
-        desc = f"{self._describe_property_path(node.object)}.{node.property}"
-        self.push_undo(desc, restore)
+        new_stack = self._snapshot_property_stack(obj_value, node.property)
+
+        desc = self._describe_property_path(node) if base_obj is None else f"{base_obj.name}.{node.property}"
+
+        def undo_prop():
+            self._restore_property_stack(obj_value, node.property, prev_stack)
+
+        def redo_prop():
+            self._restore_property_stack(obj_value, node.property, new_stack)
+
+        self.push_undo(desc, undo_prop, redo_prop)
 
     def eval_print(self, node: Print) -> None:
         """Execute: print <expression>"""
@@ -2632,6 +2716,7 @@ Focus on the specific syntax or concept they need to correct."""
         # Define the new object in the environment
         self.current_env.define(var_name, cloned_obj)
         binding_env = self.current_env
+        binding_type = binding_env.bindings[var_name]['type']
 
         def undo_clone():
             if var_name in binding_env.bindings:
@@ -2640,7 +2725,14 @@ Focus on the specific syntax or concept they need to correct."""
                     self._detach_object_instance(cloned_obj)
                     del binding_env.bindings[var_name]
 
-        self.push_undo(f"clone {node.source}", undo_clone)
+        def redo_clone():
+            binding_env.bindings[var_name] = {
+                'value': cloned_obj,
+                'type': binding_type
+            }
+            self._attach_object_instance(cloned_obj)
+
+        self.push_undo(f"clone {node.source}", undo_clone, redo_clone)
 
         # Print feedback
         if is_anonymous:
@@ -2686,7 +2778,14 @@ Focus on the specific syntax or concept they need to correct."""
             if isinstance(value, RoshObject):
                 self._attach_object_instance(value)
 
-        self.push_undo(f"delete {node.name}", undo_delete)
+        def redo_delete(target_env=env, name=node.name, value=obj):
+            if name in target_env.bindings:
+                existing = target_env.bindings[name]['value']
+                if isinstance(existing, RoshObject):
+                    self._detach_object_instance(existing)
+                del target_env.bindings[name]
+
+        self.push_undo(f"delete {node.name}", undo_delete, redo_delete)
 
     def eval_properties(self, node: PropertiesCommand) -> None:
         """Execute: properties <target> - List all properties of an object"""
