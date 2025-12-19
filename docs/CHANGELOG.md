@@ -5,6 +5,16 @@ All notable changes to the Rosh programming language will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.11] - 2025-12-16
+
+### 🧠 Builder UX
+- **Three.js undo** - In-game console now supports `undo` / `undo N` across creates, deletes, clones, and property edits
+- **Undo stack inspector** - `undo stack` previews the most recent reversible steps for confidence while experimenting
+
+### ⚙️ Engine Capabilities
+- **Capability rollbacks** - `color`, `font`, `font_size`, `text`, `scale`, `spin`, `bounce`, `pulse`, and `orbit` expose inverse handlers so capability bridge actions participate in undo
+- **Passthrough safety** - Manual `set` passthroughs to `userData` now capture their previous values for precise undos
+
 ## [0.1.10] - 2025-12-15
 
 ### ✨ Demo & Polish
