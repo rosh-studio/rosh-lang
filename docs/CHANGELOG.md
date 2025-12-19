@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🧠 Builder UX
 - **Three.js undo** - In-game console now supports `undo` / `undo N` across creates, deletes, clones, and property edits
 - **Undo stack inspector** - `undo stack` previews the most recent reversible steps for confidence while experimenting
+- **CLI undo** - Core interpreter + REPL gained `undo`, `undo N`, and `undo stack` so typed workflows mirror the Three.js console
 
 ### ⚙️ Engine Capabilities
 - **Capability rollbacks** - `color`, `font`, `font_size`, `text`, `scale`, `spin`, `bounce`, `pulse`, and `orbit` expose inverse handlers so capability bridge actions participate in undo

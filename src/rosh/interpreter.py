@@ -7,7 +7,9 @@ import json
 import math
 import random
 import re
-from typing import Any, List, Callable
+import copy
+from contextlib import contextmanager
+from typing import Any, List, Callable, Optional
 from .ast_nodes import *
 from .environment import Environment
 from .values import RoshObject, RoshFunction, rosh_to_python, is_truthy
@@ -76,6 +78,11 @@ class Interpreter:
         self.test_inputs = test_inputs or []
         self.test_input_index = 0
 
+        # Undo stack (CLI + interpreters)
+        self.undo_stack = []
+        self.undo_limit = 100
+        self._undo_enabled = False  # Enabled after meta initialization
+
         # Metadata system (v0.0.8+)
         self.source_code = None  # Original source code (for checksum calculation)
         self.program_metadata = {}  # Metadata by scope: 'core', 'generated', 'game', etc.
@@ -89,6 +96,7 @@ class Interpreter:
 
         # Implicit meta object (v0.2.7+) - always exists, holds game state
         self._init_meta_object()
+        self._undo_enabled = True
 
     def _init_meta_object(self):
         """Initialize the implicit meta object
@@ -105,6 +113,125 @@ class Interpreter:
         meta._is_meta = True  # Mark as special meta object
         self.global_env.define('meta', meta)
         self.register_instance(meta, type_name='meta', explicit_name='meta')
+
+    def push_undo(self, description: str, inverse: Callable[[], None]):
+        """Push an undo entry onto the stack."""
+        if not self._undo_enabled or not callable(inverse):
+            return
+        entry = {
+            'description': description or 'change',
+            'inverse': inverse,
+        }
+        self.undo_stack.append(entry)
+        if len(self.undo_stack) > self.undo_limit:
+            self.undo_stack.pop(0)
+
+    def perform_undo(self, count: int = 1):
+        """Execute one or more undo operations."""
+        if not self.undo_stack:
+            self.color_out.warning("Nothing to undo")
+            return
+        steps = max(1, min(count, len(self.undo_stack)))
+        for _ in range(steps):
+            entry = self.undo_stack.pop()
+            try:
+                entry['inverse']()
+                self.color_out.success(f"Undo: {entry['description']}")
+            except Exception as exc:
+                self.color_out.error(f"Undo failed: {exc}")
+                break
+
+    def describe_undo_stack(self, limit: int = 5):
+        """Print the most recent undo entries."""
+        if not self.undo_stack:
+            self.color_out.dim("Undo stack is empty")
+            return
+        self.color_out.print("Recent undo entries:", style="cyan")
+        for idx, entry in enumerate(reversed(self.undo_stack[-limit:]), 1):
+            self.color_out.dim(f"  #{idx} {entry['description']}")
+
+    @contextmanager
+    def suspend_undo(self):
+        """Temporarily disable undo stacking (for internal operations)."""
+        prev = self._undo_enabled
+        self._undo_enabled = False
+        try:
+            yield
+        finally:
+            self._undo_enabled = prev
+
+    def _snapshot_value(self, value: Any):
+        """Return a snapshot suitable for restoration."""
+        if isinstance(value, RoshObject):
+            return value
+        return copy.deepcopy(value)
+
+    def _capture_property_stack(self, obj: RoshObject, prop: str):
+        """Capture an object's property stack for undo."""
+        prev_stack = copy.deepcopy(obj.property_stacks.get(prop, []))
+
+        def restore():
+            if prev_stack:
+                obj.property_stacks[prop] = copy.deepcopy(prev_stack)
+            else:
+                obj.property_stacks.pop(prop, None)
+
+        return restore
+
+    def _describe_property_path(self, node) -> str:
+        """Render human-readable property path for undo messages."""
+        if isinstance(node, Identifier):
+            return node.name
+        if isinstance(node, PropertyAccess):
+            return f"{self._describe_property_path(node.object)}.{node.property}"
+        return "(property)"
+
+    def _find_env_for_binding(self, name: str) -> Optional[Environment]:
+        """Locate the environment that owns the given binding."""
+        env = self.current_env
+        while env:
+            if name in env.bindings:
+                return env
+            env = env.parent
+        return None
+
+    def _detach_object_instance(self, obj: Any):
+        """Remove a RoshObject from tracking structures."""
+        if not isinstance(obj, RoshObject):
+            return
+        self.uuid_map.pop(obj.uuid, None)
+
+        candidate_names = []
+        if obj.id:
+            if '-' in obj.id:
+                candidate_names.append(obj.id.rsplit('-', 1)[0])
+            candidate_names.append(obj.id)
+        candidate_names.append(obj.name)
+
+        for type_name in list(set(candidate_names)):
+            if type_name in self.instances:
+                self.instances[type_name] = [
+                    inst for inst in self.instances[type_name]
+                    if inst.uuid != obj.uuid
+                ]
+                if not self.instances[type_name]:
+                    del self.instances[type_name]
+
+    def _attach_object_instance(self, obj: Any):
+        """Reattach a RoshObject to tracking structures."""
+        if not isinstance(obj, RoshObject):
+            return
+        self.uuid_map[obj.uuid] = obj
+        if obj.id and '-' in obj.id:
+            type_name = obj.id.rsplit('-', 1)[0]
+        elif obj.id:
+            type_name = obj.id
+        else:
+            type_name = obj.name
+
+        instances = self.instances.setdefault(type_name, [])
+        if not any(inst.uuid == obj.uuid for inst in instances):
+            instances.append(obj)
 
     def execute(self, program: Program):
         """Execute a program (list of statements)"""
@@ -553,22 +680,23 @@ class Interpreter:
         obj_env = Environment(parent=self.current_env)
         self.current_env = obj_env
 
-        # Execute the body, which will set properties
+        # Execute the body without recording undo entries (internal initialization)
         # We temporarily bind 'self' or the object name to the object
         obj_env.define(node.name, obj)
 
-        for statement in node.body:
-            if isinstance(statement, SetProperty):
-                # Handle 'set property to value' inside object
-                target = statement.target
-                value = self.eval_expression(statement.value)
+        with self.suspend_undo():
+            for statement in node.body:
+                if isinstance(statement, SetProperty):
+                    # Handle 'set property to value' inside object
+                    target = statement.target
+                    value = self.eval_expression(statement.value)
 
-                if isinstance(target, Identifier):
-                    # Simple property: set name to "Hero"
-                    obj.set(target.name, value)
-                elif isinstance(target, PropertyAccess):
-                    # Nested property: set position x to 0
-                    self.eval_property_set(target, value, base_obj=obj)
+                    if isinstance(target, Identifier):
+                        # Simple property: set name to "Hero"
+                        obj.set(target.name, value)
+                    elif isinstance(target, PropertyAccess):
+                        # Nested property: set position x to 0
+                        self.eval_property_set(target, value, base_obj=obj)
 
         self.current_env = old_env
 
@@ -576,6 +704,17 @@ class Interpreter:
         self.register_instance(obj, type_name=node.name, explicit_name=node.name)
 
         self.current_env.define(node.name, obj)
+        binding_env = self.current_env
+        name = node.name
+
+        def undo_create():
+            if name in binding_env.bindings:
+                existing = binding_env.bindings[name]['value']
+                if existing is obj:
+                    self._detach_object_instance(obj)
+                    del binding_env.bindings[name]
+
+        self.push_undo(f"create {node.name}", undo_create)
 
     def eval_create_value(self, node: CreateValue) -> None:
         """Execute: create x to 5  OR  create x: number to 5"""
@@ -598,6 +737,13 @@ class Interpreter:
                 )
 
         self.current_env.define(node.name, value)
+        env = self.current_env
+
+        def undo_create_value():
+            if node.name in env.bindings:
+                del env.bindings[node.name]
+
+        self.push_undo(f"create {node.name}", undo_create_value)
 
     def _types_match(self, annotated, inferred):
         """Check if annotated type matches inferred type"""
@@ -641,17 +787,35 @@ class Interpreter:
         target = node.target
 
         if isinstance(target, Identifier):
+            name = target.name
             # Check if we have a current object context (set via 'get')
             if self.current_object is not None:
                 # Set property on current object
-                self.current_object.set(target.name, value)
-                self.color_out.success(f"{self.current_object_name}.{target.name} = {value}")
+                restore = self._capture_property_stack(self.current_object, name)
+                self.current_object.set(name, value)
+                self.push_undo(f"{self.current_object_name}.{name}", restore)
+                self.color_out.success(f"{self.current_object_name}.{name} = {value}")
             elif self.current_env.exists(target.name):
                 # Setting an existing variable
-                self.current_env.set(target.name, value)
+                binding_env = self._find_env_for_binding(name) or self.current_env
+                prev_value = self._snapshot_value(binding_env.bindings[name]['value'])
+                self.current_env.set(name, value)
+
+                def undo_assign(env=binding_env, var=name, previous=prev_value):
+                    if var in env.bindings:
+                        env.bindings[var]['value'] = self._snapshot_value(previous)
+
+                self.push_undo(f"set {name}", undo_assign)
             else:
                 # Define a new variable
-                self.current_env.define(target.name, value)
+                self.current_env.define(name, value)
+                binding_env = self.current_env
+
+                def undo_define(env=binding_env, var=name):
+                    if var in env.bindings:
+                        del env.bindings[var]
+
+                self.push_undo(f"define {name}", undo_define)
 
         elif isinstance(target, ListIndex):
             # Setting a list element
@@ -670,7 +834,17 @@ class Interpreter:
             if index < 0 or index >= len(list_val):
                 raise RoshRuntimeError(f"List index out of range: {index}")
 
+            prev_value = self._snapshot_value(list_val[index])
             list_val[index] = value
+
+            desc = "list"
+            if isinstance(target.list_expr, Identifier):
+                desc = target.list_expr.name
+
+            def undo_list_assignment(lst=list_val, idx=index, prev=prev_value):
+                lst[idx] = self._snapshot_value(prev)
+
+            self.push_undo(f"{desc}[{index}]", undo_list_assignment)
 
         elif isinstance(target, PropertyAccess):
             # Setting an object property
@@ -919,7 +1093,10 @@ class Interpreter:
         if not isinstance(obj_value, RoshObject):
             raise RoshTypeError(f"Cannot set property of non-object: {type(obj_value).__name__}")
 
+        restore = self._capture_property_stack(obj_value, node.property)
         obj_value.set(node.property, value)
+        desc = f"{self._describe_property_path(node.object)}.{node.property}"
+        self.push_undo(desc, restore)
 
     def eval_print(self, node: Print) -> None:
         """Execute: print <expression>"""
@@ -2454,6 +2631,16 @@ Focus on the specific syntax or concept they need to correct."""
 
         # Define the new object in the environment
         self.current_env.define(var_name, cloned_obj)
+        binding_env = self.current_env
+
+        def undo_clone():
+            if var_name in binding_env.bindings:
+                existing = binding_env.bindings[var_name]['value']
+                if existing is cloned_obj:
+                    self._detach_object_instance(cloned_obj)
+                    del binding_env.bindings[var_name]
+
+        self.push_undo(f"clone {node.source}", undo_clone)
 
         # Print feedback
         if is_anonymous:
@@ -2475,43 +2662,31 @@ Focus on the specific syntax or concept they need to correct."""
         if not self.current_env.exists(node.name):
             raise RoshRuntimeError(f"Cannot delete: '{node.name}' does not exist")
 
-        # Get the object before deleting (need it for cleanup)
-        obj = self.current_env.get(node.name)
+        env = self._find_env_for_binding(node.name) or self.current_env
+        binding = env.bindings.get(node.name)
+        obj = binding['value']
+        binding_type = binding['type']
 
         # Clean up instance tracking if this is a RoshObject
         if isinstance(obj, RoshObject):
-            # Remove from UUID map
-            if obj.uuid in self.uuid_map:
-                del self.uuid_map[obj.uuid]
-
-            # Remove from instances list
-            if obj.id:
-                # Extract type from ID (e.g., "ball-1" → "ball")
-                type_name = obj.id.rsplit('-', 1)[0] if '-' in obj.id else obj.name
-                if type_name in self.instances:
-                    # Remove this object from the list
-                    self.instances[type_name] = [
-                        inst for inst in self.instances[type_name]
-                        if inst.uuid != obj.uuid
-                    ]
-                    # Clean up empty lists
-                    if not self.instances[type_name]:
-                        del self.instances[type_name]
-            elif obj.name in self.instances:
-                # For template objects, use the object name as type
-                self.instances[obj.name] = [
-                    inst for inst in self.instances[obj.name]
-                    if inst.uuid != obj.uuid
-                ]
-                if not self.instances[obj.name]:
-                    del self.instances[obj.name]
+            self._detach_object_instance(obj)
 
         # Remove from environment
-        if node.name in self.current_env.bindings:
-            del self.current_env.bindings[node.name]
+        if node.name in env.bindings:
+            del env.bindings[node.name]
             self.color_out.success(f"Deleted '{node.name}'")
         else:
             raise RoshRuntimeError(f"Cannot delete: '{node.name}' is not in current scope")
+
+        def undo_delete(target_env=env, name=node.name, value=obj, value_type=binding_type):
+            target_env.bindings[name] = {
+                'value': value,
+                'type': value_type
+            }
+            if isinstance(value, RoshObject):
+                self._attach_object_instance(value)
+
+        self.push_undo(f"delete {node.name}", undo_delete)
 
     def eval_properties(self, node: PropertiesCommand) -> None:
         """Execute: properties <target> - List all properties of an object"""
