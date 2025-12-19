@@ -26,7 +26,7 @@ end
 
 # Tagline - appears after logo zoom completes
 create object tagline
-    set text to "happy coding"
+    set text to "changing worlds"
     set x to 50%
     set y to 63%
     set font_size to 1
