@@ -661,7 +661,7 @@ def run_repl(interpreter: Interpreter = None):
 
     # Use provided interpreter or create new one
     if interpreter is None:
-        interpreter = Interpreter()
+        interpreter = Interpreter(interactive=True)  # Enable feedback in REPL
 
     # Check for security flags (passed from main via global)
     if '_disable_remote_imports' in globals() and _disable_remote_imports:

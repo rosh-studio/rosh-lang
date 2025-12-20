@@ -54,7 +54,7 @@ class Interpreter:
     AST walker that executes Rosh programs
     """
 
-    def __init__(self, output_stream=None, test_mode=False, test_inputs=None):
+    def __init__(self, output_stream=None, test_mode=False, test_inputs=None, interactive=False):
         from .color import get_color_output
 
         self.global_env = Environment()
@@ -64,6 +64,7 @@ class Interpreter:
         self.data_stack = []  # Explicit data stack for stack-based operations
         self.help_registry = {}  # Context-aware help system
         self._register_builtin_help()
+        self.interactive = interactive  # Show feedback in REPL mode
 
         # Instance tracking for multi-instance support
         self.instances = {}  # type_name -> [obj1, obj2, ...]
@@ -802,12 +803,13 @@ class Interpreter:
 
         self.push_undo(f"create {final_name}", undo_create, redo_create)
 
-        # Provide feedback
-        if final_name != node.name:
-            # Name was auto-numbered
-            self.color_out.success(f"Created '{final_name}' ('{node.name}' already exists)")
-        else:
-            self.color_out.success(f"Created '{final_name}'")
+        # Provide feedback (only in interactive REPL mode)
+        if self.interactive:
+            if final_name != node.name:
+                # Name was auto-numbered
+                self.color_out.success(f"Created '{final_name}' ('{node.name}' already exists)")
+            else:
+                self.color_out.success(f"Created '{final_name}'")
 
     def eval_create_value(self, node: CreateValue) -> None:
         """Execute: create x to 5  OR  create x: number to 5"""
@@ -903,7 +905,8 @@ class Interpreter:
                     self._restore_property_stack(self.current_object, name, new_stack)
 
                 self.push_undo(f"{self.current_object_name}.{name}", undo_prop, redo_prop)
-                self.color_out.success(f"{self.current_object_name}.{name} = {value}")
+                if self.interactive:
+                    self.color_out.success(f"{self.current_object_name}.{name} = {value}")
             elif self.current_env.exists(target.name):
                 # Setting an existing variable
                 binding_env = self._find_env_for_binding(name) or self.current_env
@@ -920,6 +923,8 @@ class Interpreter:
                         env.bindings[var]['value'] = self._snapshot_value(nxt)
 
                 self.push_undo(f"set {name}", undo_assign, redo_assign)
+                if self.interactive:
+                    self.color_out.success(f"{name} = {repr(value) if isinstance(value, str) else value}")
             else:
                 # Define a new variable
                 self.current_env.define(name, value)
@@ -938,6 +943,8 @@ class Interpreter:
                     }
 
                 self.push_undo(f"define {name}", undo_define, redo_define)
+                if self.interactive:
+                    self.color_out.success(f"{name} = {repr(value) if isinstance(value, str) else value}")
 
         elif isinstance(target, ListIndex):
             # Setting a list element
@@ -1232,6 +1239,10 @@ class Interpreter:
             self._restore_property_stack(obj_value, node.property, new_stack)
 
         self.push_undo(desc, undo_prop, redo_prop)
+
+        # Provide feedback (only in interactive mode and not during object initialization)
+        if self.interactive and base_obj is None:
+            self.color_out.success(f"{desc} = {repr(value) if isinstance(value, str) else value}")
 
     def eval_print(self, node: Print) -> None:
         """Execute: print <expression>"""
