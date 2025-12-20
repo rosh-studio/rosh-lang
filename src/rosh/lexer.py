@@ -344,6 +344,7 @@ class Lexer:
         # Map keywords to token types
         keyword_map = {
             'create': TokenType.CREATE,
+            'make': TokenType.CREATE,  # Alias: "make a banana" = "create a banana"
             'object': TokenType.OBJECT,
             'number': TokenType.NUMBER_TYPE,
             'string': TokenType.STRING_TYPE,

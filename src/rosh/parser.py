@@ -235,9 +235,19 @@ class Parser:
             self.error(f"Unexpected token: {token.type.name}")
 
     def parse_create(self) -> ASTNode:
-        """Parse: create object <name> ... end  OR  create <name> to <value>  OR  create <template> [name]"""
+        """Parse: create object <name> ... end  OR  create <name> to <value>  OR  create <template> [name]
+
+        Also handles:
+        - 'create a banana' → skip 'a' (natural language)
+        - 'create banana' → implied 'create object banana'
+        """
         line = self.current_token().line
         self.expect(TokenType.CREATE)
+
+        # Skip 'a' or 'an' for natural language: "create a banana", "create an apple"
+        if (self.current_token().type == TokenType.IDENTIFIER and
+            self.current_token().value.lower() in ('a', 'an')):
+            self.advance()
 
         type_token = self.current_token()
 
@@ -350,8 +360,10 @@ class Parser:
                 return CloneObject(source=name, target=target, line=line)
 
             else:
-                # Anonymous clone: create <template>
-                return CloneObject(source=name, target=None, line=line)
+                # Implied object creation: "create banana" = "create object banana"
+                # This is the shorthand for creating an empty object.
+                # For body statements, use the full syntax: create banana ... end
+                return CreateObject(name=name, body=[], parents=None, line=line)
 
         else:
             self.error(f"Expected object, type, or identifier after 'create', got {type_token.type.name}")
