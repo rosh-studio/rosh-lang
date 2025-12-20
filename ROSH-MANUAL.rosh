@@ -292,6 +292,23 @@ print
 # ========================================
 print "=== 13. Objects and Properties ==="
 
+# Natural language syntax options:
+#   create object banana     (explicit - full form)
+#   create banana            (implied 'object' - creates empty object)
+#   create a banana          (natural English - 'a' is ignored)
+#   make banana              ('make' is alias for 'create')
+#   make an apple            (combining both features)
+
+# Quick object creation (empty objects)
+make a ball
+create an orange
+
+print "Quick objects created:"
+print ball
+print orange
+print
+
+# Full object with properties
 create object player
     set name to "Hero"
     set health to 100
@@ -767,6 +784,18 @@ print "  undo           # Reverts x"
 print "  redo           # Re-applies x = 100"
 print "  undo 3         # Undo 3 steps"
 print "  undo stack     # Show undo history"
+print
+
+print "oops - Natural language alias for undo:"
+print "  oops           # Same as 'undo'"
+print
+
+print "Triple newline - Implied 'go':"
+print "  create banana"
+print "      set color to yellow"
+print "  <blank>"
+print "  <blank>"
+print "  <blank>        # Three blank lines = 'go'"
 print
 
 print "list / look - Show all objects:"

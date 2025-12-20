@@ -184,7 +184,7 @@ def _fuzzy_match_command(word: str, interpreter=None):
         'goto', 'go', 'connect', 'link',
         # AI commands
         'prompt',
-        'undo', 'redo',
+        'undo', 'redo', 'oops',  # oops = undo (natural language)
         # Help
         'help',
     ]
@@ -591,7 +591,7 @@ def run_repl(interpreter: Interpreter = None):
     out.print()
 
     out.print("Commands:", style="bold")
-    out.print("  create, get, set, print, clone, delete, properties, undo, redo", style="cyan")
+    out.print("  create, get, set, print, clone, delete, properties, undo, redo, oops", style="cyan")
     out.print("  look, goto, connect, prompt, import, save, load, dump, go", style="cyan")
     out.print()
 
@@ -612,6 +612,7 @@ def run_repl(interpreter: Interpreter = None):
 
     buffer = []
     aliases = {}  # Store command aliases
+    blank_line_count = 0  # Track consecutive blank lines for triple-newline → go
 
     # Set up readline for command history and tab completion
     if READLINE_AVAILABLE:
@@ -741,6 +742,36 @@ def run_repl(interpreter: Interpreter = None):
             stripped = line.strip().lower()
             parts = line.strip().split()
 
+            # Triple-newline → go (close all blocks and execute)
+            if not stripped:
+                blank_line_count += 1
+                if blank_line_count >= 3 and buffer:
+                    # Trigger 'go' behavior - auto-close blocks and execute
+                    open_blocks = 0
+                    for buf_line in buffer:
+                        buf_stripped = buf_line.strip().lower()
+                        if any(buf_stripped.startswith(kw) for kw in ['create object', 'create ', 'if ', 'define function', 'when ', 'while ', 'for ']):
+                            open_blocks += 1
+                        if buf_stripped == 'end':
+                            open_blocks = max(0, open_blocks - 1)
+
+                    if open_blocks > 0:
+                        out.dim(f"[auto-closing {open_blocks} block{'s' if open_blocks > 1 else ''}]")
+                        for _ in range(open_blocks):
+                            buffer.append('end')
+
+                    source = '\n'.join(buffer)
+                    buffer = []
+                    blank_line_count = 0
+                    try:
+                        interpreter = run_source(source, "<repl>", interpreter)
+                    except RoshError as e:
+                        out.error(str(e))
+                    continue
+                continue  # Skip empty line processing
+            else:
+                blank_line_count = 0  # Reset on non-blank line
+
             # version (no args) - show interpreter version
             if stripped == 'version':
                 out.print(f"Rosh v{__version__}", style="cyan")
@@ -758,6 +789,11 @@ def run_repl(interpreter: Interpreter = None):
             # look (no args) - same as list
             if stripped in ('look', 'l'):
                 _list_objects(interpreter, out)
+                continue
+
+            # oops - natural language alias for single undo
+            if stripped == 'oops':
+                interpreter.perform_undo(1)
                 continue
 
             if parts and parts[0].lower() == 'undo':
