@@ -16,6 +16,37 @@
 
 ---
 
+## [0.1.19] - 2025-12-20 - 3D Model Loading & Global Scale
+
+### Added
+- **GLB Model Loading** (Three.js)
+  - Known objects can now specify 3D models via `model` field in `known_objects.toml`
+  - Models auto-normalize to 1 unit, then apply preset scale multipliers
+  - Fallback to primitive shapes if model fails to load
+  - 6 CC-BY licensed models included: apple, banana, football, tree, crate, barrel
+  - `ball` = simple primitive sphere, `football` = 3D soccer ball model
+
+- **Model Credits System**
+  - `credit` and `credit_url` fields in `known_objects.toml`
+  - Credits shown on object creation and via `look <object>`
+  - Proper attribution for CC-BY licensed Sketchfab models
+
+- **Global Model Settings** (Three.js REPL)
+  - `get meta scale` - Show current model scale (default 2)
+  - `set meta scale to <n>` - Global multiplier for all model sizes
+  - `set meta models on/off` - Toggle 3D models vs primitive shapes
+  - `redraw` - Recreate all typed objects with current settings
+
+### Fixed
+- Fuzzy matching now skips keywords `all` and `meta` to fix `get all`/`set all` commands
+- GLTFLoader added to Three.js template for model loading
+
+### Technical
+- Auto-normalize: computes bounding box and scales to fit 1 unit before applying multipliers
+- `meta.modelScale` (default 2) and `meta.useModels` (default true) control behavior
+
+---
+
 ## [0.1.18] - 2025-12-20 - Core Language Commands & REPL Improvements
 
 ### Added

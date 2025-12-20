@@ -70,6 +70,7 @@ uv run rosh build demos/rosh-intro/game.rosh \
     --target threejs \
     --output "$ROSH_CLOUD/demos/rosh-intro-threejs/" \
     --copy-assets
+cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_CLOUD/demos/rosh-intro-threejs/"
 
 echo ""
 echo "📦 Building space-shooter (Three.js)..."
@@ -77,6 +78,7 @@ uv run rosh build demos/space-shooter/game.rosh \
     --target threejs \
     --output "$ROSH_CLOUD/demos/space-shooter-threejs/" \
     --copy-assets
+cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_CLOUD/demos/space-shooter-threejs/"
 
 echo ""
 echo "📦 Building block-pusher (Three.js)..."
@@ -84,6 +86,7 @@ uv run rosh build demos/block-pusher/game.rosh \
     --target threejs \
     --output "$ROSH_CLOUD/demos/block-pusher-threejs/" \
     --copy-assets
+cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_CLOUD/demos/block-pusher-threejs/"
 
 # =============================================================================
 # PYGAME BUILDS (Desktop - local testing only)

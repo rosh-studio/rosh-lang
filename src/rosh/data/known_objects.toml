@@ -27,6 +27,9 @@ color = 0xffe135
 scaleX = 0.3
 scaleY = 1.2
 scaleZ = 0.3
+model = "3d_glb/banana.glb"
+credit = "Banana by Batuhan13 (CC BY 4.0)"
+credit_url = "https://skfb.ly/6WNQI"
 
 [apple]
 description = "A shiny red apple"
@@ -37,6 +40,9 @@ shape = "circle"
 [apple.3d]
 shape = "sphere"
 color = 0xff0000
+model = "3d_glb/apple.glb"
+credit = "Apple by elements (CC BY 4.0)"
+credit_url = "https://skfb.ly/6WO6M"
 
 [orange]
 description = "A round orange fruit"
@@ -115,7 +121,10 @@ height = 2.0
 [tree.3d]
 shape = "cylinder"
 color = 0x228b22
-scaleY = 3.0
+scaleY = 2.0
+model = "3d_glb/pine_tree.glb"
+credit = "Pine tree by Andriy Shekh (CC BY 4.0)"
+credit_url = "https://skfb.ly/6VKKJ"
 
 [rock]
 description = "A gray boulder"
@@ -329,6 +338,19 @@ shape = "circle"
 shape = "sphere"
 color = 0xff0000
 
+[football]
+description = "A black and white football (soccer ball)"
+category = "shape"
+[football.2d]
+color = "white"
+shape = "circle"
+[football.3d]
+shape = "sphere"
+color = 0xffffff
+model = "3d_glb/cheap_soccer_ball.glb"
+credit = "Cheap Soccer Ball by Blender3D (CC BY 4.0)"
+credit_url = "https://skfb.ly/6zNVJ"
+
 [cube]
 description = "A blue cube"
 category = "shape"
@@ -428,6 +450,9 @@ shape = "rectangle"
 [crate.3d]
 shape = "box"
 color = 0xdeb887
+model = "3d_glb/crate_box.glb"
+credit = "Crate box by KloWorks (CC BY 4.0)"
+credit_url = "https://skfb.ly/RMpW"
 
 [barrel]
 description = "A wooden barrel"
@@ -439,6 +464,9 @@ shape = "circle"
 shape = "cylinder"
 color = 0x8b4513
 scaleY = 1.2
+model = "3d_glb/stylized_low_poly_wooden_barrell.glb"
+credit = "Stylized low poly wooden barrell by pgonarg (CC BY 4.0)"
+credit_url = "https://skfb.ly/oxSxK"
 
 # =============================================================================
 # VEHICLES - Things that move
