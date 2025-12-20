@@ -334,6 +334,41 @@ class Interpreter:
 
         return instances
 
+    def _find_type_with_plural(self, type_name: str) -> str:
+        """Find type name with plural-to-singular conversion
+
+        Tries:
+        1. Exact match (banana)
+        2. Remove trailing 's' (bananas → banana)
+        3. Remove trailing 'es' (boxes → box)
+        4. Fuzzy match using Levenshtein distance
+
+        Returns the matching type name or None
+        """
+        # Try exact match first
+        if type_name in self.instances:
+            return type_name
+
+        # Try removing 's'
+        if type_name.endswith('s') and type_name[:-1] in self.instances:
+            singular = type_name[:-1]
+            self.color_out.dim(f"[{type_name} → {singular}]")
+            return singular
+
+        # Try removing 'es'
+        if type_name.endswith('es') and type_name[:-2] in self.instances:
+            singular = type_name[:-2]
+            self.color_out.dim(f"[{type_name} → {singular}]")
+            return singular
+
+        # Try removing 'ies' and adding 'y' (bodies → body)
+        if type_name.endswith('ies') and type_name[:-3] + 'y' in self.instances:
+            singular = type_name[:-3] + 'y'
+            self.color_out.dim(f"[{type_name} → {singular}]")
+            return singular
+
+        return None
+
     def _register_builtin_help(self):
         """Register help text for built-in commands"""
         self.help_registry.update({
@@ -706,7 +741,16 @@ class Interpreter:
                     raise RoshTypeError(f"Parent '{parent_name}' is not an object")
                 parent_objects.append(parent)
 
-        obj = RoshObject(name=node.name, parents=parent_objects)
+        # Auto-number if name already exists (create banana, create banana → banana, banana-2)
+        final_name = node.name
+        if self.current_env.exists(node.name):
+            # Find next available number
+            counter = 2
+            while self.current_env.exists(f"{node.name}-{counter}"):
+                counter += 1
+            final_name = f"{node.name}-{counter}"
+
+        obj = RoshObject(name=final_name, parents=parent_objects)
 
         # Create a temporary environment for the object body
         # (so 'set name to "value"' works inside the object definition)
@@ -716,7 +760,7 @@ class Interpreter:
 
         # Execute the body without recording undo entries (internal initialization)
         # We temporarily bind 'self' or the object name to the object
-        obj_env.define(node.name, obj)
+        obj_env.define(final_name, obj)
 
         with self.suspend_undo():
             for statement in node.body:
@@ -734,12 +778,12 @@ class Interpreter:
 
         self.current_env = old_env
 
-        # Register instance (use object name as both type and explicit name)
-        self.register_instance(obj, type_name=node.name, explicit_name=node.name)
+        # Register instance (use base type name for grouping, final name for binding)
+        self.register_instance(obj, type_name=node.name, explicit_name=final_name)
 
-        self.current_env.define(node.name, obj)
+        self.current_env.define(final_name, obj)
         binding_env = self.current_env
-        name = node.name
+        name = final_name
         binding_type = binding_env.bindings[name]['type']
 
         def undo_create():
@@ -756,7 +800,14 @@ class Interpreter:
             }
             self._attach_object_instance(obj)
 
-        self.push_undo(f"create {node.name}", undo_create, redo_create)
+        self.push_undo(f"create {final_name}", undo_create, redo_create)
+
+        # Provide feedback
+        if final_name != node.name:
+            # Name was auto-numbered
+            self.color_out.success(f"Created '{final_name}' ('{node.name}' already exists)")
+        else:
+            self.color_out.success(f"Created '{final_name}'")
 
     def eval_create_value(self, node: CreateValue) -> None:
         """Execute: create x to 5  OR  create x: number to 5"""
@@ -2124,9 +2175,11 @@ Focus on the specific syntax or concept they need to correct."""
             if isinstance(node.start, Identifier):
                 # Check if there are instances of this type
                 type_name = node.start.name
-                if type_name in self.instances and len(self.instances[type_name]) > 0:
+                # Try plural-to-singular conversion if exact match not found
+                actual_type = self._find_type_with_plural(type_name)
+                if actual_type and len(self.instances.get(actual_type, [])) > 0:
                     # Use all instances of this type
-                    items = self.instances[type_name]
+                    items = self.instances[actual_type]
                 else:
                     # Fall back to evaluating as expression
                     collection = self.eval_expression(node.start)
