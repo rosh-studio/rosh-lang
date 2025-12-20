@@ -442,6 +442,60 @@ COMMAND_USAGE_HINTS = {
             "prompt move player to the left",
         ],
     },
+    'properties': {
+        'message': "Show object properties.",
+        'examples': [
+            "properties <object>",
+            "properties ball",
+            "props player      # short form",
+        ],
+    },
+    'undo': {
+        'message': "Undo recent changes.",
+        'examples': [
+            "undo              # undo last change",
+            "undo 3            # undo last 3 changes",
+            "undo stack        # show undo history",
+        ],
+    },
+    'redo': {
+        'message': "Redo undone changes.",
+        'examples': [
+            "redo              # redo last undo",
+            "redo 3            # redo last 3 undos",
+            "redo stack        # show redo history",
+        ],
+    },
+    'oops': {
+        'message': "Oops! Undo the last change.",
+        'examples': [
+            "oops              # same as 'undo'",
+        ],
+    },
+    'look': {
+        'message': "Look around or at an object.",
+        'examples': [
+            "look              # list all objects",
+            "look <object>     # examine object properties",
+            "look ball",
+            "l player          # short form",
+        ],
+    },
+    'dump': {
+        'message': "Dump debug info.",
+        'examples': [
+            "dump              # dump interpreter state",
+            "dump <object>     # dump object details",
+        ],
+    },
+    'go': {
+        'message': "Execute buffered commands or go somewhere.",
+        'examples': [
+            "go                # execute pending commands",
+            "go <place>        # same as 'goto <place>'",
+            "go kitchen",
+        ],
+    },
 }
 
 
