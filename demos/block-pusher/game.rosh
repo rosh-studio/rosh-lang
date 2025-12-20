@@ -1,6 +1,9 @@
 # Block Pusher - A Sokoban Puzzle Game
 # Two levels with screen transitions
 
+# Render as 2D arcade screen in Three.js
+set _meta mode to "arcade"
+
 # === CONFIGURATION ===
 # Grid: 8x6 tiles, 50px each
 # Play area centered in 800x600 canvas
