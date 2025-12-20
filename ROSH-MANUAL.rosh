@@ -747,6 +747,50 @@ print "  save \"state.toon\""
 print
 
 # ========================================
+# 30. REPL COMMANDS
+# ========================================
+print "=== 30. REPL Commands ==="
+
+print "The Rosh REPL (rosh command with no arguments) has special commands:"
+print
+
+print "go - Auto-close blocks and execute:"
+print "  create object banana"
+print "      set color to yellow"
+print "  go"
+print "  # Automatically closes the 'create' block and runs"
+print
+
+print "undo / redo - Revert or redo changes:"
+print "  set x to 100"
+print "  undo           # Reverts x"
+print "  redo           # Re-applies x = 100"
+print "  undo 3         # Undo 3 steps"
+print "  undo stack     # Show undo history"
+print
+
+print "list / look - Show all objects:"
+print "  list           # or: look, ls, objects"
+print
+
+print "examine <obj> - Inspect object properties:"
+print "  examine player # or: look player, x player"
+print
+
+print "get <obj> [prop] - Get object or property value:"
+print "  get player         # Show player object"
+print "  get player health  # Show player.health"
+print
+
+print "clear - Clear the screen"
+print
+
+print "alias - Create command shortcuts:"
+print "  alias p print"
+print "  p \"Hello!\"     # Expands to: print \"Hello!\""
+print
+
+# ========================================
 # FEATURE SUMMARY
 # ========================================
 print "=== ROSH FEATURE SUMMARY ==="

@@ -592,7 +592,7 @@ def run_repl(interpreter: Interpreter = None):
 
     out.print("Commands:", style="bold")
     out.print("  create, get, set, print, clone, delete, properties, undo, redo", style="cyan")
-    out.print("  look, goto, connect, prompt, import, save, load, dump", style="cyan")
+    out.print("  look, goto, connect, prompt, import, save, load, dump, go", style="cyan")
     out.print()
 
     out.print("Type 'exit' to quit | 'license' for license info | 'alias' for shortcuts", style="dim")
@@ -812,6 +812,40 @@ def run_repl(interpreter: Interpreter = None):
             if stripped in ('clear', 'cls'):
                 import subprocess
                 subprocess.run('clear' if sys.platform != 'win32' else 'cls', shell=True)
+                continue
+
+            # go - auto-close all open blocks and execute buffer
+            # Makes "create banana ; go" work as a one-liner
+            if stripped == 'go':
+                if not buffer:
+                    out.dim("Nothing to run")
+                    continue
+
+                # Count open blocks that need closing
+                source_so_far = '\n'.join(buffer)
+                open_blocks = 0
+                for buf_line in buffer:
+                    buf_stripped = buf_line.strip().lower()
+                    # Keywords that open blocks
+                    if any(buf_stripped.startswith(kw) for kw in ['create object', 'create ', 'if ', 'define function', 'when ', 'while ', 'for ']):
+                        open_blocks += 1
+                    # 'end' closes a block
+                    if buf_stripped == 'end':
+                        open_blocks = max(0, open_blocks - 1)
+
+                # Auto-close all open blocks
+                if open_blocks > 0:
+                    out.dim(f"[auto-closing {open_blocks} block{'s' if open_blocks > 1 else ''}]")
+                    for _ in range(open_blocks):
+                        buffer.append('end')
+
+                # Execute the complete buffer
+                source = '\n'.join(buffer)
+                buffer = []
+                try:
+                    interpreter = run_source(source, "<repl>", interpreter)
+                except RoshError as e:
+                    out.error(str(e))
                 continue
 
             # get <obj> or get <obj> <prop> - unified get command (#017)
