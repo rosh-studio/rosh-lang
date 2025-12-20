@@ -754,7 +754,7 @@ def run_repl(interpreter: Interpreter = None):
     out.print("  look, goto, connect, prompt, import, save, load, dump, go", style="cyan")
     out.print()
 
-    out.print("Type 'exit' to quit | 'license' for license info | 'alias' for shortcuts", style="dim")
+    out.print("Type 'exit' to quit | 'credits' | 'license' | 'alias' for shortcuts", style="dim")
     if READLINE_AVAILABLE:
         out.print("History: ↑/↓ arrows | Tab completion enabled", style="dim")
     out.print()
@@ -857,6 +857,15 @@ def run_repl(interpreter: Interpreter = None):
                 out.print("them in a way that suggests endorsement without permission.")
                 out.print()
                 out.print("See LICENSE file for full details.", style="dim")
+                out.print()
+                continue
+
+            # Handle credits command
+            if line.strip() in ('credits', 'help credits'):
+                out.print()
+                out.print(f"Rosh v{__version__}", style="cyan")
+                out.print("Copyright (c) 2025 Roger Dubar")
+                out.dim("https://rosh.cloud")
                 out.print()
                 continue
 

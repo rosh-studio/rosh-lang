@@ -31,6 +31,9 @@
   - Credits shown on object creation and via `look <object>`
   - Proper attribution for CC-BY licensed Sketchfab models
 
+- **Credits Command** (CLI REPL and Three.js)
+  - `credits` - Shows Rosh version, copyright, and URL
+
 - **Global Model Settings** (Three.js REPL)
   - `get meta scale` - Show current model scale (default 2)
   - `set meta scale to <n>` - Global multiplier for all model sizes

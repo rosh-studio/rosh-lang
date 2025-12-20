@@ -1,4 +1,9 @@
-# Asset Credits
+# Rosh Credits
+
+Copyright (c) 2025 Roger Dubar
+https://rosh.cloud
+
+---
 
 ## Distributed Assets (sprites/, sounds/)
 

@@ -2309,7 +2309,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const KNOWN_PROPERTIES = ['x', 'y', 'z', 'color', 'text', 'font', 'font_size', 'scale', 'visible', 'pulse', 'width', 'height', 'rotation', 'opacity', 'active'];")
         self.write("const KNOWN_COLORS = ['red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'white', 'black', 'orange', 'purple', 'pink', 'gray'];")
         self.write("const KNOWN_FONTS = ['Inter', 'Arial', 'Helvetica', 'Times', 'Georgia', 'Courier', 'Verdana', 'Roboto'];")
-        self.write("const KNOWN_COMMANDS = ['set', 'get', 'list', 'create', 'delete', 'remove', 'reset', 'hide', 'show', 'clone', 'look', 'examine', 'inspect', 'help', 'prompt', 'save', 'load', 'capabilities', 'camera', 'undo', 'redo', 'count', 'move', 'make'];")
+        self.write("const KNOWN_COMMANDS = ['set', 'get', 'list', 'create', 'delete', 'remove', 'reset', 'hide', 'show', 'clone', 'look', 'examine', 'inspect', 'help', 'prompt', 'save', 'load', 'capabilities', 'camera', 'undo', 'redo', 'count', 'move', 'make', 'credits', 'clear', 'redraw'];")
         # Known objects with preset shapes/colors - loaded from known_objects.toml
         self._emit_known_objects()
         self.write_blank()
@@ -3474,6 +3474,15 @@ class ThreeJSEmitter(BaseEmitter):
 
         # Clear
         self.write("else if (parts[0] === 'clear') { output.innerHTML = ''; }")
+
+        # Credits
+        self.write("else if (parts[0] === 'credits') {")
+        self.indent()
+        self.write(f"log('Rosh v{__version__}', 'cyan');")
+        self.write("log('Copyright (c) 2025 Roger Dubar');")
+        self.write("log('https://rosh.cloud', 'dim');")
+        self.dedent()
+        self.write("}")
 
         # Usage hints for commands without arguments
         self.write("else if (parts[0] === 'set' && parts.length < 3) {")
