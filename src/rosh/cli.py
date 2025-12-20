@@ -395,9 +395,10 @@ def _get_command(interpreter, out, identifier: str, prop_name: str = None):
 
     if obj is None:
         # Try plural-to-singular conversion before giving up
-        for singular in _singularize(identifier)[1:]:  # Skip original, try singulars
+        singulars = _singularize(identifier)[1:]  # Skip original, try singulars
+        for singular in singulars:
             if interpreter.current_env.exists(singular):
-                out.dim(f"[{identifier} → {singular}]")
+                out.warning(f"guessed: {identifier} → {singular}")
                 obj = interpreter.current_env.get(singular)
                 obj_name_found = singular
                 break
@@ -503,7 +504,7 @@ def _get_all_command(interpreter, out, type_name: str):
         if candidate in interpreter.instances and len(interpreter.instances[candidate]) > 0:
             actual_type = candidate
             if candidate != type_name:
-                out.dim(f"[{type_name} → {candidate}]")
+                out.warning(f"guessed: {type_name} → {candidate}")
             break
 
     if not actual_type:
@@ -990,11 +991,6 @@ def run_repl(interpreter: Interpreter = None):
                     interpreter = run_source(source, "<repl>", interpreter)
                 except RoshError as e:
                     out.error(str(e))
-                    # Try to get AI suggestion if available
-                    if interpreter:
-                        suggestion = interpreter._suggest_fix_with_ai(str(e), source)
-                        if suggestion:
-                            out.print(f"\n💡 AI Suggestion: {suggestion}", style="yellow")
                 continue
 
             # If we have a simple statement (no 'end' needed), execute immediately
@@ -1031,11 +1027,6 @@ def run_repl(interpreter: Interpreter = None):
                                 out.dim("Type 'alias' to see available aliases, or use Rosh syntax")
                     else:
                         out.error(str(e))
-                        # Only show AI suggestion for non-trivial errors
-                        if interpreter and "Unknown command" not in error_msg:
-                            suggestion = interpreter._suggest_fix_with_ai(str(e), source)
-                            if suggestion:
-                                out.print(f"\n💡 AI Suggestion: {suggestion}", style="yellow")
 
         except KeyboardInterrupt:
             print("\nKeyboardInterrupt")

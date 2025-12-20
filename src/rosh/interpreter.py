@@ -352,19 +352,19 @@ class Interpreter:
         # Try removing 's'
         if type_name.endswith('s') and type_name[:-1] in self.instances:
             singular = type_name[:-1]
-            self.color_out.dim(f"[{type_name} → {singular}]")
+            self.color_out.warning(f"guessed: {type_name} → {singular}")
             return singular
 
         # Try removing 'es'
         if type_name.endswith('es') and type_name[:-2] in self.instances:
             singular = type_name[:-2]
-            self.color_out.dim(f"[{type_name} → {singular}]")
+            self.color_out.warning(f"guessed: {type_name} → {singular}")
             return singular
 
         # Try removing 'ies' and adding 'y' (bodies → body)
         if type_name.endswith('ies') and type_name[:-3] + 'y' in self.instances:
             singular = type_name[:-3] + 'y'
-            self.color_out.dim(f"[{type_name} → {singular}]")
+            self.color_out.warning(f"guessed: {type_name} → {singular}")
             return singular
 
         return None
