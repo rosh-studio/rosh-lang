@@ -394,6 +394,15 @@ def _get_command(interpreter, out, identifier: str, prop_name: str = None):
                     pass
 
     if obj is None:
+        # Try plural-to-singular conversion before giving up
+        for singular in _singularize(identifier)[1:]:  # Skip original, try singulars
+            if interpreter.current_env.exists(singular):
+                out.dim(f"[{identifier} → {singular}]")
+                obj = interpreter.current_env.get(singular)
+                obj_name_found = singular
+                break
+
+    if obj is None:
         # Object not found - suggest alternatives
         all_objects = []
         for name in interpreter.current_env.bindings.keys():
@@ -464,6 +473,55 @@ def _get_command(interpreter, out, identifier: str, prop_name: str = None):
 
     # Display it
     out.print(f"{py_value}", style="cyan")
+
+
+def _singularize(word: str) -> list:
+    """Return possible singular forms of a word.
+
+    Returns list of candidates: [original, without 's', without 'es', 'ies'→'y']
+    """
+    candidates = [word]
+    if word.endswith('ies'):
+        candidates.append(word[:-3] + 'y')  # bodies → body
+    if word.endswith('es'):
+        candidates.append(word[:-2])  # boxes → box
+    if word.endswith('s'):
+        candidates.append(word[:-1])  # bananas → banana
+    return candidates
+
+
+def _get_all_command(interpreter, out, type_name: str):
+    """Get all instances of a type.
+
+    Supports plural-to-singular: 'get all bananas' finds banana instances.
+    """
+    from .values import RoshObject
+
+    # Try singular forms
+    actual_type = None
+    for candidate in _singularize(type_name):
+        if candidate in interpreter.instances and len(interpreter.instances[candidate]) > 0:
+            actual_type = candidate
+            if candidate != type_name:
+                out.dim(f"[{type_name} → {candidate}]")
+            break
+
+    if not actual_type:
+        out.error(f"No instances of '{type_name}' found.")
+        # Suggest available types
+        if interpreter.instances:
+            types = list(interpreter.instances.keys())
+            out.dim(f"Available types: {', '.join(types)}")
+        return
+
+    instances = interpreter.instances[actual_type]
+    out.print(f"All {actual_type} ({len(instances)}):", style="bold")
+    for inst in instances:
+        inst_id = inst.id if hasattr(inst, 'id') and inst.id else inst.uuid[:8]
+        out.print(f"  {inst_id}", style="cyan")
+
+    # Push list to stack
+    interpreter.data_stack.append(instances)
 
 
 def run_file(filepath: str, toml_output: bool = False, toon_output: bool = False, test_inputs: list = None):
@@ -885,9 +943,29 @@ def run_repl(interpreter: Interpreter = None):
                 continue
 
             # get <obj> or get <obj> <prop> - unified get command (#017)
+            # Also: get all <type>, get <type> <n>
             if len(parts) >= 2 and parts[0].lower() == 'get':
+                # Handle "get all <type>" - list all instances
+                if parts[1].lower() == 'all' and len(parts) >= 3:
+                    type_name = parts[2]
+                    _get_all_command(interpreter, out, type_name)
+                    continue
+
                 identifier = parts[1]
                 prop_name = parts[2] if len(parts) >= 3 else None
+
+                # Handle "get <type> <n>" - get instance by number
+                if prop_name and prop_name.isdigit():
+                    instance_name = f"{identifier}-{prop_name}" if int(prop_name) > 1 else identifier
+                    # Check if this is actually an instance, not a property
+                    if interpreter.current_env.exists(instance_name):
+                        _get_command(interpreter, out, instance_name, None)
+                        continue
+                    # Also try without suffix for instance 1
+                    if prop_name == "1" and interpreter.current_env.exists(identifier):
+                        _get_command(interpreter, out, identifier, None)
+                        continue
+
                 _get_command(interpreter, out, identifier, prop_name)
                 continue
 
