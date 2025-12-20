@@ -68,23 +68,23 @@ class TestObjectTransformation:
         assert len(obj.uuid) == 36  # UUID format
 
     def test_coordinate_normalization(self):
-        """Bare numbers are percentages (0-100 scale), normalized to 0-1."""
-        # Design Decision (2025-12-18): set x to 50 means 50%, not 50 pixels
+        """Bare numbers are pixels, normalized to percentage of canvas."""
+        # Per CLAUDE.md: bare numbers = pixels, 50% = percentage
         program = parse("""
             create object ball
                 set x to 50
                 set y to 50
             end
         """)
-        ir = transform_ast_to_ir(program)
+        ir = transform_ast_to_ir(program, canvas_width=800, canvas_height=600)
         obj = ir.objects[0]
         assert obj.properties['x'].type == 'percentage'
-        assert obj.properties['x'].value == 0.5  # 50% = 0.5
+        assert obj.properties['x'].value == 50 / 800  # 50px on 800px canvas
         assert obj.properties['y'].type == 'percentage'
-        assert obj.properties['y'].value == 0.5  # 50% = 0.5
+        assert obj.properties['y'].value == 50 / 600  # 50px on 600px canvas
 
     def test_percentage_explicit(self):
-        """Explicit percentage (50%) should work the same as bare 50."""
+        """Explicit percentage (50%) normalizes to 0.5."""
         program = parse("""
             create object ball
                 set x to 50%

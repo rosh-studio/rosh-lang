@@ -58,16 +58,15 @@ class TestObjectEmission:
         assert "this.ball = this.add.rectangle" in code
 
     def test_object_position(self):
-        """Object position should be denormalized from percentage to pixels."""
+        """Object position: bare numbers are pixels, not percentages."""
         code = emit_phaser("""
             create object ball
                 set x to 50
                 set y to 50
             end
         """, canvas_width=800, canvas_height=600)
-        # 50% of 800 = 400, 50% of 600 = 300
-        assert "400" in code
-        assert "300" in code
+        # Bare numbers = pixels (per CLAUDE.md coordinate semantics)
+        assert "50" in code
 
     def test_object_position_explicit_pixels(self):
         """Explicit pixel values (400px) should work."""

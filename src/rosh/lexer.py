@@ -50,6 +50,7 @@ class TokenType(Enum):
     ELSE = auto()
     WHILE = auto()
     FOR = auto()
+    DO = auto()  # "do 100 times" = simple repeat loop
     IN = auto()
     STEP = auto()
     BREAK = auto()
@@ -61,12 +62,18 @@ class TokenType(Enum):
     CALL = auto()
     CLONE = auto()
     DELETE = auto()
+    RESET = auto()
+    HIDE = auto()
+    SHOW = auto()
+    COUNT = auto()
+    MOVE = auto()
     PROPERTIES = auto()
     GOTO = auto()
     LOOK = auto()
     CONNECT = auto()
     HELP = auto()
     RANDOM = auto()
+    CONFIRM = auto()  # go/yes/confirm - execute pending bulk operation
     LENGTH = auto()
     OF = auto()
     CONTAINS = auto()
@@ -373,6 +380,7 @@ class Lexer:
             'else': TokenType.ELSE,
             'while': TokenType.WHILE,
             'for': TokenType.FOR,
+            'do': TokenType.DO,
             'in': TokenType.IN,
             'step': TokenType.STEP,
             'break': TokenType.BREAK,
@@ -385,10 +393,14 @@ class Lexer:
             'call': TokenType.CALL,
             'clone': TokenType.CLONE,
             'delete': TokenType.DELETE,
+            'reset': TokenType.RESET,
+            'hide': TokenType.HIDE,
+            'show': TokenType.SHOW,
+            'count': TokenType.COUNT,
+            'move': TokenType.MOVE,
             'properties': TokenType.PROPERTIES,
             'props': TokenType.PROPERTIES,  # Alias for properties
             'goto': TokenType.GOTO,
-            'go': TokenType.GOTO,  # Alias for goto
             'look': TokenType.LOOK,
             'l': TokenType.LOOK,  # Short alias
             'examine': TokenType.LOOK,  # Alias for look
@@ -397,6 +409,9 @@ class Lexer:
             'link': TokenType.CONNECT,  # Alias
             'help': TokenType.HELP,
             'random': TokenType.RANDOM,
+            'confirm': TokenType.CONFIRM,
+            'yes': TokenType.CONFIRM,  # Alias for confirm
+            'go': TokenType.CONFIRM,   # Alias for confirm (paradigm word)
             'length': TokenType.LENGTH,
             'of': TokenType.OF,
             'contains': TokenType.CONTAINS,

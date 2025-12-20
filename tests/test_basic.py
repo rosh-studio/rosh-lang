@@ -138,10 +138,11 @@ class TestUUIDSystem(unittest.TestCase):
         self.execute("create thing")
         self.execute("get thing 2")
 
-        # Should have one item on stack (thing-2)
+        # Should have one item on stack (thing-1)
+        # 1-indexed for users: template is #1, thing-1 is #2, thing-2 is #3
         self.assertEqual(len(self.interp.data_stack), 1)
         obj = self.interp.data_stack[0]
-        self.assertEqual(obj.id, "thing-1")  # 0-indexed internally
+        self.assertEqual(obj.id, "thing-1")  # get thing 2 = second instance (thing-1)
 
     def test_instance_tracking_persistence(self):
         """Test that instance tracking survives save/load"""

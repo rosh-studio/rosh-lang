@@ -195,6 +195,8 @@ class Parser:
             return self.parse_while()
         elif token.type == TokenType.FOR:
             return self.parse_for()
+        elif token.type == TokenType.DO:
+            return self.parse_do()
         elif token.type == TokenType.WHEN:
             return self.parse_when()
         elif token.type == TokenType.TRIGGER:
@@ -219,6 +221,16 @@ class Parser:
             return self.parse_clone()
         elif token.type == TokenType.DELETE:
             return self.parse_delete()
+        elif token.type == TokenType.RESET:
+            return self.parse_reset()
+        elif token.type == TokenType.HIDE:
+            return self.parse_hide()
+        elif token.type == TokenType.SHOW:
+            return self.parse_show()
+        elif token.type == TokenType.COUNT:
+            return self.parse_count()
+        elif token.type == TokenType.MOVE:
+            return self.parse_move()
         elif token.type == TokenType.PROPERTIES:
             return self.parse_properties()
         elif token.type == TokenType.GOTO:
@@ -229,6 +241,8 @@ class Parser:
             return self.parse_connect()
         elif token.type == TokenType.HELP:
             return self.parse_help()
+        elif token.type == TokenType.CONFIRM:
+            return self.parse_confirm()
         elif token.type in (TokenType.END, TokenType.DEDENT, TokenType.EOF):
             return None
         else:
@@ -435,6 +449,17 @@ class Parser:
         """
         line = self.current_token().line
         self.expect(TokenType.SET)
+
+        # Check for bulk set: set all <type> <property> to <value>
+        if self.current_token().type == TokenType.ALL:
+            self.advance()  # consume 'all'
+            type_name = self.current_token().value
+            self.expect(TokenType.IDENTIFIER)  # type name
+            prop_name = self.current_token().value
+            self.expect(TokenType.IDENTIFIER)  # property name
+            self.expect(TokenType.TO)
+            value = self.parse_expression()
+            return SetAll(type_name=type_name, property_name=prop_name, value=value, line=line)
 
         # Check for type annotation: set x: number to 42 OR set x as number to 42
         # Also handle META token as a valid target (set meta ... )
@@ -1022,7 +1047,9 @@ class Parser:
         if self.current_token().type == TokenType.ALL:
             self.advance()  # consume 'all'
             collection = self.parse_expression()
-            self.expect(TokenType.THEN)
+            # 'then' is optional
+            if self.current_token().type == TokenType.THEN:
+                self.advance()
             self.skip_newlines()
 
             body = []
@@ -1045,13 +1072,15 @@ class Parser:
                 line=line
             )
 
-        # Check if it's a list iteration: for item in my_list then
-        # vs range-based: for i in 1 to 10 then
+        # Check if it's a list iteration: for item in my_list [then]
+        # vs range-based: for i in 1 to 10 [then]
         start = self.parse_expression()
 
-        # If next token is THEN, it's list iteration
-        if self.current_token().type == TokenType.THEN:
-            self.advance()  # consume 'then'
+        # If next token is THEN or NEWLINE (not TO), it's list iteration
+        # 'then' is optional
+        if self.current_token().type in (TokenType.THEN, TokenType.NEWLINE, TokenType.SEMICOLON):
+            if self.current_token().type == TokenType.THEN:
+                self.advance()  # consume optional 'then'
             self.skip_newlines()
 
             body = []
@@ -1084,7 +1113,9 @@ class Parser:
             self.advance()  # consume 'step'
             step = self.parse_expression()
 
-        self.expect(TokenType.THEN)
+        # 'then' is optional
+        if self.current_token().type == TokenType.THEN:
+            self.advance()
         self.skip_newlines()
 
         body = []
@@ -1102,6 +1133,56 @@ class Parser:
             start=start,
             end=end,
             step=step,
+            body=body,
+            is_collection=False,
+            line=line
+        )
+
+    def parse_do(self):
+        """Parse: do <count> times ... end
+
+        Simple repeat loop without a loop variable.
+        Internally creates a ForLoop with an unused variable.
+
+        Examples:
+            do 10 times
+                create banana
+            end
+
+            do 100 times; create banana; go
+        """
+        from .ast_nodes import ForLoop, Literal
+        line = self.current_token().line
+        self.expect(TokenType.DO)
+
+        # Parse the count (use parse_primary to avoid 'times' being treated as multiplication)
+        count = self.parse_primary()
+
+        # Expect 'times' keyword
+        self.expect(TokenType.TIMES)
+
+        # 'then' is optional (for consistency with for loops)
+        if self.current_token().type == TokenType.THEN:
+            self.advance()
+        self.skip_newlines()
+
+        # Parse body
+        body = []
+        while self.current_token().type not in (TokenType.END, TokenType.EOF):
+            stmt = self.parse_statement()
+            if stmt:
+                body.append(stmt)
+            self.skip_newlines()
+
+        self.expect(TokenType.END)
+        self.skip_newlines()
+
+        # Create a ForLoop with an internal variable name that won't conflict
+        return ForLoop(
+            variable='_',  # Unused loop variable
+            start=Literal(value=1, type_name='number', line=line),
+            end=count,
+            step=None,
             body=body,
             is_collection=False,
             line=line
@@ -1485,6 +1566,81 @@ class Parser:
 
         return DeleteObject(name=name, line=line)
 
+    def parse_reset(self) -> ResetObject:
+        """Parse: reset <name> - Revert object to template defaults"""
+        line = self.current_token().line
+        self.expect(TokenType.RESET)
+
+        name_token = self.expect(TokenType.IDENTIFIER)
+        name = name_token.value
+
+        return ResetObject(name=name, line=line)
+
+    def parse_hide(self) -> HideObject:
+        """Parse: hide <name> - Set object visible to false"""
+        line = self.current_token().line
+        self.expect(TokenType.HIDE)
+
+        name_token = self.expect(TokenType.IDENTIFIER)
+        name = name_token.value
+
+        return HideObject(name=name, line=line)
+
+    def parse_show(self) -> ShowObject:
+        """Parse: show <name> - Set object visible to true"""
+        line = self.current_token().line
+        self.expect(TokenType.SHOW)
+
+        name_token = self.expect(TokenType.IDENTIFIER)
+        name = name_token.value
+
+        return ShowObject(name=name, line=line)
+
+    def parse_count(self) -> CountObjects:
+        """Parse: count [type] - Count objects, optionally by type"""
+        line = self.current_token().line
+        self.expect(TokenType.COUNT)
+
+        # Optional type name
+        object_type = None
+        if self.current_token().type == TokenType.IDENTIFIER:
+            object_type = self.advance().value
+
+        return CountObjects(object_type=object_type, line=line)
+
+    def parse_move(self) -> MoveObject:
+        """Parse: move <name> to x,y[,z] or move <name> x y [z]"""
+        line = self.current_token().line
+        self.expect(TokenType.MOVE)
+
+        name_token = self.expect(TokenType.IDENTIFIER)
+        name = name_token.value
+
+        # Skip optional 'to'
+        if self.current_token().type == TokenType.TO:
+            self.advance()
+
+        # Parse x coordinate
+        x = self.parse_expression()
+
+        # Skip optional comma
+        if self.current_token().type == TokenType.COMMA:
+            self.advance()
+
+        # Parse y coordinate
+        y = self.parse_expression()
+
+        # Optional z coordinate
+        z = None
+        if self.current_token().type == TokenType.COMMA:
+            self.advance()
+            z = self.parse_expression()
+        elif self.current_token().type in (TokenType.NUMBER, TokenType.IDENTIFIER, TokenType.MINUS):
+            # Allow space-separated z
+            z = self.parse_expression()
+
+        return MoveObject(name=name, x=x, y=y, z=z, line=line)
+
     def parse_properties(self) -> PropertiesCommand:
         """Parse: properties <name> or props <name>"""
         line = self.current_token().line
@@ -1594,6 +1750,12 @@ class Parser:
                 topic = topic_token.type.name.lower()
 
         return Help(topic=topic, line=line)
+
+    def parse_confirm(self) -> Confirm:
+        """Parse: confirm | yes | go - Execute pending bulk operation"""
+        line = self.current_token().line
+        self.expect(TokenType.CONFIRM)
+        return Confirm(line=line)
 
     def parse_expression(self) -> ASTNode:
         """Parse an expression (with binary operators)"""

@@ -112,6 +112,21 @@ class SetProperty(ASTNode):
 
 
 @dataclass
+class SetAll(ASTNode):
+    """set all <type> <property> to <value> - bulk set requiring confirm"""
+    type_name: str  # The type of objects (e.g., 'banana')
+    property_name: str  # The property to set
+    value: ASTNode  # The value to set
+    line: int = 0
+
+
+@dataclass
+class Confirm(ASTNode):
+    """confirm/yes/go - execute pending bulk operation"""
+    line: int = 0
+
+
+@dataclass
 class Append(ASTNode):
     """append <item> to <list>"""
     item: ASTNode  # The item to append
@@ -418,6 +433,44 @@ class CloneObject(ASTNode):
 class DeleteObject(ASTNode):
     """delete <name> - Remove an object"""
     name: str  # Name of object to delete
+    line: int = 0
+
+
+@dataclass
+class ResetObject(ASTNode):
+    """reset <name> - Revert object to template defaults"""
+    name: str  # Name of object to reset
+    line: int = 0
+
+
+@dataclass
+class HideObject(ASTNode):
+    """hide <name> - Set object visible to false"""
+    name: str  # Name of object to hide
+    line: int = 0
+
+
+@dataclass
+class ShowObject(ASTNode):
+    """show <name> - Set object visible to true"""
+    name: str  # Name of object to show
+    line: int = 0
+
+
+@dataclass
+class CountObjects(ASTNode):
+    """count [type] - Count objects, optionally by type"""
+    object_type: Optional[str] = None  # None = count all
+    line: int = 0
+
+
+@dataclass
+class MoveObject(ASTNode):
+    """move <name> to x,y[,z] - Move object to coordinates"""
+    name: str  # Name of object to move
+    x: any  # Can be number or expression
+    y: any  # Can be number or expression
+    z: any = None  # Optional z coordinate
     line: int = 0
 
 

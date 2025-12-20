@@ -113,6 +113,46 @@ Export current view as PNG:
 
 ---
 
+## Design Notes
+
+### Core Language Commands
+
+These commands work in `.rosh` scripts AND all REPLs:
+
+| Command | Description | Added |
+|---------|-------------|-------|
+| `create <name>` | Create object (uses known type if available) | v0.1.13 |
+| `create <type> <name>` | Create named object of type | v0.1.13 |
+| `clone <obj>` | Clone existing object | v0.1.11 |
+| `clone <obj> as <name>` | Clone with custom name | v0.1.11 |
+| `count` | Count all objects | v0.1.13 |
+| `count <type>` | Count objects of type | v0.1.13 |
+| `move <obj> to x, y` | Move to coordinates | v0.1.13 |
+| `delete <obj>` | Delete object | v0.1.11 |
+| `set <obj>.<prop> to <val>` | Set property | v0.1.0 |
+| `get <obj>.<prop>` | Get property | v0.1.0 |
+| `print <expr>` | Print value | v0.1.0 |
+
+### REPL-Only Commands
+
+Some commands are only available in interactive REPLs, not in `.rosh` script files:
+
+| Command | Description | Available In |
+|---------|-------------|--------------|
+| `make <obj> bigger` | Scale object up by 1.5× | CLI REPL, Three.js console |
+| `make <obj> smaller` | Scale object down by 1.5× | CLI REPL, Three.js console |
+| `make <obj> visible` | Show object | CLI REPL, Three.js console |
+| `make <obj> hidden` | Hide object | CLI REPL, Three.js console |
+| `make <obj> <color>` | Change object color | CLI REPL, Three.js console |
+| `help create` | Show create syntax and known object types | CLI REPL, Three.js console |
+| `help make` | Show make command usage | CLI REPL, Three.js console |
+
+**Why REPL-only?** These are natural-language convenience commands for interactive exploration. In scripts, use explicit commands like `set ball.scale to 2` for precision and reproducibility.
+
+**Tip:** Use `help make` in the REPL to see usage examples.
+
+---
+
 ## Resolved Issues
 
 ### ISSUE-003: Add `text` command to console ✅

@@ -129,10 +129,10 @@ class TestManualBasicFeatures:
     def test_manual_while_loop(self):
         """Test while loops"""
         code = """
-        create number count to 3
-        while count is above 0 then
-            print count
-            set count to count minus 1
+        create number counter to 3
+        while counter is above 0 then
+            print counter
+            set counter to counter minus 1
         end
         """
         success, output = run_rosh_code(code)

@@ -16,6 +16,40 @@
 
 ---
 
+## [0.1.18] - 2025-12-20 - Core Language Commands & REPL Improvements
+
+### Added
+- **Core Language Commands** (work in scripts AND REPLs)
+  - `count` - Count all objects or by type (`count`, `count ball`)
+  - `move <obj> to x, y` - Move object to coordinates
+
+- **Known Objects System**
+  - `create banana` now uses known object properties (not just empty object)
+  - `create apple golden` creates "golden" of type "apple"
+  - `clone banana` creates banana from known_objects.toml if doesn't exist
+  - 37 known object types with pre-defined shapes/colors for 2D and 3D
+
+- **REPL Help System** (CLI and Three.js)
+  - `help create` - Shows create syntax and lists all known object types
+  - `help make` - Shows make command usage
+  - Commands without arguments show usage hints (e.g., `set` shows examples)
+
+- **REPL-Only Commands** (documented in ISSUES.md)
+  - `make <obj> bigger/smaller` - Relative scaling (×1.5 / ÷1.5)
+  - `make <obj> <color>` - Change color
+  - `make <obj> visible/hidden` - Show/hide
+
+### Fixed
+- Three.js: `create a banana` now creates "banana" (skips articles a/an/the)
+- Three.js: `help create` now works in console
+- CLI: `create <type> <name>` now correctly names the object
+- Serialization: Changed `_type` property to `object_type` to avoid conflict
+
+### Changed
+- Usage hints for 15+ commands when called without arguments
+
+---
+
 ## [0.1.12] - 2025-12-18 - Three.js Console Fixes & Meta Tests
 
 ### Added

@@ -98,16 +98,16 @@ class TestEveryFunctionValidation:
         code = """
         import "stdlib/game-loop-simple.rosh"
 
-        set count to 0
+        set counter to 0
 
         while tick_count is below 10 then
             if call every 3 tick_count then
-                set count to count plus 1
+                set counter to counter plus 1
             end
             set tick_count to tick_count plus 1
         end
 
-        get count
+        get counter
         print stack
         """
         output = execute_rosh(code)

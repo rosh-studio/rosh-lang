@@ -1,0 +1,537 @@
+# Rosh Known Objects Registry
+#
+# This file defines preset objects that can be created by name in any Rosh program.
+# Each emitter interprets these properties for its world type:
+#   - text: description used for "look" and text adventures
+#   - 2d: color, shape for Phaser/Pygame
+#   - 3d: shape, scale for Three.js
+#
+# Programs can import additional known objects or override these defaults.
+# Usage: create banana, clone apple, etc.
+
+# =============================================================================
+# FOOD - Fruits, vegetables, consumables
+# =============================================================================
+
+[banana]
+description = "A bright yellow banana, slightly curved"
+category = "food"
+[banana.2d]
+color = "yellow"
+shape = "ellipse"
+width = 0.6
+height = 1.0
+[banana.3d]
+shape = "cylinder"
+color = 0xffe135
+scaleX = 0.3
+scaleY = 1.2
+scaleZ = 0.3
+
+[apple]
+description = "A shiny red apple"
+category = "food"
+[apple.2d]
+color = "red"
+shape = "circle"
+[apple.3d]
+shape = "sphere"
+color = 0xff0000
+
+[orange]
+description = "A round orange fruit"
+category = "food"
+[orange.2d]
+color = "orange"
+shape = "circle"
+[orange.3d]
+shape = "sphere"
+color = 0xff8800
+
+[lemon]
+description = "A bright yellow lemon, slightly oval"
+category = "food"
+[lemon.2d]
+color = "yellow"
+shape = "ellipse"
+[lemon.3d]
+shape = "sphere"
+color = 0xffff00
+scaleY = 1.2
+
+[grape]
+description = "A small purple grape"
+category = "food"
+[grape.2d]
+color = "purple"
+shape = "circle"
+scale = 0.5
+[grape.3d]
+shape = "sphere"
+color = 0x800080
+scaleX = 0.5
+scaleY = 0.5
+scaleZ = 0.5
+
+[cherry]
+description = "A small red cherry"
+category = "food"
+[cherry.2d]
+color = "red"
+shape = "circle"
+scale = 0.4
+[cherry.3d]
+shape = "sphere"
+color = 0xdc143c
+scaleX = 0.4
+scaleY = 0.4
+scaleZ = 0.4
+
+[watermelon]
+description = "A large green watermelon"
+category = "food"
+[watermelon.2d]
+color = "green"
+shape = "ellipse"
+scale = 2.0
+[watermelon.3d]
+shape = "sphere"
+color = 0x228b22
+scaleX = 1.5
+scaleY = 1.0
+scaleZ = 1.2
+
+# =============================================================================
+# NATURE - Trees, rocks, plants
+# =============================================================================
+
+[tree]
+description = "A tall green tree"
+category = "nature"
+[tree.2d]
+color = "green"
+shape = "triangle"
+height = 2.0
+[tree.3d]
+shape = "cylinder"
+color = 0x228b22
+scaleY = 3.0
+
+[rock]
+description = "A gray boulder"
+category = "nature"
+[rock.2d]
+color = "gray"
+shape = "rectangle"
+height = 0.6
+[rock.3d]
+shape = "box"
+color = 0x808080
+scaleY = 0.6
+
+[flower]
+description = "A colorful flower"
+category = "nature"
+[flower.2d]
+color = "pink"
+shape = "circle"
+scale = 0.5
+[flower.3d]
+shape = "sphere"
+color = 0xff69b4
+scaleX = 0.5
+scaleY = 0.8
+scaleZ = 0.5
+
+[bush]
+description = "A round green bush"
+category = "nature"
+[bush.2d]
+color = "green"
+shape = "circle"
+[bush.3d]
+shape = "sphere"
+color = 0x228b22
+scaleY = 0.7
+
+[mushroom]
+description = "A red mushroom with white spots"
+category = "nature"
+[mushroom.2d]
+color = "red"
+shape = "circle"
+scale = 0.5
+[mushroom.3d]
+shape = "sphere"
+color = 0xff0000
+scaleX = 0.6
+scaleY = 0.5
+scaleZ = 0.6
+
+# =============================================================================
+# COLLECTIBLES - Game pickups
+# =============================================================================
+
+[coin]
+description = "A shiny gold coin"
+category = "collectible"
+[coin.2d]
+color = "gold"
+shape = "circle"
+scale = 0.5
+[coin.3d]
+shape = "cylinder"
+color = 0xffd700
+scaleX = 1.0
+scaleY = 0.1
+scaleZ = 1.0
+
+[gem]
+description = "A sparkling cyan gem"
+category = "collectible"
+[gem.2d]
+color = "cyan"
+shape = "diamond"
+scale = 0.6
+[gem.3d]
+shape = "sphere"
+color = 0x00ffff
+scaleX = 0.5
+scaleY = 0.7
+scaleZ = 0.5
+
+[star]
+description = "A bright yellow star"
+category = "collectible"
+[star.2d]
+color = "yellow"
+shape = "star"
+[star.3d]
+shape = "sphere"
+color = 0xffff00
+scaleX = 0.8
+scaleY = 0.8
+scaleZ = 0.8
+
+[heart]
+description = "A pink heart"
+category = "collectible"
+[heart.2d]
+color = "pink"
+shape = "heart"
+[heart.3d]
+shape = "sphere"
+color = 0xff69b4
+
+[key]
+description = "A golden key"
+category = "collectible"
+[key.2d]
+color = "gold"
+shape = "rectangle"
+width = 0.3
+height = 0.8
+[key.3d]
+shape = "box"
+color = 0xffd700
+scaleX = 0.2
+scaleY = 0.8
+scaleZ = 0.1
+
+[treasure]
+description = "A wooden treasure chest"
+category = "collectible"
+[treasure.2d]
+color = "brown"
+shape = "rectangle"
+[treasure.3d]
+shape = "box"
+color = 0x8b4513
+scaleY = 0.7
+
+# =============================================================================
+# CHARACTERS - Players, enemies, NPCs
+# =============================================================================
+
+[player]
+description = "The player character"
+category = "character"
+[player.2d]
+color = "blue"
+shape = "rectangle"
+height = 1.5
+[player.3d]
+shape = "box"
+color = 0x4169e1
+scaleY = 1.8
+
+[enemy]
+description = "A hostile enemy"
+category = "character"
+[enemy.2d]
+color = "red"
+shape = "rectangle"
+height = 1.3
+[enemy.3d]
+shape = "box"
+color = 0xff4500
+scaleY = 1.5
+
+[npc]
+description = "A friendly non-player character"
+category = "character"
+[npc.2d]
+color = "green"
+shape = "rectangle"
+height = 1.4
+[npc.3d]
+shape = "box"
+color = 0x32cd32
+scaleY = 1.6
+
+[ghost]
+description = "A spooky translucent ghost"
+category = "character"
+[ghost.2d]
+color = "white"
+shape = "circle"
+opacity = 0.6
+[ghost.3d]
+shape = "sphere"
+color = 0xffffff
+opacity = 0.6
+
+[monster]
+description = "A scary monster"
+category = "character"
+[monster.2d]
+color = "purple"
+shape = "rectangle"
+height = 1.8
+[monster.3d]
+shape = "box"
+color = 0x800080
+scaleX = 1.3
+scaleY = 1.8
+scaleZ = 1.3
+
+# =============================================================================
+# SHAPES - Basic geometric shapes
+# =============================================================================
+
+[ball]
+description = "A red ball"
+category = "shape"
+[ball.2d]
+color = "red"
+shape = "circle"
+[ball.3d]
+shape = "sphere"
+color = 0xff0000
+
+[cube]
+description = "A blue cube"
+category = "shape"
+[cube.2d]
+color = "blue"
+shape = "rectangle"
+[cube.3d]
+shape = "box"
+color = 0x0000ff
+
+[cylinder]
+description = "A green cylinder"
+category = "shape"
+[cylinder.2d]
+color = "green"
+shape = "rectangle"
+height = 1.5
+[cylinder.3d]
+shape = "cylinder"
+color = 0x00ff00
+
+[sphere]
+description = "A white sphere"
+category = "shape"
+[sphere.2d]
+color = "white"
+shape = "circle"
+[sphere.3d]
+shape = "sphere"
+color = 0xffffff
+
+[box]
+description = "A gray box"
+category = "shape"
+[box.2d]
+color = "gray"
+shape = "rectangle"
+[box.3d]
+shape = "box"
+color = 0x808080
+
+# =============================================================================
+# STRUCTURES - Buildings, platforms, obstacles
+# =============================================================================
+
+[wall]
+description = "A solid wall"
+category = "structure"
+[wall.2d]
+color = "brown"
+shape = "rectangle"
+width = 0.3
+height = 2.0
+[wall.3d]
+shape = "box"
+color = 0x8b4513
+scaleX = 0.2
+scaleY = 2.0
+scaleZ = 1.0
+
+[platform]
+description = "A flat platform"
+category = "structure"
+[platform.2d]
+color = "brown"
+shape = "rectangle"
+width = 2.0
+height = 0.3
+[platform.3d]
+shape = "box"
+color = 0x8b4513
+scaleX = 2.0
+scaleY = 0.2
+scaleZ = 2.0
+
+[door]
+description = "A wooden door"
+category = "structure"
+[door.2d]
+color = "brown"
+shape = "rectangle"
+width = 0.8
+height = 1.8
+[door.3d]
+shape = "box"
+color = 0x8b4513
+scaleX = 0.8
+scaleY = 1.8
+scaleZ = 0.1
+
+[crate]
+description = "A wooden crate"
+category = "structure"
+[crate.2d]
+color = "brown"
+shape = "rectangle"
+[crate.3d]
+shape = "box"
+color = 0xdeb887
+
+[barrel]
+description = "A wooden barrel"
+category = "structure"
+[barrel.2d]
+color = "brown"
+shape = "circle"
+[barrel.3d]
+shape = "cylinder"
+color = 0x8b4513
+scaleY = 1.2
+
+# =============================================================================
+# VEHICLES - Things that move
+# =============================================================================
+
+[car]
+description = "A red car"
+category = "vehicle"
+[car.2d]
+color = "red"
+shape = "rectangle"
+width = 1.5
+height = 0.8
+[car.3d]
+shape = "box"
+color = 0xff0000
+scaleX = 1.5
+scaleY = 0.6
+scaleZ = 0.8
+
+[ship]
+description = "A sailing ship"
+category = "vehicle"
+[ship.2d]
+color = "brown"
+shape = "triangle"
+width = 1.2
+height = 1.5
+[ship.3d]
+shape = "box"
+color = 0x8b4513
+scaleX = 0.8
+scaleY = 1.0
+scaleZ = 2.0
+
+[rocket]
+description = "A silver rocket"
+category = "vehicle"
+[rocket.2d]
+color = "silver"
+shape = "triangle"
+height = 2.0
+[rocket.3d]
+shape = "cylinder"
+color = 0xc0c0c0
+scaleX = 0.4
+scaleY = 2.0
+scaleZ = 0.4
+
+# =============================================================================
+# EFFECTS - Visual effects and particles
+# =============================================================================
+
+[explosion]
+description = "A fiery explosion"
+category = "effect"
+[explosion.2d]
+color = "orange"
+shape = "circle"
+scale = 1.5
+[explosion.3d]
+shape = "sphere"
+color = 0xff4500
+scaleX = 1.5
+scaleY = 1.5
+scaleZ = 1.5
+
+[spark]
+description = "A bright spark"
+category = "effect"
+[spark.2d]
+color = "yellow"
+shape = "circle"
+scale = 0.2
+[spark.3d]
+shape = "sphere"
+color = 0xffff00
+scaleX = 0.2
+scaleY = 0.2
+scaleZ = 0.2
+
+[cloud]
+description = "A fluffy white cloud"
+category = "effect"
+[cloud.2d]
+color = "white"
+shape = "ellipse"
+width = 2.0
+height = 0.8
+[cloud.3d]
+shape = "sphere"
+color = 0xffffff
+scaleX = 2.0
+scaleY = 0.8
+scaleZ = 1.5
+opacity = 0.8

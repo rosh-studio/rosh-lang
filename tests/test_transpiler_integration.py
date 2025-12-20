@@ -13,7 +13,7 @@ class TestTranspilerCLI(unittest.TestCase):
     def test_build_command_basic(self):
         """Test 'rosh build' command creates output files"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create test Rosh file (coordinates are percentages now)
+            # Create test Rosh file (bare numbers = pixels)
             rosh_file = Path(tmpdir) / "test.rosh"
             rosh_file.write_text("""
             create object goblin
@@ -47,7 +47,7 @@ class TestTranspilerCLI(unittest.TestCase):
     def test_build_command_with_content_verification(self):
         """Test build command generates correct JavaScript content"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create test Rosh file (coordinates are percentages now)
+            # Create test Rosh file (bare numbers = pixels)
             # 50% = 400px on 800 width, 50% = 300px on 600 height
             rosh_file = Path(tmpdir) / "test.rosh"
             rosh_file.write_text("""
@@ -69,16 +69,16 @@ class TestTranspilerCLI(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0)
 
-            # Verify game.js content (50% = 400.0 x, 300.0 y on 800x600 canvas)
+            # Verify game.js content (bare 50 = 50 pixels)
             js_content = (output_dir / "game.js").read_text()
-            self.assertIn("this.goblin = this.add.rectangle(400.0, 300.0", js_content)
+            self.assertIn("this.goblin = this.add.rectangle(50.0, 50.0", js_content)
             self.assertIn("class GameScene extends Phaser.Scene", js_content)
             self.assertIn("const game = new Phaser.Game(config)", js_content)
 
     def test_javascript_syntax_validation(self):
         """Test that generated JavaScript has valid syntax (using Node.js)"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create test Rosh file (coordinates are percentages now)
+            # Create test Rosh file (bare numbers = pixels)
             rosh_file = Path(tmpdir) / "test.rosh"
             rosh_file.write_text("""
             create object goblin

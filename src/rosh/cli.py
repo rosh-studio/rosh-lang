@@ -177,7 +177,7 @@ def _fuzzy_match_command(word: str, interpreter=None):
         'dup', 'swap', 'drop',
         'push', 'pop',
         # Object management
-        'clone', 'delete', 'properties', 'props',
+        'clone', 'delete', 'properties', 'props', 'count', 'move',
         # Universal REPL commands
         'list', 'ls', 'objects', 'look', 'l', 'examine', 'ex', 'inspect', 'x',
         # MUD commands
@@ -185,6 +185,8 @@ def _fuzzy_match_command(word: str, interpreter=None):
         # AI commands
         'prompt',
         'undo', 'redo', 'oops',  # oops = undo (natural language)
+        # REPL-only commands
+        'make',
         # Help
         'help',
     ]
@@ -205,7 +207,7 @@ def _fuzzy_match_command(word: str, interpreter=None):
     return matches[0] if matches else None
 
 
-def _list_objects(interpreter, out):
+def _list_objects(interpreter, out, max_display=10):
     """List all objects in the current environment (Universal REPL command)"""
     from .values import RoshObject, rosh_to_python
 
@@ -222,8 +224,11 @@ def _list_objects(interpreter, out):
         out.dim("No objects defined. Use 'create object <name>' to create one.")
         return
 
-    out.print("Objects:", style="bold cyan")
-    for name, obj in objects:
+    total = len(objects)
+    out.print(f"Objects ({total}):", style="bold cyan")
+
+    # Show first max_display objects
+    for name, obj in objects[:max_display]:
         # Get type (object name)
         obj_type = obj.name if hasattr(obj, 'name') and obj.name else "object"
         # Get position if available
@@ -237,6 +242,11 @@ def _list_objects(interpreter, out):
 
         prop_str = f" ({', '.join(props)})" if props else ""
         out.print(f"  {name} ({obj_type}){prop_str}", style="green")
+
+    # Show "and X more" if truncated
+    if max_display is not None and total > max_display:
+        remaining = total - max_display
+        out.dim(f"  ... and {remaining} more (use 'list all' to see all)")
 
 
 def _examine_object(interpreter, out, obj_name: str):
@@ -317,29 +327,119 @@ def _fuzzy_match_object(interpreter, obj_name: str) -> str:
 
 
 COMMAND_USAGE_HINTS = {
+    'set': {
+        'message': "Tell me what to set.",
+        'examples': [
+            "set <object>.<property> to <value>",
+            "set <property> to <value>        # on current object",
+            "set x to 100",
+            "set ball.color to \"red\"",
+        ],
+    },
+    'get': {
+        'message': "Tell me what to get.",
+        'examples': [
+            "get <object>.<property>",
+            "get ball.x",
+            "get all <type>  # select all objects of type",
+        ],
+    },
+    'print': {
+        'message': "Tell me what to print.",
+        'examples': [
+            "print <expression>",
+            "print ball.x",
+            "print \"Hello, world!\"",
+        ],
+    },
     'create': {
         'message': "Tell me what to create.",
         'examples': [
+            "create <name>              # create object (uses known type if available)",
+            "create <type> <name>       # create named object of type",
             "create object <name> ... end",
-            "create <name> to <value>",
-            "create number <name> as <value>",
-            "create string <name> as <value>",
-            "create <template> <name>  # clone template with custom name",
-            "create <template>         # clone template with auto name",
         ],
     },
     'clone': {
         'message': "Tell me what to clone.",
         'examples': [
-            "clone <source> as <target>",
-            "clone <source>  # auto-named copy",
+            "clone <object>             # auto-named copy",
+            "clone <object> as <name>   # named copy",
         ],
     },
     'delete': {
         'message': "Tell me what to delete.",
         'examples': [
-            "delete <object name>",
+            "delete <object>",
             "delete <property> from <object>",
+        ],
+    },
+    'move': {
+        'message': "Tell me what to move.",
+        'examples': [
+            "move <object> to <x>, <y>",
+            "move ball to 100, 200",
+        ],
+    },
+    'count': {
+        'message': "Count objects.",
+        'examples': [
+            "count              # count all objects",
+            "count <type>       # count objects of type",
+            "count ball",
+        ],
+    },
+    'make': {
+        'message': "Tell me what to adjust.",
+        'examples': [
+            "make <object> bigger",
+            "make <object> smaller",
+            "make <object> <color>",
+            "make <object> visible/hidden",
+        ],
+    },
+    'goto': {
+        'message': "Tell me where to go.",
+        'examples': [
+            "goto <room>",
+            "goto kitchen",
+        ],
+    },
+    'connect': {
+        'message': "Tell me what to connect.",
+        'examples': [
+            "connect <room1> to <room2>",
+            "connect kitchen to garden",
+        ],
+    },
+    'import': {
+        'message': "Tell me what to import.",
+        'examples': [
+            "import <library>",
+            "import mud",
+            "import \"path/to/file.rosh\"",
+        ],
+    },
+    'save': {
+        'message': "Tell me where to save.",
+        'examples': [
+            "save <filename>",
+            "save game.json",
+        ],
+    },
+    'load': {
+        'message': "Tell me what to load.",
+        'examples': [
+            "load <filename>",
+            "load game.json",
+        ],
+    },
+    'prompt': {
+        'message': "Tell me what you want.",
+        'examples': [
+            "prompt <natural language request>",
+            "prompt create a red ball",
+            "prompt move player to the left",
         ],
     },
 }
@@ -809,7 +909,8 @@ def run_repl(interpreter: Interpreter = None):
                     open_blocks = 0
                     for buf_line in buffer:
                         buf_stripped = buf_line.strip().lower()
-                        if any(buf_stripped.startswith(kw) for kw in ['create object', 'create ', 'if ', 'define function', 'when ', 'while ', 'for ']):
+                        # Only count block-opening keywords (not 'create <name>' one-liners)
+                        if any(buf_stripped.startswith(kw) for kw in ['create object ', 'if ', 'define function', 'when ', 'while ', 'for ', 'do ']):
                             open_blocks += 1
                         if buf_stripped == 'end':
                             open_blocks = max(0, open_blocks - 1)
@@ -836,6 +937,41 @@ def run_repl(interpreter: Interpreter = None):
                 out.print(f"Rosh v{__version__}", style="cyan")
                 continue
 
+            # help create - list known objects that can be created
+            if stripped in ('help create', 'help clone'):
+                from .data import get_known_object_names
+                names = sorted(get_known_object_names())
+                out.print("create - Create objects", style="bold cyan")
+                out.print()
+                out.print("You can create any object:")
+                out.print("  create thing           - Create empty object 'thing'")
+                out.print("  create object ball     - Same, more explicit")
+                out.print("  create car porsche     - Create 'porsche' of type 'car'")
+                out.print("  clone ball             - Clone existing 'ball'")
+                out.print()
+                if names:
+                    out.print("Known object types (with pre-defined properties):", style="cyan")
+                    # Format in rows of 6
+                    row_size = 6
+                    for i in range(0, len(names), row_size):
+                        row = names[i:i + row_size]
+                        out.print("  " + ", ".join(row))
+                continue
+
+            # help make - explain the make command (REPL-only)
+            if stripped == 'help make':
+                out.print("make - Adjust object properties (REPL only)", style="bold cyan")
+                out.print()
+                out.print("Usage:")
+                out.print("  make <obj> bigger    - Scale up by 1.5×")
+                out.print("  make <obj> smaller   - Scale down by 1.5×")
+                out.print("  make <obj> visible   - Show the object")
+                out.print("  make <obj> hidden    - Hide the object")
+                out.print("  make <obj> <color>   - Change color (red, blue, etc.)")
+                out.print()
+                out.dim("Note: 'make' is a REPL convenience command, not part of the Rosh language.")
+                continue
+
             # Provide friendlier guidance for commands missing arguments
             if len(parts) == 1 and _show_command_usage(out, parts[0].lower()):
                 continue
@@ -843,6 +979,11 @@ def run_repl(interpreter: Interpreter = None):
             # list / ls / objects (no args) - show all objects
             if stripped in ('list', 'ls', 'objects', 'list objects'):
                 _list_objects(interpreter, out)
+                continue
+
+            # list all - show all objects without truncation
+            if stripped in ('list all', 'ls all', 'objects all'):
+                _list_objects(interpreter, out, max_display=None)
                 continue
 
             # look (no args) - same as list
@@ -854,6 +995,77 @@ def run_repl(interpreter: Interpreter = None):
             if stripped == 'oops':
                 interpreter.perform_undo(1)
                 continue
+
+            # remove <x> - natural language alias for delete <x>
+            if stripped.startswith('remove '):
+                obj_name = stripped[7:].strip()
+                if obj_name:
+                    line = f"delete {obj_name}"
+                    stripped = line
+                    # Fall through to normal processing
+
+            # go <place> - alias for goto <place> (when not just "go" for confirm)
+            if stripped.startswith('go ') and interpreter.pending_operation is None:
+                place = stripped[3:].strip()
+                if place:
+                    line = f"goto {place}"
+                    stripped = line
+                    # Fall through to normal processing
+
+            # make - natural language for modifications
+            # make <obj> <color> → set <obj> color to <color>
+            # make <obj> <prop> <value> → set <obj> <prop> to <value>
+            # make <obj> visible/hidden → show/hide
+            # make <obj> big/bigger → scale up
+            if stripped.startswith('make ') and len(parts) >= 3:
+                obj_name = parts[1]
+                rest = parts[2:]
+                known_colors = {'red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'white', 'black', 'orange', 'purple', 'pink', 'gray', 'grey', 'gold', 'silver'}
+                transformed = None
+
+                # make <obj> visible → show <obj>
+                if rest[0].lower() in ('visible', 'shown'):
+                    transformed = f"show {obj_name}"
+                # make <obj> invisible/hidden → hide <obj>
+                elif rest[0].lower() in ('invisible', 'hidden', 'hide'):
+                    transformed = f"hide {obj_name}"
+                # make <obj> <color> → set <obj> color to <color>
+                elif rest[0].lower() in known_colors:
+                    transformed = f"set {obj_name} color to {rest[0]}"
+                # make <obj> big/bigger → multiply scale by 1.5
+                elif rest[0].lower() in ('big', 'bigger', 'large', 'larger'):
+                    if interpreter and interpreter.current_env.exists(obj_name):
+                        obj = interpreter.current_env.get(obj_name)
+                        if hasattr(obj, 'get') and hasattr(obj, 'set'):
+                            current_scale = obj.get('scale') if obj.has('scale') else 1
+                            new_scale = current_scale * 1.5
+                            obj.set('scale', new_scale)
+                            out.success(f"{obj_name}.scale = {new_scale:.2f}")
+                            continue
+                    transformed = f"set {obj_name} scale to 1.5"  # Fallback
+                # make <obj> small/smaller → divide scale by 1.5
+                elif rest[0].lower() in ('small', 'smaller', 'tiny'):
+                    if interpreter and interpreter.current_env.exists(obj_name):
+                        obj = interpreter.current_env.get(obj_name)
+                        if hasattr(obj, 'get') and hasattr(obj, 'set'):
+                            current_scale = obj.get('scale') if obj.has('scale') else 1
+                            new_scale = current_scale / 1.5
+                            obj.set('scale', new_scale)
+                            out.success(f"{obj_name}.scale = {new_scale:.2f}")
+                            continue
+                    transformed = f"set {obj_name} scale to 0.67"  # Fallback
+                # make <obj> <prop> <value> → set <obj> <prop> to <value>
+                elif len(rest) >= 2:
+                    prop_name = rest[0]
+                    value = ' '.join(rest[1:])
+                    transformed = f"set {obj_name} {prop_name} to {value}"
+
+                if transformed:
+                    out.dim(f"→ {transformed}")
+                    line = transformed
+                    stripped = line.strip().lower()
+                    parts = line.strip().split()
+                # Fall through to normal processing
 
             if parts and parts[0].lower() == 'undo':
                 if len(parts) >= 2 and parts[1].lower() == 'stack':
@@ -909,39 +1121,53 @@ def run_repl(interpreter: Interpreter = None):
                 subprocess.run('clear' if sys.platform != 'win32' else 'cls', shell=True)
                 continue
 
-            # go - auto-close all open blocks and execute buffer
-            # Makes "create banana ; go" work as a one-liner
-            if stripped == 'go':
-                if not buffer:
-                    out.dim("Nothing to run")
+            # go/confirm/yes - confirm pending bulk operation OR auto-close blocks
+            if stripped in ('go', 'confirm', 'yes'):
+                # First check if there's a pending bulk operation
+                if interpreter.pending_operation is not None:
+                    # Execute as confirm command
+                    try:
+                        interpreter = run_source(stripped, "<repl>", interpreter)
+                    except RoshError as e:
+                        out.error(str(e))
                     continue
 
-                # Count open blocks that need closing
-                source_so_far = '\n'.join(buffer)
-                open_blocks = 0
-                for buf_line in buffer:
-                    buf_stripped = buf_line.strip().lower()
-                    # Keywords that open blocks
-                    if any(buf_stripped.startswith(kw) for kw in ['create object', 'create ', 'if ', 'define function', 'when ', 'while ', 'for ']):
-                        open_blocks += 1
-                    # 'end' closes a block
-                    if buf_stripped == 'end':
-                        open_blocks = max(0, open_blocks - 1)
+                # Otherwise, treat 'go' as buffer execution command
+                if stripped == 'go':
+                    if not buffer:
+                        out.dim("Nothing to run")
+                        continue
 
-                # Auto-close all open blocks
-                if open_blocks > 0:
-                    out.dim(f"[auto-closing {open_blocks} block{'s' if open_blocks > 1 else ''}]")
-                    for _ in range(open_blocks):
-                        buffer.append('end')
+                    # Count open blocks that need closing
+                    source_so_far = '\n'.join(buffer)
+                    open_blocks = 0
+                    for buf_line in buffer:
+                        buf_stripped = buf_line.strip().lower()
+                        # Only count block-opening keywords (not 'create <name>' one-liners)
+                        if any(buf_stripped.startswith(kw) for kw in ['create object ', 'if ', 'define function', 'when ', 'while ', 'for ', 'do ']):
+                            open_blocks += 1
+                        # 'end' closes a block
+                        if buf_stripped == 'end':
+                            open_blocks = max(0, open_blocks - 1)
 
-                # Execute the complete buffer
-                source = '\n'.join(buffer)
-                buffer = []
-                try:
-                    interpreter = run_source(source, "<repl>", interpreter)
-                except RoshError as e:
-                    out.error(str(e))
-                continue
+                    # Auto-close all open blocks
+                    if open_blocks > 0:
+                        out.dim(f"[auto-closing {open_blocks} block{'s' if open_blocks > 1 else ''}]")
+                        for _ in range(open_blocks):
+                            buffer.append('end')
+
+                    # Execute the complete buffer
+                    source = '\n'.join(buffer)
+                    buffer = []
+                    try:
+                        interpreter = run_source(source, "<repl>", interpreter)
+                    except RoshError as e:
+                        out.error(str(e))
+                    continue
+                else:
+                    # confirm/yes without pending operation
+                    out.dim("No pending operation to confirm")
+                    continue
 
             # get <obj> or get <obj> <prop> - unified get command (#017)
             # Also: get all <type>, get <type> <n>
@@ -970,14 +1196,45 @@ def run_repl(interpreter: Interpreter = None):
                 _get_command(interpreter, out, identifier, prop_name)
                 continue
 
+            # Handle semicolon-separated statements ending with 'go'
+            # e.g., "for x in 1 to 100 then; create banana; go"
+            if ';' in line:
+                parts = [p.strip() for p in line.split(';') if p.strip()]
+                if parts and parts[-1].lower() in ('go', 'confirm', 'yes'):
+                    # Add all parts except the last to buffer
+                    for part in parts[:-1]:
+                        buffer.append(part)
+                    # Now trigger 'go' behavior on the buffer
+                    # Count open blocks that need closing
+                    open_blocks = 0
+                    for buf_line in buffer:
+                        buf_stripped = buf_line.strip().lower()
+                        # Only count block-opening keywords (not 'create <name>' one-liners)
+                        if any(buf_stripped.startswith(kw) for kw in ['create object ', 'if ', 'define function', 'when ', 'while ', 'for ', 'do ']):
+                            open_blocks += 1
+                        if buf_stripped == 'end':
+                            open_blocks = max(0, open_blocks - 1)
+
+                    if open_blocks > 0:
+                        out.dim(f"[auto-closing {open_blocks} block{'s' if open_blocks > 1 else ''}]")
+                        for _ in range(open_blocks):
+                            buffer.append('end')
+
+                    source = '\n'.join(buffer)
+                    buffer = []
+                    try:
+                        interpreter = run_source(source, "<repl>", interpreter)
+                    except RoshError as e:
+                        out.error(str(e))
+                    continue
+
             # Add line to buffer
             buffer.append(line)
 
             # Check if we need more input (waiting for 'end')
-            # Simple heuristic: if line contains 'create object', 'if', 'define function', etc.
-            # we need to wait for 'end'
+            # Simple heuristic: if line contains block-opening keywords, wait for 'end'
             stripped = line.strip().lower()
-            keywords_needing_end = ['create object', 'if ', 'define function']
+            keywords_needing_end = ['create object', 'if ', 'define function', 'for ', 'while ', 'when ', 'do ']
 
             if any(stripped.startswith(kw) for kw in keywords_needing_end):
                 # Wait for 'end'

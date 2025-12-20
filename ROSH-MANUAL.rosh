@@ -335,6 +335,34 @@ print "Enemy health:"
 print enemy.health
 print
 
+# Object lifecycle commands
+create object widget
+    set color to "blue"
+    set visible to true
+end
+
+# Delete objects
+clone widget as temp
+delete temp                  # Remove object from environment
+# (temp no longer exists)
+
+# Reset objects (revert to template defaults)
+clone widget as w1
+set w1 color to "red"        # Override template
+reset w1                     # Reverts to template defaults (color = "blue")
+print "After reset, color is inherited from template"
+delete w1
+
+# Hide and show objects (visibility shortcuts)
+hide widget                  # Same as: set widget visible to false
+show widget                  # Same as: set widget visible to true
+
+# Remove is alias for delete (REPL only - more natural language)
+clone widget as extra
+delete extra                 # In REPL: "remove extra" also works
+
+delete widget
+
 # ========================================
 # 14. FOR LOOPS - COLLECTIONS
 # ========================================

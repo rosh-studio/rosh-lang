@@ -85,6 +85,13 @@ class Interpreter:
         self.undo_limit = 100
         self._undo_enabled = False  # Enabled after meta initialization
 
+        # Pending bulk operation (requires confirm/yes to execute)
+        self.pending_operation = None  # {'type': 'set_all', 'targets': [...], 'prop': ..., 'value': ...}
+
+        # Batch operation tracking (for summarized feedback)
+        self.batch_creates = {}  # {type_name: count} - tracks creates during loops
+        self.batch_mode = False  # True when in a loop, suppresses individual feedback
+
         # Metadata system (v0.0.8+)
         self.source_code = None  # Original source code (for checksum calculation)
         self.program_metadata = {}  # Metadata by scope: 'core', 'generated', 'game', etc.
@@ -370,6 +377,45 @@ class Interpreter:
 
         return None
 
+    def _pluralize(self, word: str, count: int) -> str:
+        """Pluralize a word based on count.
+
+        Handles common English pluralization rules:
+        - banana → bananas
+        - box → boxes
+        - baby → babies
+        - leaf → leaves
+        - sheep → sheep (irregular)
+        """
+        if count == 1:
+            return word
+
+        # Irregular plurals (common ones)
+        irregulars = {
+            'sheep': 'sheep', 'fish': 'fish', 'deer': 'deer',
+            'child': 'children', 'person': 'people', 'mouse': 'mice',
+            'man': 'men', 'woman': 'women', 'foot': 'feet', 'tooth': 'teeth',
+        }
+        if word.lower() in irregulars:
+            return irregulars[word.lower()]
+
+        # Words ending in consonant + y → ies
+        if word.endswith('y') and len(word) > 1 and word[-2] not in 'aeiou':
+            return word[:-1] + 'ies'
+
+        # Words ending in s, x, z, ch, sh → es
+        if word.endswith(('s', 'x', 'z', 'ch', 'sh')):
+            return word + 'es'
+
+        # Words ending in f/fe → ves
+        if word.endswith('f'):
+            return word[:-1] + 'ves'
+        if word.endswith('fe'):
+            return word[:-2] + 'ves'
+
+        # Default: add s
+        return word + 's'
+
     def _register_builtin_help(self):
         """Register help text for built-in commands"""
         self.help_registry.update({
@@ -517,6 +563,10 @@ class Interpreter:
             return self.eval_create_value(node)
         elif isinstance(node, SetProperty):
             return self.eval_set_property(node)
+        elif isinstance(node, SetAll):
+            return self.eval_set_all(node)
+        elif isinstance(node, Confirm):
+            return self.eval_confirm(node)
         elif isinstance(node, Append):
             return self.eval_append(node)
         elif isinstance(node, Remove):
@@ -585,6 +635,16 @@ class Interpreter:
             return self.eval_clone_object(node)
         elif isinstance(node, DeleteObject):
             return self.eval_delete_object(node)
+        elif isinstance(node, ResetObject):
+            return self.eval_reset_object(node)
+        elif isinstance(node, HideObject):
+            return self.eval_hide_object(node)
+        elif isinstance(node, ShowObject):
+            return self.eval_show_object(node)
+        elif isinstance(node, CountObjects):
+            return self.eval_count_objects(node)
+        elif isinstance(node, MoveObject):
+            return self.eval_move_object(node)
         elif isinstance(node, PropertiesCommand):
             return self.eval_properties(node)
         elif isinstance(node, GotoRoom):
@@ -742,16 +802,19 @@ class Interpreter:
                     raise RoshTypeError(f"Parent '{parent_name}' is not an object")
                 parent_objects.append(parent)
 
-        # Auto-number if name already exists (create banana, create banana → banana, banana-2)
-        final_name = node.name
-        if self.current_env.exists(node.name):
-            # Find next available number
-            counter = 2
-            while self.current_env.exists(f"{node.name}-{counter}"):
-                counter += 1
-            final_name = f"{node.name}-{counter}"
+        # Determine if this is a template (first creation) or instance (subsequent)
+        is_instance = self.current_env.exists(node.name)
 
-        obj = RoshObject(name=final_name, parents=parent_objects)
+        obj = RoshObject(name=node.name, parents=parent_objects)
+
+        # If this is a simple "create <name>" with no body/parents,
+        # check if it's a known object type and apply its properties
+        if not node.body and not node.parents and not is_instance:
+            from .data import get_known_objects_text
+            known_objects = get_known_objects_text()
+            if node.name in known_objects:
+                obj.set('object_type', node.name)
+                obj.set('description', known_objects[node.name])
 
         # Create a temporary environment for the object body
         # (so 'set name to "value"' works inside the object definition)
@@ -761,7 +824,7 @@ class Interpreter:
 
         # Execute the body without recording undo entries (internal initialization)
         # We temporarily bind 'self' or the object name to the object
-        obj_env.define(final_name, obj)
+        obj_env.define(node.name, obj)
 
         with self.suspend_undo():
             for statement in node.body:
@@ -779,8 +842,15 @@ class Interpreter:
 
         self.current_env = old_env
 
-        # Register instance (use base type name for grouping, final name for binding)
-        self.register_instance(obj, type_name=node.name, explicit_name=final_name)
+        # Register instance and determine final name
+        if is_instance:
+            # Instance creation: use auto-numbering from register_instance (ball-1, ball-2, etc.)
+            self.register_instance(obj, type_name=node.name, explicit_name=None)
+            final_name = obj.id  # register_instance sets obj.id to auto-numbered name
+        else:
+            # Template creation: use original name
+            self.register_instance(obj, type_name=node.name, explicit_name=node.name)
+            final_name = node.name
 
         self.current_env.define(final_name, obj)
         binding_env = self.current_env
@@ -805,11 +875,16 @@ class Interpreter:
 
         # Provide feedback (only in interactive REPL mode)
         if self.interactive:
-            if final_name != node.name:
-                # Name was auto-numbered
-                self.color_out.success(f"Created '{final_name}' ('{node.name}' already exists)")
+            if self.batch_mode:
+                # Track for batch summary
+                type_name = node.name
+                self.batch_creates[type_name] = self.batch_creates.get(type_name, 0) + 1
             else:
-                self.color_out.success(f"Created '{final_name}'")
+                if final_name != node.name:
+                    # Name was auto-numbered
+                    self.color_out.success(f"Created '{final_name}' ('{node.name}' already exists)")
+                else:
+                    self.color_out.success(f"Created '{final_name}'")
 
     def eval_create_value(self, node: CreateValue) -> None:
         """Execute: create x to 5  OR  create x: number to 5"""
@@ -982,6 +1057,57 @@ class Interpreter:
         elif isinstance(target, PropertyAccess):
             # Setting an object property
             self.eval_property_set(target, value)
+
+    def eval_set_all(self, node: SetAll) -> None:
+        """Execute: set all <type> <property> to <value> - Stage bulk operation"""
+        type_name = node.type_name
+        prop_name = node.property_name
+        value = self.eval_expression(node.value)
+
+        # Find matching type (with plural handling)
+        actual_type = self._find_type_with_plural(type_name)
+        if actual_type is None:
+            raise RoshRuntimeError(f"No instances of type '{type_name}' found")
+
+        # Get all instances of this type
+        instances = self.instances.get(actual_type, [])
+        if not instances:
+            raise RoshRuntimeError(f"No instances of type '{actual_type}' found")
+
+        # Stage the operation - don't execute yet
+        self.pending_operation = {
+            'type': 'set_all',
+            'targets': instances,
+            'type_name': actual_type,
+            'prop': prop_name,
+            'value': value
+        }
+
+        # Show confirmation prompt
+        self.color_out.warning(f"set {prop_name} to {repr(value) if isinstance(value, str) else value} on {len(instances)} {actual_type}(s)")
+        self.color_out.info("Type 'go' or 'confirm' to execute")
+
+    def eval_confirm(self, node: Confirm) -> None:
+        """Execute: confirm | yes | go - Execute pending bulk operation"""
+        if self.pending_operation is None:
+            self.color_out.warning("No pending operation to confirm")
+            return
+
+        op = self.pending_operation
+        self.pending_operation = None  # Clear before executing
+
+        if op['type'] == 'set_all':
+            targets = op['targets']
+            prop_name = op['prop']
+            value = op['value']
+            count = 0
+
+            for obj in targets:
+                if isinstance(obj, RoshObject):
+                    obj.set(prop_name, value)
+                    count += 1
+
+            self.color_out.success(f"Set {prop_name} = {repr(value) if isinstance(value, str) else value} on {count} object(s)")
 
     def eval_append(self, node) -> None:
         """Execute: append <item> to <list>"""
@@ -2179,6 +2305,9 @@ Focus on the specific syntax or concept they need to correct."""
         """
         from .errors import BreakLoop, ContinueLoop
 
+        # Calculate iteration count for batch mode decision
+        iteration_count = 0
+
         if node.is_collection:
             # Collection-based iteration: for item in my_list OR for item in all items
             # Check if this is "for...in all <type>" - parser consumed "all" but we need to get all instances
@@ -2216,6 +2345,14 @@ Focus on the specific syntax or concept they need to correct."""
                     # Single value - treat as single-item list
                     items = [collection]
 
+            iteration_count = len(items)
+
+            # Enable batch mode if > 10 iterations (suppress per-item feedback)
+            use_batch = self.interactive and iteration_count > 10
+            if use_batch:
+                self.batch_mode = True
+                self.batch_creates = {}
+
             # Iterate over each item
             for item in items:
                 # Set loop variable to current item (define creates or updates)
@@ -2229,6 +2366,11 @@ Focus on the specific syntax or concept they need to correct."""
                     break
                 except ContinueLoop:
                     continue
+
+            # Show batch summary
+            if use_batch:
+                self.batch_mode = False
+                self._show_batch_summary()
         else:
             # Range-based iteration: for i in start to end [step X]
             start_val = self.eval_expression(node.start)
@@ -2242,6 +2384,20 @@ Focus on the specific syntax or concept they need to correct."""
                 raise RoshRuntimeError(f"For loop end must be a number, got {type(end_val).__name__}")
             if not isinstance(step_val, (int, float)):
                 raise RoshRuntimeError(f"For loop step must be a number, got {type(step_val).__name__}")
+
+            # Calculate iteration count
+            if step_val > 0:
+                iteration_count = max(0, int((end_val - start_val) / step_val) + 1)
+            elif step_val < 0:
+                iteration_count = max(0, int((start_val - end_val) / abs(step_val)) + 1)
+            else:
+                raise RoshRuntimeError("For loop step cannot be zero")
+
+            # Enable batch mode if > 10 iterations
+            use_batch = self.interactive and iteration_count > 10
+            if use_batch:
+                self.batch_mode = True
+                self.batch_creates = {}
 
             # Handle positive or negative steps
             if step_val > 0:
@@ -2276,8 +2432,18 @@ Focus on the specific syntax or concept they need to correct."""
                         pass  # Just continue to next iteration
 
                     current += step_val
-            else:
-                raise RoshRuntimeError("For loop step cannot be zero")
+
+            # Show batch summary
+            if use_batch:
+                self.batch_mode = False
+                self._show_batch_summary()
+
+    def _show_batch_summary(self):
+        """Show summary of batch operations (creates, etc.)"""
+        for type_name, count in self.batch_creates.items():
+            plural = self._pluralize(type_name, count)
+            self.color_out.success(f"Created {count} {plural}")
+        self.batch_creates = {}
 
     def eval_when_statement(self, node: WhenStatement) -> None:
         """Register an event handler
@@ -2742,12 +2908,29 @@ Focus on the specific syntax or concept they need to correct."""
     def eval_clone_object(self, node: CloneObject) -> None:
         """Execute: clone <source> as <target> - Deep copy an object
         If target is None, creates anonymous instance with auto-numbered ID
+        If source doesn't exist but is a known object, create it first
         """
+        # Check if source object exists
+        if not self.current_env.exists(node.source):
+            # Check if this is a known object we can create
+            from .data import get_known_objects_text
+            known_objects = get_known_objects_text()
+            if node.source in known_objects:
+                # Create from known object template
+                # Use target name if provided (e.g., "create apple golden" → named "golden", type "apple")
+                # Otherwise use source name (e.g., "clone apple" → named "apple")
+                obj_name = node.target if node.target else node.source
+                new_obj = RoshObject(name=obj_name)
+                new_obj.set('object_type', node.source)  # Type is still the template type
+                new_obj.set('description', known_objects[node.source])
+                self.current_env.define(obj_name, new_obj)
+                self.color_out.success(f"Created '{obj_name}'" + (f" (type: {node.source})" if node.target else ""))
+                return
+            else:
+                raise RoshRuntimeError(f"Cannot clone: object '{node.source}' does not exist")
+
         # Get the source object
         source_obj = self.current_env.get(node.source)
-
-        if source_obj is None:
-            raise RoshRuntimeError(f"Cannot clone: object '{node.source}' does not exist")
 
         if not isinstance(source_obj, RoshObject):
             raise RoshTypeError(f"Cannot clone non-object: '{node.source}' is not an object")
@@ -2850,6 +3033,185 @@ Focus on the specific syntax or concept they need to correct."""
                 del target_env.bindings[name]
 
         self.push_undo(f"delete {node.name}", undo_delete, redo_delete)
+
+    def eval_reset_object(self, node: ResetObject) -> None:
+        """Execute: reset <name> - Revert object to template defaults"""
+        # Check if the object exists
+        if not self.current_env.exists(node.name):
+            raise RoshRuntimeError(f"Cannot reset: '{node.name}' does not exist")
+
+        obj = self.current_env.get(node.name)
+        if not isinstance(obj, RoshObject):
+            raise RoshTypeError(f"Cannot reset non-object: '{node.name}'")
+
+        # Save current state for undo
+        old_stacks = {k: list(v) for k, v in obj.property_stacks.items()}
+
+        # Clear all property stacks - object will inherit from template
+        obj.property_stacks.clear()
+
+        self.color_out.success(f"Reset '{node.name}' to defaults")
+
+        def undo_reset(target_obj=obj, saved_stacks=old_stacks):
+            target_obj.property_stacks = {k: list(v) for k, v in saved_stacks.items()}
+
+        def redo_reset(target_obj=obj):
+            target_obj.property_stacks.clear()
+
+        self.push_undo(f"reset {node.name}", undo_reset, redo_reset)
+
+    def eval_hide_object(self, node: HideObject) -> None:
+        """Execute: hide <name> - Set object visible to false"""
+        # Check if the object exists
+        if not self.current_env.exists(node.name):
+            raise RoshRuntimeError(f"Cannot hide: '{node.name}' does not exist")
+
+        obj = self.current_env.get(node.name)
+        if not isinstance(obj, RoshObject):
+            raise RoshTypeError(f"Cannot hide non-object: '{node.name}'")
+
+        # Save current visibility for undo
+        old_visible = obj.get('visible') if obj.has('visible') else True
+
+        # Set visible to false
+        obj.set('visible', False)
+
+        self.color_out.success(f"Hid '{node.name}'")
+
+        def undo_hide(target_obj=obj, saved_visible=old_visible):
+            target_obj.set('visible', saved_visible)
+
+        def redo_hide(target_obj=obj):
+            target_obj.set('visible', False)
+
+        self.push_undo(f"hide {node.name}", undo_hide, redo_hide)
+
+    def eval_show_object(self, node: ShowObject) -> None:
+        """Execute: show <name> - Set object visible to true"""
+        # Check if the object exists
+        if not self.current_env.exists(node.name):
+            raise RoshRuntimeError(f"Cannot show: '{node.name}' does not exist")
+
+        obj = self.current_env.get(node.name)
+        if not isinstance(obj, RoshObject):
+            raise RoshTypeError(f"Cannot show non-object: '{node.name}'")
+
+        # Save current visibility for undo
+        old_visible = obj.get('visible') if obj.has('visible') else True
+
+        # Set visible to true
+        obj.set('visible', True)
+
+        self.color_out.success(f"Showed '{node.name}'")
+
+        def undo_show(target_obj=obj, saved_visible=old_visible):
+            target_obj.set('visible', saved_visible)
+
+        def redo_show(target_obj=obj):
+            target_obj.set('visible', True)
+
+        self.push_undo(f"show {node.name}", undo_show, redo_show)
+
+    def eval_count_objects(self, node: CountObjects) -> None:
+        """Execute: count [type] - Count objects, optionally by type"""
+        # Get all objects from the current environment (traverse up the scope chain)
+        all_objects = []
+        env = self.current_env
+        seen_names = set()
+        while env is not None:
+            for name, binding in env.bindings.items():
+                if name not in seen_names:
+                    seen_names.add(name)
+                    value = binding['value']
+                    if isinstance(value, RoshObject):
+                        all_objects.append((name, value))
+            env = env.parent
+
+        if node.object_type is None:
+            # Count all objects
+            count = len(all_objects)
+            self.color_out.info(f"{count} object{'s' if count != 1 else ''} in scope")
+        else:
+            # Count objects matching the type
+            type_name = node.object_type
+            # Handle plurals
+            if type_name.endswith('ies'):
+                type_name = type_name[:-3] + 'y'
+            elif type_name.endswith('es') and (type_name.endswith('xes') or type_name.endswith('shes') or type_name.endswith('ches')):
+                type_name = type_name[:-2]
+            elif type_name.endswith('s') and not type_name.endswith('ss'):
+                type_name = type_name[:-1]
+
+            # Find matches - check name, _type property, or extract from name
+            import re
+            matches = []
+            for name, obj in all_objects:
+                obj_type = None
+                if obj.has('_type'):
+                    obj_type = obj.get('_type')
+                elif obj.parents:
+                    # Use first parent's name as type
+                    obj_type = obj.parents[0].name
+                else:
+                    # Try to extract type from name like "banana-1" -> "banana"
+                    match = re.match(r'^(.+?)-\d+$', name)
+                    obj_type = match.group(1) if match else name
+
+                if obj_type == type_name or name == type_name:
+                    matches.append(name)
+
+            count = len(matches)
+            if count == 0:
+                self.color_out.dim(f"No {type_name} objects found")
+            else:
+                self.color_out.info(f"{count} {type_name} object{'s' if count != 1 else ''}:")
+                for name in matches:
+                    self.color_out.print(f"  {name}")
+
+    def eval_move_object(self, node: MoveObject) -> None:
+        """Execute: move <name> to x,y[,z] - Move object to coordinates"""
+        # Check if the object exists
+        if not self.current_env.exists(node.name):
+            raise RoshRuntimeError(f"Cannot move: '{node.name}' does not exist")
+
+        obj = self.current_env.get(node.name)
+        if not isinstance(obj, RoshObject):
+            raise RoshTypeError(f"Cannot move non-object: '{node.name}'")
+
+        # Evaluate coordinates
+        x = self.eval_expression(node.x)
+        y = self.eval_expression(node.y)
+        z = self.eval_expression(node.z) if node.z else None
+
+        # Save old position for undo
+        old_x = obj.get('x') if obj.has('x') else 0
+        old_y = obj.get('y') if obj.has('y') else 0
+        old_z = obj.get('z') if obj.has('z') else 0
+
+        # Set new position
+        obj.set('x', x)
+        obj.set('y', y)
+        if z is not None:
+            obj.set('z', z)
+
+        # Report the move
+        if z is not None:
+            self.color_out.success(f"Moved '{node.name}' to ({x}, {y}, {z})")
+        else:
+            self.color_out.success(f"Moved '{node.name}' to ({x}, {y})")
+
+        def undo_move(target_obj=obj, sx=old_x, sy=old_y, sz=old_z):
+            target_obj.set('x', sx)
+            target_obj.set('y', sy)
+            target_obj.set('z', sz)
+
+        def redo_move(target_obj=obj, nx=x, ny=y, nz=z):
+            target_obj.set('x', nx)
+            target_obj.set('y', ny)
+            if nz is not None:
+                target_obj.set('z', nz)
+
+        self.push_undo(f"move {node.name}", undo_move, redo_move)
 
     def eval_properties(self, node: PropertiesCommand) -> None:
         """Execute: properties <target> - List all properties of an object"""
