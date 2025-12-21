@@ -1,6 +1,6 @@
 # 🤖 Rosh Programming Language
 
-**v0.1.11** - A spoken-language-first, stack-based, AI-native programming language for games and interactive storytelling.
+**Current version:** See `CHANGELOG.md` for release history.
 
 > 🤖 **Rosh** - Programming that sounds like talking to a person!
 
@@ -51,7 +51,7 @@ rosh examples/hello.rosh
 - **Full filesystem access** - Code runs with your user permissions
 - **AI code requires confirmation** - But runs unrestricted after approval
 
-See [docs/proposals/SECURITY-PLAN.md](docs/proposals/SECURITY-PLAN.md) for details and [docs/EVAL-SAFETY.md](docs/EVAL-SAFETY.md) for why this is safe for single-user.
+See [docs/EVAL-SAFETY.md](docs/EVAL-SAFETY.md) for why this is safe for single-user.
 
 ## Quick Start
 
@@ -180,10 +180,10 @@ This executable tutorial demonstrates **ALL working features** of Rosh with hand
 
 ## Project Status
 
-**Current Version:** v0.1.10 (Transpiler Demo & Polish)
-**Interpreter:** v0.0.9 (TOON format support)
+**Current Version:** See `CHANGELOG.md` for release history.
+**Interpreter:** See `CHANGELOG.md` for interpreter milestones.
 
-> **For detailed roadmap:** See `../rosh-dev/ROADMAP.md` (private planning repo)
+> Roadmap will be published alongside the open-source release.
 
 ### Recent Releases
 
@@ -365,7 +365,7 @@ end
 - `docs/AI_SETUP.md` - AI integration guide
 - `docs/EVAL-SAFETY.md` - Understanding eval in single-user vs multi-user
 
-**For strategic planning:** See `../rosh-dev/ROADMAP.md` (private repo)
+**Strategic planning:** Roadmap will be published alongside the open-source release.
 
 ## Directory Structure
 
@@ -389,7 +389,6 @@ rosh-lang/
 ├── stdlib/             # Standard library
 │   └── mud.rosh        # MUD templates (rooms, NPCs, items)
 ├── docs/               # Documentation
-│   ├── proposals/      # Vision documents for future features
 │   └── archive/        # Historical documents
 ├── editor/             # Editor extensions
 │   └── vscode/         # VS Code extension

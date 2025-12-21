@@ -1,6 +1,6 @@
 # Rosh Changelog
 
-**Policy:** See docs/POLICIES.md for changelog guidelines
+**Policy:** See docs/CONTRIBUTING.md for changelog guidelines
 
 > Single chronological log of ALL changes. Never delete, only append.
 
@@ -957,7 +957,7 @@ print "Health: {player.health} / {player.max_health}"
 - Created ISSUES.md for bug tracking
 - Created CHANGELOG.md (this file)
 - Renamed rosh_ideas_direction.md to IDEAS.md
-- Created docs/proposals/EVENT-SYSTEM.md specification
+- Created event system specification (internal)
 - Created docs/TRANSPILER-ROADMAP.md
 - Created docs/HOSTING-PLATFORMS.md
 - Updated PROJECT-PLAN.md with:

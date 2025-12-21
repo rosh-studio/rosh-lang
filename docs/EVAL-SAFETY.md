@@ -272,9 +272,9 @@ def eval_eval(self, node: Eval) -> None:
 ---
 
 **Questions or concerns?** See:
-- `PROJECT-PLAN.md` - Development roadmap
-- `docs/proposals/SECURITY-PLAN.md` - Security considerations
-- `examples/intro-to-rosh.rosh` - Working examples
+- `docs/ARCHITECTURE.md` - System overview
+- `ROSH-MANUAL.rosh` - Working examples
+- Security roadmap is tracked internally until public release
 
 ---
 

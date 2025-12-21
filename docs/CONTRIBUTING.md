@@ -5,6 +5,14 @@
 
 ---
 
+## 🧾 Changelog
+
+- Update `CHANGELOG.md` for user-facing changes
+- Keep newest entries first; format `## [X.Y.Z] - YYYY-MM-DD`
+- Keep `[Unreleased]` at the top; append, never delete
+
+---
+
 ## 🏗 Language Design Philosophy
 
 ### What Rosh Is
