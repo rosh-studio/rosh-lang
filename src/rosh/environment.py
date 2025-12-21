@@ -53,43 +53,59 @@ class Environment:
     Manages variable bindings with support for nested scopes and type inference.
 
     Each binding stores: {'value': <value>, 'type': <inferred_type>}
+
+    Variable names are case-insensitive (for voice-friendly input).
     """
 
     def __init__(self, parent: Optional['Environment'] = None):
         self.parent = parent
         self.bindings: Dict[str, Dict[str, Any]] = {}
+        # Lowercase -> original case mapping for case-insensitive lookup
+        self._name_map: Dict[str, str] = {}
+
+    def _find_key(self, name: str) -> Optional[str]:
+        """Find the actual key for a case-insensitive name lookup."""
+        name_lower = name.lower()
+        if name_lower in self._name_map:
+            return self._name_map[name_lower]
+        return None
 
     def define(self, name: str, value: Any):
         """Define a new variable in the current scope with inferred type"""
         inferred_type = infer_type(value)
+        # Store with the provided case, but map lowercase for lookup
         self.bindings[name] = {
             'value': value,
             'type': inferred_type
         }
+        self._name_map[name.lower()] = name
 
     def get(self, name: str) -> Any:
-        """Get a variable value, checking parent scopes if needed"""
-        if name in self.bindings:
-            return self.bindings[name]['value']
+        """Get a variable value, checking parent scopes if needed (case-insensitive)"""
+        actual_key = self._find_key(name)
+        if actual_key and actual_key in self.bindings:
+            return self.bindings[actual_key]['value']
         elif self.parent:
             return self.parent.get(name)
         else:
             raise RoshNameError(f"Undefined variable: {name}")
 
     def get_type(self, name: str) -> Union[str, Tuple[str, str]]:
-        """Get a variable's type"""
-        if name in self.bindings:
-            return self.bindings[name]['type']
+        """Get a variable's type (case-insensitive)"""
+        actual_key = self._find_key(name)
+        if actual_key and actual_key in self.bindings:
+            return self.bindings[actual_key]['type']
         elif self.parent:
             return self.parent.get_type(name)
         else:
             raise RoshNameError(f"Undefined variable: {name}")
 
     def set(self, name: str, value: Any):
-        """Set a variable value with type checking (must already exist)"""
-        if name in self.bindings:
+        """Set a variable value with type checking (must already exist, case-insensitive)"""
+        actual_key = self._find_key(name)
+        if actual_key and actual_key in self.bindings:
             # Get the declared type
-            declared_type = self.bindings[name]['type']
+            declared_type = self.bindings[actual_key]['type']
             new_type = infer_type(value)
 
             # Check type compatibility
@@ -98,7 +114,7 @@ class Environment:
                 # In the future, this will raise a TypeError
                 pass
 
-            self.bindings[name]['value'] = value
+            self.bindings[actual_key]['value'] = value
             # Note: Type doesn't change after initial assignment
 
         elif self.parent:
@@ -132,8 +148,9 @@ class Environment:
         return False
 
     def exists(self, name: str) -> bool:
-        """Check if a variable exists"""
-        if name in self.bindings:
+        """Check if a variable exists (case-insensitive)"""
+        actual_key = self._find_key(name)
+        if actual_key and actual_key in self.bindings:
             return True
         elif self.parent:
             return self.parent.exists(name)

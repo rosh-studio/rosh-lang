@@ -13,11 +13,21 @@ It serves as both:
 Run with: rosh ROSH-MANUAL.rosh
 Or:       python -m rosh ROSH-MANUAL.rosh
 
-Last updated: v0.1.9
+Last updated: v0.1.20
 """
 
+# ========================================
+# HELLO WORLD
+# ========================================
+# The simplest Rosh program - no quotes needed!
+
+print Hello World
+
+# ========================================
+
+print
 print "=== WELCOME TO ROSH ==="
-print "An English-like programming language for interactive storytelling"
+print "An English-like programming language for interactive worlds"
 print
 
 # ========================================
@@ -32,15 +42,9 @@ set score to 100
 
 print "Name:"
 print name
-print "Age:"
-print age
+print "Age: {age}" # String interpolation
 print
-
-# Classic syntax also works (backward compatible)
-create number health to 100
-print "Health (classic syntax):"
-print health
-print
+print {name} is {age} years old with a score of {score} 
 
 # ========================================
 # 2. ARITHMETIC OPERATIONS

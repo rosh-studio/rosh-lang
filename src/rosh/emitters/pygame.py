@@ -21,6 +21,19 @@ from ..ir import (
     IR_Value, IR_Expression, IR_Conditional, IR_Loop
 )
 
+# =============================================================================
+# STOP - DO NOT MODIFY THIS EMITTER
+# =============================================================================
+# This emitter is FROZEN for demo purposes. All new features must go through:
+#   1. Parser/IR first (src/rosh/parser.py, ir.py, ir_transformer.py)
+#   2. Bump IR_VERSION
+#   3. Update ALL emitters together
+#
+# Adding features here without IR changes violates the versioning policy.
+# See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
+# =============================================================================
+IMPLEMENTS_IR_VERSION = "0.0.9"
+
 
 class PygameEmitter(BaseEmitter):
     """Emit Pygame Python from Rosh IR.

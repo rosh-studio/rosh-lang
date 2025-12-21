@@ -16,11 +16,17 @@ See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
 """
 
 # =============================================================================
-# IR Version Compliance
-# This emitter implements IR version 0.1.0
-# Must match IR_VERSION in src/rosh/ir.py before making changes
+# STOP - DO NOT MODIFY THIS EMITTER
 # =============================================================================
-IMPLEMENTS_IR_VERSION = "0.1.0"
+# This emitter is FROZEN for demo purposes. All new features must go through:
+#   1. Parser/IR first (src/rosh/parser.py, ir.py, ir_transformer.py)
+#   2. Bump IR_VERSION
+#   3. Update ALL emitters together
+#
+# Adding features here without IR changes violates the versioning policy.
+# See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
+# =============================================================================
+IMPLEMENTS_IR_VERSION = "0.0.9"
 
 import json
 from typing import Dict, Any, Set, List

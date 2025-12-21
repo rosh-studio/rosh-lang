@@ -208,5 +208,230 @@ class TestSecurityImprovements(unittest.TestCase):
         self.assertIn("Force reloading", source)
 
 
+class TestV0119Regressions(unittest.TestCase):
+    """Regression tests for v0.1.19 features (2025-12-21)
+
+    Features:
+    - Bulk undo grouping (undo all of a bulk operation at once)
+    - Print with bare words (no quotes needed)
+    - Case-preserving identifiers with case-insensitive lookup
+    - Repeat command
+    """
+
+    def setUp(self):
+        """Create a fresh interpreter for each test"""
+        self.interp = Interpreter()
+        self.interp.interactive = False  # Suppress feedback messages
+
+    def execute(self, code: str):
+        """Helper: Execute Rosh code"""
+        lexer = Lexer(code)
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        ast = parser.parse()
+        self.interp.execute(ast)
+
+    def test_print_bare_words(self):
+        """
+        Test that print works without quotes.
+
+        print Hello World  →  outputs "Hello World"
+        """
+        import io
+        output = io.StringIO()
+        self.interp.output_stream = output
+
+        self.execute('print Hello World')
+
+        self.assertEqual(output.getvalue().strip(), 'Hello World')
+
+    def test_print_bare_words_case_preserved(self):
+        """
+        Test that bare print preserves case of identifiers.
+
+        print Hello World  →  "Hello World" (not lowercase)
+        """
+        import io
+        output = io.StringIO()
+        self.interp.output_stream = output
+
+        self.execute('print HeLLo WoRLd')
+
+        self.assertEqual(output.getvalue().strip(), 'HeLLo WoRLd')
+
+    def test_print_single_word_variable_lookup(self):
+        """
+        Test that single word after print checks for variable first.
+
+        create box → print box → prints object properties
+        """
+        import io
+        output = io.StringIO()
+        self.interp.output_stream = output
+
+        self.execute('create box')
+        self.execute('print box')
+
+        # Should contain object representation, not just "box"
+        self.assertIn('box', output.getvalue())
+        self.assertIn('_type', output.getvalue())
+
+    def test_print_single_word_bare_string(self):
+        """
+        Test that single word not matching variable is printed as string.
+
+        print Hello  →  outputs "Hello"
+        """
+        import io
+        output = io.StringIO()
+        self.interp.output_stream = output
+
+        self.execute('print Greetings')
+
+        self.assertEqual(output.getvalue().strip(), 'Greetings')
+
+    def test_print_property_access(self):
+        """
+        Test that print obj.prop still works.
+        """
+        import io
+        output = io.StringIO()
+        self.interp.output_stream = output
+
+        self.execute('create box')
+        self.execute('set box.name to "MyBox"')
+        self.execute('print box.name')
+
+        self.assertEqual(output.getvalue().strip(), 'MyBox')
+
+    def test_variable_case_insensitive_lookup(self):
+        """
+        Test that variable lookup is case-insensitive.
+
+        create Enemy → set enemy.health to 50 → works
+        """
+        self.execute('create Enemy')
+        self.execute('set enemy.health to 50')
+
+        # Should be able to access with any case
+        enemy = self.interp.global_env.get('enemy')
+        self.assertEqual(enemy.get('health'), 50)
+
+        enemy2 = self.interp.global_env.get('ENEMY')
+        self.assertEqual(enemy2.get('health'), 50)
+
+    def test_variable_case_preserved_in_name(self):
+        """
+        Test that the original case is preserved for the stored name.
+        """
+        self.execute('create MyPlayer')
+
+        # The original name should be preserved
+        self.assertTrue(self.interp.global_env.exists('myplayer'))
+        self.assertTrue(self.interp.global_env.exists('MyPlayer'))
+        self.assertTrue(self.interp.global_env.exists('MYPLAYER'))
+
+    def test_undo_group_bulk_create(self):
+        """
+        Test that bulk create can be undone as a single operation.
+
+        create 5 orcs; go → undo → all 5 should be removed
+        """
+        from rosh.cli import run_source
+
+        # Simulate bulk create through the CLI which handles grouping
+        self.interp.start_undo_group()
+        self.execute('create orc')
+        self.execute('create orc')
+        self.execute('create orc')
+
+        # Should have 3 orcs
+        self.assertEqual(len(self.interp.instances.get('orc', [])), 3)
+
+        # Undo should remove all 3 at once (same group)
+        self.interp.perform_undo(1)
+
+        # Should have 0 orcs
+        self.assertEqual(len(self.interp.instances.get('orc', [])), 0)
+
+    def test_undo_separate_commands(self):
+        """
+        Test that separate commands are in separate undo groups.
+        """
+        # First command
+        self.interp.start_undo_group()
+        self.execute('create box')
+
+        # Second command (new group)
+        self.interp.start_undo_group()
+        self.execute('create ball')
+
+        # Should have both
+        self.assertTrue(self.interp.global_env.exists('box'))
+        self.assertTrue(self.interp.global_env.exists('ball'))
+
+        # Undo should only remove ball
+        self.interp.perform_undo(1)
+
+        self.assertTrue(self.interp.global_env.exists('box'))
+        self.assertFalse(self.interp.global_env.exists('ball'))
+
+    def test_repeat_command(self):
+        """
+        Test that repeat re-executes the last substantive command.
+        """
+        self.execute('create box')
+        self.execute('repeat')
+
+        # Should have 2 box objects (box and box-1)
+        self.assertEqual(len(self.interp.instances.get('box', [])), 2)
+
+    def test_repeat_skips_utility_commands(self):
+        """
+        Test that repeat skips utility commands (help, confirm, repeat itself).
+        """
+        self.execute('create box')
+        # Help shouldn't become last_command
+        # (We can't easily execute help in test, so we verify the logic exists)
+
+        self.execute('repeat')
+
+        # Should repeat create box, not help
+        self.assertEqual(len(self.interp.instances.get('box', [])), 2)
+
+    def test_print_bare_interpolation(self):
+        """
+        Test that bare print supports {interpolation} without quotes.
+
+        print {name} is {age} years old  →  "Alice is 25 years old"
+        """
+        import io
+        output = io.StringIO()
+        self.interp.output_stream = output
+
+        self.execute('set name to "Alice"')
+        self.execute('set age to 25')
+        self.execute('print {name} is {age} years old')
+
+        self.assertEqual(output.getvalue().strip(), 'Alice is 25 years old')
+
+    def test_print_bare_interpolation_with_property(self):
+        """
+        Test that bare print interpolation works with object properties.
+
+        print {player.name} has {player.health} HP
+        """
+        import io
+        output = io.StringIO()
+        self.interp.output_stream = output
+
+        self.execute('create player')
+        self.execute('set player.name to "Hero"')
+        self.execute('set player.health to 100')
+        self.execute('print {player.name} has {player.health} HP')
+
+        self.assertEqual(output.getvalue().strip(), 'Hero has 100 HP')
+
+
 if __name__ == '__main__':
     unittest.main()

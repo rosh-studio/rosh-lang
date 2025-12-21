@@ -146,6 +146,8 @@ class TokenType(Enum):
     SEMICOLON = auto()
     LBRACKET = auto()
     RBRACKET = auto()
+    LBRACE = auto()      # { for interpolation
+    RBRACE = auto()      # } for interpolation
     LANGLE = auto()      # <
     RANGLE = auto()      # >
     NEWLINE = auto()
@@ -414,6 +416,7 @@ class Lexer:
             'confirm': TokenType.CONFIRM,
             'yes': TokenType.CONFIRM,  # Alias for confirm
             'go': TokenType.CONFIRM,   # Alias for confirm (paradigm word)
+            # Note: 'y' is handled in CLI only (conflicts with variable name)
             'repeat': TokenType.REPEAT,
             # Note: :repeat and :r work in REPL only (colon is tokenized before keywords)
             'length': TokenType.LENGTH,
@@ -469,9 +472,13 @@ class Lexer:
         }
 
         token_type = keyword_map.get(identifier_lower, TokenType.IDENTIFIER)
-        # Always normalize to lowercase (case-insensitive language)
-        # String literals preserve case, but identifiers/keywords do not
-        value = identifier_lower
+
+        # Keywords use lowercase (case-insensitive commands)
+        # Identifiers preserve original case (for bare print strings, variable names with case)
+        if token_type == TokenType.IDENTIFIER:
+            value = identifier  # Preserve original case
+        else:
+            value = identifier_lower  # Keywords are lowercase
 
         return Token(token_type, value, start_line, start_col)
 
@@ -544,6 +551,17 @@ class Lexer:
 
             if char == ']':
                 self.tokens.append(Token(TokenType.RBRACKET, ']', self.line, self.column))
+                self.advance()
+                continue
+
+            # Braces for interpolation in bare print
+            if char == '{':
+                self.tokens.append(Token(TokenType.LBRACE, '{', self.line, self.column))
+                self.advance()
+                continue
+
+            if char == '}':
+                self.tokens.append(Token(TokenType.RBRACE, '}', self.line, self.column))
                 self.advance()
                 continue
 

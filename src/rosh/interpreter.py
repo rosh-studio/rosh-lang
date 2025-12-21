@@ -84,9 +84,13 @@ class Interpreter:
         self.redo_stack = []
         self.undo_limit = 100
         self._undo_enabled = False  # Enabled after meta initialization
+        self._undo_group = 0  # Group ID for bulk undo - all entries in same group undo together
 
         # Pending bulk operation (requires confirm/yes to execute)
         self.pending_operation = None  # {'type': 'set_all', 'targets': [...], 'prop': ..., 'value': ...}
+
+        # Last substantive command for repeat functionality
+        self.last_command = None  # AST node of last non-utility command
 
         # Batch operation tracking (for summarized feedback)
         self.batch_creates = {}  # {type_name: count} - tracks creates during loops
@@ -123,6 +127,10 @@ class Interpreter:
         self.global_env.define('meta', meta)
         self.register_instance(meta, type_name='meta', explicit_name='meta')
 
+    def start_undo_group(self):
+        """Start a new undo group. All subsequent push_undo calls share this group."""
+        self._undo_group += 1
+
     def push_undo(self, description: str, inverse: Callable[[], None], redo: Optional[Callable[[], None]] = None):
         """Push an undo entry onto the stack."""
         if not self._undo_enabled or not callable(inverse):
@@ -131,6 +139,7 @@ class Interpreter:
             'description': description or 'change',
             'undo': inverse,
             'redo': redo,
+            'group': self._undo_group,
         }
         self.undo_stack.append(entry)
         if len(self.undo_stack) > self.undo_limit:
@@ -138,23 +147,43 @@ class Interpreter:
         self.redo_stack.clear()
 
     def perform_undo(self, count: int = 1):
-        """Execute one or more undo operations."""
+        """Execute one or more undo operations (by group)."""
         if not self.undo_stack:
             self.color_out.warning("Nothing to undo")
             return
-        steps = max(1, min(count, len(self.undo_stack)))
-        for _ in range(steps):
-            entry = self.undo_stack.pop()
-            try:
-                entry['undo']()
-                self.color_out.success(f"Undo: {entry['description']}")
-                if entry.get('redo'):
-                    self.redo_stack.append(entry)
-            except Exception as exc:
-                self.color_out.error(f"Undo failed: {exc}")
-                # Put entry back if undo failed
-                self.undo_stack.append(entry)
+
+        for _ in range(count):
+            if not self.undo_stack:
                 break
+
+            # Get the group of the most recent entry
+            target_group = self.undo_stack[-1].get('group', 0)
+
+            # Collect all entries in this group
+            group_entries = []
+            while self.undo_stack and self.undo_stack[-1].get('group', 0) == target_group:
+                group_entries.append(self.undo_stack.pop())
+
+            # Execute undos (already in reverse order - most recent first)
+            undo_count = 0
+            first_desc = group_entries[0]['description'] if group_entries else 'change'
+            for entry in group_entries:
+                try:
+                    entry['undo']()
+                    undo_count += 1
+                    if entry.get('redo'):
+                        self.redo_stack.append(entry)
+                except Exception as exc:
+                    self.color_out.error(f"Undo failed: {exc}")
+                    # Put remaining entries back
+                    self.undo_stack.append(entry)
+                    break
+
+            # Report what was undone
+            if undo_count > 1:
+                self.color_out.success(f"Undo: {first_desc} ({undo_count} operations)")
+            elif undo_count == 1:
+                self.color_out.success(f"Undo: {first_desc}")
 
     def describe_undo_stack(self, limit: int = 5):
         """Print the most recent undo entries."""
@@ -557,6 +586,11 @@ class Interpreter:
 
     def eval_statement(self, node: ASTNode) -> Any:
         """Evaluate a statement"""
+        # Track last substantive command for repeat functionality
+        # Exclude utility commands that shouldn't be repeated
+        if not isinstance(node, (Help, Confirm, Repeat)):
+            self.last_command = node
+
         if isinstance(node, CreateObject):
             return self.eval_create_object(node)
         elif isinstance(node, CreateValue):
@@ -567,6 +601,8 @@ class Interpreter:
             return self.eval_set_all(node)
         elif isinstance(node, Confirm):
             return self.eval_confirm(node)
+        elif isinstance(node, Repeat):
+            return self.eval_repeat(node)
         elif isinstance(node, BulkOperation):
             return self.eval_bulk_operation(node)
         elif isinstance(node, Append):
@@ -1108,7 +1144,7 @@ class Interpreter:
 
         # Show confirmation prompt
         self.color_out.warning(f"set {prop_name} to {repr(value) if isinstance(value, str) else value} on {len(instances)} {actual_type}(s)")
-        self.color_out.info("Type 'go' or 'confirm' to execute")
+        self.color_out.info("Type 'yes' or 'go' to execute")
 
     def eval_confirm(self, node: Confirm) -> None:
         """Execute: confirm | yes | go - Execute pending bulk operation"""
@@ -1118,6 +1154,9 @@ class Interpreter:
 
         op = self.pending_operation
         self.pending_operation = None  # Clear before executing
+
+        # Start new undo group so entire bulk operation can be undone together
+        self.start_undo_group()
 
         if op['type'] == 'set_all':
             targets = op['targets']
@@ -1209,28 +1248,30 @@ class Interpreter:
                     count += 1
             self.color_out.success(f"Set {prop_name} on {count} object(s)")
 
+    def eval_repeat(self, node: Repeat) -> None:
+        """Execute: repeat - Re-execute last substantive command"""
+        if self.last_command is None:
+            self.color_out.warning("No command to repeat")
+            return
+
+        # Re-execute the last command
+        self.color_out.info("Repeating...")
+        self.eval_statement(self.last_command)
+
     def eval_bulk_operation(self, node: BulkOperation) -> None:
         """Stage bulk operation for confirmation"""
         operation = node.operation
         count = node.count
         type_name = node.type_name
         modifiers = node.modifiers
+        auto_confirm = node.auto_confirm
 
         # Threshold for requiring confirmation (can be configured later)
         confirm_threshold = 10
 
         if operation == 'create':
-            if count >= confirm_threshold:
-                self.pending_operation = {
-                    'type': 'bulk_create',
-                    'count': count,
-                    'type_name': type_name,
-                    'modifiers': modifiers
-                }
-                self.color_out.warning(f"Create {count} {type_name}(s)?")
-                self.color_out.info("Type 'go' or 'confirm' to execute")
-            else:
-                # Execute immediately for small counts
+            # Auto-confirm (trailing 'go') or small count: execute immediately
+            if auto_confirm or count < confirm_threshold:
                 self.pending_operation = {
                     'type': 'bulk_create',
                     'count': count,
@@ -1238,6 +1279,16 @@ class Interpreter:
                     'modifiers': modifiers
                 }
                 self.eval_confirm(Confirm(line=node.line))
+            else:
+                # Large count without auto-confirm: ask for confirmation
+                self.pending_operation = {
+                    'type': 'bulk_create',
+                    'count': count,
+                    'type_name': type_name,
+                    'modifiers': modifiers
+                }
+                self.color_out.warning(f"Create {count} {type_name}(s)?")
+                self.color_out.info("Type 'yes' or 'go' to execute")
 
         elif operation == 'delete':
             instances = self.instances.get(type_name, [])
@@ -1246,21 +1297,17 @@ class Interpreter:
                 return
 
             targets = instances[:count]
-            if len(targets) >= confirm_threshold:
-                self.pending_operation = {
-                    'type': 'bulk_delete',
-                    'targets': targets,
-                    'type_name': type_name
-                }
-                self.color_out.warning(f"Delete {len(targets)} {type_name}(s)?")
-                self.color_out.info("Type 'go' or 'confirm' to execute")
-            else:
-                self.pending_operation = {
-                    'type': 'bulk_delete',
-                    'targets': targets,
-                    'type_name': type_name
-                }
+            self.pending_operation = {
+                'type': 'bulk_delete',
+                'targets': targets,
+                'type_name': type_name
+            }
+            # Auto-confirm (trailing 'go') or small count: execute immediately
+            if auto_confirm or len(targets) < confirm_threshold:
                 self.eval_confirm(Confirm(line=node.line))
+            else:
+                self.color_out.warning(f"Delete {len(targets)} {type_name}(s)?")
+                self.color_out.info("Type 'yes' or 'go' to execute")
 
         elif operation == 'get':
             instances = self.instances.get(type_name, [])
@@ -1292,7 +1339,7 @@ class Interpreter:
                     'type_name': type_name
                 }
                 self.color_out.warning(f"Set {node.property_name} on {len(targets)} {type_name}(s)?")
-                self.color_out.info("Type 'go' or 'confirm' to execute")
+                self.color_out.info("Type 'yes' or 'go' to execute")
             else:
                 self.pending_operation = {
                     'type': 'bulk_set',
@@ -1565,10 +1612,26 @@ class Interpreter:
             self.color_out.success(f"{desc} = {repr(value) if isinstance(value, str) else value}")
 
     def eval_print(self, node: Print) -> None:
-        """Execute: print <expression>"""
-        # Evaluate expression and print
-        value = self.eval_expression(node.expression)
-        output = rosh_to_python(value)
+        """Execute: print <expression>
+
+        Special handling for bare identifiers:
+        - If identifier exists as variable/object, print its value
+        - If not, treat the identifier name as a bare string
+        """
+        # Special case: bare identifier that might not exist
+        if isinstance(node.expression, Identifier):
+            name = node.expression.name
+            if self.current_env.exists(name):
+                # It's a variable - print its value
+                value = self.eval_expression(node.expression)
+                output = rosh_to_python(value)
+            else:
+                # Not a variable - print the name as a bare string
+                output = name
+        else:
+            # Normal expression evaluation
+            value = self.eval_expression(node.expression)
+            output = rosh_to_python(value)
 
         if isinstance(output, str):
             print(output, file=self.output_stream)

@@ -128,6 +128,38 @@ class Parser:
         while self.current_token().type in (TokenType.NEWLINE, TokenType.SEMICOLON):
             self.advance()
 
+    def _collect_interpolation(self) -> str:
+        """Collect tokens between { and } for string interpolation.
+
+        Returns a string like '{var}' or '{obj.prop}' that the interpreter
+        will process at runtime.
+        """
+        self.expect(TokenType.LBRACE)  # consume {
+        parts = []
+
+        while self.current_token().type != TokenType.RBRACE:
+            tok = self.current_token()
+            if tok.type == TokenType.EOF:
+                self.error("Unclosed interpolation - missing '}'")
+            if tok.type == TokenType.NEWLINE:
+                self.error("Newline not allowed inside interpolation {}")
+
+            # Collect the token value
+            if tok.type == TokenType.DOT:
+                parts.append('.')
+            elif tok.type == TokenType.IDENTIFIER:
+                parts.append(tok.value)
+            elif tok.type == TokenType.NUMBER:
+                parts.append(str(tok.value))
+            elif isinstance(tok.value, str):
+                parts.append(tok.value)
+            else:
+                parts.append(str(tok.value) if tok.value else '')
+            self.advance()
+
+        self.expect(TokenType.RBRACE)  # consume }
+        return '{' + ''.join(parts) + '}'
+
     def parse(self) -> Program:
         """Parse the entire program"""
         statements = []
@@ -754,7 +786,15 @@ class Parser:
         return target
 
     def parse_print(self) -> Print:
-        """Parse: print [<expression>] OR print stack"""
+        """Parse: print [<expression>] OR print stack OR print bare words
+
+        Supports:
+        - print "Hello World"     → quoted string (with interpolation)
+        - print Hello World       → bare words (no quotes needed)
+        - print ball              → if ball is object, prints properties; else prints "ball"
+        - print stack             → prints top of stack
+        - print                   → prints blank line
+        """
         from .ast_nodes import PrintStack
         line = self.current_token().line
         self.expect(TokenType.PRINT)
@@ -765,10 +805,83 @@ class Parser:
             return PrintStack(line=line)
 
         # If no expression, print blank line (empty string)
-        if self.current_token().type in (TokenType.NEWLINE, TokenType.SEMICOLON, TokenType.EOF, TokenType.END, TokenType.ELSE):
+        end_tokens = (TokenType.NEWLINE, TokenType.SEMICOLON, TokenType.EOF, TokenType.END, TokenType.ELSE)
+        if self.current_token().type in end_tokens:
             return Print(expression=Literal(value="", type_name="string", line=line), line=line)
 
-        # Otherwise print the expression
+        # If quoted string, parse as expression (supports interpolation)
+        if self.current_token().type == TokenType.STRING:
+            expr = self.parse_expression()
+            return Print(expression=expr, line=line)
+
+        # Bare words: collect all tokens until end of statement as a string
+        # Supports interpolation: print {name} is {age} years old
+        # BUT if we see operators or dots on first word, parse as expression instead
+        if self.current_token().type == TokenType.IDENTIFIER:
+            # Peek ahead - if followed by DOT or LBRACKET, it's an expression (property/index access)
+            if self.peek_token().type in (TokenType.DOT, TokenType.LBRACKET):
+                expr = self.parse_expression()
+                return Print(expression=expr, line=line)
+
+            first_word = self.current_token().value
+            self.advance()
+
+            # Check if there are more words (bare string)
+            # Include identifiers, keywords, and {interpolation} sections
+            parts = [first_word]
+            while True:
+                tok = self.current_token()
+                # Accept identifiers
+                if tok.type == TokenType.IDENTIFIER:
+                    parts.append(tok.value)
+                    self.advance()
+                # Accept {expression} for interpolation
+                elif tok.type == TokenType.LBRACE:
+                    interp = self._collect_interpolation()
+                    parts.append(interp)
+                # Accept keywords that look like words
+                elif tok.type not in (TokenType.NEWLINE, TokenType.SEMICOLON, TokenType.EOF,
+                                       TokenType.END, TokenType.ELSE, TokenType.DOT, TokenType.LBRACKET):
+                    if isinstance(tok.value, str) and tok.value.isalpha():
+                        parts.append(tok.value)
+                        self.advance()
+                    else:
+                        break
+                else:
+                    break
+
+            if len(parts) == 1 and not parts[0].startswith('{'):
+                # Single word without interpolation - could be variable or bare string (runtime decides)
+                return Print(expression=Identifier(name=first_word, line=line), line=line)
+            else:
+                # Multiple parts or has interpolation - treat as interpolated string
+                bare_text = ' '.join(parts)
+                return Print(expression=Literal(value=bare_text, type_name="string", line=line), line=line)
+
+        # Handle bare print starting with {interpolation}
+        if self.current_token().type == TokenType.LBRACE:
+            parts = []
+            while True:
+                tok = self.current_token()
+                if tok.type == TokenType.IDENTIFIER:
+                    parts.append(tok.value)
+                    self.advance()
+                elif tok.type == TokenType.LBRACE:
+                    interp = self._collect_interpolation()
+                    parts.append(interp)
+                elif tok.type not in (TokenType.NEWLINE, TokenType.SEMICOLON, TokenType.EOF,
+                                       TokenType.END, TokenType.ELSE):
+                    if isinstance(tok.value, str) and tok.value.isalpha():
+                        parts.append(tok.value)
+                        self.advance()
+                    else:
+                        break
+                else:
+                    break
+            bare_text = ' '.join(parts)
+            return Print(expression=Literal(value=bare_text, type_name="string", line=line), line=line)
+
+        # Fallback: try parsing as expression
         expr = self.parse_expression()
         return Print(expression=expr, line=line)
 

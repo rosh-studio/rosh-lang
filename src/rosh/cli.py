@@ -451,28 +451,7 @@ COMMAND_USAGE_HINTS = {
             "props player      # short form",
         ],
     },
-    'undo': {
-        'message': "Undo recent changes.",
-        'examples': [
-            "undo              # undo last change",
-            "undo 3            # undo last 3 changes",
-            "undo stack        # show undo history",
-        ],
-    },
-    'redo': {
-        'message': "Redo undone changes.",
-        'examples': [
-            "redo              # redo last undo",
-            "redo 3            # redo last 3 undos",
-            "redo stack        # show redo history",
-        ],
-    },
-    'oops': {
-        'message': "Oops! Undo the last change.",
-        'examples': [
-            "oops              # same as 'undo'",
-        ],
-    },
+    # Note: undo/redo/oops are valid with no args, so no usage hints needed
     'look': {
         'message': "Look around or at an object.",
         'examples': [
@@ -765,6 +744,9 @@ def run_source(source: str, filename: str = "<stdin>", interpreter: Interpreter 
     # Set source code for checksum calculation (metadata system)
     interpreter.source_code = source
 
+    # Start new undo group for this command (so entire command undoes together)
+    interpreter.start_undo_group()
+
     try:
         interpreter.execute(program)
     except StopExecution:
@@ -1045,8 +1027,8 @@ def run_repl(interpreter: Interpreter = None):
                 continue
 
             # Provide friendlier guidance for commands missing arguments
-            # Exception: 'go', 'confirm', 'yes' should fall through to pending operation handler
-            if len(parts) == 1 and parts[0].lower() not in ('go', 'confirm', 'yes'):
+            # Exception: commands that are valid with no arguments
+            if len(parts) == 1 and parts[0].lower() not in ('go', 'confirm', 'yes', 'y', 'undo', 'redo', 'oops', 'repeat', 'look', 'l', 'list', 'ls'):
                 if _show_command_usage(out, parts[0].lower()):
                     continue
 
@@ -1195,8 +1177,8 @@ def run_repl(interpreter: Interpreter = None):
                 subprocess.run('clear' if sys.platform != 'win32' else 'cls', shell=True)
                 continue
 
-            # go/confirm/yes - confirm pending bulk operation OR auto-close blocks
-            if stripped in ('go', 'confirm', 'yes'):
+            # go/confirm/yes/y - confirm pending bulk operation OR auto-close blocks
+            if stripped in ('go', 'confirm', 'yes', 'y'):
                 # First check if there's a pending operation
                 if interpreter.pending_operation is not None:
                     op = interpreter.pending_operation
@@ -1213,8 +1195,10 @@ def run_repl(interpreter: Interpreter = None):
                         continue
 
                     # Otherwise, execute as confirm command (bulk ops)
+                    # Note: 'y' is CLI-only (conflicts with variable), so translate to 'yes'
+                    confirm_cmd = 'yes' if stripped == 'y' else stripped
                     try:
-                        interpreter = run_source(stripped, "<repl>", interpreter)
+                        interpreter = run_source(confirm_cmd, "<repl>", interpreter)
                     except RoshError as e:
                         out.error(str(e))
                     continue
@@ -1289,7 +1273,7 @@ def run_repl(interpreter: Interpreter = None):
             # e.g., "for x in 1 to 100 then; create banana; go"
             if ';' in line:
                 parts = [p.strip() for p in line.split(';') if p.strip()]
-                if parts and parts[-1].lower() in ('go', 'confirm', 'yes'):
+                if parts and parts[-1].lower() in ('go', 'confirm', 'yes', 'y'):
                     # Add all parts except the last to buffer
                     for part in parts[:-1]:
                         buffer.append(part)

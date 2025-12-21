@@ -16,7 +16,42 @@
 
 ---
 
-## [0.1.20] - 2025-12-21 - Bulk Operations & Typo Correction
+## [0.1.20] - 2025-12-21 - Voice-Friendly Syntax & IR Versioning
+
+### Added
+- **Bare Print with Interpolation** - Print without quotes, with variable substitution
+  - `print Hello World` → outputs "Hello World"
+  - `print {name} is {age} years old` → interpolates variables
+  - `print {player.health} HP` → works with object properties
+  - Case preserved in bare strings
+
+- **Case-Insensitive Variables** - Variable lookup is case-insensitive
+  - `create Enemy` → `set enemy.health to 50` works
+  - Original case preserved for storage
+
+- **Bulk Undo Grouping** - Undo entire bulk operations at once
+  - `create 100 orcs` then `undo` removes all 100
+  - Each user command is one undo group
+
+- **CLI Shortcuts**
+  - `y` accepted as shortcut for `yes` in confirmations
+  - `undo`, `redo`, `look`, `repeat` work without showing usage hints
+
+- **Canonical Hello World** - ROSH-MANUAL.rosh now starts with `print Hello World`
+
+### Technical
+- **IR Versioning Policy** - Parser/IR is source of truth, emitters frozen at v0.0.9
+  - `IMPLEMENTS_IR_VERSION` constant in all emitters
+  - Emitters will sync to IR 0.1.0 in January 2026
+  - Added code organization guidelines (shared vs platform-specific logic)
+
+- **Lexer** - Added LBRACE/RBRACE tokens for `{` and `}`
+
+- **Regression Tests** - 19 tests covering v0.0.4 and v0.1.19/v0.1.20 features
+
+---
+
+## [0.1.20-pre] - 2025-12-21 - Bulk Operations & Typo Correction
 
 ### Added
 - **Bulk Operations** (CLI REPL, scripts, Three.js REPL)
