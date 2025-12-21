@@ -567,6 +567,8 @@ class Interpreter:
             return self.eval_set_all(node)
         elif isinstance(node, Confirm):
             return self.eval_confirm(node)
+        elif isinstance(node, BulkOperation):
+            return self.eval_bulk_operation(node)
         elif isinstance(node, Append):
             return self.eval_append(node)
         elif isinstance(node, Remove):
@@ -786,6 +788,27 @@ class Interpreter:
 
         else:
             raise RoshRuntimeError(f"Unknown expression type: {type(node).__name__}")
+
+    def _create_typed_object(self, type_name: str) -> Optional[RoshObject]:
+        """Helper to create a typed object programmatically.
+        Returns the created object or None if creation failed.
+        """
+        # Create a synthetic CreateObject node
+        node = CreateObject(name=type_name, body=[], parents=None, line=0)
+
+        # Temporarily disable interactive feedback for bulk operations
+        was_interactive = self.interactive
+        self.interactive = False
+
+        try:
+            self.eval_create_object(node)
+            # Get the created object (it was just defined in current_env)
+            instances = self.instances.get(type_name, [])
+            if instances:
+                return instances[-1]  # Return the most recently created
+            return None
+        finally:
+            self.interactive = was_interactive
 
     def eval_create_object(self, node: CreateObject) -> None:
         """Execute: create object <name> [from parent1, parent2] ... end"""
@@ -1108,6 +1131,177 @@ class Interpreter:
                     count += 1
 
             self.color_out.success(f"Set {prop_name} = {repr(value) if isinstance(value, str) else value} on {count} object(s)")
+
+        elif op['type'] == 'bulk_create':
+            count = op['count']
+            type_name = op['type_name']
+            modifiers = op['modifiers']
+
+            # Known color and size mappings
+            known_colors = {'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
+                            'white', 'black', 'orange', 'purple', 'pink', 'gray',
+                            'grey', 'gold', 'silver'}
+            known_sizes = {'big': 2, 'large': 2, 'huge': 3, 'small': 0.5, 'tiny': 0.25}
+
+            # Collect unknown modifiers for description
+            description_words = []
+            for mod in modifiers:
+                if mod not in known_colors and mod not in known_sizes:
+                    description_words.append(mod)
+
+            # Build description: "angry orc", "big angry orc", etc.
+            description = ' '.join(description_words + [type_name]) if description_words else None
+
+            self.batch_mode = True
+            created = 0
+            for i in range(count):
+                # Create the object
+                obj = self._create_typed_object(type_name)
+                if obj:
+                    # Apply known modifiers
+                    for mod in modifiers:
+                        if mod in known_colors:
+                            obj.set('color', mod)
+                        elif mod in known_sizes:
+                            obj.set('scale', known_sizes[mod])
+                    # Set description if we have unknown modifiers
+                    if description:
+                        obj.set('description', description)
+                    created += 1
+            self.batch_mode = False
+            self.color_out.success(f"Created {created} {type_name}(s)")
+
+        elif op['type'] == 'bulk_delete':
+            targets = op['targets']
+            count = 0
+            for obj in targets:
+                # RoshObject uses .id (display ID like "ball-1") or .name
+                if isinstance(obj, RoshObject):
+                    name = obj.id or obj.name
+                else:
+                    name = obj.get('_id') or obj.get('_name') if hasattr(obj, 'get') else None
+                if name and self.current_env.exists(name):
+                    # Find the right environment
+                    env = self._find_env_for_binding(name) or self.current_env
+                    if name in env.bindings:
+                        # Clean up instance tracking
+                        if isinstance(obj, RoshObject):
+                            self._detach_object_instance(obj)
+                        del env.bindings[name]
+                        count += 1
+            self.color_out.success(f"Deleted {count} object(s)")
+
+        elif op['type'] == 'bulk_get':
+            targets = op['targets']
+            # Push all targets onto the data stack
+            for obj in targets:
+                self.data_stack.append(obj)
+            self.color_out.success(f"Selected {len(targets)} object(s)")
+
+        elif op['type'] == 'bulk_set':
+            targets = op['targets']
+            prop_name = op['prop']
+            value = op['value']
+            count = 0
+            for obj in targets:
+                if isinstance(obj, RoshObject):
+                    obj.set(prop_name, value)
+                    count += 1
+            self.color_out.success(f"Set {prop_name} on {count} object(s)")
+
+    def eval_bulk_operation(self, node: BulkOperation) -> None:
+        """Stage bulk operation for confirmation"""
+        operation = node.operation
+        count = node.count
+        type_name = node.type_name
+        modifiers = node.modifiers
+
+        # Threshold for requiring confirmation (can be configured later)
+        confirm_threshold = 10
+
+        if operation == 'create':
+            if count >= confirm_threshold:
+                self.pending_operation = {
+                    'type': 'bulk_create',
+                    'count': count,
+                    'type_name': type_name,
+                    'modifiers': modifiers
+                }
+                self.color_out.warning(f"Create {count} {type_name}(s)?")
+                self.color_out.info("Type 'go' or 'confirm' to execute")
+            else:
+                # Execute immediately for small counts
+                self.pending_operation = {
+                    'type': 'bulk_create',
+                    'count': count,
+                    'type_name': type_name,
+                    'modifiers': modifiers
+                }
+                self.eval_confirm(Confirm(line=node.line))
+
+        elif operation == 'delete':
+            instances = self.instances.get(type_name, [])
+            if not instances:
+                self.color_out.warning(f"No {type_name} objects found")
+                return
+
+            targets = instances[:count]
+            if len(targets) >= confirm_threshold:
+                self.pending_operation = {
+                    'type': 'bulk_delete',
+                    'targets': targets,
+                    'type_name': type_name
+                }
+                self.color_out.warning(f"Delete {len(targets)} {type_name}(s)?")
+                self.color_out.info("Type 'go' or 'confirm' to execute")
+            else:
+                self.pending_operation = {
+                    'type': 'bulk_delete',
+                    'targets': targets,
+                    'type_name': type_name
+                }
+                self.eval_confirm(Confirm(line=node.line))
+
+        elif operation == 'get':
+            instances = self.instances.get(type_name, [])
+            if not instances:
+                self.color_out.warning(f"No {type_name} objects found")
+                return
+
+            targets = instances[:count]
+            # Get doesn't need confirmation - it's read-only
+            for obj in targets:
+                self.data_stack.append(obj)
+            self.color_out.success(f"Selected {len(targets)} {type_name}(s)")
+
+        elif operation == 'set':
+            instances = self.instances.get(type_name, [])
+            if not instances:
+                self.color_out.warning(f"No {type_name} objects found")
+                return
+
+            targets = instances[:count]
+            value = self.eval_expression(node.property_value)
+
+            if len(targets) >= confirm_threshold:
+                self.pending_operation = {
+                    'type': 'bulk_set',
+                    'targets': targets,
+                    'prop': node.property_name,
+                    'value': value,
+                    'type_name': type_name
+                }
+                self.color_out.warning(f"Set {node.property_name} on {len(targets)} {type_name}(s)?")
+                self.color_out.info("Type 'go' or 'confirm' to execute")
+            else:
+                self.pending_operation = {
+                    'type': 'bulk_set',
+                    'targets': targets,
+                    'prop': node.property_name,
+                    'value': value,
+                    'type_name': type_name
+                }
+                self.eval_confirm(Confirm(line=node.line))
 
     def eval_append(self, node) -> None:
         """Execute: append <item> to <list>"""
@@ -3165,8 +3359,11 @@ Focus on the specific syntax or concept they need to correct."""
                 self.color_out.dim(f"No {type_name} objects found")
             else:
                 self.color_out.info(f"{count} {type_name} object{'s' if count != 1 else ''}:")
-                for name in matches:
+                # Show first 10, then "...N more"
+                for name in matches[:10]:
                     self.color_out.print(f"  {name}")
+                if count > 10:
+                    self.color_out.dim(f"  ...{count - 10} more")
 
     def eval_move_object(self, node: MoveObject) -> None:
         """Execute: move <name> to x,y[,z] - Move object to coordinates"""

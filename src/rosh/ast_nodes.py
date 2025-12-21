@@ -127,6 +127,26 @@ class Confirm(ASTNode):
 
 
 @dataclass
+class BulkOperation(ASTNode):
+    """Bulk operation: create/delete/get/set N [modifiers] type [property to value]
+
+    Examples:
+    - create 100 balls
+    - create 50 green balls
+    - delete 20 balls
+    - get 10 balls
+    - set 30 balls color to red
+    """
+    operation: str  # 'create', 'delete', 'get', 'set'
+    count: int  # Number of objects
+    type_name: str  # Object type (singularized)
+    modifiers: List[str]  # Color/size modifiers for create
+    property_name: Optional[str] = None  # For set operations
+    property_value: Optional[ASTNode] = None  # For set operations
+    line: int = 0
+
+
+@dataclass
 class Append(ASTNode):
     """append <item> to <list>"""
     item: ASTNode  # The item to append

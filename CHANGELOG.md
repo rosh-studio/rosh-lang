@@ -16,6 +16,58 @@
 
 ---
 
+## [0.1.20] - 2025-12-21 - Bulk Operations & Typo Correction
+
+### Added
+- **Bulk Operations** (CLI REPL, scripts, Three.js REPL)
+  - `create N [modifiers] type` - Create multiple objects at once
+  - `delete N type` - Delete first N objects of type
+  - `get N type` - Select first N objects of type
+  - `set N type property to value` - Set property on first N objects
+  - Examples: `create 100 angry orcs`, `set 20 balls color to red`
+  - Unknown modifiers become `description` property (e.g., "angry orc")
+  - CLI requires confirmation for >= 10 objects (type `go` or `confirm`)
+  - Works in both scripts AND REPL ("everything works everywhere")
+
+- **Typo Correction with Confirm** (CLI REPL)
+  - When you mistype a command, Rosh suggests correction
+  - Type `yes` or `go` to execute the corrected command
+  - Example: `cerate ball` → "Did you mean: create?" → `yes` → executes `create ball`
+
+- **Orc Model** - Added `orc` to known objects with 3D model (CC BY 4.0 by EvgeshQa)
+
+- **Three.js examine shows description** - `examine` command now shows object description if set
+
+- **`make all <type> <modifier>`** (Three.js REPL)
+  - Apply modifications to all objects of a type
+  - Examples: `make all orcs bigger`, `make all balls red`, `make all enemies hidden`
+
+- **Floor Control** (Three.js REPL)
+  - `set meta floor off` - Hide the ground grid
+  - `set meta floor on` - Show the ground grid
+  - `set meta floor to green` - Solid color floor (replaces grid)
+  - `get meta` - View all meta settings
+  - `get meta floor` - View floor settings
+
+- **Color Modifiers** - Color words (green, red, blue, etc.) now properly apply to objects
+  - `create green orc` creates an orc with green color
+  - Works with cloning too: cloned objects inherit color modifiers
+
+- **Bulk Delete** (Three.js REPL)
+  - `delete N type` - Delete first N objects of type (e.g., `delete 90 orcs`)
+  - `delete all type` - Delete all objects of type (e.g., `delete all orcs`)
+
+- **Confirmation for >= 10 Objects** (Three.js REPL)
+  - Bulk create, delete, and make all now require confirmation for >= 10 objects
+  - Type `go` or `confirm` to execute, or any other command to cancel
+  - Matches CLI REPL behavior (ISSUE-010 resolved)
+
+- **Plural Singularization** - Commands now accept plurals
+  - `make orcs smaller` → finds and modifies `orc`
+  - `delete balls` → deletes `ball`
+
+---
+
 ## [0.1.19] - 2025-12-20 - 3D Model Loading & Global Scale
 
 ### Added

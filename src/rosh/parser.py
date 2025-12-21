@@ -254,9 +254,15 @@ class Parser:
         Also handles:
         - 'create a banana' → skip 'a' (natural language)
         - 'create banana' → implied 'create object banana'
+        - 'create 100 balls' → bulk create
+        - 'create 50 green balls' → bulk create with modifiers
         """
         line = self.current_token().line
         self.expect(TokenType.CREATE)
+
+        # Check for bulk create: create N [modifiers] type
+        if self.current_token().type == TokenType.NUMBER:
+            return self._parse_bulk_operation('create', line)
 
         # Skip 'a' or 'an' for natural language: "create a banana", "create an apple"
         if (self.current_token().type == TokenType.IDENTIFIER and
@@ -382,6 +388,81 @@ class Parser:
         else:
             self.error(f"Expected object, type, or identifier after 'create', got {type_token.type.name}")
 
+    def _parse_bulk_operation(self, operation: str, line: int) -> ASTNode:
+        """Parse bulk operation: N [modifiers] type [property to value]
+
+        Examples:
+        - create 100 balls
+        - create 50 green balls
+        - delete 20 balls
+        - get 10 balls
+        - set 30 balls color to red
+        """
+        from .ast_nodes import BulkOperation, Literal
+
+        # Parse count
+        count_token = self.expect(TokenType.NUMBER)
+        count = int(count_token.value)
+
+        # Known modifiers (colors and sizes)
+        known_colors = {'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
+                        'white', 'black', 'orange', 'purple', 'pink', 'gray',
+                        'grey', 'gold', 'silver'}
+        known_sizes = {'big', 'small', 'large', 'tiny', 'huge'}
+
+        modifiers = []
+        type_name = None
+        property_name = None
+        property_value = None
+
+        # Collect all words, then treat the last one as type name
+        # This allows unknown modifiers like "angry" in "create 100 angry orcs"
+        words = []
+        while self.current_token().type == TokenType.IDENTIFIER:
+            word = self.current_token().value.lower()
+            # For set operation, stop at property name (word before 'to')
+            if operation == 'set' and self.peek_token() and self.peek_token().type == TokenType.TO:
+                break
+            words.append(word)
+            self.advance()
+
+        if not words:
+            self.error("Expected type name in bulk operation")
+
+        # Last word is the type name, rest are modifiers
+        type_name = words[-1]
+        # Singularize if ends with 's' (simple heuristic)
+        if type_name.endswith('s') and len(type_name) > 1:
+            type_name = type_name[:-1]
+
+        # Everything before the last word is a modifier
+        for word in words[:-1]:
+            modifiers.append(word)
+
+        # For set operations, parse property to value
+        if operation == 'set':
+            if self.current_token().type == TokenType.IDENTIFIER:
+                property_name = self.current_token().value
+                self.advance()
+
+                if self.current_token().type == TokenType.TO:
+                    self.advance()
+                    property_value = self.parse_expression()
+                else:
+                    self.error("Expected 'to' after property name in bulk set")
+            else:
+                self.error("Expected property name in bulk set")
+
+        return BulkOperation(
+            operation=operation,
+            count=count,
+            type_name=type_name,
+            modifiers=modifiers,
+            property_name=property_name,
+            property_value=property_value,
+            line=line
+        )
+
     def parse_type_annotation(self):
         """
         Parse a type annotation.
@@ -446,9 +527,14 @@ class Parser:
         Also supports natural language property access:
           set book.color to red   (dot syntax)
           set book color to red   (natural language - equivalent to above)
+          set 20 balls color to red  (bulk set)
         """
         line = self.current_token().line
         self.expect(TokenType.SET)
+
+        # Check for bulk set: set N type property to value
+        if self.current_token().type == TokenType.NUMBER:
+            return self._parse_bulk_operation('set', line)
 
         # Check for bulk set: set all <type> <property> to <value>
         if self.current_token().type == TokenType.ALL:
@@ -706,9 +792,14 @@ class Parser:
         - get player health  → space-separated property access
         - get all ball       → gets all instances of type
         - get ball 5         → gets instance #5
+        - get 10 balls       → bulk get first 10 of type
         """
         line = self.current_token().line
         self.expect(TokenType.GET)
+
+        # Check for bulk get: get N type
+        if self.current_token().type == TokenType.NUMBER:
+            return self._parse_bulk_operation('get', line)
 
         # Check for 'get all <type>'
         get_all = False
@@ -1557,9 +1648,13 @@ class Parser:
         return CloneObject(source=source, target=target, line=line)
 
     def parse_delete(self) -> DeleteObject:
-        """Parse: delete <name>"""
+        """Parse: delete <name> OR delete N type (bulk delete)"""
         line = self.current_token().line
         self.expect(TokenType.DELETE)
+
+        # Check for bulk delete: delete N type
+        if self.current_token().type == TokenType.NUMBER:
+            return self._parse_bulk_operation('delete', line)
 
         name_token = self.expect(TokenType.IDENTIFIER)
         name = name_token.value

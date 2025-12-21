@@ -5,6 +5,7 @@ Rosh CLI - Command-line interface for running Rosh programs
 import sys
 import argparse
 import os
+import re
 from pathlib import Path
 from .lexer import Lexer
 from .parser import Parser
@@ -959,6 +960,14 @@ def run_repl(interpreter: Interpreter = None):
                     line = expanded
                 out.dim(f"→ {line}")  # Show expansion
 
+            # ===== Spelling Normalization =====
+            # British → American spelling for consistency
+            line = re.sub(r'\bcolour\b', 'color', line, flags=re.IGNORECASE)
+            line = re.sub(r'\bcentre\b', 'center', line, flags=re.IGNORECASE)
+
+            # ===== Bulk Operations now handled by parser (BulkOperation node) =====
+            # This ensures consistency between REPL and scripts
+
             # ===== Universal REPL Commands =====
             # "If it works somewhere, it should work everywhere"
             stripped = line.strip().lower()
@@ -1036,8 +1045,10 @@ def run_repl(interpreter: Interpreter = None):
                 continue
 
             # Provide friendlier guidance for commands missing arguments
-            if len(parts) == 1 and _show_command_usage(out, parts[0].lower()):
-                continue
+            # Exception: 'go', 'confirm', 'yes' should fall through to pending operation handler
+            if len(parts) == 1 and parts[0].lower() not in ('go', 'confirm', 'yes'):
+                if _show_command_usage(out, parts[0].lower()):
+                    continue
 
             # list / ls / objects (no args) - show all objects
             if stripped in ('list', 'ls', 'objects', 'list objects'):
@@ -1186,9 +1197,22 @@ def run_repl(interpreter: Interpreter = None):
 
             # go/confirm/yes - confirm pending bulk operation OR auto-close blocks
             if stripped in ('go', 'confirm', 'yes'):
-                # First check if there's a pending bulk operation
+                # First check if there's a pending operation
                 if interpreter.pending_operation is not None:
-                    # Execute as confirm command
+                    op = interpreter.pending_operation
+
+                    # Special case: corrected command - run it directly
+                    if op.get('type') == 'corrected_command':
+                        corrected = op['command']
+                        interpreter.pending_operation = None
+                        out.dim(f"→ {corrected}")
+                        try:
+                            interpreter = run_source(corrected, "<repl>", interpreter)
+                        except RoshError as e:
+                            out.error(str(e))
+                        continue
+
+                    # Otherwise, execute as confirm command (bulk ops)
                     try:
                         interpreter = run_source(stripped, "<repl>", interpreter)
                     except RoshError as e:
@@ -1234,7 +1258,9 @@ def run_repl(interpreter: Interpreter = None):
 
             # get <obj> or get <obj> <prop> - unified get command (#017)
             # Also: get all <type>, get <type> <n>
-            if len(parts) >= 2 and parts[0].lower() == 'get':
+            # Note: bulk get (get N type) handled by parser - skip this handler
+            is_bulk_get = (len(parts) >= 3 and parts[0].lower() == 'get' and parts[1].isdigit())
+            if len(parts) >= 2 and parts[0].lower() == 'get' and not is_bulk_get:
                 # Handle "get all <type>" - list all instances
                 if parts[1].lower() == 'all' and len(parts) >= 3:
                     type_name = parts[2]
@@ -1342,7 +1368,14 @@ def run_repl(interpreter: Interpreter = None):
                             # Fuzzy match against available commands
                             suggestion = _fuzzy_match_command(word, interpreter)
                             if suggestion:
+                                # Build corrected command and stage it
+                                corrected = source.strip().replace(word, suggestion, 1)
+                                interpreter.pending_operation = {
+                                    'type': 'corrected_command',
+                                    'command': corrected
+                                }
                                 out.print(f"Did you mean: {suggestion}?", style="yellow")
+                                out.info("Type 'yes' or 'go' to execute")
                             else:
                                 out.dim("Type 'alias' to see available aliases, or use Rosh syntax")
                     else:

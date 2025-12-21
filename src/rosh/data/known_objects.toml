@@ -324,6 +324,21 @@ scaleX = 1.3
 scaleY = 1.8
 scaleZ = 1.3
 
+[orc]
+description = "A fierce green orc warrior"
+category = "character"
+[orc.2d]
+color = "green"
+shape = "rectangle"
+height = 1.6
+[orc.3d]
+shape = "box"
+color = 0x228b22
+scaleY = 1.6
+model = "3d_glb/orc_warrior.glb"
+credit = "Orc_Warrior by EvgeshQa (CC BY 4.0)"
+credit_url = "https://skfb.ly/oqIMM"
+
 # =============================================================================
 # SHAPES - Basic geometric shapes
 # =============================================================================

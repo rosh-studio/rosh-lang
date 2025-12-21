@@ -176,3 +176,14 @@ Remove objects at runtime with confirmation.
 **Target:** Three.js, Main REPL
 
 Clone objects with `clone ball` (auto-name) or `clone ball as newball`.
+
+---
+
+### ISSUE-010: Three.js REPL - Confirmation for bulk operations ✅
+**Resolved:** 2025-12-21
+**Target:** Three.js REPL
+
+Three.js REPL now has confirmation for bulk operations with >= 10 objects, matching CLI behavior:
+- `create 100 balls` → "⚠ Create 100 ball(s)?" → type `go` to execute
+- `delete all orcs` → "⚠ Delete all 50 orc(s)?" → type `confirm` to execute
+- `make all balls bigger` → "⚠ Modify 20 ball(s)?" → type `yes` to execute
