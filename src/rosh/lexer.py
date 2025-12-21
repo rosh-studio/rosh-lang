@@ -415,8 +415,7 @@ class Lexer:
             'yes': TokenType.CONFIRM,  # Alias for confirm
             'go': TokenType.CONFIRM,   # Alias for confirm (paradigm word)
             'repeat': TokenType.REPEAT,
-            ':repeat': TokenType.REPEAT,  # Colon-style command
-            ':r': TokenType.REPEAT,  # Short alias
+            # Note: :repeat and :r work in REPL only (colon is tokenized before keywords)
             'length': TokenType.LENGTH,
             'of': TokenType.OF,
             'contains': TokenType.CONTAINS,

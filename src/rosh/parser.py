@@ -243,6 +243,8 @@ class Parser:
             return self.parse_help()
         elif token.type == TokenType.CONFIRM:
             return self.parse_confirm()
+        elif token.type == TokenType.REPEAT:
+            return self.parse_repeat()
         elif token.type in (TokenType.END, TokenType.DEDENT, TokenType.EOF):
             return None
         else:
@@ -431,9 +433,15 @@ class Parser:
 
         # Last word is the type name, rest are modifiers
         type_name = words[-1]
-        # Singularize if ends with 's' (simple heuristic)
-        if type_name.endswith('s') and len(type_name) > 1:
-            type_name = type_name[:-1]
+        # Singularize: boxes→box, berries→berry, balls→ball
+        if type_name.endswith('ies') and len(type_name) > 3:
+            type_name = type_name[:-3] + 'y'  # berries → berry
+        elif type_name.endswith('xes') or type_name.endswith('shes') or type_name.endswith('ches'):
+            type_name = type_name[:-2]  # boxes → box, bushes → bush
+        elif type_name.endswith('ses') or type_name.endswith('zes'):
+            type_name = type_name[:-2]  # buses → bus, quizzes → quiz (approximation)
+        elif type_name.endswith('s') and not type_name.endswith('ss') and len(type_name) > 1:
+            type_name = type_name[:-1]  # balls → ball
 
         # Everything before the last word is a modifier
         for word in words[:-1]:
@@ -453,6 +461,12 @@ class Parser:
             else:
                 self.error("Expected property name in bulk set")
 
+        # Check for trailing 'go'/'confirm'/'yes' for auto-confirmation
+        auto_confirm = False
+        if self.current_token().type == TokenType.CONFIRM:
+            auto_confirm = True
+            self.advance()
+
         return BulkOperation(
             operation=operation,
             count=count,
@@ -460,6 +474,7 @@ class Parser:
             modifiers=modifiers,
             property_name=property_name,
             property_value=property_value,
+            auto_confirm=auto_confirm,
             line=line
         )
 
@@ -1851,6 +1866,12 @@ class Parser:
         line = self.current_token().line
         self.expect(TokenType.CONFIRM)
         return Confirm(line=line)
+
+    def parse_repeat(self) -> Repeat:
+        """Parse: repeat | :repeat | :r - Repeat last substantive command"""
+        line = self.current_token().line
+        self.expect(TokenType.REPEAT)
+        return Repeat(line=line)
 
     def parse_expression(self) -> ASTNode:
         """Parse an expression (with binary operators)"""

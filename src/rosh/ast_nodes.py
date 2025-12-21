@@ -127,6 +127,12 @@ class Confirm(ASTNode):
 
 
 @dataclass
+class Repeat(ASTNode):
+    """repeat/:repeat/:r - repeat last substantive command"""
+    line: int = 0
+
+
+@dataclass
 class BulkOperation(ASTNode):
     """Bulk operation: create/delete/get/set N [modifiers] type [property to value]
 
@@ -136,6 +142,7 @@ class BulkOperation(ASTNode):
     - delete 20 balls
     - get 10 balls
     - set 30 balls color to red
+    - create 100 balls go  (auto-confirm with trailing 'go')
     """
     operation: str  # 'create', 'delete', 'get', 'set'
     count: int  # Number of objects
@@ -143,6 +150,7 @@ class BulkOperation(ASTNode):
     modifiers: List[str]  # Color/size modifiers for create
     property_name: Optional[str] = None  # For set operations
     property_value: Optional[ASTNode] = None  # For set operations
+    auto_confirm: bool = False  # If True, skip confirmation prompt (trailing 'go'/'confirm')
     line: int = 0
 
 
