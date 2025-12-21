@@ -5,6 +5,7 @@ The canonical, target-agnostic representation of a Rosh program.
 Sits between AST (parser output) and emitters (target code generators).
 
 See: rosh-dev/proposals/ROSH-IR-SPECIFICATION.md for full documentation.
+See: rosh-dev/proposals/IR-VERSIONING-POLICY.md for versioning rules.
 
 Design Principles:
 1. Normalized - All coordinates use 0.0-1.0, colors use 0xRRGGBB
@@ -13,6 +14,12 @@ Design Principles:
 4. Stable - Objects have UUIDs that persist across save/load
 5. Target-agnostic - No Phaser/Pygame/Unity specifics
 """
+
+# =============================================================================
+# IR Version - Emitters must implement this version
+# See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
+# =============================================================================
+IR_VERSION = "0.1.0"
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional

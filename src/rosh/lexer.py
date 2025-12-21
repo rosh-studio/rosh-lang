@@ -74,6 +74,7 @@ class TokenType(Enum):
     HELP = auto()
     RANDOM = auto()
     CONFIRM = auto()  # go/yes/confirm - execute pending bulk operation
+    REPEAT = auto()   # repeat/:repeat/:r - repeat last substantive command
     LENGTH = auto()
     OF = auto()
     CONTAINS = auto()
@@ -404,7 +405,8 @@ class Lexer:
             'look': TokenType.LOOK,
             'l': TokenType.LOOK,  # Short alias
             'examine': TokenType.LOOK,  # Alias for look
-            'ex': TokenType.LOOK,  # Short alias for examine/look
+            'ex': TokenType.LOOK,  # Short alias for examine
+            # Note: 'x' works in REPL only (not keyword, as x is common variable name)
             'connect': TokenType.CONNECT,
             'link': TokenType.CONNECT,  # Alias
             'help': TokenType.HELP,
@@ -412,6 +414,9 @@ class Lexer:
             'confirm': TokenType.CONFIRM,
             'yes': TokenType.CONFIRM,  # Alias for confirm
             'go': TokenType.CONFIRM,   # Alias for confirm (paradigm word)
+            'repeat': TokenType.REPEAT,
+            ':repeat': TokenType.REPEAT,  # Colon-style command
+            ':r': TokenType.REPEAT,  # Short alias
             'length': TokenType.LENGTH,
             'of': TokenType.OF,
             'contains': TokenType.CONTAINS,
