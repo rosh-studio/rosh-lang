@@ -1,7 +1,7 @@
 {
   "name": "rosh",
   "displayName": "Rosh Language Support",
-  "description": "Syntax highlighting for Rosh v0.2.0 - AI-native control language for live worlds",
+  "description": "Syntax highlighting for Rosh v0.2.0 - a control language for live worlds",
   "version": "0.2.0",
   "publisher": "rosh",
   "engines": {
