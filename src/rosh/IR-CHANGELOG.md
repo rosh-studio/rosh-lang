@@ -52,10 +52,34 @@ Initial versioned release (pre-v1).
 
 ---
 
-## Future Versions
+## v0.2.0 (2025-12-22)
 
-### v0.2.0 (planned)
-- TBD based on parser/IR work
+**Spec-first architecture release.**
+
+### New Commands
+- `dump` - Full JSON object dump (separate from `look`)
+
+### Console Commands (all emitters)
+- `list` - List all objects
+- `look` - Human-readable object summary
+- `set` - Set object properties (now includes width/height)
+- `hide` / `show` - Visibility control
+- `create` - Runtime object creation
+- `help` - Command help
+
+### Infrastructure
+- TOML specifications (`spec/v0.2.0/`)
+- Spec loader and audit tool
+- Voice normalization with context-dependent rules
+- Namespace isolation for runtime objects
+
+### Breaking Changes
+- Object naming now uses hyphenated style (`box-1` not `box1`)
+- All emitters must implement console commands from `rosh-console.toml`
+
+---
+
+## Future Versions
 
 ### v1.0.0 (planned)
 - Stable baseline for production use

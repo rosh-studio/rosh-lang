@@ -10,9 +10,51 @@
 
 ### Next Steps
 - Record 60-second demo video ("Actual footage. Not faked.")
-- ~~Simple landing page (slogan + signup only)~~ ✅ Done
 - Outreach to contacts (Gregor Hofer, Soluis, etc.)
-- ~~Update existing demos to use percentage-based coordinates~~ ✅ Done
+
+---
+
+## [0.2.0] - 2025-12-22 - Spec-First Architecture
+
+**Major release introducing spec-driven development.**
+
+### Added
+- **TOML Specifications** (`spec/v0.2.0/`)
+  - `rosh-cli.toml` - 18 CLI commands with aliases, typos, behaviors
+  - `rosh-console.toml` - 7 required console commands for all emitters
+  - `rosh-2d.toml` - 26 properties for 2D targets
+  - `rosh-3d.toml` - 43 properties for 3D targets
+  - `rosh-voice.toml` - Voice corrections with context-dependent rules
+
+- **Spec Infrastructure**
+  - `src/rosh/spec/loader.py` - Load and parse TOML specs
+  - `src/rosh/spec/audit.py` - Verify implementations match specs
+  - `src/rosh/voice.py` - Voice normalization module
+  - `docs/SPEC-CHAIN.md` - Dependency chain documentation
+
+- **Console Improvements**
+  - All 3 emitters (Phaser, Pygame, Three.js) implement same 7 commands
+  - `dump` command - Full JSON output (separate from `look`)
+  - `width`/`height` support in console `set` command
+  - Voice input for Phaser and Three.js (Web Speech API)
+
+- **Namespace Isolation**
+  - Phaser uses `scene.roshObjects` for runtime-created objects
+  - Prevents collision with Phaser engine properties
+
+- **Better Error Logging**
+  - GLTF model load failures show actual error message
+  - Fallback to primitive shapes with clear warning
+
+### Changed
+- **Object Naming** - Now uses `box-1` style (hyphenated) instead of `box1`
+- **IR Version** - All emitters synchronized to 0.2.0
+- **Orc Model Size** - Increased to 2.5x scale for visibility
+
+### Technical
+- 274 tests passing
+- Full audit compliance: `python -m rosh.spec.audit`
+- Archived outdated v0.0.x and v0.1.x documentation
 
 ---
 
