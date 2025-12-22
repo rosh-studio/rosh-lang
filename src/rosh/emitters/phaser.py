@@ -244,7 +244,7 @@ class PhaserEmitter(BaseEmitter):
         # Set up keyboard if needed
         if self.needs_keyboard:
             self.write("this.cursors = this.input.keyboard.createCursorKeys();")
-            self.write("this.keys = this.input.keyboard.addKeys('W,A,S,D,SPACE,R');")
+            self.write("this.keys = this.input.keyboard.addKeys('A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z,SPACE');")
             self.write_blank()
 
         # Create objects
