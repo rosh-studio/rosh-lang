@@ -32,7 +32,7 @@ from ..ir import (
 # Adding features here without IR changes violates the versioning policy.
 # See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
 # =============================================================================
-IMPLEMENTS_IR_VERSION = "0.0.9"
+IMPLEMENTS_IR_VERSION = "0.2.0"
 
 
 class PygameEmitter(BaseEmitter):
@@ -217,6 +217,15 @@ class PygameEmitter(BaseEmitter):
         self.write("self.clock = pygame.time.Clock()")
         self.write("self.running = True")
         self.write("self.font = pygame.font.Font(None, 24)")
+        self.write_blank()
+
+        # Console state
+        self.write_comment("Console state (press ` to toggle)")
+        self.write("self.console_visible = False")
+        self.write("self.console_input = ''")
+        self.write("self.console_history = []")
+        self.write("self.console_output = []")
+        self.write("self.console_font = pygame.font.Font(None, 20)")
 
         # Scene/level state
         if self.uses_scenes:
@@ -361,9 +370,40 @@ class PygameEmitter(BaseEmitter):
         self.write("self.running = False")
         self.dedent()
 
-        # Keydown events
+        # Console handling
+        self.write("elif event.type == pygame.KEYDOWN:")
+        self.indent()
+        self.write_comment("Console toggle with backtick")
+        self.write("if event.key == pygame.K_BACKQUOTE:")
+        self.indent()
+        self.write("self.console_visible = not self.console_visible")
+        self.dedent()
+        self.write("elif self.console_visible:")
+        self.indent()
+        self.write_comment("Console input handling")
+        self.write("if event.key == pygame.K_RETURN:")
+        self.indent()
+        self.write("self.process_console_command(self.console_input)")
+        self.write("self.console_history.append(self.console_input)")
+        self.write("self.console_input = ''")
+        self.dedent()
+        self.write("elif event.key == pygame.K_BACKSPACE:")
+        self.indent()
+        self.write("self.console_input = self.console_input[:-1]")
+        self.dedent()
+        self.write("elif event.key == pygame.K_ESCAPE:")
+        self.indent()
+        self.write("self.console_visible = False")
+        self.dedent()
+        self.write("elif event.unicode and event.unicode.isprintable():")
+        self.indent()
+        self.write("self.console_input += event.unicode")
+        self.dedent()
+        self.dedent()
+
+        # Game keydown events (only when console not visible)
         if self.keydown_events:
-            self.write("elif event.type == pygame.KEYDOWN:")
+            self.write("elif not self.console_visible:")
             self.indent()
             for key, handlers_list in self.keydown_events.items():
                 pygame_key = self._pygame_key(key)
@@ -377,8 +417,9 @@ class PygameEmitter(BaseEmitter):
                 self.dedent()
             self.dedent()
 
-        self.dedent()
-        self.dedent()
+        self.dedent()  # close elif KEYDOWN
+        self.dedent()  # close for event loop
+        self.dedent()  # close method body
         self.write_blank()
 
     def _emit_update(self):
@@ -502,6 +543,33 @@ class PygameEmitter(BaseEmitter):
                         self.write(f"score_text = self.font.render(f'Score: {{self.{target}_score}}', True, (255, 255, 255))")
                         self.write(f"self.screen.blit(score_text, ({px}, {y_offset}))")
 
+        # Draw dynamically created objects (from console)
+        self.write_blank()
+        self.write_comment("Draw dynamically created objects")
+        self.write("for attr in dir(self):")
+        self.indent()
+        self.write("if not attr.startswith('_') and isinstance(getattr(self, attr, None), pygame.Rect):")
+        self.indent()
+        known_objects = [obj.name for obj in self.ir.objects if 'target' not in obj.properties]
+        self.write(f"if attr not in {known_objects}:")
+        self.indent()
+        self.write("rect = getattr(self, attr)")
+        self.write("if getattr(self, f'{attr}_visible', True) and rect.width > 0:")
+        self.indent()
+        self.write("color = getattr(self, f'{attr}_color', (0, 255, 0))")
+        self.write("pygame.draw.rect(self.screen, color, rect)")
+        self.dedent()
+        self.dedent()
+        self.dedent()
+        self.dedent()
+
+        self.write_blank()
+        self.write_comment("Draw console overlay")
+        self.write("if self.console_visible:")
+        self.indent()
+        self.write("self.draw_console()")
+        self.dedent()
+
         self.write_blank()
         self.write("pygame.display.flip()")
         self.dedent()
@@ -509,10 +577,245 @@ class PygameEmitter(BaseEmitter):
 
     def _emit_helper_methods(self):
         """Emit any helper methods needed."""
+        # Always emit console methods
+        self._emit_console_methods()
+
         if self.uses_scenes:
             self._emit_scene_visibility_method()
         if self.uses_save_load:
             self._emit_save_load_methods()
+
+    def _emit_console_methods(self):
+        """Emit console drawing and command processing methods."""
+        # Draw console method
+        self.write("def draw_console(self):")
+        self.indent()
+        self.write_comment("Draw semi-transparent console overlay")
+        self.write("console_height = 200")
+        self.write("console_surf = pygame.Surface((self.screen.get_width(), console_height))")
+        self.write("console_surf.set_alpha(220)")
+        self.write("console_surf.fill((20, 20, 40))")
+        self.write("self.screen.blit(console_surf, (0, 0))")
+        self.write_blank()
+
+        self.write_comment("Draw console header")
+        self.write("header = self.console_font.render('Rosh Console (` to close, Enter to execute)', True, (100, 200, 255))")
+        self.write("self.screen.blit(header, (10, 5))")
+        self.write_blank()
+
+        self.write_comment("Draw output lines")
+        self.write("y = 25")
+        self.write("for line in self.console_output[-7:]:")
+        self.indent()
+        self.write("color = (200, 200, 200) if not line.startswith('Error') else (255, 100, 100)")
+        self.write("text = self.console_font.render(line, True, color)")
+        self.write("self.screen.blit(text, (10, y))")
+        self.write("y += 18")
+        self.dedent()
+        self.write_blank()
+
+        self.write_comment("Draw input line")
+        self.write("pygame.draw.rect(self.screen, (40, 40, 60), (5, console_height - 25, self.screen.get_width() - 10, 22))")
+        self.write("prompt = self.console_font.render('> ' + self.console_input + '_', True, (0, 255, 255))")
+        self.write("self.screen.blit(prompt, (10, console_height - 22))")
+        self.dedent()
+        self.write_blank()
+
+        # Process console command method
+        self.write("def process_console_command(self, cmd):")
+        self.indent()
+        self.write("if not cmd.strip():")
+        self.indent()
+        self.write("return")
+        self.dedent()
+        self.write_blank()
+
+        self.write("parts = cmd.strip().split()")
+        self.write("command = parts[0].lower()")
+        self.write_blank()
+
+        self.write("try:")
+        self.indent()
+
+        # list command
+        self.write("if command in ('list', 'ls', 'objects'):")
+        self.indent()
+        self.write("objects = [name for name in dir(self) if isinstance(getattr(self, name, None), pygame.Rect)]")
+        self.write("self.console_output.append('Objects: ' + ', '.join(objects) if objects else 'No objects')")
+        self.dedent()
+
+        # look command
+        self.write("elif command in ('look', 'l', 'examine', 'x', 'dump'):")
+        self.indent()
+        self.write("if len(parts) > 1:")
+        self.indent()
+        self.write("name = parts[1]")
+        self.write("rect = getattr(self, name, None)")
+        self.write("if rect:")
+        self.indent()
+        self.write("color = getattr(self, f'{name}_color', 'N/A')")
+        self.write("visible = getattr(self, f'{name}_visible', True)")
+        self.write("self.console_output.append(f'{name}: x={rect.x}, y={rect.y}, w={rect.width}, h={rect.height}')")
+        self.write("self.console_output.append(f'  color={color}, visible={visible}')")
+        self.dedent()
+        self.write("else:")
+        self.indent()
+        self.write("self.console_output.append(f'Object not found: {name}')")
+        self.dedent()
+        self.dedent()
+        self.write("else:")
+        self.indent()
+        self.write("self.console_output.append('Usage: look <object>')")
+        self.dedent()
+        self.dedent()
+
+        # set command: "set <obj> <prop> to <value>" or "set <obj> <color>"
+        self.write("elif command == 'set':")
+        self.indent()
+        self.write_comment("Parse: set <obj> <prop> to <value>  OR  set <obj> <color>")
+        self.write("if len(parts) >= 5 and parts[3] == 'to':")
+        self.indent()
+        self.write("name, prop, value = parts[1], parts[2], ' '.join(parts[4:])")
+        self.dedent()
+        self.write("elif len(parts) == 4 and parts[2] == 'to':")
+        self.indent()
+        self.write_comment("set <obj> to <color> - shorthand for color")
+        self.write("name, prop, value = parts[1], 'color', parts[3]")
+        self.dedent()
+        self.write("elif len(parts) == 3:")
+        self.indent()
+        self.write_comment("set <obj> <color> - even shorter")
+        self.write("name, prop, value = parts[1], 'color', parts[2]")
+        self.dedent()
+        self.write("else:")
+        self.indent()
+        self.write("self.console_output.append('Usage: set <obj> <prop> to <value>')")
+        self.write("return")
+        self.dedent()
+        self.write_blank()
+
+        self.write("rect = getattr(self, name, None)")
+        self.write("if not rect:")
+        self.indent()
+        self.write("self.console_output.append(f'Object not found: {name}')")
+        self.write("return")
+        self.dedent()
+        self.write_blank()
+
+        self.write("if prop == 'x':")
+        self.indent()
+        self.write("rect.x = int(value)")
+        self.dedent()
+        self.write("elif prop == 'y':")
+        self.indent()
+        self.write("rect.y = int(value)")
+        self.dedent()
+        self.write("elif prop in ('width', 'w'):")
+        self.indent()
+        self.write("rect.width = int(value)")
+        self.dedent()
+        self.write("elif prop in ('height', 'h'):")
+        self.indent()
+        self.write("rect.height = int(value)")
+        self.dedent()
+        self.write("elif prop == 'text':")
+        self.indent()
+        self.write("setattr(self, f'{name}_text', value)")
+        self.dedent()
+        self.write("elif prop in ('color', 'colour'):")
+        self.indent()
+        self.write("colors = {'red': (255,0,0), 'green': (0,255,0), 'blue': (0,0,255), 'yellow': (255,255,0), 'cyan': (0,255,255), 'magenta': (255,0,255), 'white': (255,255,255), 'black': (0,0,0), 'orange': (255,136,0), 'purple': (136,0,255)}")
+        self.write("setattr(self, f'{name}_color', colors.get(value.lower(), (0,255,0)))")
+        self.dedent()
+        self.write("elif prop == 'visible':")
+        self.indent()
+        self.write("setattr(self, f'{name}_visible', value.lower() in ('true', '1', 'yes', 'on'))")
+        self.dedent()
+        self.write("else:")
+        self.indent()
+        self.write_comment("Generic property set")
+        self.write("setattr(self, f'{name}_{prop}', value)")
+        self.dedent()
+        self.write("self.console_output.append(f'{name}.{prop} = {value}')")
+        self.dedent()
+
+        # hide/show commands
+        self.write("elif command == 'hide':")
+        self.indent()
+        self.write("if len(parts) > 1:")
+        self.indent()
+        self.write("setattr(self, f'{parts[1]}_visible', False)")
+        self.write("self.console_output.append(f'{parts[1]} hidden')")
+        self.dedent()
+        self.dedent()
+
+        self.write("elif command in ('show', 'unhide'):")
+        self.indent()
+        self.write("if len(parts) > 1:")
+        self.indent()
+        self.write("setattr(self, f'{parts[1]}_visible', True)")
+        self.write("self.console_output.append(f'{parts[1]} visible')")
+        self.dedent()
+        self.dedent()
+
+        # create command: "create <name>" or "create 3 boxes" or "create <name> at <x> <y>"
+        self.write("elif command == 'create':")
+        self.indent()
+        self.write("if len(parts) < 2:")
+        self.indent()
+        self.write("self.console_output.append('Usage: create <name> [at <x> <y>]')")
+        self.write("return")
+        self.dedent()
+        self.write_blank()
+        self.write_comment("Handle 'create 3 boxes' syntax")
+        self.write("count = 1")
+        self.write("base_name = parts[1]")
+        self.write("if parts[1].isdigit() and len(parts) >= 3:")
+        self.indent()
+        self.write("count = int(parts[1])")
+        self.write("base_name = parts[2]")
+        self.dedent()
+        self.write_blank()
+        self.write("for i in range(count):")
+        self.indent()
+        self.write("name = base_name")
+        self.write_comment("Auto-number if name exists")
+        self.write("counter = 1")
+        self.write("while hasattr(self, name):")
+        self.indent()
+        self.write("counter += 1")
+        self.write("name = f'{base_name}-{counter}'")
+        self.dedent()
+        self.write_comment("Offset multiple objects so they don't stack")
+        self.write("x, y = 400 + (i * 60), 300")
+        self.write("setattr(self, name, pygame.Rect(x - 25, y - 25, 50, 50))")
+        self.write("setattr(self, f'{name}_color', (0, 255, 0))")
+        self.write("setattr(self, f'{name}_visible', True)")
+        self.write("self.console_output.append(f'Created {name} at ({x}, {y})')")
+        self.dedent()
+        self.dedent()
+
+        # help command
+        self.write("elif command == 'help':")
+        self.indent()
+        self.write("self.console_output.append('Commands: list, look <obj>, set <obj> <prop> to <value>')")
+        self.write("self.console_output.append('          hide <obj>, show <obj>, create <name>, help')")
+        self.dedent()
+
+        # unknown command
+        self.write("else:")
+        self.indent()
+        self.write("self.console_output.append(f'Unknown command: {command}')")
+        self.dedent()
+
+        self.dedent()  # try
+        self.write("except Exception as e:")
+        self.indent()
+        self.write("self.console_output.append(f'Error: {e}')")
+        self.dedent()
+
+        self.dedent()  # function
+        self.write_blank()
 
     def _emit_scene_visibility_method(self):
         """Emit update_scene_visibility helper method."""

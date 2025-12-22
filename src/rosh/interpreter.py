@@ -1752,10 +1752,23 @@ class Interpreter:
             raise RoshRuntimeError(f"Cannot get value from: {type(target).__name__}")
 
     def eval_dump(self, node: Dump) -> None:
-        """Execute: dump - outputs entire state as JSON"""
+        """Execute: dump [target] - outputs state or specific object as JSON"""
         import json
-        state = self.get_state()
-        json_output = json.dumps(state, indent=2)
+        from .values import rosh_to_python
+
+        if node.target:
+            # Dump specific object
+            if self.current_env.exists(node.target):
+                obj = self.current_env.get(node.target)
+                obj_data = rosh_to_python(obj)
+                json_output = json.dumps(obj_data, indent=2)
+            else:
+                raise RoshRuntimeError(f"Object '{node.target}' not found")
+        else:
+            # Dump entire state
+            state = self.get_state()
+            json_output = json.dumps(state, indent=2)
+
         print(json_output, file=self.output_stream)
 
     def eval_save(self, node: Save) -> None:

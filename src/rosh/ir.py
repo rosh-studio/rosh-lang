@@ -4,8 +4,19 @@ Rosh IR (Intermediate Representation)
 The canonical, target-agnostic representation of a Rosh program.
 Sits between AST (parser output) and emitters (target code generators).
 
-See: rosh-dev/proposals/ROSH-IR-SPECIFICATION.md for full documentation.
-See: rosh-dev/proposals/IR-VERSIONING-POLICY.md for versioning rules.
+=============================================================================
+KEY DOCUMENTS - READ BEFORE MODIFYING
+=============================================================================
+- rosh-dev/proposals/IR-VERSIONING-POLICY.md - Versioning rules and compliance
+- rosh-dev/proposals/JS-RUNTIME-ARCHITECTURE.md - Three-layer JS structure
+- rosh-dev/proposals/ROSH-IR-SPECIFICATION.md - Full IR documentation
+
+ARCHITECTURE SUMMARY:
+- Python (parser.py, ir.py, cli.py) = SOURCE OF TRUTH for all semantics
+- JS Runtime = Three layers: rosh-core.js -> rosh-3d.js -> engine adapters
+- Emitters = Translate IR to target code, do NOT add features
+- Version: All components must match IR_VERSION before changes
+=============================================================================
 
 Design Principles:
 1. Normalized - All coordinates use 0.0-1.0, colors use 0xRRGGBB
@@ -19,7 +30,7 @@ Design Principles:
 # IR Version - Emitters must implement this version
 # See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
 # =============================================================================
-IR_VERSION = "0.1.0"
+IR_VERSION = "0.2.0"
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional

@@ -1,0 +1,380 @@
+# Rosh 2D Properties Specification v0.2.0
+#
+# Defines properties for 2D game objects (sprites, shapes, text)
+# Used by: Phaser emitter, Pygame emitter
+#
+# Run: python -m rosh.spec.loader 2d
+# Test: pytest tests/spec/test_2d_compliance.py
+
+[meta]
+version = "0.2.0"
+description = "Rosh 2D properties specification"
+status = "draft"
+experimental = true
+
+# =============================================================================
+# OBJECT TYPES
+# =============================================================================
+
+[types.shape]
+description = "Basic geometric shape (rectangle, circle, etc.)"
+default_shape = "rectangle"
+
+[types.sprite]
+description = "Image-based object"
+requires = ["sprite"]
+
+[types.text]
+description = "Text display object"
+requires = ["text"]
+
+[types.group]
+description = "Container for multiple objects"
+
+# =============================================================================
+# POSITION PROPERTIES
+# =============================================================================
+
+[properties.x]
+type = "number"
+description = "Horizontal position"
+default = "50%"
+default_note = "New objects appear at screen center"
+unit = "pixels"
+supports_percent = true
+percent_of = "canvas_width"
+aliases = ["left"]
+
+[properties.x.examples]
+"set x to 100" = { value = 100, unit = "pixels" }
+"set x to 50%" = { value = 0.5, unit = "percent", actual = "canvas_width * 0.5" }
+
+# -----------------------------------------------------------------------------
+
+[properties.y]
+type = "number"
+description = "Vertical position"
+default = "50%"
+default_note = "New objects appear at screen center"
+unit = "pixels"
+supports_percent = true
+percent_of = "canvas_height"
+aliases = ["top"]
+
+# -----------------------------------------------------------------------------
+
+[properties.z]
+type = "number"
+description = "Z-index (draw order, higher = on top)"
+default = 0
+aliases = ["depth", "layer"]
+
+# =============================================================================
+# SIZE PROPERTIES
+# =============================================================================
+
+[properties.width]
+type = "number"
+description = "Object width"
+default = 50
+unit = "pixels"
+supports_percent = true
+percent_of = "canvas_width"
+aliases = ["w"]
+
+# -----------------------------------------------------------------------------
+
+[properties.height]
+type = "number"
+description = "Object height"
+default = 50
+unit = "pixels"
+supports_percent = true
+percent_of = "canvas_height"
+aliases = ["h"]
+
+# -----------------------------------------------------------------------------
+
+[properties.scale]
+type = "number"
+description = "Size multiplier"
+default = 1.0
+aliases = ["size"]
+
+[properties.scale.examples]
+"set scale to 2" = { value = 2.0, effect = "doubles size" }
+"make bigger" = { value = "current * 1.5" }
+"make smaller" = { value = "current / 1.5" }
+
+# =============================================================================
+# APPEARANCE PROPERTIES
+# =============================================================================
+
+[properties.color]
+type = "color"
+description = "Object color"
+default = "#00ff00"
+format = "hex_rgb"
+aliases = ["colour", "fill"]
+
+[properties.color.named_colors]
+red = "#ff0000"
+green = "#00ff00"
+blue = "#0000ff"
+yellow = "#ffff00"
+cyan = "#00ffff"
+magenta = "#ff00ff"
+white = "#ffffff"
+black = "#000000"
+orange = "#ff8800"
+purple = "#8800ff"
+pink = "#ff88cc"
+gray = "#888888"
+grey = "#888888"
+gold = "#ffd700"
+silver = "#c0c0c0"
+
+[properties.color.examples]
+"set color to red" = { value = "#ff0000" }
+"set color to #ff8800" = { value = "#ff8800" }
+"set colour to blue" = { corrected = "set color to blue", value = "#0000ff" }
+
+# -----------------------------------------------------------------------------
+
+[properties.visible]
+type = "boolean"
+description = "Whether object is displayed"
+default = true
+aliases = ["shown"]
+
+[properties.visible.examples]
+"set visible to true" = { value = true }
+"set visible to false" = { value = false }
+"show box" = { effect = "set visible to true" }
+"hide box" = { effect = "set visible to false" }
+
+# -----------------------------------------------------------------------------
+
+[properties.opacity]
+type = "number"
+description = "Transparency (0.0 = invisible, 1.0 = solid)"
+default = 1.0
+min = 0.0
+max = 1.0
+aliases = ["alpha", "transparency"]
+
+# -----------------------------------------------------------------------------
+
+[properties.rotation]
+type = "number"
+description = "Rotation angle in degrees"
+default = 0
+unit = "degrees"
+aliases = ["angle", "rot"]
+
+[properties.rotation.examples]
+"set rotation to 45" = { value = 45, unit = "degrees" }
+"set angle to 90" = { value = 90, unit = "degrees" }
+
+# =============================================================================
+# SPRITE PROPERTIES
+# =============================================================================
+
+[properties.sprite]
+type = "string"
+description = "Image filename for sprite objects"
+aliases = ["image", "texture"]
+
+[properties.sprite.examples]
+"set sprite to \"player.png\"" = { value = "player.png" }
+
+# -----------------------------------------------------------------------------
+
+[properties.anchor_x]
+type = "number"
+description = "Horizontal anchor point (0.0 = left, 0.5 = center, 1.0 = right)"
+default = 0.5
+min = 0.0
+max = 1.0
+
+[properties.anchor_y]
+type = "number"
+description = "Vertical anchor point (0.0 = top, 0.5 = center, 1.0 = bottom)"
+default = 0.5
+min = 0.0
+max = 1.0
+
+# =============================================================================
+# TEXT PROPERTIES
+# =============================================================================
+
+[properties.text]
+type = "string"
+description = "Text content for text objects"
+aliases = ["content", "label"]
+
+# -----------------------------------------------------------------------------
+
+[properties.font_size]
+type = "number"
+description = "Font size in pixels"
+default = 16
+unit = "pixels"
+aliases = ["size", "fontSize"]
+
+# -----------------------------------------------------------------------------
+
+[properties.font_family]
+type = "string"
+description = "Font family name"
+default = "Arial"
+aliases = ["font"]
+
+# -----------------------------------------------------------------------------
+
+[properties.text_align]
+type = "string"
+description = "Text alignment"
+default = "center"
+values = ["left", "center", "right"]
+aliases = ["align"]
+
+# =============================================================================
+# MOTION PROPERTIES
+# =============================================================================
+
+[properties.velocity_x]
+type = "number"
+description = "Horizontal velocity in pixels per second"
+default = 0
+unit = "pixels/second"
+aliases = ["vx", "speed_x"]
+
+# -----------------------------------------------------------------------------
+
+[properties.velocity_y]
+type = "number"
+description = "Vertical velocity in pixels per second"
+default = 0
+unit = "pixels/second"
+aliases = ["vy", "speed_y"]
+
+# -----------------------------------------------------------------------------
+
+[properties.speed]
+type = "number"
+description = "Movement speed (used by player controls)"
+default = 5
+unit = "pixels/frame"
+aliases = ["move_speed"]
+
+# -----------------------------------------------------------------------------
+
+[properties.angular_velocity]
+type = "number"
+description = "Rotation speed in degrees per second"
+default = 0
+unit = "degrees/second"
+aliases = ["spin", "rotation_speed"]
+
+# =============================================================================
+# PHYSICS PROPERTIES (Optional - engine dependent)
+# =============================================================================
+
+[properties.solid]
+type = "boolean"
+description = "Whether object blocks other objects"
+default = false
+aliases = ["collidable"]
+
+# -----------------------------------------------------------------------------
+
+[properties.gravity]
+type = "boolean"
+description = "Whether gravity affects this object"
+default = false
+
+# -----------------------------------------------------------------------------
+
+[properties.bounce]
+type = "number"
+description = "Bounciness (0.0 = no bounce, 1.0 = full bounce)"
+default = 0.0
+min = 0.0
+max = 1.0
+aliases = ["elasticity", "restitution"]
+
+# =============================================================================
+# SCENE/LEVEL PROPERTIES (Roshonic "Dimensions, Not Modes")
+# =============================================================================
+
+[properties.scene]
+type = "string"
+description = "Named scene this object belongs to (none = always visible)"
+optional = true
+aliases = ["screen", "room"]
+
+[properties.scene.examples]
+"set scene to \"menu\"" = { effect = "object only visible in menu scene" }
+
+# -----------------------------------------------------------------------------
+
+[properties.level]
+type = "number"
+description = "Level number within scene (none = all levels)"
+optional = true
+
+# =============================================================================
+# COORDINATE SYSTEM
+# =============================================================================
+
+[coordinates]
+origin = "top_left"
+x_direction = "right"
+y_direction = "down"
+unit = "pixels"
+
+[coordinates.notes]
+description = """
+2D uses screen coordinates:
+- Origin (0,0) is top-left
+- X increases to the right
+- Y increases downward
+- Percentages are relative to canvas size
+"""
+
+# =============================================================================
+# UNIT CONVERSIONS
+# =============================================================================
+
+[units.pixels]
+description = "Absolute pixel values"
+example = "set x to 100"
+
+[units.percent]
+description = "Percentage of canvas dimension"
+example = "set x to 50%"
+note = "50% of width for x, 50% of height for y"
+
+# =============================================================================
+# BEHAVIOR RULES
+# =============================================================================
+
+[behavior.default_creation]
+description = "What happens when creating objects without explicit type"
+rule = "Objects without sprite property are shapes, with sprite are sprites"
+
+[behavior.default_position]
+description = "Where new objects appear"
+rule = "New objects appear at screen center (50%, 50%) unless position specified"
+offset_rule = "Multiple objects created together are offset to avoid overlap"
+offset_amount = 20
+offset_unit = "pixels"
+
+[behavior.color_inheritance]
+description = "Color is auto-assigned if not specified"
+rule = "Objects get rotating colors from palette: green, blue, red, yellow, ..."
+
+[behavior.percentage_resolution]
+description = "When percentages are resolved"
+rule = "At emit time, percentages converted to pixels based on canvas size"

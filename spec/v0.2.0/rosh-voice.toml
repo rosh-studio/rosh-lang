@@ -1,0 +1,339 @@
+# Rosh Voice Normalization Specification v0.2.0
+#
+# Defines how speech-to-text output is normalized into canonical Rosh commands.
+# Speech-first paradigm: Rosh is designed for voice input.
+#
+# Run: python -m rosh.spec.loader voice
+# Test: pytest tests/spec/test_voice_compliance.py
+
+[meta]
+version = "0.2.0"
+description = "Rosh voice normalization specification"
+status = "draft"
+experimental = true
+
+# =============================================================================
+# CORE PRINCIPLES
+# =============================================================================
+
+[principles]
+description = """
+Rosh voice input follows these principles:
+
+1. CANONICAL STORAGE: History always stores the corrected/canonical form
+2. USER FEEDBACK: Corrections are shown but not intrusive
+3. GRACEFUL DEGRADATION: Always try to do something reasonable
+4. UNDO SAFETY: Users can always undo if the guess was wrong
+"""
+
+# =============================================================================
+# WORD CORRECTIONS
+# =============================================================================
+# Common speech-to-text errors and their corrections
+
+[corrections.product]
+# Product name mishearings
+raush = "rosh"
+rush = "rosh"
+rawsh = "rosh"
+roush = "rosh"
+
+[corrections.commands]
+# Command typos (from rosh-cli.toml)
+creat = "create"
+crate = "create"
+craete = "create"
+delte = "delete"
+deleet = "delete"
+cloen = "clone"
+lst = "list"
+lok = "look"
+lool = "look"
+hlep = "help"
+hepl = "help"
+unod = "undo"
+reod = "redo"
+mov = "move"
+mvoe = "move"
+shwo = "show"
+hdie = "hide"
+mak = "make"
+maek = "make"
+coutn = "count"
+
+[corrections.keywords]
+# Common mishearings of keywords
+# NOTE: 'too', 'to', 'for' are NOT listed here - they are context-dependent
+# See [context.number_words] for when these become numbers vs keywords
+tow = "to"
+# 'fore' is not corrected - could be "for" (loop) or "4" (number)
+inn = "in"
+iff = "if"
+els = "else"
+wile = "while"
+ennd = "end"
+wen = "when"
+
+[corrections.numbers]
+# Number words to digits
+# IMPORTANT: These are UNCONDITIONAL corrections (always applied)
+zero = "0"
+one = "1"
+won = "1"
+two = "2"
+three = "3"
+four = "4"
+five = "5"
+six = "6"
+seven = "7"
+eight = "8"
+ate = "8"
+nine = "9"
+ten = "10"
+
+# CONTEXT-DEPENDENT number words - see [context.number_words]
+# These should ONLY be converted to numbers in specific contexts:
+# - After 'from' (e.g., "from one to ten" → "from 1 to 10")
+# - In loop ranges (e.g., "for i in 1 to 10")
+# - After comparison operators
+# DO NOT blindly replace 'to' with '2' - it breaks "set x to 5"!
+[corrections.numbers_contextual]
+to = "2"
+too = "2"
+for = "4"
+fore = "4"
+
+[corrections.colors]
+# Color mishearings
+read = "red"
+reed = "red"
+blew = "blue"
+blu = "blue"
+gren = "green"
+yello = "yellow"
+yelloe = "yellow"
+orang = "orange"
+purpl = "purple"
+purpel = "purple"
+whit = "white"
+blak = "black"
+gry = "gray"
+grey = "gray"
+
+# =============================================================================
+# SPELLING NORMALIZATION
+# =============================================================================
+
+[spellings]
+# British to American
+colour = "color"
+colours = "colors"
+centre = "center"
+centres = "centers"
+grey = "gray"
+favourite = "favorite"
+behaviour = "behavior"
+organised = "organized"
+realise = "realize"
+
+# Common variations
+ok = "okay"
+alright = "all right"
+
+# =============================================================================
+# IMPLIED WORDS
+# =============================================================================
+# Words that can be omitted in speech but are added for canonical form
+
+[implied.to]
+description = "Implied 'to' in set commands"
+examples = [
+    { input = "set x 100", canonical = "set x to 100" },
+    { input = "set color red", canonical = "set color to red" },
+    { input = "move ball 50 100", canonical = "move ball to 50 100" },
+]
+message = "[implied: to]"
+
+[implied.object]
+description = "Implied 'object' in create commands"
+examples = [
+    { input = "create box", canonical = "create object box" },
+]
+note = "Only when object type cannot be inferred"
+
+[implied.quotes]
+description = "Implied quotes around string values"
+examples = [
+    { input = "set text hello world", canonical = 'set text to "hello world"' },
+    { input = "print hello there", canonical = 'print "hello there"' },
+]
+
+# =============================================================================
+# PROPERTY INFERENCE
+# =============================================================================
+# Inferring property names from value types
+
+[inference.color_from_name]
+description = "Infer 'color' property when value is a known color"
+color_names = [
+    "red", "green", "blue", "yellow", "cyan", "magenta",
+    "white", "black", "orange", "purple", "pink",
+    "gray", "grey", "gold", "silver"
+]
+examples = [
+    { input = "set box red", canonical = "set box color to red" },
+    { input = "make ball blue", canonical = "set ball color to blue" },
+]
+message = "[inferred: color]"
+
+[inference.position_from_numbers]
+description = "Infer position when bare numbers follow object name"
+examples = [
+    { input = "set box 100 200", canonical = "set box x to 100 && set box y to 200" },
+]
+note = "Only in REPL, not scripts"
+
+# =============================================================================
+# COMMAND ALIASES (Natural Language)
+# =============================================================================
+
+[aliases.deletion]
+remove = "delete"
+destroy = "delete"
+get_rid_of = "delete"
+eliminate = "delete"
+
+[aliases.creation]
+new = "create"
+add = "create"
+spawn = "create"
+make = "create"  # When not followed by modifier
+
+[aliases.inspection]
+examine = "look"
+inspect = "look"
+check = "look"
+what_is = "look"
+show_me = "look"
+describe = "look"
+
+[aliases.visibility]
+reveal = "show"
+unhide = "show"
+display = "show"
+conceal = "hide"
+disappear = "hide"
+
+[aliases.navigation]
+go = "goto"
+go_to = "goto"
+travel = "goto"
+visit = "goto"
+enter = "goto"
+
+[aliases.undo]
+oops = "undo"
+whoops = "undo"
+nevermind = "undo"
+take_back = "undo"
+revert = "undo"
+
+# =============================================================================
+# NATURAL PHRASES
+# =============================================================================
+# Complete phrase transformations
+
+[phrases]
+"what's the" = "get"
+"what is the" = "get"
+"how many" = "count"
+"how big is" = "get size"
+"where is" = "get position"
+"what color is" = "get color"
+"make it" = "make"
+"put it at" = "move to"
+"bring back" = "show"
+"get rid of" = "delete"
+"take away" = "delete"
+
+# =============================================================================
+# CONTEXT-DEPENDENT RULES
+# =============================================================================
+
+[context.number_words]
+description = "When 'to', 'for', 'too' become numbers vs keywords"
+
+# CRITICAL: These words are ambiguous and must be resolved by context
+# The [corrections.numbers_contextual] section lists them, but they should
+# ONLY be converted to numbers in these specific patterns:
+rules = [
+    "After 'from' (e.g., 'from one to ten' → 'from 1 to 10')",
+    "In loop ranges (e.g., 'for i in 1 to 10')",
+    "After comparison operators (e.g., 'x equals two')",
+    "When followed by another number word (e.g., 'to three' → '2 3')",
+]
+
+# NEVER convert to numbers in these patterns:
+never_convert = [
+    "'set x to 5' - 'to' is keyword, not '2'",
+    "'move to 100' - 'to' is keyword",
+    "'for each item' - 'for' is loop keyword, not '4'",
+]
+
+# IMPLEMENTATION NOTE: Voice processors should:
+# 1. First try to parse as a valid Rosh command
+# 2. If parsing fails, try contextual number substitution
+# 3. If still ambiguous, prefer keyword interpretation (safer)
+# 4. User can always undo if guess was wrong
+
+[context.article_stripping]
+description = "Remove articles in certain contexts"
+articles = ["a", "an", "the"]
+examples = [
+    { input = "create a box", canonical = "create box" },
+    { input = "delete the ball", canonical = "delete ball" },
+    { input = "move the player to the left", canonical = "move player to left" },
+]
+
+[context.please]
+description = "Strip politeness words"
+words = ["please", "can you", "would you", "could you"]
+examples = [
+    { input = "please create a box", canonical = "create box" },
+    { input = "can you delete the ball", canonical = "delete ball" },
+]
+
+# =============================================================================
+# PUNCTUATION HANDLING
+# =============================================================================
+
+[punctuation]
+description = "How to handle punctuation from speech-to-text"
+
+[punctuation.rules]
+periods = "ignore"
+commas = "ignore unless separating list items"
+question_marks = "strip, command remains same"
+exclamation = "strip"
+quotes = "keep for string values"
+
+# =============================================================================
+# OUTPUT BEHAVIOR
+# =============================================================================
+
+[output.quiet_mode]
+description = "When quiet mode is enabled"
+shows = ["errors"]
+hides = ["corrections", "inferences", "implied words"]
+command = "meta quiet on"
+
+[output.verbose_mode]
+description = "When verbose mode is enabled (default)"
+shows = ["everything"]
+format = "[correction: {from} → {to}]"
+
+[output.examples]
+quiet_correction = ""
+verbose_correction = "[corrected: creat → create]"
+implied = "[implied: to]"
+inferred = "[inferred: color]"

@@ -26,7 +26,7 @@ See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
 # Adding features here without IR changes violates the versioning policy.
 # See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
 # =============================================================================
-IMPLEMENTS_IR_VERSION = "0.0.9"
+IMPLEMENTS_IR_VERSION = "0.2.0"
 
 import json
 from typing import Dict, Any, Set, List
@@ -3104,7 +3104,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.dedent()
         self.write("}, undefined, (err) => {")
         self.indent()
-        self.write("log('Failed to load model, using fallback shape', 'warn');")
+        self.write("console.error('GLTF load error:', err);")
+        self.write("log('Failed to load ' + preset.model + ': ' + (err.message || err), 'warn');")
         self.write("// Fallback to primitive shape")
         self.write("let geom = shape === 'sphere' ? new THREE.SphereGeometry(size) : shape === 'cylinder' ? new THREE.CylinderGeometry(size*0.5, size*0.5, size) : new THREE.BoxGeometry(size, size, size);")
         self.write("const mat = new THREE.MeshStandardMaterial({color: color});")
@@ -3726,7 +3727,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.dedent()
         self.write("}, undefined, (err) => {")
         self.indent()
-        self.write("log('Failed to load model, using fallback shape', 'warn');")
+        self.write("console.error('GLTF load error:', err);")
+        self.write("log('Failed to load ' + preset.model + ': ' + (err.message || err), 'warn');")
         self.write("let geom = preset.shape === 'sphere' ? new THREE.SphereGeometry(1) : preset.shape === 'cylinder' ? new THREE.CylinderGeometry(0.5, 0.5, 1) : new THREE.BoxGeometry(1, 1, 1);")
         self.write("const mat = new THREE.MeshStandardMaterial({color: preset.color});")
         self.write("const mesh = new THREE.Mesh(geom, mat);")

@@ -33,7 +33,7 @@ from ..ir import (
 # Adding features here without IR changes violates the versioning policy.
 # See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
 # =============================================================================
-IMPLEMENTS_IR_VERSION = "0.0.9"
+IMPLEMENTS_IR_VERSION = "0.2.0"
 
 
 class PhaserEmitter(BaseEmitter):
@@ -167,6 +167,7 @@ class PhaserEmitter(BaseEmitter):
         self._emit_functions()
         self._emit_class_end()
         self._emit_game_config()
+        self._emit_console()
 
         return self.get_code()
 
@@ -565,6 +566,381 @@ class PhaserEmitter(BaseEmitter):
         self.write("};")
         self.write_blank()
         self.write("const game = new Phaser.Game(config);")
+
+    def _emit_console(self):
+        """Emit in-game console with voice support.
+
+        SPEC CHAIN: rosh-console.toml → phaser.py
+        Must implement: list, look, set, hide, show, create, help
+        """
+        self.write_blank()
+        self.write_comment("=" * 70)
+        self.write_comment("Rosh Console - Press ` (backtick) to toggle")
+        self.write_comment("Voice: Hold Ctrl+Space to speak (Chrome/Edge)")
+        self.write_comment("=" * 70)
+        self.write_blank()
+
+        # Console state
+        self.write("let roshConsoleVisible = false;")
+        self.write("let roshConsoleInput = '';")
+        self.write("let roshConsoleOutput = [];")
+        self.write("let roshObjectCounter = {};")
+        self.write_blank()
+
+        # Get scene reference helper
+        self.write("function getScene() { return game.scene.scenes[0]; }")
+        self.write_blank()
+
+        # Initialize roshObjects namespace when scene is ready
+        self.write_comment("Dedicated namespace for runtime-created objects (avoids engine collisions)")
+        self.write("setTimeout(() => { const s = getScene(); if (s) s.roshObjects = s.roshObjects || {}; }, 100);")
+        self.write_blank()
+
+        # Console HTML/CSS
+        self.write_comment("Create console DOM elements")
+        self.write("const consoleDiv = document.createElement('div');")
+        self.write("consoleDiv.id = 'rosh-console';")
+        self.write("consoleDiv.innerHTML = `")
+        self.write("  <div id='rosh-console-header'>Rosh Console (\\` to close) <span id='rosh-voice-btn'>🎤</span></div>")
+        self.write("  <div id='rosh-console-output'></div>")
+        self.write("  <div id='rosh-console-input-row'>")
+        self.write("    <span>&gt; </span>")
+        self.write("    <input type='text' id='rosh-console-input' autocomplete='off' placeholder='type command or hold Ctrl+Space'>")
+        self.write("  </div>")
+        self.write("`;")
+        self.write("consoleDiv.style.cssText = `")
+        self.write("  display: none; position: fixed; top: 0; left: 0; right: 0;")
+        self.write("  height: 200px; background: rgba(20,20,40,0.95); color: #0ff;")
+        self.write("  font-family: monospace; font-size: 14px; z-index: 9999;")
+        self.write("  border-bottom: 2px solid #0ff;")
+        self.write("`;")
+        self.write("document.body.appendChild(consoleDiv);")
+        self.write_blank()
+
+        # Style the console elements
+        self.write_comment("Style console elements")
+        self.write("const style = document.createElement('style');")
+        self.write("style.textContent = `")
+        self.write("  #rosh-console-header { padding: 5px 10px; color: #6cf; border-bottom: 1px solid #333; }")
+        self.write("  #rosh-console-output { height: 140px; overflow-y: auto; padding: 5px 10px; }")
+        self.write("  #rosh-console-output div { margin: 2px 0; }")
+        self.write("  #rosh-console-output .error { color: #f66; }")
+        self.write("  #rosh-console-output .info { color: #6cf; }")
+        self.write("  #rosh-console-output .dim { color: #666; }")
+        self.write("  #rosh-console-input-row { display: flex; padding: 5px 10px; background: rgba(30,30,50,0.8); }")
+        self.write("  #rosh-console-input { flex: 1; background: transparent; border: none; color: #0ff; outline: none; font-family: inherit; font-size: inherit; }")
+        self.write("  #rosh-voice-btn { cursor: pointer; margin-left: 10px; opacity: 0.5; }")
+        self.write("  #rosh-voice-btn:hover { opacity: 1; }")
+        self.write("  #rosh-voice-btn.listening { opacity: 1; animation: pulse 1s infinite; }")
+        self.write("  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }")
+        self.write("`;")
+        self.write("document.head.appendChild(style);")
+        self.write_blank()
+
+        # Console log function
+        self.write("function roshLog(msg, type = 'normal') {")
+        self.indent()
+        self.write("const output = document.getElementById('rosh-console-output');")
+        self.write("const div = document.createElement('div');")
+        self.write("div.className = type;")
+        self.write("div.textContent = msg;")
+        self.write("output.appendChild(div);")
+        self.write("output.scrollTop = output.scrollHeight;")
+        self.write("roshConsoleOutput.push(msg);")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+        # Toggle console
+        self.write("function toggleRoshConsole() {")
+        self.indent()
+        self.write("roshConsoleVisible = !roshConsoleVisible;")
+        self.write("consoleDiv.style.display = roshConsoleVisible ? 'block' : 'none';")
+        self.write("if (roshConsoleVisible) document.getElementById('rosh-console-input').focus();")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+        # Voice corrections
+        self.write_comment("Voice corrections for common mishearings")
+        self.write("const VOICE_CORRECTIONS = {")
+        self.indent()
+        self.write("'raush': 'rosh', 'rush': 'rosh', 'rawsh': 'rosh', 'roush': 'rosh',")
+        self.write("'colour': 'color', 'grey': 'gray', 'centre': 'center',")
+        self.write("'visibility': 'visible', 'invisible': 'visible false',")
+        self.dedent()
+        self.write("};")
+        self.write_blank()
+
+        self.write("function applyVoiceCorrections(text) {")
+        self.indent()
+        self.write("let result = text.toLowerCase();")
+        self.write("for (const [wrong, right] of Object.entries(VOICE_CORRECTIONS)) {")
+        self.indent()
+        self.write("result = result.replace(new RegExp('\\\\b' + wrong + '\\\\b', 'g'), right);")
+        self.dedent()
+        self.write("}")
+        self.write("return result;")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+        # Process command - implements rosh-console.toml required commands
+        self._emit_console_commands()
+
+        # Keyboard handler
+        self.write_comment("Keyboard handling")
+        self.write("document.addEventListener('keydown', (e) => {")
+        self.indent()
+        self.write("if (e.key === '`' || e.key === '~') { e.preventDefault(); toggleRoshConsole(); return; }")
+        self.write("if (!roshConsoleVisible) return;")
+        self.write("const input = document.getElementById('rosh-console-input');")
+        self.write("if (e.key === 'Enter' && document.activeElement === input) {")
+        self.indent()
+        self.write("const cmd = input.value.trim();")
+        self.write("if (cmd) { roshLog('> ' + cmd, 'dim'); processRoshCommand(cmd); }")
+        self.write("input.value = '';")
+        self.dedent()
+        self.write("}")
+        self.write("if (e.key === 'Escape') { toggleRoshConsole(); }")
+        self.dedent()
+        self.write("});")
+        self.write_blank()
+
+        # Voice input
+        self._emit_voice_support()
+
+        self.write("roshLog('Rosh Console ready. Type help for commands.', 'info');")
+
+    def _emit_console_commands(self):
+        """Emit console command processing.
+
+        SPEC: rosh-console.toml - required commands
+        """
+        self.write("function processRoshCommand(cmd) {")
+        self.indent()
+        self.write("const scene = getScene();")
+        self.write("if (!scene) { roshLog('No active scene', 'error'); return; }")
+        self.write_blank()
+        self.write("cmd = applyVoiceCorrections(cmd);")
+        self.write("const parts = cmd.trim().split(/\\s+/);")
+        self.write("const command = parts[0].toLowerCase();")
+        self.write_blank()
+
+        self.write("try {")
+        self.indent()
+
+        # list command
+        self.write("if (command === 'list' || command === 'ls' || command === 'objects') {")
+        self.indent()
+        self.write_comment("List original objects + runtime-created objects from roshObjects namespace")
+        known_objects = [obj.name for obj in self.ir.objects if 'target' not in obj.properties]
+        self.write(f"const originalObjects = {known_objects};")
+        self.write("const runtimeObjects = scene.roshObjects ? Object.keys(scene.roshObjects) : [];")
+        self.write("const allObjects = [...originalObjects, ...runtimeObjects];")
+        self.write("roshLog('Objects: ' + allObjects.join(', '));")
+        self.dedent()
+        self.write("}")
+
+        # look command
+        self.write("else if (command === 'look' || command === 'l' || command === 'examine' || command === 'x') {")
+        self.indent()
+        self.write("if (parts.length < 2) { roshLog('Usage: look <object>', 'error'); return; }")
+        self.write("const name = parts[1];")
+        self.write_comment("Check both scene and roshObjects namespace")
+        self.write("const obj = scene[name] || (scene.roshObjects && scene.roshObjects[name]);")
+        self.write("if (!obj) { roshLog('Object not found: ' + name, 'error'); return; }")
+        self.write("roshLog(name + ': x=' + Math.round(obj.x) + ', y=' + Math.round(obj.y));")
+        self.write("if (obj.visible !== undefined) roshLog('  visible=' + obj.visible);")
+        self.write("if (obj.text !== undefined) roshLog('  text=\"' + obj.text + '\"');")
+        self.dedent()
+        self.write("}")
+
+        # set command
+        self.write("else if (command === 'set') {")
+        self.indent()
+        self.write_comment("Parse: set <obj> <prop> to <value>  OR  set <obj> <color>")
+        self.write("let name, prop, value;")
+        self.write("if (parts.length >= 5 && parts[3] === 'to') {")
+        self.indent()
+        self.write("name = parts[1]; prop = parts[2]; value = parts.slice(4).join(' ');")
+        self.dedent()
+        self.write("} else if (parts.length === 4 && parts[2] === 'to') {")
+        self.indent()
+        self.write("name = parts[1]; prop = 'color'; value = parts[3];")
+        self.dedent()
+        self.write("} else if (parts.length === 3) {")
+        self.indent()
+        self.write("name = parts[1]; prop = 'color'; value = parts[2];")
+        self.dedent()
+        self.write("} else { roshLog('Usage: set <obj> <prop> to <value>', 'error'); return; }")
+        self.write_blank()
+        self.write_comment("Check both scene and roshObjects namespace")
+        self.write("const obj = scene[name] || (scene.roshObjects && scene.roshObjects[name]);")
+        self.write("if (!obj) { roshLog('Object not found: ' + name, 'error'); return; }")
+        self.write_blank()
+        self.write("const colors = {red: 0xff0000, green: 0x00ff00, blue: 0x0000ff, yellow: 0xffff00, cyan: 0x00ffff, magenta: 0xff00ff, white: 0xffffff, black: 0x000000, orange: 0xff8800, purple: 0x8800ff};")
+        self.write("if (prop === 'x') obj.x = parseFloat(value);")
+        self.write("else if (prop === 'y') obj.y = parseFloat(value);")
+        self.write("else if (prop === 'width' || prop === 'w') {")
+        self.indent()
+        self.write("const w = parseFloat(value);")
+        self.write("if (obj.setSize) obj.setSize(w, obj.height || 50);")
+        self.write("else if (obj.setDisplaySize) obj.setDisplaySize(w, obj.displayHeight || 50);")
+        self.write("else obj.width = w;")
+        self.dedent()
+        self.write("}")
+        self.write("else if (prop === 'height' || prop === 'h') {")
+        self.indent()
+        self.write("const h = parseFloat(value);")
+        self.write("if (obj.setSize) obj.setSize(obj.width || 50, h);")
+        self.write("else if (obj.setDisplaySize) obj.setDisplaySize(obj.displayWidth || 50, h);")
+        self.write("else obj.height = h;")
+        self.dedent()
+        self.write("}")
+        self.write("else if (prop === 'text' && obj.setText) obj.setText(value);")
+        self.write("else if (prop === 'color' || prop === 'colour') {")
+        self.indent()
+        self.write("const c = colors[value.toLowerCase()] || parseInt(value, 16);")
+        self.write("if (obj.setTint) obj.setTint(c);")
+        self.write("else if (obj.setColor) obj.setColor('#' + c.toString(16).padStart(6, '0'));")
+        self.write("else if (obj.setFillStyle) obj.setFillStyle(c);")
+        self.dedent()
+        self.write("}")
+        self.write("else if (prop === 'visible') obj.visible = (value === 'true' || value === '1');")
+        self.write("else obj[prop] = value;")
+        self.write("roshLog(name + '.' + prop + ' = ' + value);")
+        self.dedent()
+        self.write("}")
+
+        # hide command
+        self.write("else if (command === 'hide') {")
+        self.indent()
+        self.write("if (parts.length < 2) { roshLog('Usage: hide <object>', 'error'); return; }")
+        self.write("const obj = scene[parts[1]] || (scene.roshObjects && scene.roshObjects[parts[1]]);")
+        self.write("if (!obj) { roshLog('Object not found: ' + parts[1], 'error'); return; }")
+        self.write("obj.visible = false;")
+        self.write("roshLog(parts[1] + ' hidden');")
+        self.dedent()
+        self.write("}")
+
+        # show command
+        self.write("else if (command === 'show' || command === 'unhide') {")
+        self.indent()
+        self.write("if (parts.length < 2) { roshLog('Usage: show <object>', 'error'); return; }")
+        self.write("const obj = scene[parts[1]] || (scene.roshObjects && scene.roshObjects[parts[1]]);")
+        self.write("if (!obj) { roshLog('Object not found: ' + parts[1], 'error'); return; }")
+        self.write("obj.visible = true;")
+        self.write("roshLog(parts[1] + ' visible');")
+        self.dedent()
+        self.write("}")
+
+        # create command - supports "create box" or "create 3 boxes"
+        self.write("else if (command === 'create') {")
+        self.indent()
+        self.write("if (parts.length < 2) { roshLog('Usage: create <name> [at <x> <y>]', 'error'); return; }")
+        self.write_blank()
+        self.write_comment("Handle 'create 3 boxes' syntax")
+        self.write("let count = 1;")
+        self.write("let baseName = parts[1];")
+        self.write("if (/^\\d+$/.test(parts[1]) && parts.length >= 3) {")
+        self.indent()
+        self.write("count = parseInt(parts[1]);")
+        self.write("baseName = parts[2];")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+        self.write("for (let i = 0; i < count; i++) {")
+        self.indent()
+        self.write("let name = baseName;")
+        self.write_comment("Auto-number if name exists in scene or roshObjects")
+        self.write("if (!roshObjectCounter[baseName]) roshObjectCounter[baseName] = 0;")
+        self.write("while (scene[name] || (scene.roshObjects && scene.roshObjects[name])) { roshObjectCounter[baseName]++; name = baseName + '-' + roshObjectCounter[baseName]; }")
+        self.write_comment("Offset multiple objects so they don't stack")
+        self.write("let x = 400 + (i * 60), y = 300;")
+        self.write_comment("Create in roshObjects namespace (avoids engine collisions)")
+        self.write("if (!scene.roshObjects) scene.roshObjects = {};")
+        self.write("scene.roshObjects[name] = scene.add.rectangle(x, y, 50, 50, 0x00ff00);")
+        self.write("roshLog('Created ' + name + ' at (' + x + ', ' + y + ')');")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+
+        # help command
+        self.write("else if (command === 'help' || command === '?') {")
+        self.indent()
+        self.write("roshLog('Commands: list, look <obj>, set <obj> <prop> to <value>');")
+        self.write("roshLog('          hide <obj>, show <obj>, create <name>');")
+        self.write("roshLog('Voice: Hold Ctrl+Space to speak');")
+        self.dedent()
+        self.write("}")
+
+        # unknown
+        self.write("else { roshLog('Unknown command: ' + command + '. Type help for commands.', 'error'); }")
+
+        self.dedent()
+        self.write("} catch(e) { roshLog('Error: ' + e.message, 'error'); }")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+    def _emit_voice_support(self):
+        """Emit Web Speech API voice input support."""
+        self.write_comment("Voice Input - Hold Ctrl+Space to speak (Chrome/Edge)")
+        self.write("const voiceBtn = document.getElementById('rosh-voice-btn');")
+        self.write("let recognition = null;")
+        self.write("let isListening = false;")
+        self.write_blank()
+
+        self.write("if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {")
+        self.indent()
+        self.write("const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;")
+        self.write("recognition = new SpeechRecognition();")
+        self.write("recognition.continuous = false;")
+        self.write("recognition.interimResults = false;")
+        self.write("recognition.lang = 'en-US';")
+        self.write_blank()
+
+        self.write("recognition.onresult = (event) => {")
+        self.indent()
+        self.write("const cmd = event.results[0][0].transcript;")
+        self.write("roshLog('[voice] ' + cmd, 'info');")
+        self.write("processRoshCommand(cmd);")
+        self.dedent()
+        self.write("};")
+        self.write_blank()
+
+        self.write("recognition.onend = () => { isListening = false; voiceBtn.classList.remove('listening'); };")
+        self.write("recognition.onerror = (e) => { roshLog('[voice error] ' + e.error, 'error'); isListening = false; voiceBtn.classList.remove('listening'); };")
+        self.write_blank()
+
+        self.write("function startVoice() {")
+        self.indent()
+        self.write("if (isListening) return;")
+        self.write("try { recognition.start(); isListening = true; voiceBtn.classList.add('listening'); roshLog('[voice] Listening...', 'dim'); }")
+        self.write("catch(e) { roshLog('[voice] ' + e.message, 'error'); }")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+        self.write("function stopVoice() { if (isListening) { recognition.stop(); isListening = false; voiceBtn.classList.remove('listening'); } }")
+        self.write_blank()
+
+        # Ctrl+Space for push-to-talk
+        self.write_comment("Ctrl+Space for push-to-talk")
+        self.write("document.addEventListener('keydown', (e) => { if (e.ctrlKey && e.code === 'Space' && roshConsoleVisible) { e.preventDefault(); startVoice(); } });")
+        self.write("document.addEventListener('keyup', (e) => { if (e.code === 'Space') stopVoice(); });")
+        self.write("voiceBtn.addEventListener('click', () => { if (isListening) stopVoice(); else startVoice(); });")
+
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("voiceBtn.style.display = 'none';")
+        self.write("roshLog('[voice] Not supported in this browser', 'dim');")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
 
     # =========================================================================
     # Object Emission

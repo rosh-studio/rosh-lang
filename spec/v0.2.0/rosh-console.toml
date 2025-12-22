@@ -1,0 +1,199 @@
+# Rosh In-Game Console Specification v0.2.0
+# ==========================================
+#
+# WHAT THIS IS:
+#   Defines commands for the RUNTIME console embedded in generated games.
+#   This is NOT the CLI REPL (rosh repl) - that's defined in rosh-cli.toml.
+#
+# DEPENDENCY CHAIN:
+#   rosh-console.toml (this file)
+#       ↓ consumed by
+#   src/rosh/emitters/*.py (phaser.py, pygame.py, threejs.py)
+#       ↓ which generate
+#   Runtime console code in output (game.js, game.py)
+#
+# UPSTREAM DEPENDENCIES:
+#   - rosh-2d.toml (property names for 2D targets)
+#   - rosh-3d.toml (property names for 3D targets)
+#
+# AUDIT REQUIREMENT:
+#   tools/audit_spec.py must verify ALL emitters implement ALL required commands.
+#
+# VERSION POLICY:
+#   When adding commands here, ALL emitters must be updated together.
+#   See: docs/SPEC-CHAIN.md
+
+[meta]
+version = "0.2.0"
+description = "In-game runtime console commands"
+applies_to = ["emitters/phaser.py", "emitters/pygame.py", "emitters/threejs.py"]
+
+# =============================================================================
+# CONSOLE ACTIVATION
+# =============================================================================
+
+[activation]
+key = "backtick"
+description = "Press ` (backtick) to toggle console visibility"
+required = true
+
+# =============================================================================
+# REQUIRED COMMANDS - All emitters MUST implement these
+# =============================================================================
+
+[commands.list]
+syntax = "list"
+aliases = ["ls", "objects"]
+description = "List all objects in the scene"
+required = true
+example = "list"
+output = "Objects: player, enemy, wall"
+
+[commands.look]
+syntax = "look <object>"
+aliases = ["l", "examine", "x"]
+description = "Inspect an object's properties (human-readable summary)"
+required = true
+example = "look player"
+output = "player: x=400, y=300, visible=true"
+
+[commands.set]
+syntax = "set <object> <property> to <value>"
+aliases = []
+description = "Set an object's property"
+required = true
+examples = [
+    "set player x to 100",
+    "set player color to red",
+    "set player visible to false",
+    "set logo text to hello world",
+]
+shorthand = [
+    { syntax = "set <object> <color>", expands_to = "set <object> color to <color>" },
+    { syntax = "set <object> to <color>", expands_to = "set <object> color to <color>" },
+]
+
+# Properties that set MUST support (from rosh-2d.toml / rosh-3d.toml)
+supported_properties = [
+    "x",
+    "y",
+    "z",          # 3D only
+    "color",
+    "visible",
+    "text",
+    "width",
+    "height",
+]
+
+# Named colors that set MUST recognize
+named_colors = [
+    "red",
+    "green",
+    "blue",
+    "yellow",
+    "cyan",
+    "magenta",
+    "white",
+    "black",
+    "orange",
+    "purple",
+]
+
+[commands.hide]
+syntax = "hide <object>"
+aliases = []
+description = "Hide an object (set visible to false)"
+required = true
+example = "hide enemy"
+
+[commands.show]
+syntax = "show <object>"
+aliases = ["unhide"]
+description = "Show an object (set visible to true)"
+required = true
+example = "show enemy"
+
+[commands.create]
+syntax = "create <name> [at <x> <y>]"
+aliases = []
+description = "Create a new object at runtime"
+required = true
+examples = [
+    "create box",
+    "create ball at 100 200",
+]
+behavior = [
+    "If name exists, auto-number: box, box2, box3...",
+    "Default position is screen/world center",
+    "Default color is green",
+    "Default size is 50x50 (2D) or 1x1x1 (3D)",
+]
+
+[commands.help]
+syntax = "help"
+aliases = ["?"]
+description = "Show available commands"
+required = true
+
+# =============================================================================
+# OPTIONAL COMMANDS - Emitters MAY implement these
+# =============================================================================
+
+[commands.dump]
+syntax = "dump <object>"
+aliases = ["json"]
+description = "Dump object as full JSON (machine-readable)"
+required = false
+example = "dump player"
+output = '{"name":"player","x":400,"y":300,"visible":true,"color":"#00ff00"}'
+
+[commands.delete]
+syntax = "delete <object>"
+aliases = ["destroy", "remove", "rm"]
+description = "Remove an object from the scene"
+required = false
+
+[commands.move]
+syntax = "move <object> to <x> <y>"
+aliases = []
+description = "Move an object to a position"
+required = false
+note = "Shorthand for set x/y"
+
+[commands.clear]
+syntax = "clear"
+aliases = ["cls"]
+description = "Clear console output"
+required = false
+
+[commands.reset]
+syntax = "reset"
+aliases = ["restart"]
+description = "Reset game to initial state"
+required = false
+
+# =============================================================================
+# ERROR HANDLING
+# =============================================================================
+
+[errors]
+unknown_command = "Unknown command: {command}"
+object_not_found = "Object not found: {name}"
+invalid_syntax = "Usage: {correct_syntax}"
+invalid_value = "Invalid value: {value}"
+
+# =============================================================================
+# VISUAL STYLE
+# =============================================================================
+
+[style]
+background_color = "#141428"      # Dark blue, semi-transparent
+background_alpha = 220            # 0-255
+header_color = "#64c8ff"          # Light blue
+text_color = "#c8c8c8"            # Light gray
+error_color = "#ff6464"           # Red
+prompt_color = "#00ffff"          # Cyan
+prompt_symbol = "> "
+cursor = "_"
+font_size = 20
+max_output_lines = 7

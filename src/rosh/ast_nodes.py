@@ -236,7 +236,8 @@ class Get(ASTNode):
 
 @dataclass
 class Dump(ASTNode):
-    """dump - outputs entire state as JSON"""
+    """dump [target] - outputs state or specific object as JSON"""
+    target: Optional[str] = None  # Optional object name to dump
     line: int = 0
 
 

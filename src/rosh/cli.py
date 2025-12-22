@@ -1,5 +1,34 @@
 """
 Rosh CLI - Command-line interface for running Rosh programs
+
+=============================================================================
+ARCHITECTURE POLICY - READ BEFORE MODIFYING
+=============================================================================
+This file is the SOURCE OF TRUTH for REPL command behavior.
+
+Key documents:
+- rosh-dev/proposals/IR-VERSIONING-POLICY.md - Version tracking and compliance
+- rosh-dev/proposals/JS-RUNTIME-ARCHITECTURE.md - Runtime layer separation
+
+The JS in-game REPL (rosh-runtime.js) should be GENERATED from this file.
+DO NOT hand-code features in rosh-runtime.js - add them HERE first.
+
+REPL features in this file:
+- Command parsing (create, set, delete, look, list, etc.)
+- Fuzzy matching for typos (_fuzzy_match_command)
+- British/American spelling normalization (colour→color)
+- Bulk operations (create N, delete all, set all)
+- Smart object name resolution
+- Property inference (unambiguous values only)
+- Undo/redo support
+- Multi-line block handling
+
+When adding REPL features:
+1. Implement here in Python first
+2. Test in Python REPL
+3. Regenerate rosh-runtime.js from this source
+4. Engine adapters (threejs-adapter.js, phaser-adapter.js) remain thin
+=============================================================================
 """
 
 import sys
@@ -163,34 +192,50 @@ def output_toon(interpreter: Interpreter):
 
 
 def _fuzzy_match_command(word: str, interpreter=None):
-    """Find closest matching command using fuzzy string matching"""
+    """Find closest matching command using spec-based typo correction + fuzzy matching.
+
+    Uses the spec loader for:
+    1. Known typos (exact correction from spec)
+    2. Fuzzy matching against all known commands
+    """
     import difflib
 
-    # List of all available commands
-    commands = [
-        # Core commands
-        'create', 'set', 'get', 'print', 'dump', 'save', 'load',
-        'import', 'eval', 'read', 'write',
+    word_lower = word.lower()
+
+    # First: check known typos from spec (exact match)
+    try:
+        from .spec.loader import _get_loader
+        loader = _get_loader()
+        correction = loader.is_typo(word_lower)
+        if correction:
+            return correction
+    except Exception:
+        pass  # Fall back to fuzzy matching if spec unavailable
+
+    # Build command list from spec + language keywords
+    commands = []
+
+    # Add commands from spec
+    try:
+        from .spec.loader import get_all_commands
+        spec_commands = get_all_commands()
+        for cmd in spec_commands.values():
+            commands.extend(cmd.all_names)
+    except Exception:
+        pass
+
+    # Add language keywords not in spec
+    language_keywords = [
+        'print', 'save', 'load', 'import', 'eval', 'read', 'write',
         'if', 'then', 'else', 'while', 'end',
         'define', 'function', 'call',
-        # Stack operations
         'add', 'subtract', 'multiply', 'divide',
-        'dup', 'swap', 'drop',
-        'push', 'pop',
-        # Object management
-        'clone', 'delete', 'properties', 'props', 'count', 'move',
-        # Universal REPL commands
-        'list', 'ls', 'objects', 'look', 'l', 'examine', 'ex', 'inspect', 'x',
-        # MUD commands
-        'goto', 'go', 'connect', 'link',
-        # AI commands
-        'prompt',
-        'undo', 'redo', 'oops',  # oops = undo (natural language)
-        # REPL-only commands
-        'make',
-        # Help
-        'help',
+        'dup', 'swap', 'drop', 'push', 'pop',
+        'goto', 'go', 'connect', 'link', 'prompt',
     ]
+    for kw in language_keywords:
+        if kw not in commands:
+            commands.append(kw)
 
     # Add user-defined functions if interpreter available
     if interpreter:
@@ -202,8 +247,8 @@ def _fuzzy_match_command(word: str, interpreter=None):
         except:
             pass
 
-    # Find close matches (up to 3, with cutoff of 0.6)
-    matches = difflib.get_close_matches(word.lower(), commands, n=1, cutoff=0.6)
+    # Find close matches (up to 1, with cutoff of 0.6)
+    matches = difflib.get_close_matches(word_lower, commands, n=1, cutoff=0.6)
 
     return matches[0] if matches else None
 
@@ -942,10 +987,20 @@ def run_repl(interpreter: Interpreter = None):
                     line = expanded
                 out.dim(f"→ {line}")  # Show expansion
 
-            # ===== Spelling Normalization =====
-            # British → American spelling for consistency
-            line = re.sub(r'\bcolour\b', 'color', line, flags=re.IGNORECASE)
-            line = re.sub(r'\bcentre\b', 'center', line, flags=re.IGNORECASE)
+            # ===== Voice Normalization =====
+            # Normalize input using voice spec (typos, spellings, implied words)
+            try:
+                from .voice import normalize_input
+                quiet_mode = getattr(interpreter, 'quiet_mode', False)
+                normalized, messages = normalize_input(line, quiet=quiet_mode)
+                if normalized != line:
+                    line = normalized
+                    for msg in messages:
+                        out.dim(msg)
+            except ImportError:
+                # Fallback: basic spelling normalization
+                line = re.sub(r'\bcolour\b', 'color', line, flags=re.IGNORECASE)
+                line = re.sub(r'\bcentre\b', 'center', line, flags=re.IGNORECASE)
 
             # ===== Bulk Operations now handled by parser (BulkOperation node) =====
             # This ensures consistency between REPL and scripts
@@ -1019,6 +1074,8 @@ def run_repl(interpreter: Interpreter = None):
                 out.print("Usage:")
                 out.print("  make <obj> bigger    - Scale up by 1.5×")
                 out.print("  make <obj> smaller   - Scale down by 1.5×")
+                out.print("  make <obj> faster    - Speed up by 1.5×")
+                out.print("  make <obj> slower    - Slow down by 1.5×")
                 out.print("  make <obj> visible   - Show the object")
                 out.print("  make <obj> hidden    - Hide the object")
                 out.print("  make <obj> <color>   - Change color (red, blue, etc.)")
@@ -1060,6 +1117,16 @@ def run_repl(interpreter: Interpreter = None):
                     stripped = line
                     # Fall through to normal processing
 
+            # copy/duplicate - aliases for clone
+            if stripped.startswith('copy ') or stripped.startswith('duplicate '):
+                rest = stripped.split(None, 1)[1] if ' ' in stripped else ''
+                if rest:
+                    line = f"clone {rest}"
+                    stripped = line.lower()
+                    parts = line.split()
+                    out.dim(f"→ {line}")
+                    # Fall through to normal processing
+
             # go <place> - alias for goto <place> (when not just "go" for confirm)
             if stripped.startswith('go ') and interpreter.pending_operation is None:
                 place = stripped[3:].strip()
@@ -1068,11 +1135,33 @@ def run_repl(interpreter: Interpreter = None):
                     stripped = line
                     # Fall through to normal processing
 
+            # move <obj> to <x> <y> [z] - set position with one command
+            move_match = re.match(r'^move\s+(\w+)\s+to\s+(-?\d+(?:\.\d+)?)\s*,?\s*(-?\d+(?:\.\d+)?)(?:\s*,?\s*(-?\d+(?:\.\d+)?))?$', stripped, re.IGNORECASE)
+            if move_match:
+                obj_name = move_match.group(1)
+                x_val = float(move_match.group(2))
+                y_val = float(move_match.group(3))
+                z_val = move_match.group(4)
+                if interpreter and interpreter.current_env.exists(obj_name):
+                    obj = interpreter.current_env.get(obj_name)
+                    if hasattr(obj, 'set'):
+                        obj.set('x', x_val)
+                        obj.set('y', y_val)
+                        if z_val:
+                            obj.set('z', float(z_val))
+                            out.success(f"{obj_name} moved to ({x_val}, {y_val}, {z_val})")
+                        else:
+                            out.success(f"{obj_name} moved to ({x_val}, {y_val})")
+                        continue
+                out.warning(f"Object '{obj_name}' not found")
+                continue
+
             # make - natural language for modifications
             # make <obj> <color> → set <obj> color to <color>
             # make <obj> <prop> <value> → set <obj> <prop> to <value>
             # make <obj> visible/hidden → show/hide
             # make <obj> big/bigger → scale up
+            # make <obj> faster/slower → adjust speed
             if stripped.startswith('make ') and len(parts) >= 3:
                 obj_name = parts[1]
                 rest = parts[2:]
@@ -1110,6 +1199,28 @@ def run_repl(interpreter: Interpreter = None):
                             out.success(f"{obj_name}.scale = {new_scale:.2f}")
                             continue
                     transformed = f"set {obj_name} scale to 0.67"  # Fallback
+                # make <obj> faster → multiply speed by 1.5
+                elif rest[0].lower() in ('fast', 'faster', 'quick', 'quicker'):
+                    if interpreter and interpreter.current_env.exists(obj_name):
+                        obj = interpreter.current_env.get(obj_name)
+                        if hasattr(obj, 'get') and hasattr(obj, 'set'):
+                            current_speed = obj.get('speed') if obj.has('speed') else 1
+                            new_speed = current_speed * 1.5
+                            obj.set('speed', new_speed)
+                            out.success(f"{obj_name}.speed = {new_speed:.2f}")
+                            continue
+                    transformed = f"set {obj_name} speed to 1.5"  # Fallback
+                # make <obj> slower → divide speed by 1.5
+                elif rest[0].lower() in ('slow', 'slower'):
+                    if interpreter and interpreter.current_env.exists(obj_name):
+                        obj = interpreter.current_env.get(obj_name)
+                        if hasattr(obj, 'get') and hasattr(obj, 'set'):
+                            current_speed = obj.get('speed') if obj.has('speed') else 1
+                            new_speed = current_speed / 1.5
+                            obj.set('speed', new_speed)
+                            out.success(f"{obj_name}.speed = {new_speed:.2f}")
+                            continue
+                    transformed = f"set {obj_name} speed to 0.67"  # Fallback
                 # make <obj> <prop> <value> → set <obj> <prop> to <value>
                 elif len(rest) >= 2:
                     prop_name = rest[0]
@@ -1171,30 +1282,85 @@ def run_repl(interpreter: Interpreter = None):
                 _examine_object(interpreter, out, obj_name)
                 continue
 
+            # show <obj> / unhide <obj> - make object visible
+            if len(parts) >= 2 and parts[0].lower() in ('show', 'unhide'):
+                obj_name = parts[1]
+                if interpreter and interpreter.current_env.exists(obj_name):
+                    obj = interpreter.current_env.get(obj_name)
+                    if hasattr(obj, 'set'):
+                        obj.set('visible', True)
+                        out.success(f"{obj_name} visible")
+                    else:
+                        out.warning(f"Cannot set visibility on '{obj_name}'")
+                else:
+                    out.warning(f"Object '{obj_name}' not found")
+                continue
+
+            # hide <obj> - hide object
+            if len(parts) >= 2 and parts[0].lower() == 'hide':
+                obj_name = parts[1]
+                if interpreter and interpreter.current_env.exists(obj_name):
+                    obj = interpreter.current_env.get(obj_name)
+                    if hasattr(obj, 'set'):
+                        obj.set('visible', False)
+                        out.success(f"{obj_name} hidden")
+                    else:
+                        out.warning(f"Cannot set visibility on '{obj_name}'")
+                else:
+                    out.warning(f"Object '{obj_name}' not found")
+                continue
+
+            # meta <setting> [<value>] - runtime settings
+            if parts and parts[0].lower() == 'meta':
+                if len(parts) == 1:
+                    # Show all meta settings
+                    out.print("Meta settings:", style="cyan")
+                    quiet = getattr(interpreter, 'quiet_mode', False)
+                    out.print(f"  quiet: {'on' if quiet else 'off'}", style="dim")
+                else:
+                    setting = parts[1].lower()
+                    if setting in ('quiet', 'q'):
+                        # Toggle or set quiet mode
+                        if len(parts) >= 3:
+                            value = parts[2].lower()
+                            interpreter.quiet_mode = value in ('on', 'true', '1', 'yes')
+                        else:
+                            interpreter.quiet_mode = True
+                        out.print(f"Quiet mode {'enabled' if interpreter.quiet_mode else 'disabled'}", style="cyan")
+                    elif setting in ('verbose', 'v'):
+                        interpreter.quiet_mode = False
+                        out.print("Verbose mode enabled", style="cyan")
+                    else:
+                        out.warning(f"Unknown setting: {setting}")
+                        out.dim("Available: quiet, verbose")
+                continue
+
             # clear / cls - clear screen (simple version)
             if stripped in ('clear', 'cls'):
                 import subprocess
                 subprocess.run('clear' if sys.platform != 'win32' else 'cls', shell=True)
                 continue
 
+            # Handle corrected command confirmation BEFORE go/yes handling
+            # This ensures block detection works (e.g., "creat object x" → "create object x")
+            if stripped in ('go', 'confirm', 'yes', 'y') and interpreter.pending_operation is not None:
+                op = interpreter.pending_operation
+                if op.get('type') == 'corrected_command':
+                    corrected = op['command']
+                    interpreter.pending_operation = None
+                    out.dim(f"→ {corrected}")
+                    # Replace line with corrected command and continue through normal processing
+                    line = corrected
+                    stripped = line.strip().lower()
+                    parts = line.strip().split()
+                    # Fall through to normal processing (including block detection)
+
             # go/confirm/yes/y - confirm pending bulk operation OR auto-close blocks
             if stripped in ('go', 'confirm', 'yes', 'y'):
                 # First check if there's a pending operation
                 if interpreter.pending_operation is not None:
                     op = interpreter.pending_operation
-
-                    # Special case: corrected command - run it directly
-                    if op.get('type') == 'corrected_command':
-                        corrected = op['command']
-                        interpreter.pending_operation = None
-                        out.dim(f"→ {corrected}")
-                        try:
-                            interpreter = run_source(corrected, "<repl>", interpreter)
-                        except RoshError as e:
-                            out.error(str(e))
-                        continue
-
-                    # Otherwise, execute as confirm command (bulk ops)
+                    # Execute as confirm command (bulk ops)
                     # Note: 'y' is CLI-only (conflicts with variable), so translate to 'yes'
                     confirm_cmd = 'yes' if stripped == 'y' else stripped
                     try:

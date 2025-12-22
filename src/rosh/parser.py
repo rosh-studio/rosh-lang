@@ -1,5 +1,27 @@
 """
 Parser for Rosh - converts tokens into an AST
+
+=============================================================================
+ARCHITECTURE POLICY - READ BEFORE MODIFYING
+=============================================================================
+This file is the SOURCE OF TRUTH for Rosh language semantics.
+
+Key documents:
+- rosh-dev/proposals/IR-VERSIONING-POLICY.md - Version tracking and compliance
+- rosh-dev/proposals/JS-RUNTIME-ARCHITECTURE.md - Runtime layer separation
+
+Rules:
+1. Parser/IR defines ALL language semantics - emitters just translate
+2. Changes here require IR_VERSION bump in ir.py
+3. ALL emitters must be updated together after parser changes
+4. The JS runtime (rosh-runtime.js) should be GENERATED from Python, not hand-coded
+
+If adding a feature:
+1. Implement here first (parser.py, ir.py, ir_transformer.py)
+2. Bump IR_VERSION
+3. Update all emitters (phaser.py, pygame.py, threejs.py)
+4. Regenerate rosh-runtime.js from Python source
+=============================================================================
 """
 
 from typing import List, Optional
@@ -619,25 +641,45 @@ class Parser:
                 )
 
             # Check for natural language property access: set book color to red
+            # Also supports: set book color red (without 'to' - Roshonic)
             # Also supports multi-level: set meta game title to "x" (becomes meta.game.title)
-            # Pattern: IDENTIFIER IDENTIFIER+ TO (where identifiers are property chain)
+            # Pattern: IDENTIFIER IDENTIFIER+ [TO] value
             if next_token.type in (TokenType.IDENTIFIER, TokenType.META):
                 # Look ahead to find where TO appears in the sequence
                 # Save position so we can backtrack if needed
                 saved_pos = self.pos
                 self.advance()  # consume first identifier (object name)
 
-                # Collect property identifiers until we hit TO or non-identifier
-                prop_tokens = []
+                # Collect ALL identifiers first, then figure out which is value
+                all_ident_tokens = []
                 while self.current_token().type == TokenType.IDENTIFIER:
-                    prop_tokens.append(self.current_token())
+                    all_ident_tokens.append(self.current_token())
                     self.advance()
 
-                if self.current_token().type == TokenType.TO and len(prop_tokens) > 0:
-                    # Natural language: set book color to red OR set meta game title to "x"
+                # Check for TO
+                has_to = self.current_token().type == TokenType.TO
+                if has_to:
                     self.advance()  # consume TO
+                    # Everything before TO is properties
+                    prop_tokens = all_ident_tokens
                     value = self.parse_expression()
+                elif len(all_ident_tokens) >= 1:
+                    # No TO - last identifier is the value, rest are properties
+                    # For "set orc text hello": text=prop, hello=value
+                    prop_tokens = all_ident_tokens[:-1] if len(all_ident_tokens) > 1 else all_ident_tokens
+                    if len(all_ident_tokens) > 1:
+                        # Last token is the value (as an identifier expression)
+                        value_token = all_ident_tokens[-1]
+                        value = Identifier(name=value_token.value, line=value_token.line)
+                    else:
+                        # Only one identifier after obj - it's a property, value comes next
+                        value = self.parse_expression()
+                else:
+                    # No identifiers collected, backtrack
+                    self.pos = saved_pos
+                    prop_tokens = []
 
+                if len(prop_tokens) > 0:
                     # Build the property chain
                     target = Identifier(name=name_token.value, line=name_token.line)
                     for prop_token in prop_tokens:
@@ -647,8 +689,10 @@ class Parser:
                             line=prop_token.line
                         )
                     return SetProperty(target=target, value=value, line=line)
+                elif len(all_ident_tokens) == 0:
+                    # Backtrack was set, continue to normal parsing
+                    pass
                 else:
-                    # Not natural language syntax, backtrack
                     self.pos = saved_pos
 
         # Otherwise parse as normal set/assignment
@@ -954,10 +998,17 @@ class Parser:
         return Get(target=target, instance_index=instance_index, get_all=get_all, line=line)
 
     def parse_dump(self) -> Dump:
-        """Parse: dump - outputs entire state as JSON"""
+        """Parse: dump [target] - outputs entire state or specific object as JSON"""
         line = self.current_token().line
         self.expect(TokenType.DUMP)
-        return Dump(line=line)
+
+        # Optional target object name
+        target = None
+        if self.current_token().type == TokenType.IDENTIFIER:
+            target = self.current_token().value
+            self.advance()
+
+        return Dump(target=target, line=line)
 
     def parse_save(self):
         """Parse: save [game [slot]] | save [as toon|json] [filepath]

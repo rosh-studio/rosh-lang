@@ -334,7 +334,9 @@ height = 1.6
 [orc.3d]
 shape = "box"
 color = 0x228b22
-scaleY = 1.6
+scaleX = 2.5
+scaleY = 2.5
+scaleZ = 2.5
 model = "3d_glb/orc_warrior.glb"
 credit = "Orc_Warrior by EvgeshQa (CC BY 4.0)"
 credit_url = "https://skfb.ly/oqIMM"
