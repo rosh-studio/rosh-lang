@@ -212,7 +212,7 @@ class Auditor:
         results = []
         emitters_dir = self.base_path / "src" / "rosh" / "emitters"
 
-        for emitter_name in ["phaser.py", "pygame.py", "threejs.py"]:
+        for emitter_name in ["phaser.py", "pygame.py", "threejs.py", "godot.py"]:
             filepath = emitters_dir / emitter_name
             if filepath.exists():
                 results.append(self.audit_emitter_console(filepath))
@@ -220,6 +220,64 @@ class Auditor:
                 result = AuditResult(f"emitters/{emitter_name}", spec_type="console")
                 result.errors.append(f"Emitter not found: {filepath}")
                 results.append(result)
+
+        return results
+
+    def audit_parsing_parity(self) -> List[AuditResult]:
+        """Audit emitters for parsing parity.
+
+        Ensures all emitters parse commands the same way:
+        - 'create blue box' → name='box', color=blue (not name='blue')
+        - 'create a big red ball' → name='ball', color=red, size=big
+
+        SPEC: rosh-console.toml [commands.create].parsing
+        """
+        results = []
+        emitters_dir = self.base_path / "src" / "rosh" / "emitters"
+
+        # Patterns that indicate correct modifier parsing
+        parity_patterns = {
+            "last_word_is_name": [
+                # Pattern: iterating backwards to find last non-modifier word
+                r"words\[words\.length\s*-\s*1\]",  # JS: words[words.length - 1]
+                r"desc_parts\.size\(\)\s*-\s*1.*-1.*-1",  # GDScript: range(size-1, -1, -1)
+                r"words\[-1\]",  # Python: words[-1]
+            ],
+            "color_modifiers": [
+                r"colors?\s*=\s*\{.*red.*blue",  # color dict with red, blue
+            ],
+            "size_modifiers": [
+                r"big.*large|size_mods|sizeWords",  # size modifier handling
+            ],
+        }
+
+        for emitter_name in ["phaser.py", "threejs.py", "godot.py"]:
+            filepath = emitters_dir / emitter_name
+            result = AuditResult(
+                str(filepath.relative_to(self.base_path)),
+                spec_type="parity"
+            )
+
+            if not filepath.exists():
+                result.errors.append(f"File not found: {filepath}")
+                results.append(result)
+                continue
+
+            content = filepath.read_text()
+
+            for pattern_name, patterns in parity_patterns.items():
+                found = False
+                for pattern in patterns:
+                    if re.search(pattern, content, re.IGNORECASE | re.DOTALL):
+                        found = True
+                        break
+
+                if found:
+                    result.found.append(pattern_name)
+                else:
+                    result.missing.append(pattern_name)
+
+            results.append(result)
 
         return results
 
@@ -264,7 +322,8 @@ def main():
     parser = argparse.ArgumentParser(description="Audit Rosh implementations")
     parser.add_argument("--js", action="store_true", help="Audit JS files only")
     parser.add_argument("--python", action="store_true", help="Audit Python files only")
-    parser.add_argument("--console", action="store_true", help="Audit emitter console parity only")
+    parser.add_argument("--console", action="store_true", help="Audit emitter console commands only")
+    parser.add_argument("--parity", action="store_true", help="Audit parsing parity across emitters")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show details")
     args = parser.parse_args()
 
@@ -273,8 +332,12 @@ def main():
     # Get results based on filter
     if args.console:
         results = auditor.audit_all_emitter_consoles()
+    elif args.parity:
+        results = auditor.audit_parsing_parity()
     else:
         results = auditor.audit_all()
+        # Also include parity tests
+        results.extend(auditor.audit_parsing_parity())
 
         # Filter if requested
         if args.js:
@@ -342,6 +405,25 @@ def main():
                         print(f"    - {cmd} (only in: {', '.join(emitters_with)})")
                     all_ok = False
 
+    # Parsing parity results
+    parity_results = [r for r in results if r.spec_type == "parity"]
+    if parity_results:
+        print()
+        print("Parsing Parity (rosh-console.toml modifiers)")
+        print("-" * 40)
+        for result in parity_results:
+            if result.ok:
+                print(f"  OK  {result.target}")
+                if args.verbose:
+                    print(f"       Patterns: {', '.join(result.found)}")
+            else:
+                all_ok = False
+                print(f" FAIL {result.target}")
+                if result.missing:
+                    print(f"       Missing patterns: {', '.join(result.missing)}")
+                if result.errors:
+                    print(f"       Errors: {', '.join(result.errors)}")
+
     print()
     print("=" * 60)
 
@@ -350,7 +432,7 @@ def main():
         print()
         print("Spec chain verified:")
         print("  rosh-cli.toml → cli.py")
-        print("  rosh-console.toml → phaser.py, pygame.py, threejs.py")
+        print("  rosh-console.toml → phaser.py, pygame.py, threejs.py, godot.py")
         return 0
     else:
         print("Some implementations are out of sync with spec.")

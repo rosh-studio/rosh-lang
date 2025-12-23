@@ -227,7 +227,9 @@ aliases = ["size", "fontSize"]
 [properties.font_family]
 type = "string"
 description = "Font family name"
-default = "Arial"
+default = "Inter"
+default_note = "Inter is the default font across all Rosh targets for consistent look"
+fallback = ["system-ui", "Arial", "sans-serif"]
 aliases = ["font"]
 
 # -----------------------------------------------------------------------------

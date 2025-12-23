@@ -52,10 +52,10 @@
           │                         EMITTERS                                 │
           │                   src/rosh/emitters/                             │
           │                                                                  │
-          │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐          │
-          │  │ phaser.py   │    │ pygame.py   │    │ threejs.py  │          │
-          │  │ (Browser 2D)│    │ (Desktop 2D)│    │ (Browser 3D)│          │
-          │  └─────────────┘    └─────────────┘    └─────────────┘          │
+          │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐│
+          │  │ phaser.py   │  │ pygame.py   │  │ threejs.py  │  │ godot.py    ││
+          │  │ (Browser 2D)│  │ (Desktop 2D)│  │ (Browser 3D)│  │ (Godot 4.x) ││
+          │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘│
           │                                                                  │
           │  Consumes:                                                       │
           │  - IR_Program (from parser)                                      │
@@ -179,7 +179,7 @@ The audit tool (`src/rosh/spec/audit.py`) verifies:
 
 ### Adding a new console command:
 1. Add to `rosh-console.toml`
-2. Implement in ALL emitters (`phaser.py`, `pygame.py`, `threejs.py`)
+2. Implement in ALL emitters (`phaser.py`, `pygame.py`, `threejs.py`, `godot.py`)
 3. Run audit to verify parity
 
 ### Adding a new object property:
@@ -244,9 +244,95 @@ All voice-enabled consoles apply these corrections (from `rosh-voice.toml`):
 
 ---
 
+---
+
+## Godot Emitter Status (v0.2.0)
+
+The Godot emitter (`src/rosh/emitters/godot.py`) targets Godot 4.x with GDScript output.
+
+### What Works
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| 3D mode (default) | ✅ Working | Camera3D, DirectionalLight3D, ground plane |
+| 2D/arcade mode | ✅ Working | `mode = "arcade"` in metadata |
+| Text objects (Label3D) | ✅ Working | font_size, color, billboard mode |
+| WASD camera controls | ✅ Working | + Q/E for up/down, right-click mouse look |
+| Console commands | ✅ Working | list, look, set, hide, show, create, delete, move, help |
+| Create with modifiers | ✅ Working | `create big blue sphere` → name=sphere, color=blue |
+| Runtime objects | ✅ Working | Create/delete/move objects via console |
+| Undo/redo (3D) | ✅ Working | For create/delete operations |
+
+### What Doesn't Work / Known Issues
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Console anchor warnings | ⚠️ Cosmetic | Non-critical Godot UI warnings at startup |
+| `create text name` syntax | ❌ Broken | Parser interprets as clone; use `create object name` with `set text` |
+| Phaser parity | ⚠️ Partial | Phaser needs modifier parsing update |
+| Animation/tweening | ❌ Not implemented | No `on start` animation support yet |
+| Sound/audio | ❌ Not implemented | |
+| Collision detection | ❌ Not implemented | |
+
+### Running Godot Output
+
+```bash
+# Build for Godot
+uv run python -c "
+from rosh.parser import Parser
+from rosh.lexer import Lexer
+from rosh.ir_transformer import transform_ast_to_ir
+from rosh.emitters.godot import GodotEmitter
+# ... emit to /tmp/godot-intro/main.gd
+"
+
+# Run in Godot
+godot --path /tmp/godot-intro/
+```
+
+---
+
+## Future: Tighter Specifications (LLVM-style)
+
+Currently our specs define commands and properties but lack **edge case coverage**. LLVM's approach:
+
+1. **Formal Grammar** - Every syntax variation explicitly defined
+2. **Lit Tests** - Small test cases with embedded expected output
+3. **Edge Cases Documented** - What happens with invalid input, boundary values
+
+### Proposed Improvements
+
+1. **Add test cases to specs** (like LLVM's FileCheck):
+```toml
+[commands.create.tests]
+input = "create blue box"
+expect_name = "box"
+expect_color = "blue"
+
+input = "create big red ball"
+expect_name = "ball"
+expect_shape = "sphere"
+expect_size = 2.0
+
+input = "create a the big"  # all modifiers, no name
+expect_name = "object"      # falls back to default
+```
+
+2. **Parity tests in audit** - Run same commands through all emitters, compare behavior
+
+3. **Property validation** - Define valid ranges, types, defaults with examples
+
+Sources:
+- [LLVM Language Reference Manual](https://llvm.org/docs/LangRef.html)
+- [LLVM Testing Infrastructure Guide](https://llvm.org/docs/TestingGuide.html)
+
+---
+
 ## Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.2.0 | 2024-12-22 | Initial spec chain documentation |
 | 0.2.0 | 2024-12-22 | Added voice support matrix and limitations |
+| 0.2.0 | 2024-12-23 | Added Godot emitter to chain |
+| 0.2.0 | 2024-12-23 | Added Godot status and LLVM-style spec proposal |

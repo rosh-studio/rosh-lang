@@ -26,7 +26,7 @@ See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
 # Adding features here without IR changes violates the versioning policy.
 # See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
 # =============================================================================
-IMPLEMENTS_IR_VERSION = "0.2.0"
+IMPLEMENTS_IR_VERSION = "0.2.1"
 
 import json
 from typing import Dict, Any, Set, List

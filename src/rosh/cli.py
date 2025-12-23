@@ -1654,6 +1654,7 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
     from .emitters.phaser import PhaserEmitter
     from .emitters.pygame import PygameEmitter
     from .emitters.threejs import ThreeJSEmitter
+    from .emitters.godot import GodotEmitter
     from .errors import RoshError
 
     try:
@@ -1767,6 +1768,28 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             print(f"   cd {output_dir} && python3 -m http.server 8000", file=sys.stderr)
             print(f"   open http://localhost:8000", file=sys.stderr)
 
+        elif target == 'godot':
+            # Transform AST to IR, then emit Godot GDScript
+            ir = transform_ast_to_ir(
+                program,
+                canvas_width=meta.get('canvas', {}).get('width', 800),
+                canvas_height=meta.get('canvas', {}).get('height', 600)
+            )
+            emitter = GodotEmitter(ir, meta=meta)
+            gd_code = emitter.emit()
+            project_godot = emitter.emit_project_godot()
+            main_tscn = emitter.emit_main_tscn()
+            generate_godot_output(gd_code, project_godot, main_tscn, output_dir)
+
+            # Copy assets if requested
+            if copy_assets and emitter.sprite_assets:
+                copy_sprite_assets(path, Path(output_dir), emitter.sprite_assets)
+
+            print(f"✅ Build successful!", file=sys.stderr)
+            print(f"📁 Output: {output_dir}", file=sys.stderr)
+            print(f"🎮 To run:", file=sys.stderr)
+            print(f"   Open in Godot 4.x: godot {output_dir}/project.godot", file=sys.stderr)
+
         else:
             print(f"Error: Unknown target: {target}", file=sys.stderr)
             sys.exit(1)
@@ -1830,6 +1853,42 @@ def generate_pygame_output(py_code: str, output_dir: str):
     (output_path / "assets").mkdir(exist_ok=True)
 
 
+def generate_godot_output(gd_code: str, project_godot: str, main_tscn: str, output_dir: str):
+    """Generate Godot output files
+
+    Creates:
+    - project.godot (Godot project file)
+    - main.tscn (main scene file)
+    - main.gd (generated GDScript)
+    - assets/ (placeholder directory)
+
+    Args:
+        gd_code: Generated GDScript code
+        project_godot: project.godot content
+        main_tscn: main.tscn content
+        output_dir: Directory for output files
+    """
+    from pathlib import Path
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Write project.godot
+    with open(output_path / "project.godot", "w") as f:
+        f.write(project_godot)
+
+    # Write main.tscn
+    with open(output_path / "main.tscn", "w") as f:
+        f.write(main_tscn)
+
+    # Write main.gd
+    with open(output_path / "main.gd", "w") as f:
+        f.write(gd_code)
+
+    # Create assets directory
+    (output_path / "assets").mkdir(exist_ok=True)
+
+
 def generate_threejs_output(js_code: str, output_dir: str, capabilities: dict | None = None):
     """Generate Three.js output files
 
@@ -1884,8 +1943,8 @@ def main():
         # Build subcommand
         build_parser = subparsers.add_parser('build', help='Transpile Rosh code to target platform')
         build_parser.add_argument('file', help='Rosh file to transpile')
-        build_parser.add_argument('--target', required=True, choices=['phaser', 'pygame', 'threejs'],
-                                  help='Target platform (phaser, pygame, threejs)')
+        build_parser.add_argument('--target', required=True, choices=['phaser', 'pygame', 'threejs', 'godot'],
+                                  help='Target platform (phaser, pygame, threejs, godot)')
         build_parser.add_argument('--output', default='dist/',
                                   help='Output directory (default: dist/)')
         build_parser.add_argument('--copy-assets', action='store_true',

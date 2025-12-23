@@ -12,6 +12,11 @@ description = "Rosh 3D properties specification"
 status = "draft"
 experimental = true
 
+[meta.mode_fallback]
+description = "Rosh programs can specify mode='arcade' to use 2D rendering instead"
+arcade_mode = "When mode='arcade' is set in program metadata, fall back to 2D spec"
+default = "3D mode is the default for programs without explicit mode setting"
+
 # =============================================================================
 # OBJECT TYPES
 # =============================================================================
@@ -242,6 +247,41 @@ type = "string"
 description = "Which side(s) to render"
 default = "front"
 values = ["front", "back", "both"]
+
+# =============================================================================
+# TEXT PROPERTIES (for text3d type)
+# =============================================================================
+
+[properties.text]
+type = "string"
+description = "Text content for 3D text objects"
+applies_to = ["text3d"]
+aliases = ["content", "label"]
+
+[properties.font_family]
+type = "string"
+description = "Font family name"
+default = "Inter"
+default_note = "Inter is the default font across all Rosh targets for consistent look"
+fallback = ["system-ui", "Arial", "sans-serif"]
+applies_to = ["text3d"]
+aliases = ["font"]
+
+[properties.font_size]
+type = "number"
+description = "Font size in world units"
+default = 1.0
+unit = "world_units"
+applies_to = ["text3d"]
+aliases = ["size", "fontSize"]
+
+[properties.text_align]
+type = "string"
+description = "Text alignment"
+default = "center"
+values = ["left", "center", "right"]
+applies_to = ["text3d"]
+aliases = ["align"]
 
 # =============================================================================
 # TEXTURE PROPERTIES

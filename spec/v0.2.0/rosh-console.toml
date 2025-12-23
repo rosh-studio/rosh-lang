@@ -114,14 +114,27 @@ required = true
 example = "show enemy"
 
 [commands.create]
-syntax = "create <name> [at <x> <y>]"
+syntax = "create [modifiers...] <name> [at <x> <y>]"
 aliases = []
 description = "Create a new object at runtime"
 required = true
 examples = [
     "create box",
     "create ball at 100 200",
+    "create blue box",
+    "create big red ball",
 ]
+modifiers = [
+    { type = "color", words = ["red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", "orange", "purple", "pink", "gray"] },
+    { type = "size", words = ["big", "large", "small", "tiny"] },
+    { type = "shape", words = ["ball", "sphere", "cube", "box", "cylinder"] },
+]
+parsing = """
+Parse modifiers from the description, name is the LAST non-modifier word:
+  'create blue box' → name='box', color=blue
+  'create big red ball' → name='ball', color=red, size=big
+  'create thing' → name='thing', defaults applied
+"""
 behavior = [
     "If name exists, auto-number: box, box2, box3...",
     "Default position is screen/world center",

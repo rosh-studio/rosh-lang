@@ -3,7 +3,7 @@
 # Deploy Demos Script
 # =============================================================================
 #
-# Builds all demos for Phaser (web), Three.js (web 3D), and Pygame (desktop).
+# Builds all demos for Phaser (web), Three.js (web 3D), Pygame (desktop), and Godot.
 #
 # USAGE:
 #   cd rosh-lang
@@ -13,6 +13,7 @@
 #   Phaser (browser)  → rosh.cloud/demos/*-phaser/     (for web upload)
 #   Three.js (browser) → rosh.cloud/demos/*-threejs/   (for web upload)
 #   Pygame (desktop)  → rosh.cloud/dist/*-pygame/      (local testing only)
+#   Godot (desktop)   → rosh.cloud/dist/*-godot/       (local testing only)
 #
 # AFTER RUNNING:
 #   Upload rosh.cloud/demos/ to your web server (not dist/)
@@ -119,6 +120,73 @@ uv run rosh build demos/block-pusher/game.rosh \
     --output "$ROSH_CLOUD/dist/block-pusher-pygame/" \
     --copy-assets
 
+# =============================================================================
+# GODOT BUILDS (Desktop - local testing only)
+# =============================================================================
+
+echo ""
+echo "🎮 GODOT BUILDS (local testing only)"
+echo ""
+
+GODOT_INTRO_DIR="$ROSH_CLOUD/dist/rosh-intro-godot"
+mkdir -p "$GODOT_INTRO_DIR"
+
+echo "📦 Building rosh-intro (Godot)..."
+uv run python -c "
+from rosh.parser import Parser
+from rosh.lexer import Lexer
+from rosh.ir_transformer import transform_ast_to_ir
+from rosh.emitters.godot import GodotEmitter
+
+# Read the source
+with open('demos/rosh-intro/game.rosh', 'r') as f:
+    source = f.read()
+
+# Parse and transform
+lexer = Lexer(source)
+tokens = lexer.tokenize()
+parser = Parser(tokens)
+ast = parser.parse()
+ir = transform_ast_to_ir(ast)
+
+# Emit Godot
+emitter = GodotEmitter(ir)
+gd_code = emitter.emit()
+
+# Write outputs
+with open('$GODOT_INTRO_DIR/main.gd', 'w') as f:
+    f.write(gd_code)
+
+with open('$GODOT_INTRO_DIR/main.tscn', 'w') as f:
+    f.write('''[gd_scene load_steps=2 format=3]
+
+[ext_resource type=\"Script\" path=\"res://main.gd\" id=\"1\"]
+
+[node name=\"Main\" type=\"Node3D\"]
+script = ExtResource(\"1\")
+''')
+
+with open('$GODOT_INTRO_DIR/project.godot', 'w') as f:
+    f.write('''[gd_resource type=\"ProjectSettings\" format=3]
+
+config_version=5
+
+[application]
+config/name=\"Rosh Intro\"
+run/main_scene=\"res://main.tscn\"
+config/features=PackedStringArray(\"4.2\")
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
+
+[rendering]
+renderer/rendering_method=\"forward_plus\"
+''')
+
+print('  Created: main.gd, main.tscn, project.godot')
+"
+
 echo ""
 echo "=== All demos built! ==="
 echo ""
@@ -137,5 +205,11 @@ echo "  $ROSH_CLOUD/dist/rosh-intro-pygame/"
 echo "  $ROSH_CLOUD/dist/space-shooter-pygame/"
 echo "  $ROSH_CLOUD/dist/block-pusher-pygame/"
 echo ""
+echo "Godot (local testing - don't upload):"
+echo "  $ROSH_CLOUD/dist/rosh-intro-godot/"
+echo ""
 echo "To run Pygame demos:"
 echo "  python3 $ROSH_CLOUD/dist/space-shooter-pygame/game.py"
+echo ""
+echo "To run Godot demos:"
+echo "  godot --path $ROSH_CLOUD/dist/rosh-intro-godot/"
