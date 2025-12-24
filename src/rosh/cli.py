@@ -447,7 +447,7 @@ COMMAND_USAGE_HINTS = {
     'goto': {
         'message': "Tell me where to go.",
         'examples': [
-            "goto <room>",
+            "goto <space>",
             "goto kitchen",
         ],
     },

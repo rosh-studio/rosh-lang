@@ -497,13 +497,13 @@ class Interpreter:
             'save': 'Save state to a JSON file.\n  save <filepath>',
             'eval': 'Evaluate Rosh code from a string.\n  eval <code_string>',
 
-            # MUD commands
-            'goto': 'Move to a room or follow an exit.\n  goto <room>  or  goto <direction>  (alias: go)',
-            'go': 'Alias for goto.\n  go <room>  or  go <direction>',
-            'look': 'Display current room description.\n  look  (alias: l)',
+            # Navigation commands
+            'goto': 'Move to a space or follow an exit.\n  goto <space>  or  goto <direction>  (alias: go)',
+            'go': 'Alias for goto.\n  go <space>  or  go <direction>',
+            'look': 'Display current space description.\n  look  (alias: l)',
             'l': 'Alias for look.',
-            'connect': 'Connect two rooms bidirectionally.\n  connect <room1> <direction> <room2>  (alias: link)',
-            'link': 'Alias for connect.\n  link <room1> <direction> <room2>',
+            'connect': 'Connect two spaces bidirectionally.\n  connect <space1> <direction> <space2>  (alias: link)',
+            'link': 'Alias for connect.\n  link <space1> <direction> <space2>',
 
             # AI integration
             'prompt': 'Send a prompt to AI.\n  prompt <message> into <var>\n  prompt exec <message> - Execute AI response as code\n  prompt <message> using <vars> into <var>',
@@ -3604,10 +3604,10 @@ Focus on the specific syntax or concept they need to correct."""
         room_obj = self.current_env.get(node.room)
 
         if room_obj is None:
-            raise RoshRuntimeError(f"Cannot go to '{node.room}': room does not exist")
+            raise RoshRuntimeError(f"Cannot go to '{node.room}': space does not exist")
 
         if not isinstance(room_obj, RoshObject):
-            raise RoshTypeError(f"Cannot go to '{node.room}': not a room object")
+            raise RoshTypeError(f"Cannot go to '{node.room}': not a valid space")
 
         # Update current-room variable
         if self.current_env.exists('current-room'):
@@ -3671,9 +3671,9 @@ Focus on the specific syntax or concept they need to correct."""
                     self.color_out.print(f"  {prop_name}: {current_value}", style="green")
             return
 
-        # No target - show current room
+        # No target - show current space
         if not self.current_env.exists('current-room'):
-            print("You are nowhere. Use 'goto <room>' to go somewhere.", file=self.output_stream)
+            print("You are nowhere. Use 'goto <space>' to go somewhere.", file=self.output_stream)
             return
 
         current_room_name = self.current_env.get('current-room')
@@ -3710,14 +3710,14 @@ Focus on the specific syntax or concept they need to correct."""
         room2_obj = self.current_env.get(node.room2)
 
         if room1_obj is None:
-            raise RoshRuntimeError(f"Cannot connect: room '{node.room1}' does not exist")
+            raise RoshRuntimeError(f"Cannot connect: space '{node.room1}' does not exist")
         if room2_obj is None:
-            raise RoshRuntimeError(f"Cannot connect: room '{node.room2}' does not exist")
+            raise RoshRuntimeError(f"Cannot connect: space '{node.room2}' does not exist")
 
         if not isinstance(room1_obj, RoshObject):
-            raise RoshTypeError(f"Cannot connect: '{node.room1}' is not a room")
+            raise RoshTypeError(f"Cannot connect: '{node.room1}' is not a valid space")
         if not isinstance(room2_obj, RoshObject):
-            raise RoshTypeError(f"Cannot connect: '{node.room2}' is not a room")
+            raise RoshTypeError(f"Cannot connect: '{node.room2}' is not a valid space")
 
         # Map directions to their opposites
         opposite_directions = {

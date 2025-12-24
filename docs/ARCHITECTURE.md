@@ -46,9 +46,9 @@ Domain-specific concepts are provided through **importable libraries**:
 The MUD (Multi-User Dungeon) library provides game-specific functionality:
 
 **Spatial Commands:**
-- `goto <room>` - Move to a room
-- `look [object]` - Examine current room or object
-- `connect <room1> <direction> <room2>` - Link rooms
+- `goto <space>` - Move to a space
+- `look [object]` - Examine current space or object
+- `connect <space1> <direction> <space2>` - Link spaces
 
 **Templates:**
 - `room` - Locations with exits (north, south, east, west, up, down)
@@ -58,7 +58,7 @@ The MUD (Multi-User Dungeon) library provides game-specific functionality:
 
 ### Design Rationale
 
-**Why rooms are NOT core language features:**
+**Why spaces are NOT core language features:**
 
 1. **General Purpose**: Rosh can be used for:
    - Data processing and transformation
