@@ -187,6 +187,75 @@ renderer/rendering_method=\"forward_plus\"
 print('  Created: main.gd, main.tscn, project.godot')
 "
 
+# Space Shooter (Godot) - 2D Arcade with sprites
+GODOT_SHOOTER_DIR="$ROSH_CLOUD/projects/space-shooter-godot"
+mkdir -p "$GODOT_SHOOTER_DIR"
+
+echo "📦 Building space-shooter (Godot)..."
+uv run python -c "
+from rosh.parser import Parser
+from rosh.lexer import Lexer
+from rosh.ir_transformer import transform_ast_to_ir
+from rosh.emitters.godot import GodotEmitter
+import shutil
+
+# Read the source
+with open('demos/space-shooter/game.rosh', 'r') as f:
+    source = f.read()
+
+# Parse and transform
+lexer = Lexer(source)
+tokens = lexer.tokenize()
+parser = Parser(tokens)
+ast = parser.parse()
+ir = transform_ast_to_ir(ast)
+
+# Emit Godot
+emitter = GodotEmitter(ir)
+gd_code = emitter.emit()
+
+# Write outputs
+with open('$GODOT_SHOOTER_DIR/main.gd', 'w') as f:
+    f.write(gd_code)
+
+with open('$GODOT_SHOOTER_DIR/main.tscn', 'w') as f:
+    f.write('''[gd_scene load_steps=2 format=3]
+
+[ext_resource type=\"Script\" path=\"res://main.gd\" id=\"1\"]
+
+[node name=\"Main\" type=\"Node2D\"]
+script = ExtResource(\"1\")
+''')
+
+with open('$GODOT_SHOOTER_DIR/project.godot', 'w') as f:
+    f.write('''config_version=5
+
+[application]
+config/name=\"Space Shooter\"
+run/main_scene=\"res://main.tscn\"
+config/features=PackedStringArray(\"4.5\")
+
+[display]
+window/size/viewport_width=800
+window/size/viewport_height=600
+
+[rendering]
+renderer/rendering_method=\"gl_compatibility\"
+''')
+
+print('  Created: main.gd, main.tscn, project.godot')
+"
+
+# Copy sprite assets
+echo "  Copying sprite assets..."
+cp "$ROSH_CLOUD/demos/space-shooter-phaser/assets/player.png" "$GODOT_SHOOTER_DIR/"
+cp "$ROSH_CLOUD/demos/space-shooter-phaser/assets/enemyShip.png" "$GODOT_SHOOTER_DIR/"
+cp "$ROSH_CLOUD/demos/space-shooter-phaser/assets/laserGreen.png" "$GODOT_SHOOTER_DIR/"
+cp "$ROSH_CLOUD/demos/space-shooter-phaser/assets/laser1.ogg" "$GODOT_SHOOTER_DIR/"
+cp "$ROSH_CLOUD/demos/space-shooter-phaser/assets/lose1.ogg" "$GODOT_SHOOTER_DIR/"
+cp "$ROSH_CLOUD/demos/space-shooter-phaser/assets/lose3.ogg" "$GODOT_SHOOTER_DIR/"
+echo "  Assets copied!"
+
 echo ""
 echo "=== All demos built! ==="
 echo ""
@@ -205,11 +274,12 @@ echo "  $ROSH_CLOUD/dist/rosh-intro-pygame/"
 echo "  $ROSH_CLOUD/dist/space-shooter-pygame/"
 echo "  $ROSH_CLOUD/dist/block-pusher-pygame/"
 echo ""
-echo "Godot (local testing - don't upload):"
+echo "Godot projects (require Godot to run):"
 echo "  $ROSH_CLOUD/dist/rosh-intro-godot/"
+echo "  $ROSH_CLOUD/projects/space-shooter-godot/"
 echo ""
 echo "To run Pygame demos:"
 echo "  python3 $ROSH_CLOUD/dist/space-shooter-pygame/game.py"
 echo ""
-echo "To run Godot demos:"
-echo "  godot --path $ROSH_CLOUD/dist/rosh-intro-godot/"
+echo "To run Godot projects:"
+echo "  open -a Godot $ROSH_CLOUD/projects/space-shooter-godot/project.godot"

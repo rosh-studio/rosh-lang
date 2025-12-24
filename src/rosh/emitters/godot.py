@@ -70,6 +70,7 @@ class GodotEmitter(BaseEmitter):
         self.continuous_keys: Dict[str, List[list]] = {}
         self.update_handlers: List[list] = []
         self.text_objects: Set[str] = set()  # Objects with text property
+        self.sprite_objects: Dict[str, str] = {}  # object_name -> sprite_file
         self.has_meta = False  # Whether meta object is used
 
         # 3D vs 2D mode - default is 3D, arcade mode is 2D
@@ -99,6 +100,7 @@ class GodotEmitter(BaseEmitter):
                 sprite_val = obj.properties['sprite']
                 if sprite_val.type == 'string':
                     self.sprite_assets.add(sprite_val.value)
+                    self.sprite_objects[obj.name] = sprite_val.value
 
         # Detect meta object usage
         if self.ir.init_actions:
@@ -345,6 +347,15 @@ script = ExtResource("1")
             self.write("var _font: Font")
             self.write_blank()
 
+        # Sprite textures
+        if self.sprite_assets:
+            self.write_comment("Sprite textures")
+            for sprite_file in sorted(self.sprite_assets):
+                # Create a safe variable name from the sprite file
+                var_name = "_tex_" + sprite_file.replace('.', '_').replace('-', '_')
+                self.write(f"var {var_name}: Texture2D")
+            self.write_blank()
+
         # REPL Console
         self.write_comment("REPL Console")
         self.write("var _console_visible: bool = false")
@@ -365,6 +376,14 @@ script = ExtResource("1")
         if self.text_objects:
             self.write_comment("Load default font")
             self.write("_font = ThemeDB.fallback_font")
+            self.write_blank()
+
+        # Load sprite textures
+        if self.sprite_assets:
+            self.write_comment("Load sprite textures")
+            for sprite_file in sorted(self.sprite_assets):
+                var_name = "_tex_" + sprite_file.replace('.', '_').replace('-', '_')
+                self.write(f'{var_name} = load("res://{sprite_file}")')
             self.write_blank()
 
         # Set up REPL console
@@ -393,8 +412,14 @@ script = ExtResource("1")
             self.write(f"if {obj.name}_visible:")
             self.indent()
             if obj.name in self.text_objects:
-                # Text object - use draw_string
-                self.write(f"draw_string(_font, Vector2({obj.name}_x, {obj.name}_y), {obj.name}_text, HORIZONTAL_ALIGNMENT_CENTER, -1, {obj.name}_font_size, {obj.name}_color)")
+                # Text object - use draw_string with full width for centering
+                canvas_width = self.ir.metadata.canvas_width
+                self.write(f"draw_string(_font, Vector2(0, {obj.name}_y), {obj.name}_text, HORIZONTAL_ALIGNMENT_CENTER, {canvas_width}, {obj.name}_font_size, {obj.name}_color)")
+            elif obj.name in self.sprite_objects:
+                # Sprite object - use draw_texture
+                sprite_file = self.sprite_objects[obj.name]
+                tex_var = "_tex_" + sprite_file.replace('.', '_').replace('-', '_')
+                self.write(f"draw_texture({tex_var}, Vector2({obj.name}_x - {obj.name}_w/2, {obj.name}_y - {obj.name}_h/2))")
             else:
                 # Shape object - use draw_rect
                 self.write(f"draw_rect(Rect2({obj.name}_x - {obj.name}_w/2, {obj.name}_y - {obj.name}_h/2, {obj.name}_w, {obj.name}_h), {obj.name}_color)")
@@ -424,7 +449,9 @@ script = ExtResource("1")
             self.indent()
             for handler_lines in handlers:
                 for line in handler_lines:
-                    self.write(line)
+                    # Handle multi-line output (e.g., conditionals)
+                    for subline in line.split('\n'):
+                        self.write(subline)
             self.dedent()
 
         # Update handlers
@@ -543,7 +570,9 @@ script = ExtResource("1")
             self.indent()
             for handler_lines in handlers:
                 for line in handler_lines:
-                    self.write(line)
+                    # Handle multi-line output (e.g., conditionals)
+                    for subline in line.split('\n'):
+                        self.write(subline)
             self.dedent()
 
         self.dedent()
@@ -937,7 +966,7 @@ script = ExtResource("1")
 
     def _emit_function(self, func: IR_Function):
         """Emit a user-defined function."""
-        params = ", ".join(func.parameters) if func.parameters else ""
+        params = ", ".join(func.params) if func.params else ""
         self.write(f"func {func.name}({params}):")
         self.indent()
 
@@ -946,7 +975,9 @@ script = ExtResource("1")
                 if action:
                     code = self.emit_action(action)
                     if code:
-                        self.write(code)
+                        # Handle multi-line output (e.g., conditionals)
+                        for subline in code.split('\n'):
+                            self.write(subline)
         else:
             self.write("pass")
 
@@ -998,6 +1029,12 @@ script = ExtResource("1")
         elif action.type == 'call_function':
             func_name = action.params.get('name', '')
             args = action.params.get('arguments', [])
+            args_str = ", ".join(str(self._emit_value(a)) for a in args)
+            return f"{func_name}({args_str})"
+        elif action.type == 'call':
+            # IR uses 'call' with 'function' and 'args' params
+            func_name = action.params.get('function', '')
+            args = action.params.get('args', [])
             args_str = ", ".join(str(self._emit_value(a)) for a in args)
             return f"{func_name}({args_str})"
         return ""
@@ -1133,7 +1170,8 @@ script = ExtResource("1")
                 op = self._map_operator(expr.operator)
                 return f"{left} {op} {right}"
             elif expr.type == 'unary_op':
-                operand = self.emit_expression(expr.left)
+                # Unary operand is stored in expr.right (not expr.left)
+                operand = self.emit_expression(expr.right)
                 op = self._map_operator(expr.operator)
                 return f"{op}{operand}"
         elif isinstance(expr, IR_Value):
@@ -1155,7 +1193,13 @@ script = ExtResource("1")
             val = obj.properties[prop]
             if val.type == 'percentage':
                 return val.value
-            return float(val.value)
+            # Handle case where value is an expression (can't evaluate statically)
+            if hasattr(val.value, 'type'):  # It's an IR_Expression
+                return default
+            try:
+                return float(val.value)
+            except (TypeError, ValueError):
+                return default
         return default
 
     def _get_bool_prop(self, obj: IR_Object, prop: str, default: bool) -> bool:
