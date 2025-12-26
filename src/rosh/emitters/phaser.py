@@ -624,7 +624,7 @@ class PhaserEmitter(BaseEmitter):
         self.write("style.textContent = `")
         self.write("  #rosh-console-header { padding: 5px 10px; color: #6cf; border-bottom: 1px solid #333; }")
         self.write("  #rosh-console-output { height: 140px; overflow-y: auto; padding: 5px 10px; }")
-        self.write("  #rosh-console-output div { margin: 2px 0; }")
+        self.write("  #rosh-console-output div { display: block; margin: 2px 0; }")
         self.write("  #rosh-console-output .error { color: #f66; }")
         self.write("  #rosh-console-output .info { color: #6cf; }")
         self.write("  #rosh-console-output .dim { color: #666; }")
