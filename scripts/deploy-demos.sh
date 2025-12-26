@@ -10,13 +10,13 @@
 #   ./scripts/deploy-demos.sh
 #
 # WHAT IT DOES:
-#   Phaser (browser)  → rosh.cloud/demos/*-phaser/     (for web upload)
-#   Three.js (browser) → rosh.cloud/demos/*-threejs/   (for web upload)
-#   Pygame (desktop)  → rosh.cloud/dist/*-pygame/      (local testing only)
-#   Godot (desktop)   → rosh.cloud/dist/*-godot/       (local testing only)
+#   Phaser (browser)  → rosh-portal/static/demos/*-phaser/   (served by Flask)
+#   Three.js (browser) → rosh-portal/static/demos/*-threejs/ (served by Flask)
+#   Pygame (desktop)  → rosh-portal/static/dist/*-pygame/    (local testing only)
+#   Godot (desktop)   → rosh-portal/static/dist/*-godot/     (local testing only)
 #
 # AFTER RUNNING:
-#   Upload rosh.cloud/demos/ to your web server (not dist/)
+#   Commit and push to deploy via Railway
 #
 # =============================================================================
 
@@ -24,7 +24,7 @@ set -e  # Exit on error
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROSH_LANG="$(dirname "$SCRIPT_DIR")"
-ROSH_CLOUD="/Users/rdubar/dev/rosh/rosh.cloud"
+ROSH_PORTAL="/Users/rdubar/dev/rosh/rosh-portal/static"
 
 echo "=== Deploying Rosh Demos ==="
 echo ""
@@ -41,21 +41,21 @@ echo ""
 echo "📦 Building rosh-intro (Phaser)..."
 uv run rosh build demos/rosh-intro/game.rosh \
     --target phaser \
-    --output "$ROSH_CLOUD/demos/rosh-intro-phaser/" \
+    --output "$ROSH_PORTAL/demos/rosh-intro-phaser/" \
     --copy-assets
 
 echo ""
 echo "📦 Building space-shooter (Phaser)..."
 uv run rosh build demos/space-shooter/game.rosh \
     --target phaser \
-    --output "$ROSH_CLOUD/demos/space-shooter-phaser/" \
+    --output "$ROSH_PORTAL/demos/space-shooter-phaser/" \
     --copy-assets
 
 echo ""
 echo "📦 Building block-pusher (Phaser)..."
 uv run rosh build demos/block-pusher/game.rosh \
     --target phaser \
-    --output "$ROSH_CLOUD/demos/block-pusher-phaser/" \
+    --output "$ROSH_PORTAL/demos/block-pusher-phaser/" \
     --copy-assets
 
 # =============================================================================
@@ -69,25 +69,25 @@ echo ""
 echo "📦 Building rosh-intro (Three.js)..."
 uv run rosh build demos/rosh-intro/game.rosh \
     --target threejs \
-    --output "$ROSH_CLOUD/demos/rosh-intro-threejs/" \
+    --output "$ROSH_PORTAL/demos/rosh-intro-threejs/" \
     --copy-assets
-cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_CLOUD/demos/rosh-intro-threejs/"
+cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/rosh-intro-threejs/"
 
 echo ""
 echo "📦 Building space-shooter (Three.js)..."
 uv run rosh build demos/space-shooter/game.rosh \
     --target threejs \
-    --output "$ROSH_CLOUD/demos/space-shooter-threejs/" \
+    --output "$ROSH_PORTAL/demos/space-shooter-threejs/" \
     --copy-assets
-cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_CLOUD/demos/space-shooter-threejs/"
+cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/space-shooter-threejs/"
 
 echo ""
 echo "📦 Building block-pusher (Three.js)..."
 uv run rosh build demos/block-pusher/game.rosh \
     --target threejs \
-    --output "$ROSH_CLOUD/demos/block-pusher-threejs/" \
+    --output "$ROSH_PORTAL/demos/block-pusher-threejs/" \
     --copy-assets
-cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_CLOUD/demos/block-pusher-threejs/"
+cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/block-pusher-threejs/"
 
 # =============================================================================
 # PYGAME BUILDS (Desktop - local testing only)
@@ -98,26 +98,26 @@ echo "🐍 PYGAME BUILDS (local testing only)"
 echo ""
 
 # Create dist directory
-mkdir -p "$ROSH_CLOUD/dist"
+mkdir -p "$ROSH_PORTAL/dist"
 
 echo "📦 Building rosh-intro (Pygame)..."
 uv run rosh build demos/rosh-intro/game.rosh \
     --target pygame \
-    --output "$ROSH_CLOUD/dist/rosh-intro-pygame/" \
+    --output "$ROSH_PORTAL/dist/rosh-intro-pygame/" \
     --copy-assets
 
 echo ""
 echo "📦 Building space-shooter (Pygame)..."
 uv run rosh build demos/space-shooter/game.rosh \
     --target pygame \
-    --output "$ROSH_CLOUD/dist/space-shooter-pygame/" \
+    --output "$ROSH_PORTAL/dist/space-shooter-pygame/" \
     --copy-assets
 
 echo ""
 echo "📦 Building block-pusher (Pygame)..."
 uv run rosh build demos/block-pusher/game.rosh \
     --target pygame \
-    --output "$ROSH_CLOUD/dist/block-pusher-pygame/" \
+    --output "$ROSH_PORTAL/dist/block-pusher-pygame/" \
     --copy-assets
 
 # =============================================================================
@@ -128,7 +128,7 @@ echo ""
 echo "🎮 GODOT BUILDS (local testing only)"
 echo ""
 
-GODOT_INTRO_DIR="$ROSH_CLOUD/dist/rosh-intro-godot"
+GODOT_INTRO_DIR="$ROSH_PORTAL/dist/rosh-intro-godot"
 mkdir -p "$GODOT_INTRO_DIR"
 
 echo "📦 Building rosh-intro (Godot)..."
@@ -188,7 +188,7 @@ print('  Created: main.gd, main.tscn, project.godot')
 "
 
 # Space Shooter (Godot) - 2D Arcade with sprites
-GODOT_SHOOTER_DIR="$ROSH_CLOUD/projects/space-shooter-godot"
+GODOT_SHOOTER_DIR="$ROSH_PORTAL/projects/space-shooter-godot"
 mkdir -p "$GODOT_SHOOTER_DIR"
 
 echo "📦 Building space-shooter (Godot)..."
@@ -248,38 +248,38 @@ print('  Created: main.gd, main.tscn, project.godot')
 
 # Copy sprite assets
 echo "  Copying sprite assets..."
-cp "$ROSH_CLOUD/demos/space-shooter-phaser/assets/player.png" "$GODOT_SHOOTER_DIR/"
-cp "$ROSH_CLOUD/demos/space-shooter-phaser/assets/enemyShip.png" "$GODOT_SHOOTER_DIR/"
-cp "$ROSH_CLOUD/demos/space-shooter-phaser/assets/laserGreen.png" "$GODOT_SHOOTER_DIR/"
-cp "$ROSH_CLOUD/demos/space-shooter-phaser/assets/laser1.ogg" "$GODOT_SHOOTER_DIR/"
-cp "$ROSH_CLOUD/demos/space-shooter-phaser/assets/lose1.ogg" "$GODOT_SHOOTER_DIR/"
-cp "$ROSH_CLOUD/demos/space-shooter-phaser/assets/lose3.ogg" "$GODOT_SHOOTER_DIR/"
+cp "$ROSH_PORTAL/demos/space-shooter-phaser/assets/player.png" "$GODOT_SHOOTER_DIR/"
+cp "$ROSH_PORTAL/demos/space-shooter-phaser/assets/enemyShip.png" "$GODOT_SHOOTER_DIR/"
+cp "$ROSH_PORTAL/demos/space-shooter-phaser/assets/laserGreen.png" "$GODOT_SHOOTER_DIR/"
+cp "$ROSH_PORTAL/demos/space-shooter-phaser/assets/laser1.ogg" "$GODOT_SHOOTER_DIR/"
+cp "$ROSH_PORTAL/demos/space-shooter-phaser/assets/lose1.ogg" "$GODOT_SHOOTER_DIR/"
+cp "$ROSH_PORTAL/demos/space-shooter-phaser/assets/lose3.ogg" "$GODOT_SHOOTER_DIR/"
 echo "  Assets copied!"
 
 echo ""
 echo "=== All demos built! ==="
 echo ""
 echo "Phaser (upload these):"
-echo "  $ROSH_CLOUD/demos/rosh-intro-phaser/"
-echo "  $ROSH_CLOUD/demos/space-shooter-phaser/"
-echo "  $ROSH_CLOUD/demos/block-pusher-phaser/"
+echo "  $ROSH_PORTAL/demos/rosh-intro-phaser/"
+echo "  $ROSH_PORTAL/demos/space-shooter-phaser/"
+echo "  $ROSH_PORTAL/demos/block-pusher-phaser/"
 echo ""
 echo "Three.js (upload these):"
-echo "  $ROSH_CLOUD/demos/rosh-intro-threejs/"
-echo "  $ROSH_CLOUD/demos/space-shooter-threejs/"
-echo "  $ROSH_CLOUD/demos/block-pusher-threejs/"
+echo "  $ROSH_PORTAL/demos/rosh-intro-threejs/"
+echo "  $ROSH_PORTAL/demos/space-shooter-threejs/"
+echo "  $ROSH_PORTAL/demos/block-pusher-threejs/"
 echo ""
 echo "Pygame (local testing - don't upload):"
-echo "  $ROSH_CLOUD/dist/rosh-intro-pygame/"
-echo "  $ROSH_CLOUD/dist/space-shooter-pygame/"
-echo "  $ROSH_CLOUD/dist/block-pusher-pygame/"
+echo "  $ROSH_PORTAL/dist/rosh-intro-pygame/"
+echo "  $ROSH_PORTAL/dist/space-shooter-pygame/"
+echo "  $ROSH_PORTAL/dist/block-pusher-pygame/"
 echo ""
 echo "Godot projects (require Godot to run):"
-echo "  $ROSH_CLOUD/dist/rosh-intro-godot/"
-echo "  $ROSH_CLOUD/projects/space-shooter-godot/"
+echo "  $ROSH_PORTAL/dist/rosh-intro-godot/"
+echo "  $ROSH_PORTAL/projects/space-shooter-godot/"
 echo ""
 echo "To run Pygame demos:"
-echo "  python3 $ROSH_CLOUD/dist/space-shooter-pygame/game.py"
+echo "  python3 $ROSH_PORTAL/dist/space-shooter-pygame/game.py"
 echo ""
 echo "To run Godot projects:"
-echo "  open -a Godot $ROSH_CLOUD/projects/space-shooter-godot/project.godot"
+echo "  open -a Godot $ROSH_PORTAL/projects/space-shooter-godot/project.godot"
