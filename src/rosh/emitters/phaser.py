@@ -17,6 +17,7 @@ See: rosh-dev/proposals/ROSH-IR-SPECIFICATION.md
 import re
 from typing import Dict, Any, Set
 from .base import BaseEmitter
+from .. import __version__
 from ..ir import (
     IR_Program, IR_Object, IR_Event, IR_Action, IR_Function,
     IR_Value, IR_Expression, IR_Conditional, IR_Loop
@@ -712,7 +713,8 @@ class PhaserEmitter(BaseEmitter):
         # Voice input
         self._emit_voice_support()
 
-        self.write("roshLog('Rosh Console ready. Type help for commands.', 'info');")
+        self.write(f"roshLog('Rosh v{__version__} | Phaser', 'info');")
+        self.write("roshLog('Type help for commands. Press ` to toggle console.', 'dim');")
 
     def _emit_console_commands(self):
         """Emit console command processing.

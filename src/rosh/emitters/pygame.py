@@ -16,6 +16,7 @@ See: rosh-dev/proposals/ROSH-IR-SPECIFICATION.md
 
 from typing import Dict, Any, Set, List
 from .base import BaseEmitter
+from .. import __version__
 from ..ir import (
     IR_Program, IR_Object, IR_Event, IR_Action, IR_Function,
     IR_Value, IR_Expression, IR_Conditional, IR_Loop
@@ -225,6 +226,8 @@ class PygameEmitter(BaseEmitter):
         self.write("self.console_input = ''")
         self.write("self.console_history = []")
         self.write("self.console_output = []")
+        self.write(f"self.console_output.append('Rosh v{__version__} | Pygame')")
+        self.write("self.console_output.append('Type help for commands. Press ` to toggle console.')")
         self.write("self.console_font = pygame.font.Font(None, 20)")
 
         # Scene/level state

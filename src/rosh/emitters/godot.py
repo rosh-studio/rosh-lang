@@ -17,6 +17,7 @@ See: rosh-dev/proposals/GODOT-EMITTER-PROPOSAL.md
 
 from typing import Dict, Any, Set, List
 from .base import BaseEmitter
+from .. import __version__
 from ..ir import (
     IR_Program, IR_Object, IR_Event, IR_Action, IR_Function,
     IR_Value, IR_Expression, IR_Conditional, IR_Loop
@@ -614,7 +615,8 @@ script = ExtResource("1")
         self.write("_console_output.size = Vector2(get_viewport().size.x - 20, 140)")
         self.write("_console_output.position.x = 10")
         self.write("_console_output.bbcode_enabled = true")
-        self.write('_console_output.text = "[color=cyan]Rosh Console[/color] - Type commands below (` to toggle)\\n"')
+        self.write(f'_console_output.text = "[color=cyan]Rosh v{__version__} | Godot[/color]\\n"')
+        self.write('_console_output.append_text("[color=gray]Type help for commands. Press ` to toggle console.[/color]\\n")')
         self.write("bg.add_child(_console_output)")
         self.write_blank()
 
@@ -763,7 +765,7 @@ script = ExtResource("1")
         self.write_comment("Handle 'clear' command (alias: cls)")
         self.write('if parts[0] == "clear" or parts[0] == "cls":')
         self.indent()
-        self.write('_console_output.text = "[color=cyan]Rosh Console[/color]\\n"')
+        self.write(f'_console_output.text = "[color=cyan]Rosh v{__version__} | Godot[/color]\\n"')
         self.write('return ""')
         self.dedent()
         self.write_blank()
@@ -1591,7 +1593,8 @@ script = ExtResource("1")
         self.write("_console_output.size = Vector2(get_viewport().size.x - 20, 140)")
         self.write("_console_output.position.x = 10")
         self.write("_console_output.bbcode_enabled = true")
-        self.write('_console_output.text = "[color=cyan]Rosh Console (3D)[/color] - Type commands below (` to toggle)\\n"')
+        self.write(f'_console_output.text = "[color=cyan]Rosh v{__version__} | Godot 3D[/color]\\n"')
+        self.write('_console_output.append_text("[color=gray]Type help for commands. Press ` to toggle console.[/color]\\n")')
         self.write("bg.add_child(_console_output)")
         self.write_blank()
 
@@ -1729,7 +1732,7 @@ script = ExtResource("1")
         self.write_comment("Handle 'clear' command (alias: cls)")
         self.write('if parts[0] == "clear" or parts[0] == "cls":')
         self.indent()
-        self.write('_console_output.text = "[color=cyan]Rosh Console (3D)[/color]\\n"')
+        self.write(f'_console_output.text = "[color=cyan]Rosh v{__version__} | Godot 3D[/color]\\n"')
         self.write('return ""')
         self.dedent()
         self.write_blank()

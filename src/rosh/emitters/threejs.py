@@ -2230,7 +2230,8 @@ class ThreeJSEmitter(BaseEmitter):
         self._emit_voice_input()
         self.write_blank()
 
-        self.write(f"log('Rosh Console ready! Rosh v{__version__}. Type help for commands.', 'cyan');")
+        self.write(f"log('Rosh v{__version__} | Three.js', 'cyan');")
+        self.write("log('Type help for commands. Press ` to toggle console.', 'dim');")
 
     def _emit_fuzzy_matching(self):
         """Emit fuzzy matching helpers for typo/voice tolerance."""
