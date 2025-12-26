@@ -656,6 +656,8 @@ class PhaserEmitter(BaseEmitter):
         self.indent()
         self.write("roshConsoleVisible = !roshConsoleVisible;")
         self.write("consoleDiv.style.display = roshConsoleVisible ? 'block' : 'none';")
+        self.write("// Disable Phaser keyboard when console is open so we can type")
+        self.write("game.input.keyboard.enabled = !roshConsoleVisible;")
         self.write("if (roshConsoleVisible) document.getElementById('rosh-console-input').focus();")
         self.dedent()
         self.write("}")
