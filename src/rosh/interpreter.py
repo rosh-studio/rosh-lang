@@ -3063,6 +3063,13 @@ Focus on the specific syntax or concept they need to correct."""
         right = self.eval_expression(node.right)
 
         if node.operator == 'plus':
+            # Auto-coerce mixed types to string with warning
+            if isinstance(left, str) and not isinstance(right, str):
+                print(f"⚠️  Warning: Converting {type(right).__name__} to string for concatenation")
+                return left + str(right)
+            elif isinstance(right, str) and not isinstance(left, str):
+                print(f"⚠️  Warning: Converting {type(left).__name__} to string for concatenation")
+                return str(left) + right
             return left + right
         elif node.operator == 'minus':
             return left - right
