@@ -2047,10 +2047,18 @@ class Parser:
             op_token = self.advance()
 
             if op_token.type == TokenType.DIVIDED:
-                self.expect(TokenType.BY)
+                # Handle "divided by" (two words) or "/" (symbol)
+                if self.current_token().type == TokenType.BY:
+                    self.advance()  # consume 'by'
                 operator = 'divided_by'
             elif op_token.type == TokenType.MODULO:
                 operator = 'modulo'
+            elif op_token.type == TokenType.PLUS:
+                operator = 'plus'
+            elif op_token.type == TokenType.MINUS:
+                operator = 'minus'
+            elif op_token.type == TokenType.TIMES:
+                operator = 'times'
             else:
                 operator = op_token.value
 

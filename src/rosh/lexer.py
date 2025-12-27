@@ -565,9 +565,29 @@ class Lexer:
                 self.advance()
                 continue
 
-            # Minus sign (for negative numbers and unary minus)
+            # Math operators: + - * /
+            if char == '+':
+                self.tokens.append(Token(TokenType.PLUS, '+', self.line, self.column))
+                self.advance()
+                continue
+
             if char == '-':
                 self.tokens.append(Token(TokenType.MINUS, '-', self.line, self.column))
+                self.advance()
+                continue
+
+            if char == '*':
+                self.tokens.append(Token(TokenType.TIMES, '*', self.line, self.column))
+                self.advance()
+                continue
+
+            if char == '/':
+                self.tokens.append(Token(TokenType.DIVIDED, '/', self.line, self.column))
+                self.advance()
+                continue
+
+            if char == '%':
+                self.tokens.append(Token(TokenType.MODULO, '%', self.line, self.column))
                 self.advance()
                 continue
 
