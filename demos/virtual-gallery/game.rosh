@@ -1,0 +1,145 @@
+# =============================================================================
+# VIRTUAL GALLERY - Interactive Museum Demo
+# =============================================================================
+#
+# A demonstration for Glasgow Life showing how visitors could interact
+# with a virtual museum exhibit using voice or text commands.
+#
+# Target: Three.js (3D browser)
+# Run: rosh build demos/virtual-gallery/game.rosh --target threejs --output build/
+#
+# =============================================================================
+
+meta
+    title "Virtual Gallery"
+    author "Rosh"
+    version "0.1.0"
+    description "Interactive museum exhibit - create and explore 3D art"
+end
+
+# -----------------------------------------------------------------------------
+# Gallery Setup - Pre-placed Art Pieces
+# -----------------------------------------------------------------------------
+
+# Central floating sculpture - a spinning blue sphere
+# Using percentages: 50% = center, smaller % = higher position (y inverted)
+create object sculpture
+    set type to "sphere"
+    set x to 50%
+    set y to 50%
+    set z to 0
+    set color to "blue"
+    set size to 2
+    set spin to "0 20 0"
+end
+
+# Orbiting red sphere
+create object orbiter1
+    set type to "sphere"
+    set x to 70%
+    set y to 50%
+    set z to 0
+    set color to "red"
+    set size to 0.5
+    set orbit to "3 30 2"
+end
+
+# Orbiting green sphere
+create object orbiter2
+    set type to "sphere"
+    set x to 30%
+    set y to 50%
+    set z to 0
+    set color to "green"
+    set size to 0.5
+    set orbit to "3 -30 2"
+end
+
+# Orbiting yellow sphere
+create object orbiter3
+    set type to "sphere"
+    set x to 50%
+    set y to 50%
+    set z to 3
+    set color to "yellow"
+    set size to 0.5
+    set orbit to "3 45 2"
+end
+
+# Floating cubes in the gallery corners
+create object cube1
+    set type to "cube"
+    set x to 20%
+    set y to 60%
+    set z to -3
+    set color to "purple"
+    set bounce to "0.5 1"
+    set spin to "0 10 0"
+end
+
+create object cube2
+    set type to "cube"
+    set x to 80%
+    set y to 60%
+    set z to -3
+    set color to "orange"
+    set bounce to "0.5 1.2"
+    set spin to "0 -10 0"
+end
+
+create object cube3
+    set type to "cube"
+    set x to 20%
+    set y to 60%
+    set z to 3
+    set color to "cyan"
+    set pulse to "0.2 0.5"
+end
+
+create object cube4
+    set type to "cube"
+    set x to 80%
+    set y to 60%
+    set z to 3
+    set color to "pink"
+    set pulse to "0.2 0.7"
+end
+
+# Welcome text - positioned above and behind the scene
+# Give each text different z to prevent z-fighting
+create object title
+    set text to "Virtual Gallery"
+    set x to 50%
+    set y to 0%
+    set z to -10
+    set color to "white"
+    set font_size to 64
+end
+
+create object subtitle
+    set text to "Speak or type to create art"
+    set x to 50%
+    set y to 15%
+    set z to -10.1
+    set color to "gray"
+    set font_size to 32
+end
+
+# Floor marker (flat white box)
+create object floor
+    set type to "cube"
+    set x to 50%
+    set y to 80%
+    set z to 0
+    set color to "white"
+    set scale to "20 0.1 20"
+end
+
+# -----------------------------------------------------------------------------
+# Gallery is ready - visitors can now use voice/text commands:
+#   - "create sphere"
+#   - "set sphere color to red"
+#   - "set cube1 spin to 0 30 0"
+#   - "hide sculpture"
+#   - "create text Hello World"
+# -----------------------------------------------------------------------------

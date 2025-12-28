@@ -27,6 +27,9 @@ See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
 # See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
 # =============================================================================
 IMPLEMENTS_IR_VERSION = "0.2.1"
+# NOTE: Python interpreter is at 0.2.3 (spec test infrastructure).
+# Emitters are deliberately behind - they work, but don't have spec testing.
+# Priority: Sync emitters to 0.2.3 when parity tests are implemented.
 
 import json
 from typing import Dict, Any, Set, List
@@ -948,9 +951,10 @@ class ThreeJSEmitter(BaseEmitter):
         # Convert normalized coords to 3D world
         # x: 0-1 maps to roughly -8 to 8
         # y: 0-1 maps to roughly 8 to 0 (inverted, above ground)
+        # z: used directly as world coordinate (not normalized)
         world_x = (x - 0.5) * 16
         world_y = (0.5 - y) * 8 + 2  # Center at y=2 (above ground)
-        world_z = z * 16 if z != 0 else 0
+        world_z = z  # Z is passed through directly as world coordinate
 
         # Get shape type
         shape = 'box'
@@ -3047,23 +3051,24 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const descWords = words.slice(0, -1).filter(w => !knownMods.includes(w) && !shapeWords.includes(w));")
         self.write("const objDescription = descWords.length > 0 ? descWords.join(' ') + ' ' + name : null;")
         self.write("let color = null, size = 1, shape = 'box';")
+        self.write("let userSize = null;")  # Track if user specified a size
         self.write("for (const [c, hex] of Object.entries(colors)) if (desc.includes(c)) color = hex;")
         self.write("const userColor = color;")  # Remember if user specified a color
-        self.write("if (desc.includes('big') || desc.includes('large')) size = 2;")
-        self.write("if (desc.includes('small') || desc.includes('tiny')) size = 0.5;")
+        self.write("if (desc.includes('big') || desc.includes('large')) { size = 2; userSize = 2; }")
+        self.write("if (desc.includes('small') || desc.includes('tiny')) { size = 0.5; userSize = 0.5; }")
         self.write("if (desc.includes('ball') || desc.includes('sphere')) shape = 'sphere';")
         self.write("else if (desc.includes('cylinder') || desc.includes('tube')) shape = 'cylinder';")
-        # Check if object with this name exists - if so, clone it
+        # Check if object with this name exists
         self.write("const existing = scene.getObjectByName(name);")
-        self.write("if (existing) {")
+        # Only clone if NO modifiers specified (user wants exact duplicate)
+        self.write("const hasModifiers = userColor !== null || userSize !== null;")
+        self.write("if (existing && !hasModifiers) {")
         self.indent()
-        self.write("// Clone existing object")
+        self.write("// Clone existing object (no modifiers specified)")
         self.write("let n = 1; while (scene.getObjectByName(name + '-' + n)) n++;")
         self.write("const clone = existing.clone();")
         self.write("clone.name = name + '-' + n;")
         self.write("clone.position.x += 2;")
-        self.write("// Apply user color if specified")
-        self.write("if (userColor !== null && clone.material) { clone.material = clone.material.clone(); clone.material.color.setHex(userColor); }")
         self.write("scene.add(clone);")
         self.write("pushUndo('create ' + clone.name, () => { scene.remove(clone); }, () => { scene.add(clone); });")
         self.write("if (!bulkCreateMode || bulkCreateCount < BULK_LOG_LIMIT) log('Created ' + clone.name + ' (cloned from ' + name + ')', 'ok');")
@@ -3113,6 +3118,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const mesh = new THREE.Mesh(geom, mat);")
         self.write("mesh.name = name;")
         self.write("mesh.userData._type = name;")
+        self.write("mesh.userData._consoleTemplate = { type: 'mesh', shape: shape, size: size, color: color };")
         self.write("if (objDescription) mesh.userData._description = objDescription;")
         self.write("if (preset.scaleX || preset.scaleY || preset.scaleZ) mesh.scale.set(preset.scaleX || 1, preset.scaleY || 1, preset.scaleZ || 1);")
         self.write("mesh.position.set((Math.random()-0.5)*10, size, (Math.random()-0.5)*10);")
@@ -3133,6 +3139,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("if (preset && (preset.scaleX || preset.scaleY || preset.scaleZ)) mesh.scale.set(preset.scaleX || 1, preset.scaleY || 1, preset.scaleZ || 1);")
         self.write("mesh.position.set((Math.random()-0.5)*10, size, (Math.random()-0.5)*10);")
         self.write("mesh.userData._type = name;")
+        self.write("mesh.userData._consoleTemplate = { type: 'mesh', shape: shape, size: size, color: color };")
         self.write("if (objDescription) mesh.userData._description = objDescription;")
         self.write("scene.add(mesh);")
         self.write("pushUndo('create ' + mesh.name, () => { scene.remove(mesh); }, () => { scene.add(mesh); });")
@@ -3341,6 +3348,16 @@ class ThreeJSEmitter(BaseEmitter):
         self.dedent()
         self.write("}")
         self.write("else log('Not found: ' + parts[1], 'err');")
+        self.dedent()
+        self.write("}")
+
+        # Reset scene (clear localStorage and reload)
+        self.write("else if (parts[0] === 'reset' && (parts[1] === 'scene' || parts[1] === 'all')) {")
+        self.indent()
+        self.write("log('Clearing saved data and reloading...', 'warn');")
+        self.write("// Clear all rosh saves from localStorage")
+        self.write("Object.keys(localStorage).filter(k => k.startsWith('rosh_save_')).forEach(k => localStorage.removeItem(k));")
+        self.write("setTimeout(() => location.reload(), 500);")
         self.dedent()
         self.write("}")
 
@@ -3626,7 +3643,26 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("if (singular !== objName) { obj = scene.getObjectByName(singular); if (obj) objName = singular; }")
         self.dedent()
         self.write("}")
-        self.write("if (!obj) { log('Not found: ' + parts[1], 'err'); }")
+        # If object not found, check if this looks like a creation command
+        self.write("if (!obj) {")
+        self.indent()
+        self.write("// Check if user means 'create' - articles, colors, sizes suggest creation")
+        self.write("const articles = ['a', 'an', 'the'];")
+        self.write("const colors = ['red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'white', 'black', 'orange', 'purple', 'pink', 'gray'];")
+        self.write("const sizes = ['big', 'small', 'large', 'tiny', 'huge'];")
+        self.write("const firstWord = parts[1].toLowerCase();")
+        self.write("if (articles.includes(firstWord) || colors.includes(firstWord) || sizes.includes(firstWord)) {")
+        self.indent()
+        # Filter out articles and build create command
+        self.write("const createParts = parts.slice(1).filter(w => !articles.includes(w.toLowerCase()));")
+        self.write("const createCmd = 'create ' + createParts.join(' ');")
+        self.write("log('→ ' + createCmd, 'dim');")
+        self.write("execCommand(createCmd, false);")
+        self.dedent()
+        self.write("}")
+        self.write("else { log('Not found: ' + parts[1] + '. Did you mean: create ' + parts.slice(1).join(' ') + '?', 'err'); }")
+        self.dedent()
+        self.write("}")
         self.write("else {")
         self.indent()
         # make <obj> visible/hidden
@@ -3689,6 +3725,16 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("else { log('Usage: make <obj> <color|visible|big|prop value>', 'err'); }")
         self.dedent()
         self.write("}")
+        self.dedent()
+        self.write("}")
+
+        # Handle "make <word>" (2 words) - treat as create
+        self.write("else if (parts[0] === 'make' && parts[1] && !parts[2]) {")
+        self.indent()
+        self.write("// 'make ball' or 'make yellow' -> create it")
+        self.write("const createCmd = 'create ' + parts[1];")
+        self.write("log('→ ' + createCmd, 'dim');")
+        self.write("execCommand(createCmd, false);")
         self.dedent()
         self.write("}")
 
@@ -4529,6 +4575,30 @@ class ThreeJSEmitter(BaseEmitter):
             val = obj.properties[prop]
             if val.type in ('percentage', 'number'):
                 return val.value
+            elif val.type == 'expression':
+                # Try to evaluate simple expressions like unary minus
+                return self._eval_simple_expr(val.value, default)
+        return default
+
+    def _eval_simple_expr(self, expr, default: float) -> float:
+        """Evaluate simple IR expressions (unary minus, literals)."""
+        if not hasattr(expr, 'type'):
+            if isinstance(expr, (int, float)):
+                return float(expr)
+            return default
+
+        if expr.type == 'unary_op' and expr.operator == '-':
+            # Unary minus: -value
+            inner = self._eval_simple_expr(expr.right, default)
+            return -inner
+        elif expr.type == 'literal':
+            # Literal value wrapped in IR_Value
+            if hasattr(expr.value, 'value'):
+                return float(expr.value.value)
+            elif isinstance(expr.value, (int, float)):
+                return float(expr.value)
+        elif hasattr(expr, 'value') and isinstance(expr.value, (int, float)):
+            return float(expr.value)
         return default
 
     def _get_prop_string(self, obj: IR_Object, prop: str, default: str) -> str:

@@ -429,11 +429,40 @@ class Parser:
                 return CreateValue(name=name, value=value_expr, annotated_type=None, line=line)
 
             elif next_token.type == TokenType.IDENTIFIER:
-                # Clone with explicit target: create <template> <name>
-                target = next_token.value
-                self.validate_identifier(target, "clone target")
-                self.advance()
-                return CloneObject(source=name, target=target, line=line)
+                # Could be: create <template> <name> OR create <modifier> <type>
+                # Check if first word is a known modifier (color/size)
+                known_modifiers = {
+                    'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
+                    'white', 'black', 'orange', 'purple', 'pink', 'gray',
+                    'grey', 'gold', 'silver',  # colors
+                    'big', 'small', 'large', 'tiny', 'huge'  # sizes
+                }
+                if name.lower() in known_modifiers:
+                    # First word is a modifier, treat as bulk create with count=1
+                    # E.g., "create red ball" -> create 1 red ball
+                    modifiers = [name.lower()]
+                    # Collect any additional modifiers and type name
+                    while self.current_token().type == TokenType.IDENTIFIER:
+                        word = self.current_token().value.lower()
+                        modifiers.append(word)
+                        self.advance()
+                    # Last word is type name, rest are modifiers
+                    type_name = modifiers[-1]
+                    modifiers = modifiers[:-1]
+                    return BulkOperation(
+                        operation='create',
+                        count=1,
+                        type_name=type_name,
+                        modifiers=modifiers,
+                        auto_confirm=True,
+                        line=line
+                    )
+                else:
+                    # Clone with explicit target: create <template> <name>
+                    target = next_token.value
+                    self.validate_identifier(target, "clone target")
+                    self.advance()
+                    return CloneObject(source=name, target=target, line=line)
 
             else:
                 # Implied object creation: "create banana" = "create object banana"
@@ -2336,4 +2365,7 @@ class Parser:
             return self.parse_target()
 
         else:
-            self.error(f"Unexpected token in expression: {token.type.name}")
+            if token.type == TokenType.EOF:
+                self.error("Incomplete command. Did you forget a value?")
+            else:
+                self.error(f"Unexpected token in expression: {token.type.name}")
