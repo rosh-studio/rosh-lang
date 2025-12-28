@@ -2311,7 +2311,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("'enter': 'Inter', 'inter': 'Inter', 'inner': 'Inter',")
         self.write("'aerial': 'Arial', 'arial': 'Arial', 'area': 'Arial',")
         self.write("'read': 'red', 'reed': 'red',")
-        self.write("'great': 'gray', 'grey': 'gray',")
+        self.write("'grey': 'gray',")  # Removed 'great': 'gray' - too aggressive (BUG-006)
         self.write("'blew': 'blue', 'blow': 'blue',")
         self.write("'wait': 'white', 'weight': 'white', 'wet': 'white',")
         self.write("'lack': 'black', 'block': 'black',")

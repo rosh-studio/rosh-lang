@@ -29,6 +29,10 @@ def _load_voice_spec():
         # Build corrections cache for fast lookup
         corrections = _voice_spec.get('corrections', {})
         for category, items in corrections.items():
+            # Skip contextual corrections - these need special handling
+            # (e.g., 'to' should NOT become '2' in 'set x to 5')
+            if category == 'numbers_contextual':
+                continue
             if isinstance(items, dict):
                 for typo, correct in items.items():
                     _corrections_cache[typo.lower()] = correct
