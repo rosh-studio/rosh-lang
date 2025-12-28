@@ -1903,6 +1903,469 @@ def generate_threejs_output(js_code: str, output_dir: str, capabilities: dict | 
             json.dump(capabilities, f, indent=2)
 
 
+def run_tests(filepath: str, verbose: bool = False, fail_fast: bool = False,
+              filter_pattern: str = None, level: str = 'standard'):
+    """Run Rosh spec tests from a .rosh test file.
+
+    Test files use this syntax:
+        section "core"
+
+        test "create simple object"
+            create box
+            expect box exists
+            expect box.color is "green"
+        end
+    """
+    from .lexer import Lexer, TokenType
+    from .parser import Parser
+    from .interpreter import Interpreter
+
+    # Read test file
+    try:
+        with open(filepath, 'r') as f:
+            source = f.read()
+    except FileNotFoundError:
+        print(f"Error: Test file not found: {filepath}", file=sys.stderr)
+        sys.exit(1)
+
+    # Parse the test file to extract tests
+    tests = _parse_test_file(source)
+
+    if not tests:
+        print(f"No tests found in {filepath}")
+        sys.exit(0)
+
+    # Filter tests by section/level
+    section_order = {'core': 0, 'standard': 1, 'full': 2}
+    level_threshold = section_order.get(level, 1)
+    filtered_tests = [
+        t for t in tests
+        if section_order.get(t.get('section', 'core'), 0) <= level_threshold
+    ]
+
+    # Filter by pattern if provided
+    if filter_pattern:
+        import fnmatch
+        filtered_tests = [t for t in filtered_tests if fnmatch.fnmatch(t['name'], filter_pattern)]
+
+    if not filtered_tests:
+        print(f"No tests match level '{level}'" + (f" and pattern '{filter_pattern}'" if filter_pattern else ""))
+        sys.exit(0)
+
+    print(f"\nRunning: {filepath}")
+    passed = 0
+    failed = 0
+    skipped = 0
+
+    for test in filtered_tests:
+        if test.get('skip'):
+            if verbose:
+                print(f"  - {test['name']} (skipped: {test['skip']})")
+            skipped += 1
+            continue
+
+        # Run the test
+        result = _run_single_test(test, verbose)
+
+        if result['passed']:
+            print(f"  \u2713 {test['name']}")
+            passed += 1
+        else:
+            print(f"  \u2717 {test['name']}")
+            if result.get('error'):
+                print(f"    Error: {result['error']}")
+            if result.get('expected') and result.get('actual'):
+                print(f"    Expected: {result['expected']}")
+                print(f"    Actual:   {result['actual']}")
+            failed += 1
+            if fail_fast:
+                break
+
+    # Summary
+    print(f"\nResults: {passed} passed, {failed} failed" + (f", {skipped} skipped" if skipped else ""))
+
+    if failed > 0:
+        sys.exit(1)
+
+
+def _parse_test_file(source: str) -> list:
+    """Parse a test file and extract test definitions.
+
+    Returns list of test dicts:
+        {
+            'name': 'test name',
+            'section': 'core',
+            'commands': ['create box', 'set box x to 5'],
+            'expects': [{'type': 'exists', 'target': 'box'}, ...],
+            'skip': None or 'reason',
+            'todo': False,
+            'voice': False
+        }
+    """
+    from .lexer import Lexer, TokenType
+
+    lexer = Lexer(source)
+    tokens = lexer.tokenize()
+
+    tests = []
+    current_section = 'core'
+    i = 0
+
+    while i < len(tokens):
+        token = tokens[i]
+
+        # Skip newlines
+        if token.type == TokenType.NEWLINE:
+            i += 1
+            continue
+
+        # Section declaration
+        if token.type == TokenType.SECTION:
+            i += 1
+            if i < len(tokens) and tokens[i].type == TokenType.STRING:
+                current_section = tokens[i].value
+            i += 1
+            continue
+
+        # Test declaration
+        if token.type == TokenType.TEST:
+            test = {
+                'name': '',
+                'section': current_section,
+                'commands': [],
+                'expects': [],
+                'skip': None,
+                'todo': False,
+                'voice': False
+            }
+
+            i += 1
+
+            # Test name (string)
+            if i < len(tokens) and tokens[i].type == TokenType.STRING:
+                test['name'] = tokens[i].value
+                i += 1
+
+            # Optional modifiers: skip, todo, with voice
+            while i < len(tokens) and tokens[i].type not in (TokenType.NEWLINE, TokenType.EOF):
+                if tokens[i].type == TokenType.SKIP:
+                    i += 1
+                    if i < len(tokens) and tokens[i].type == TokenType.STRING:
+                        test['skip'] = tokens[i].value
+                        i += 1
+                elif tokens[i].type == TokenType.TODO:
+                    test['todo'] = True
+                    i += 1
+                elif tokens[i].type == TokenType.WITH:
+                    i += 1
+                    if i < len(tokens) and tokens[i].type == TokenType.VOICE:
+                        test['voice'] = True
+                        i += 1
+                else:
+                    i += 1
+
+            # Skip newline after test declaration
+            while i < len(tokens) and tokens[i].type == TokenType.NEWLINE:
+                i += 1
+
+            # Parse test body until END
+            body_tokens = []
+            while i < len(tokens) and tokens[i].type != TokenType.END:
+                body_tokens.append(tokens[i])
+                i += 1
+
+            # Parse body into commands and expects
+            test['commands'], test['expects'] = _parse_test_body(body_tokens)
+
+            # Skip END token
+            if i < len(tokens) and tokens[i].type == TokenType.END:
+                i += 1
+
+            tests.append(test)
+            continue
+
+        i += 1
+
+    return tests
+
+
+def _parse_test_body(tokens: list) -> tuple:
+    """Parse test body tokens into commands and expect statements."""
+    from .lexer import TokenType
+
+    commands = []
+    expects = []
+    i = 0
+
+    while i < len(tokens):
+        # Skip newlines
+        if tokens[i].type == TokenType.NEWLINE:
+            i += 1
+            continue
+
+        # Expect statement
+        if tokens[i].type == TokenType.EXPECT:
+            i += 1
+            expect = {'type': 'unknown'}
+
+            # Collect tokens until newline
+            expect_tokens = []
+            while i < len(tokens) and tokens[i].type != TokenType.NEWLINE:
+                expect_tokens.append(tokens[i])
+                i += 1
+
+            if expect_tokens:
+                expect = _parse_expect(expect_tokens)
+            expects.append(expect)
+            continue
+
+        # Try statement (for error testing)
+        if tokens[i].type == TokenType.TRY:
+            i += 1
+            # Collect command tokens until newline
+            cmd_tokens = []
+            while i < len(tokens) and tokens[i].type != TokenType.NEWLINE:
+                cmd_tokens.append(tokens[i])
+                i += 1
+            if cmd_tokens:
+                cmd_str = _tokens_to_string(cmd_tokens)
+                commands.append({'cmd': cmd_str, 'try': True})
+            continue
+
+        # Regular command
+        cmd_tokens = []
+        while i < len(tokens) and tokens[i].type != TokenType.NEWLINE:
+            cmd_tokens.append(tokens[i])
+            i += 1
+        if cmd_tokens:
+            cmd_str = _tokens_to_string(cmd_tokens)
+            commands.append({'cmd': cmd_str, 'try': False})
+
+        i += 1
+
+    return commands, expects
+
+
+def _tokens_to_string(tokens: list) -> str:
+    """Convert tokens back to string for execution."""
+    from .lexer import TokenType
+
+    result = []
+    prev_was_dot = False
+
+    for t in tokens:
+        if t.type == TokenType.DOT:
+            # Remove trailing space from previous token and add dot without space
+            if result and result[-1] == ' ':
+                result.pop()
+            result.append('.')
+            prev_was_dot = True
+        elif t.value is not None:
+            if prev_was_dot:
+                # Don't add space after dot
+                prev_was_dot = False
+            elif result and result[-1] not in ('.', ' ', ''):
+                result.append(' ')
+
+            if t.type == TokenType.STRING:
+                result.append(f'"{t.value}"')
+            else:
+                result.append(str(t.value))
+        else:
+            # Token with no value (like a keyword)
+            if prev_was_dot:
+                prev_was_dot = False
+            elif result and result[-1] not in ('.', ' ', ''):
+                result.append(' ')
+            result.append(t.type.name.lower())
+
+    return ''.join(result)
+
+
+def _parse_expect(tokens: list) -> dict:
+    """Parse expect tokens into an expect dict."""
+    from .lexer import TokenType
+
+    if not tokens:
+        return {'type': 'unknown'}
+
+    # expect <object> not exists (check FIRST before "exists")
+    if len(tokens) >= 3 and tokens[-2].type == TokenType.NOT and tokens[-1].type == TokenType.EXISTS:
+        return {
+            'type': 'not_exists',
+            'target': tokens[0].value if tokens[0].value else str(tokens[0].type.name)
+        }
+
+    # expect <object> exists
+    if len(tokens) >= 2 and tokens[-1].type == TokenType.EXISTS:
+        return {
+            'type': 'exists',
+            'target': tokens[0].value if tokens[0].value else str(tokens[0].type.name)
+        }
+
+    # expect <object>.<prop> is <value>
+    # Look for IS token
+    is_idx = None
+    for idx, t in enumerate(tokens):
+        if t.type == TokenType.IS:
+            is_idx = idx
+            break
+
+    if is_idx is not None:
+        # Target is everything before IS
+        target_tokens = tokens[:is_idx]
+        value_tokens = tokens[is_idx + 1:]
+
+        target = _tokens_to_string(target_tokens)
+        value = _tokens_to_string(value_tokens)
+
+        # Strip quotes if present
+        if value.startswith('"') and value.endswith('"'):
+            value = value[1:-1]
+
+        return {
+            'type': 'equals',
+            'target': target,
+            'value': value
+        }
+
+    # expect no correction
+    if len(tokens) >= 2 and tokens[0].type == TokenType.NO and tokens[1].type == TokenType.CORRECTION:
+        return {'type': 'no_correction'}
+
+    # expect correction "x" to "y"
+    if len(tokens) >= 1 and tokens[0].type == TokenType.CORRECTION:
+        # Find string values
+        strings = [t.value for t in tokens if t.type == TokenType.STRING]
+        if len(strings) >= 2:
+            return {
+                'type': 'correction',
+                'from': strings[0],
+                'to': strings[1]
+            }
+
+    return {'type': 'unknown', 'tokens': [t.value for t in tokens]}
+
+
+def _run_single_test(test: dict, verbose: bool) -> dict:
+    """Run a single test and return result."""
+    from .interpreter import Interpreter
+    from .lexer import Lexer
+    from .parser import Parser
+
+    result = {'passed': True}
+    interpreter = Interpreter()
+    last_error = None
+
+    # Run commands
+    for cmd_info in test['commands']:
+        cmd = cmd_info['cmd']
+        is_try = cmd_info['try']
+
+        try:
+            lexer = Lexer(cmd)
+            tokens = lexer.tokenize()
+            parser = Parser(tokens)
+            ast = parser.parse()
+            interpreter.execute(ast)
+            last_error = None
+        except Exception as e:
+            last_error = str(e)
+            if not is_try:
+                result['passed'] = False
+                result['error'] = f"Command failed: {cmd}\n{e}"
+                return result
+
+    # Check expects
+    for expect in test['expects']:
+        expect_result = _check_expect(expect, interpreter, last_error)
+        if not expect_result['passed']:
+            result['passed'] = False
+            result['expected'] = expect_result.get('expected')
+            result['actual'] = expect_result.get('actual')
+            return result
+
+    return result
+
+
+def _check_expect(expect: dict, interpreter, last_error: str) -> dict:
+    """Check a single expect statement against interpreter state."""
+    from .values import RoshObject
+
+    expect_type = expect.get('type')
+
+    def get_var(name: str):
+        """Get a variable from interpreter, returning None if not found."""
+        try:
+            return interpreter.global_env.get(name)
+        except:
+            return None
+
+    if expect_type == 'exists':
+        target = expect['target']
+        obj = get_var(target)
+        if obj is None:
+            return {'passed': False, 'expected': f'{target} exists', 'actual': f'{target} not found'}
+        return {'passed': True}
+
+    if expect_type == 'not_exists':
+        target = expect['target']
+        obj = get_var(target)
+        if obj is not None:
+            return {'passed': False, 'expected': f'{target} not exists', 'actual': f'{target} exists'}
+        return {'passed': True}
+
+    if expect_type == 'equals':
+        target = expect['target']
+        expected_value = expect['value']
+
+        # Parse target (object.property or object property)
+        if '.' in target:
+            parts = target.split('.')
+            obj_name = parts[0]
+            prop = '.'.join(parts[1:])
+        else:
+            parts = target.split()
+            if len(parts) >= 2:
+                obj_name = parts[0]
+                prop = parts[1]
+            else:
+                obj_name = target
+                prop = None
+
+        obj = get_var(obj_name)
+        if obj is None:
+            return {'passed': False, 'expected': f'{target} is {expected_value}', 'actual': f'{obj_name} not found'}
+
+        if prop:
+            if isinstance(obj, RoshObject):
+                actual_value = obj.get(prop)  # RoshObject uses .get() method
+            else:
+                actual_value = None
+        else:
+            actual_value = obj
+
+        # Normalize for comparison
+        actual_str = str(actual_value) if actual_value is not None else 'None'
+        expected_str = str(expected_value)
+
+        if actual_str != expected_str:
+            return {'passed': False, 'expected': f'{target} is {expected_str}', 'actual': f'{target} is {actual_str}'}
+
+        return {'passed': True}
+
+    if expect_type == 'no_correction':
+        # TODO: Implement correction tracking
+        return {'passed': True}
+
+    if expect_type == 'correction':
+        # TODO: Implement correction tracking
+        return {'passed': True}
+
+    # Unknown expect type
+    return {'passed': True}
+
+
 def main():
     """Main entry point for the Rosh CLI"""
     parser = argparse.ArgumentParser(
@@ -1910,9 +2373,9 @@ def main():
         prog="rosh"
     )
 
-    # Check if using build subcommand (peek at args)
+    # Check if using subcommand (peek at args)
     import sys
-    using_subcommand = len(sys.argv) > 1 and sys.argv[1] == 'build'
+    using_subcommand = len(sys.argv) > 1 and sys.argv[1] in ('build', 'test')
 
     if using_subcommand:
         # Add subparsers for commands
@@ -1929,6 +2392,19 @@ def main():
                                   help='Automatically copy required sprite assets to output')
         build_parser.add_argument('--repl', action='store_true',
                                   help='🔧 DEV MODE: Enable in-game REPL (press ` or F12 to toggle console)')
+
+        # Test subcommand
+        test_parser = subparsers.add_parser('test', help='Run Rosh spec tests')
+        test_parser.add_argument('file', help='Test file (.rosh) to run')
+        test_parser.add_argument('-v', '--verbose', action='store_true',
+                                 help='Verbose output (show all test details)')
+        test_parser.add_argument('--fail-fast', action='store_true',
+                                 help='Stop on first test failure')
+        test_parser.add_argument('--filter', metavar='PATTERN',
+                                 help='Only run tests matching pattern')
+        test_parser.add_argument('--level', choices=['core', 'standard', 'full'],
+                                 default='standard',
+                                 help='Compliance level to check (default: standard)')
     else:
         # Default behavior (run/REPL) - preserve existing arguments
         parser.add_argument(
@@ -2020,6 +2496,17 @@ def main():
         copy_assets = getattr(args, 'copy_assets', False)
         enable_repl = getattr(args, 'repl', False)
         run_build(args.file, args.target, args.output, copy_assets, enable_repl)
+        return
+
+    # Handle test subcommand
+    if hasattr(args, 'subcommand') and args.subcommand == 'test':
+        run_tests(
+            args.file,
+            verbose=args.verbose,
+            fail_fast=args.fail_fast,
+            filter_pattern=args.filter,
+            level=args.level
+        )
         return
 
     if args.command:

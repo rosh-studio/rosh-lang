@@ -103,6 +103,18 @@ class TokenType(Enum):
     # Metadata system
     META = auto()
 
+    # Test system
+    TEST = auto()       # test "name" ... end
+    EXPECT = auto()     # expect <condition>
+    SECTION = auto()    # section "core" / "standard" / "full"
+    TRY = auto()        # try <command> - capture errors
+    SKIP = auto()       # test "x" skip "reason"
+    TODO = auto()       # test "x" todo - expected to fail
+    EXISTS = auto()     # expect box exists
+    VOICE = auto()      # test "x" with voice
+    CORRECTION = auto() # expect correction "x" to "y"
+    NO = auto()         # expect no correction
+
     # Comparison operators (multi-word)
     IS = auto()
     EQUAL = auto()
@@ -440,6 +452,17 @@ class Lexer:
             'sound': TokenType.SOUND,
             'music': TokenType.MUSIC,
             'meta': TokenType.META,
+            # Test system keywords
+            'test': TokenType.TEST,
+            'expect': TokenType.EXPECT,
+            'section': TokenType.SECTION,
+            'try': TokenType.TRY,
+            'skip': TokenType.SKIP,
+            'todo': TokenType.TODO,
+            'exists': TokenType.EXISTS,
+            'voice': TokenType.VOICE,
+            'correction': TokenType.CORRECTION,
+            'no': TokenType.NO,
             'is': TokenType.IS,
             'equal': TokenType.EQUAL,
             'not': TokenType.NOT,

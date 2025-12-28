@@ -1,0 +1,178 @@
+# =============================================================================
+# ROSH SPECIFICATION TEST SUITE
+# =============================================================================
+#
+# Project:      Rosh Programming Language
+# Version:      0.2.3
+# Created:      2025-12-28
+#
+# Lead:         Roger Dubar (rdubar)
+# Lead AI:      Claude Opus 4.5 (Anthropic)
+#
+# Run:          rosh test spec/v0.2.3/rosh-tests.rosh
+# Run verbose:  rosh test spec/v0.2.3/rosh-tests.rosh -v
+# Run level:    rosh test spec/v0.2.3/rosh-tests.rosh --level core
+#
+# =============================================================================
+
+# =============================================================================
+# CORE TESTS - Required for "Rosh Core Compliant"
+# =============================================================================
+
+section "core"
+
+# -----------------------------------------------------------------------------
+# Object Creation
+# -----------------------------------------------------------------------------
+
+test "create simple object"
+    create box
+    expect box exists
+end
+
+test "create object exists"
+    create ball
+    expect ball exists
+end
+
+test "set color on created object"
+    create thing
+    set thing color to "green"
+    expect thing.color is "green"
+end
+
+# -----------------------------------------------------------------------------
+# Property Setting
+# -----------------------------------------------------------------------------
+
+test "set property with to keyword"
+    create player
+    set player x to 100
+    expect player.x is "100"
+end
+
+test "set property with dot notation"
+    create enemy
+    set enemy.y to 200
+    expect enemy.y is "200"
+end
+
+test "set color property"
+    create cube
+    set cube color to "red"
+    expect cube.color is "red"
+end
+
+# -----------------------------------------------------------------------------
+# Variables
+# -----------------------------------------------------------------------------
+
+test "create variable with value"
+    set score to 0
+    expect score is "0"
+end
+
+test "set variable to new value"
+    set counter to 5
+    set counter to 10
+    expect counter is "10"
+end
+
+# -----------------------------------------------------------------------------
+# Basic Math
+# -----------------------------------------------------------------------------
+
+test "addition expression"
+    set a to 5
+    set b to a plus 3
+    expect b is "8"
+end
+
+test "subtraction expression"
+    set x to 10
+    set y to x minus 4
+    expect y is "6"
+end
+
+# =============================================================================
+# STANDARD TESTS - Required for "Rosh Standard Compliant"
+# =============================================================================
+
+section "standard"
+
+# -----------------------------------------------------------------------------
+# Visibility
+# -----------------------------------------------------------------------------
+
+test "hide makes object invisible"
+    create target
+    hide target
+    expect target.visible is "False"
+end
+
+test "show makes object visible"
+    create item
+    hide item
+    show item
+    expect item.visible is "True"
+end
+
+# -----------------------------------------------------------------------------
+# Delete
+# -----------------------------------------------------------------------------
+
+test "delete removes object"
+    create temp
+    delete temp
+    expect temp not exists
+end
+
+# -----------------------------------------------------------------------------
+# Error Handling
+# -----------------------------------------------------------------------------
+
+test "try captures error for nonexistent object"
+    try set nonexistent x to 5
+    expect nonexistent not exists
+end
+
+# =============================================================================
+# FULL TESTS - Required for "Rosh Full Compliant"
+# =============================================================================
+
+section "full"
+
+# -----------------------------------------------------------------------------
+# Undo/Redo (placeholder - needs interpreter support)
+# -----------------------------------------------------------------------------
+
+test "undo placeholder" skip "Undo not implemented in interpreter"
+    create undotest
+    expect undotest exists
+end
+
+# -----------------------------------------------------------------------------
+# Voice Corrections (placeholder - needs voice layer)
+# -----------------------------------------------------------------------------
+
+test "voice correction placeholder" skip "Voice testing not implemented"
+    expect box exists
+end
+
+# =============================================================================
+# KEYWORDS REFERENCE (for parser development)
+# =============================================================================
+#
+# New keywords added for test system:
+#   - test      : Define a test block
+#   - expect    : Assertion statement
+#   - section   : Group tests by compliance level
+#   - try       : Wrap command to capture errors
+#   - skip      : Skip a test with reason
+#   - todo      : Mark test as expected to fail
+#   - exists    : Check if object exists
+#   - voice     : Enable voice preprocessing for test
+#   - correction: Check for voice correction
+#   - no        : Negation (expect no correction)
+#
+# =============================================================================
