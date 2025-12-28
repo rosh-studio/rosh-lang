@@ -7,7 +7,7 @@
 # Test: pytest tests/spec/test_2d_compliance.py
 
 [meta]
-version = "0.2.0"
+version = "0.2.4"
 description = "Rosh 2D properties specification"
 status = "draft"
 experimental = true
@@ -380,3 +380,47 @@ rule = "Objects get rotating colors from palette: green, blue, red, yellow, ..."
 [behavior.percentage_resolution]
 description = "When percentages are resolved"
 rule = "At emit time, percentages converted to pixels based on canvas size"
+
+# =============================================================================
+# CAPABILITIES - Engine-driven continuous animations (2D equivalents)
+# =============================================================================
+# 2D versions of capabilities - adapted for sprite/shape contexts
+
+[capabilities.spin]
+type = "number"
+description = "Continuous rotation (degrees per second)"
+format = "speed"
+default = 30
+example = 'set spin to 30'
+userData_key = "_spin"
+note = "Applies rotation += speed * deltaTime each frame"
+
+[capabilities.bounce]
+type = "vector2"
+description = "Vertical bouncing animation"
+format = "amplitude frequency"
+default = [10, 1]
+example = 'set bounce to "10 1"'
+userData_key = "_bounce"
+note = "Modifies y position using sine wave (amplitude in pixels)"
+
+[capabilities.pulse]
+type = "vector2"
+description = "Scale pulsing animation"
+format = "amount frequency"
+default = [0.2, 0.5]
+example = 'set pulse to "0.2 0.5"'
+userData_key = "_pulse"
+note = "Modifies scale uniformly using sine wave"
+
+# Note: orbit is 3D-only, not applicable in 2D
+
+# =============================================================================
+# SHAPE SYNONYMS
+# =============================================================================
+
+[shape_synonyms]
+description = "Natural language shape names map to canonical types"
+ball = "circle"
+box = "rectangle"
+square = "rectangle"

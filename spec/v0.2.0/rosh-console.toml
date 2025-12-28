@@ -24,7 +24,7 @@
 #   See: docs/SPEC-CHAIN.md
 
 [meta]
-version = "0.2.0"
+version = "0.2.4"
 description = "In-game runtime console commands"
 applies_to = ["emitters/phaser.py", "emitters/pygame.py", "emitters/threejs.py"]
 
@@ -125,10 +125,17 @@ examples = [
     "create big red ball",
 ]
 modifiers = [
-    { type = "color", words = ["red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", "orange", "purple", "pink", "gray"] },
-    { type = "size", words = ["big", "large", "small", "tiny"] },
-    { type = "shape", words = ["ball", "sphere", "cube", "box", "cylinder"] },
+    { type = "color", words = ["red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", "orange", "purple", "pink", "gray", "grey", "gold", "silver"] },
+    { type = "size", words = ["big", "large", "small", "tiny", "huge"] },
+    { type = "shape", words = ["ball", "sphere", "cube", "box", "cylinder", "tube", "cone", "torus", "ring", "plane"] },
 ]
+
+# Shape synonyms - these map to canonical geometry types
+[commands.create.shape_synonyms]
+ball = "sphere"
+box = "cube"
+tube = "cylinder"
+ring = "torus"
 parsing = """
 Parse modifiers from the description, name is the LAST non-modifier word:
   'create blue box' → name='box', color=blue
@@ -147,6 +154,31 @@ syntax = "help"
 aliases = ["?"]
 description = "Show available commands"
 required = true
+
+[commands.get]
+syntax = "get <object> | get <color> <shape>"
+aliases = []
+description = "Select an object for manipulation. Supports deep search by attributes."
+required = true
+examples = [
+    "get player",
+    "get blue box",
+    "get red sphere",
+    "get cube",
+]
+
+[commands.get.deep_search]
+description = """
+When exact name match fails, search by attributes:
+1. Parse query for known colors and shape types
+2. Search all objects matching color AND/OR shape
+3. Report matches with [deep search] indicator
+4. Auto-select first match if multiple found
+"""
+examples = [
+    { input = "get blue box", output = "[deep search] Found 4: cube1, cube2, cube3, cube4" },
+    { input = "get red sphere", output = "[deep search] <object: orbiter1>" },
+]
 
 # =============================================================================
 # OPTIONAL COMMANDS - Emitters MAY implement these
@@ -184,6 +216,40 @@ syntax = "reset"
 aliases = ["restart"]
 description = "Reset game to initial state"
 required = false
+
+# =============================================================================
+# CAPABILITY COMMANDS - Engine-driven animations
+# =============================================================================
+# These commands enable continuous animations driven by the game engine.
+# They work in both 2D and 3D contexts with appropriate adaptations.
+
+[commands.make]
+syntax = "make <object> <modifier>"
+aliases = []
+description = "Apply natural language modifications including capabilities"
+required = false
+examples = [
+    "make box spin",
+    "make ball bounce",
+    "make cube bigger",
+    "make sphere red",
+]
+
+[commands.make.capabilities]
+description = "Capabilities are engine-driven continuous animations"
+spin = { syntax = "spin [<x> <y> <z>]", description = "Rotate continuously", default = "0 20 0" }
+bounce = { syntax = "bounce [<amplitude> <frequency>]", description = "Bounce up and down", default = "0.5 1" }
+pulse = { syntax = "pulse [<amount> <frequency>]", description = "Scale in and out", default = "0.2 0.5" }
+orbit = { syntax = "orbit [<radius> <speed> <height>]", description = "Orbit around center (3D only)", default = "3 30 2" }
+
+[commands.make.stop]
+syntax = "stop <capability>"
+description = "Stop a capability animation"
+examples = [
+    "make box stop spin",
+    "make ball stop bounce",
+    "stop spin",           # Applies to current object
+]
 
 # =============================================================================
 # ERROR HANDLING

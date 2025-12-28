@@ -7,7 +7,7 @@
 # Test: pytest tests/spec/test_3d_compliance.py
 
 [meta]
-version = "0.2.0"
+version = "0.2.4"
 description = "Rosh 3D properties specification"
 status = "draft"
 experimental = true
@@ -25,6 +25,13 @@ default = "3D mode is the default for programs without explicit mode setting"
 description = "3D geometric mesh"
 subtypes = ["box", "sphere", "cylinder", "plane", "cone", "torus"]
 default = "box"
+
+# Shape synonyms for natural language support
+[types.mesh.synonyms]
+ball = "sphere"
+cube = "box"
+tube = "cylinder"
+ring = "torus"
 
 [types.light]
 description = "Light source"
@@ -492,3 +499,86 @@ rule = "Objects default to 1x1x1 world units (visible from default camera)"
 [behavior.color_inheritance]
 description = "Color is auto-assigned if not specified"
 rule = "Objects get rotating colors from palette: green, blue, red, yellow, ..."
+
+# =============================================================================
+# CAPABILITIES - Engine-driven continuous animations
+# =============================================================================
+# Capabilities are animations driven by the game engine's update loop.
+# They can be set in .rosh files or via console commands.
+# Format in .rosh: set spin to "x y z" (degrees per second for each axis)
+
+[capabilities.spin]
+type = "vector3"
+description = "Continuous rotation around axes (degrees per second)"
+format = "x y z"
+default = [0, 20, 0]
+example = 'set spin to "0 30 0"'
+userData_key = "_spin"
+note = "Applies rotation.x/y/z += speed * deltaTime each frame"
+
+[capabilities.bounce]
+type = "vector2"
+description = "Vertical bouncing animation"
+format = "amplitude frequency"
+default = [0.5, 1]
+example = 'set bounce to "0.5 1"'
+userData_key = "_bounce"
+note = "Modifies position.y using sine wave"
+
+[capabilities.pulse]
+type = "vector2"
+description = "Scale pulsing animation"
+format = "amount frequency"
+default = [0.2, 0.5]
+example = 'set pulse to "0.2 0.5"'
+userData_key = "_pulse"
+note = "Modifies scale uniformly using sine wave"
+
+[capabilities.orbit]
+type = "vector3"
+description = "Orbital motion around center point"
+format = "radius speed height"
+default = [3, 30, 2]
+example = 'set orbit to "3 30 2"'
+userData_key = "_orbit"
+note = "Circles around world origin at given radius/speed/height"
+
+[capabilities.initialization]
+description = """
+Capabilities set in .rosh files are stored in userData as arrays.
+On scene load, the engine traverses all objects and registers
+those with capability userData in the animation state maps.
+"""
+
+# =============================================================================
+# DEEP SEARCH - Find objects by attributes
+# =============================================================================
+
+[deep_search]
+description = """
+When 'get <query>' doesn't match an exact object name, perform deep search:
+1. Parse query for known colors and shape types
+2. Check each mesh's material color and geometry type
+3. Return matching objects with [deep search] indicator
+"""
+
+[deep_search.color_detection]
+description = "Detect color from material or userData"
+sources = ["userData._color", "material.color (hex analysis)"]
+fuzzy_matching = """
+If exact hex not found, use RGB thresholds:
+- red: r>200, g<100, b<100
+- blue: r<100, g<100, b>200
+- etc.
+"""
+
+[deep_search.type_detection]
+description = "Detect shape type from geometry or userData"
+sources = ["userData._type", "geometry.type"]
+mapping = """
+BoxGeometry → cube
+SphereGeometry → sphere
+CylinderGeometry → cylinder
+ConeGeometry → cone
+TorusGeometry → torus
+"""
