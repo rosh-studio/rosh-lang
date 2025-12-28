@@ -362,7 +362,6 @@ class Parser:
                 y_value = Literal(value=y_token.value, type_name='number', line=y_token.line)
 
                 # Add implicit set x and set y to body
-                from .ast_nodes import SetProperty, Identifier
                 body.append(SetProperty(
                     target=Identifier(name='x', line=line),
                     value=x_value,
@@ -457,6 +456,31 @@ class Parser:
                         auto_confirm=True,
                         line=line
                     )
+                elif next_token.value.lower() in known_modifiers:
+                    # Second word is a modifier: "make ball red" = set ball color to red
+                    # This is a natural language shorthand for setting properties
+                    target_name = name
+                    modifier = next_token.value.lower()
+                    self.advance()
+
+                    # Determine property based on modifier type
+                    colors = {'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
+                              'white', 'black', 'orange', 'purple', 'pink', 'gray',
+                              'grey', 'gold', 'silver'}
+                    sizes = {'big': 2, 'small': 0.5, 'large': 2, 'tiny': 0.25, 'huge': 3}
+
+                    base_target = Identifier(name=target_name, line=line)
+
+                    if modifier in colors:
+                        target = PropertyAccess(object=base_target, property='color', line=line)
+                        return SetProperty(target=target, value=Literal(value=modifier, type_name='string', line=line), line=line)
+                    elif modifier in sizes:
+                        target = PropertyAccess(object=base_target, property='scale', line=line)
+                        return SetProperty(target=target, value=Literal(value=sizes[modifier], type_name='number', line=line), line=line)
+                    else:
+                        # Unknown modifier - treat as description
+                        target = PropertyAccess(object=base_target, property='description', line=line)
+                        return SetProperty(target=target, value=Literal(value=modifier, type_name='string', line=line), line=line)
                 else:
                     # Clone with explicit target: create <template> <name>
                     target = next_token.value

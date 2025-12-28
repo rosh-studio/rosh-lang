@@ -1,0 +1,310 @@
+# =============================================================================
+# Rosh REPL Commands Specification (DRAFT)
+# Version: 0.2.4
+# Status: DRAFT - awaiting BDFL review
+# =============================================================================
+#
+# This document specifies the commands available in the Rosh runtime REPL
+# (the in-browser/in-game console). These are separate from the Rosh language
+# syntax and are intended for interactive use.
+#
+# Classification:
+#   - CORE: Must be implemented by all emitters
+#   - STANDARD: Should be implemented, can vary by target
+#   - EXTENDED: Target-specific features (3D, voice, etc.)
+#
+# =============================================================================
+
+[meta]
+version = "0.2.4"
+status = "draft"
+last_updated = "2025-12-28"
+
+# =============================================================================
+# CORE COMMANDS - Required for all emitters
+# =============================================================================
+
+[commands.create]
+classification = "core"
+aliases = ["make"]
+syntax = [
+    "create <name>",
+    "create <type> <name>",
+    "create <modifier> <type>",
+    "create N <type>",
+]
+description = "Create a new object or clone an existing one"
+examples = [
+    "create ball",
+    "create ball myball",
+    "create red ball",
+    "create 10 balls",
+]
+notes = """
+When first word is a known modifier (color/size), treats as creation with attributes.
+When first word is an existing object name and second is an identifier, clones the object.
+"""
+
+[commands.set]
+classification = "core"
+syntax = [
+    "set <object> <property> to <value>",
+    "set <object>.<property> to <value>",
+    "set all <type> <property> to <value>",
+]
+description = "Set a property on an object or all objects of a type"
+examples = [
+    "set ball color to red",
+    "set ball.x to 100",
+    "set all balls color to blue",
+]
+
+[commands.get]
+classification = "core"
+syntax = [
+    "get <object>",
+    "get <object> <property>",
+    "get <object>.<property>",
+]
+description = "Get and display object properties"
+examples = [
+    "get ball",
+    "get ball color",
+    "get ball.x",
+]
+
+[commands.list]
+classification = "core"
+syntax = ["list", "list <type>"]
+description = "List all objects or objects of a specific type"
+examples = [
+    "list",
+    "list balls",
+]
+
+[commands.delete]
+classification = "core"
+aliases = ["remove"]
+syntax = [
+    "delete <name>",
+    "delete N <type>",
+]
+description = "Remove an object from the scene"
+examples = [
+    "delete ball",
+    "delete 5 balls",
+]
+
+[commands.save]
+classification = "core"
+syntax = ["save", "save <slot>"]
+description = "Save current state"
+backend_notes = "Python uses filesystem, JS uses localStorage"
+examples = [
+    "save",
+    "save mywork",
+]
+
+[commands.load]
+classification = "core"
+syntax = ["load", "load <slot>"]
+description = "Load saved state"
+examples = [
+    "load",
+    "load mywork",
+]
+
+[commands.help]
+classification = "core"
+syntax = ["help", "help <command>"]
+description = "Show help for commands"
+examples = [
+    "help",
+    "help create",
+]
+
+# =============================================================================
+# STANDARD COMMANDS - Should be implemented
+# =============================================================================
+
+[commands.hide]
+classification = "standard"
+syntax = ["hide <name>"]
+description = "Make an object invisible"
+
+[commands.show]
+classification = "standard"
+syntax = ["show <name>"]
+description = "Make an object visible"
+
+[commands.move]
+classification = "standard"
+syntax = [
+    "move <name> to <x> <y>",
+    "move <name> to <x> <y> <z>",
+]
+description = "Move an object to a position"
+examples = [
+    "move ball to 100 200",
+    "move cube to 0 5 0",
+]
+
+[commands.clone]
+classification = "standard"
+syntax = [
+    "clone <name>",
+    "clone <name> as <newname>",
+]
+description = "Duplicate an object"
+examples = [
+    "clone ball",
+    "clone ball as ball2",
+]
+
+[commands.look]
+classification = "standard"
+aliases = ["examine", "x", "ex", "inspect", "l"]
+syntax = ["look", "look <name>"]
+description = "Examine an object or show current view"
+examples = [
+    "look ball",
+    "examine cube",
+    "x sphere",
+]
+notes = "Aliases 'x' and 'l' may conflict with variable names in some contexts"
+
+[commands.count]
+classification = "standard"
+syntax = ["count", "count <type>"]
+description = "Count objects, optionally by type"
+examples = [
+    "count",
+    "count balls",
+]
+
+[commands.prompt]
+classification = "standard"
+syntax = ["prompt <text>"]
+description = "Send natural language to AI for interpretation"
+requires = ["ai_integration"]
+examples = [
+    "prompt create a big blue ball",
+    "prompt move everything to the left",
+]
+
+# =============================================================================
+# EXTENDED COMMANDS - Target-specific
+# =============================================================================
+
+[commands.make]
+classification = "extended"
+syntax = [
+    "make <name> <modifier>",
+    "make <name> <modifier1> <modifier2>",
+    "make N <type>",
+    "make all <type> <modifier>",
+]
+description = "Natural language shorthand for create/set operations"
+examples = [
+    "make ball red",
+    "make ball big",
+    "make 5 red balls",
+    "make all balls blue",
+]
+notes = """
+'make' is an alias for 'create' at the lexer level.
+When followed by an existing object name and a modifier, acts as 'set'.
+This is the natural language interface for quick modifications.
+"""
+
+[commands.undo]
+classification = "extended"
+syntax = ["undo", "undo stack"]
+description = "Undo the last operation"
+notes = "undo stack shows the undo history"
+
+[commands.redo]
+classification = "extended"
+syntax = ["redo", "redo stack"]
+description = "Redo the last undone operation"
+
+[commands.reset]
+classification = "extended"
+syntax = [
+    "reset <name>",
+    "reset scene",
+    "reset all",
+]
+description = "Reset object or clear scene"
+notes = "'reset scene' clears localStorage and reloads (JS only)"
+
+[commands.camera]
+classification = "extended"
+targets = ["threejs", "godot"]
+syntax = ["camera reset"]
+description = "Reset camera to default position"
+
+[commands.redraw]
+classification = "extended"
+targets = ["threejs"]
+syntax = ["redraw"]
+description = "Recreate all objects (useful after certain operations)"
+
+[commands.repeat]
+classification = "extended"
+aliases = [":r", ":repeat"]
+syntax = ["repeat", ":r"]
+description = "Repeat the last command"
+
+[commands.credits]
+classification = "extended"
+syntax = ["credits"]
+description = "Show credits for assets and libraries used"
+
+[commands.capabilities]
+classification = "extended"
+syntax = ["capabilities"]
+description = "Show what features this build supports"
+
+# =============================================================================
+# MODIFIERS - Used with create/make commands
+# =============================================================================
+
+[modifiers.colors]
+values = [
+    "red", "green", "blue", "yellow", "cyan", "magenta",
+    "white", "black", "orange", "purple", "pink", "gray",
+    "grey", "gold", "silver"
+]
+property = "color"
+type = "string"
+
+[modifiers.sizes]
+values = { big = 2, large = 2, huge = 3, small = 0.5, tiny = 0.25 }
+property = "scale"
+type = "number"
+
+# =============================================================================
+# SYNC STATUS with Python Parser
+# =============================================================================
+
+[sync]
+last_checked = "2025-12-28"
+python_version = "0.2.3"
+js_repl_version = "0.2.1"
+parity = "~85%"
+
+[sync.in_both]
+commands = [
+    "create", "set", "get", "list", "save", "load", "delete", "remove",
+    "hide", "show", "move", "clone", "look", "examine", "count", "prompt",
+    "make"
+]
+
+[sync.js_only]
+commands = ["undo", "redo", "reset scene", "camera", "redraw", "repeat", "credits", "capabilities"]
+notes = "These are runtime-only features that don't apply to static .rosh files"
+
+[sync.python_only]
+commands = ["if", "while", "for", "when", "trigger", "print", "input", "import", "define"]
+notes = "These are language constructs, not REPL commands"
