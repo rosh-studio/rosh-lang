@@ -956,11 +956,13 @@ class ThreeJSEmitter(BaseEmitter):
         world_y = (0.5 - y) * 8 + 2  # Center at y=2 (above ground)
         world_z = z  # Z is passed through directly as world coordinate
 
-        # Get shape type
+        # Get shape type - check both 'shape' and 'type' properties
         shape = 'box'
-        if 'shape' in obj.properties:
-            shape_val = obj.properties['shape']
-            shape = shape_val.value if hasattr(shape_val, 'value') else str(shape_val)
+        for shape_prop in ('type', 'shape'):
+            if shape_prop in obj.properties:
+                shape_val = obj.properties[shape_prop]
+                shape = shape_val.value if hasattr(shape_val, 'value') else str(shape_val)
+                break
 
         # Get size
         width = self._get_prop_value(obj, 'width', 0.05) * 16
@@ -991,8 +993,29 @@ class ThreeJSEmitter(BaseEmitter):
             sprite = obj.properties['sprite'].value
             self._emit_textured_plane(name, sprite, world_x, world_y, world_z, width, height)
             object_kind = 'sprite'
-        elif shape == 'sphere':
+        elif shape in ('sphere', 'ball'):
             self.write(f"const {name}Geometry = new THREE.SphereGeometry({radius}, 32, 32);")
+            self.write(f"const {name}Material = new THREE.MeshStandardMaterial({{ color: 0x{color:06x} }});")
+            self.write(f"const {name} = new THREE.Mesh({name}Geometry, {name}Material);")
+            self.write(f"{name}.position.set({world_x:.2f}, {world_y:.2f}, {world_z:.2f});")
+            self.write(f"{name}.name = '{name}';")
+            self.write(f"scene.add({name});")
+        elif shape in ('cylinder', 'tube'):
+            self.write(f"const {name}Geometry = new THREE.CylinderGeometry({radius}, {radius}, {height:.2f}, 32);")
+            self.write(f"const {name}Material = new THREE.MeshStandardMaterial({{ color: 0x{color:06x} }});")
+            self.write(f"const {name} = new THREE.Mesh({name}Geometry, {name}Material);")
+            self.write(f"{name}.position.set({world_x:.2f}, {world_y:.2f}, {world_z:.2f});")
+            self.write(f"{name}.name = '{name}';")
+            self.write(f"scene.add({name});")
+        elif shape == 'cone':
+            self.write(f"const {name}Geometry = new THREE.ConeGeometry({radius}, {height:.2f}, 32);")
+            self.write(f"const {name}Material = new THREE.MeshStandardMaterial({{ color: 0x{color:06x} }});")
+            self.write(f"const {name} = new THREE.Mesh({name}Geometry, {name}Material);")
+            self.write(f"{name}.position.set({world_x:.2f}, {world_y:.2f}, {world_z:.2f});")
+            self.write(f"{name}.name = '{name}';")
+            self.write(f"scene.add({name});")
+        elif shape == 'torus':
+            self.write(f"const {name}Geometry = new THREE.TorusGeometry({radius}, {radius * 0.3:.2f}, 16, 48);")
             self.write(f"const {name}Material = new THREE.MeshStandardMaterial({{ color: 0x{color:06x} }});")
             self.write(f"const {name} = new THREE.Mesh({name}Geometry, {name}Material);")
             self.write(f"{name}.position.set({world_x:.2f}, {world_y:.2f}, {world_z:.2f});")
@@ -1006,7 +1029,7 @@ class ThreeJSEmitter(BaseEmitter):
             self.write(f"{name}.name = '{name}';")
             self.write(f"scene.add({name});")
         else:
-            # Default: box
+            # Default: box/cube
             self.write(f"const {name}Geometry = new THREE.BoxGeometry({width:.2f}, {height:.2f}, {depth:.2f});")
             self.write(f"const {name}Material = new THREE.MeshStandardMaterial({{ color: 0x{color:06x} }});")
             self.write(f"const {name} = new THREE.Mesh({name}Geometry, {name}Material);")
@@ -1024,10 +1047,23 @@ class ThreeJSEmitter(BaseEmitter):
 
         # Custom properties in userData
         known = {'x', 'y', 'z', 'width', 'height', 'depth', 'color', 'shape', 'radius', 'text', 'sprite', 'visible', 'saveable', 'type'}
+        # Capability properties need special handling - stored as _name with array values
+        capability_props = {'spin', 'orbit', 'bounce', 'pulse'}
         for prop_name, prop_value in obj.properties.items():
             if prop_name not in known:
                 val = self.get_value(prop_value)
-                if isinstance(val, str):
+                if prop_name in capability_props:
+                    # Parse "x y z" string into array and store as _name
+                    if isinstance(val, str):
+                        parts = val.split()
+                        try:
+                            nums = [float(p) for p in parts]
+                            self.write(f"{name}.userData._{prop_name} = [{', '.join(str(n) for n in nums)}];")
+                        except ValueError:
+                            self.write(f"{name}.userData._{prop_name} = '{val}';")
+                    else:
+                        self.write(f"{name}.userData._{prop_name} = {val};")
+                elif isinstance(val, str):
                     self.write(f"{name}.userData.{prop_name} = '{val}';")
                 elif isinstance(val, bool):
                     self.write(f"{name}.userData.{prop_name} = {'true' if val else 'false'};")
@@ -1999,6 +2035,41 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("renderer.render(scene, camera);")
         self.dedent()
         self.write("}")
+        self.write_blank()
+
+        # Initialize capability states for objects defined in .rosh file
+        self.write_comment("Initialize capability states from userData")
+        self.write("scene.traverse(obj => {")
+        self.indent()
+        self.write("if (!obj.userData) return;")
+        self.write("if (Array.isArray(obj.userData._spin) && obj.userData._spin.length >= 3) {")
+        self.indent()
+        self.write("const s = obj.userData._spin;")
+        self.write("capabilityState.spin.set(obj, { x: s[0], y: s[1], z: s[2] });")
+        self.dedent()
+        self.write("}")
+        self.write("if (Array.isArray(obj.userData._bounce) && obj.userData._bounce.length >= 2) {")
+        self.indent()
+        self.write("const b = obj.userData._bounce;")
+        self.write("capabilityState.bounce.set(obj, { amplitude: b[0], frequency: b[1] * Math.PI * 2, baseY: obj.position.y, phase: 0 });")
+        self.dedent()
+        self.write("}")
+        self.write("if (Array.isArray(obj.userData._pulse) && obj.userData._pulse.length >= 2) {")
+        self.indent()
+        self.write("const p = obj.userData._pulse;")
+        self.write("capabilityState.pulse.set(obj, { amount: p[0], frequency: p[1] * Math.PI * 2, baseScale: obj.scale.x, phase: 0 });")
+        self.dedent()
+        self.write("}")
+        self.write("if (Array.isArray(obj.userData._orbit) && obj.userData._orbit.length >= 3) {")
+        self.indent()
+        self.write("const o = obj.userData._orbit;")
+        self.write("capabilityState.orbit.set(obj, { center: new THREE.Vector3(0, obj.position.y, 0), radius: o[0], speed: o[1] * Math.PI / 180, angle: 0, height: o[2] || obj.position.y });")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("});")
+        self.write_blank()
+
         self.write("animate();")
         self.write_blank()
 
@@ -3891,12 +3962,113 @@ class ThreeJSEmitter(BaseEmitter):
         self.dedent()
         self.write("}")
 
-        # Get
+        # Get - with deep attribute search fallback
         self.write("else if (parts[0] === 'get' && parts[1]) {")
         self.indent()
-        self.write("const obj = scene.getObjectByName(parts[1]);")
-        self.write("if (obj) { currentObject = obj; currentObjectName = parts[1]; log('<object: ' + parts[1] + '>', 'ok'); }")
-        self.write("else log('Not found: ' + parts[1], 'err');")
+        self.write("const queryParts = parts.slice(1);")
+        self.write("const queryJoined = queryParts.join('-');")  # Try hyphenated version
+        self.write("let obj = scene.getObjectByName(queryParts[0]) || scene.getObjectByName(queryJoined);")
+        self.write("if (obj) { currentObject = obj; currentObjectName = obj.name; log('<object: ' + obj.name + '>', 'ok'); }")
+        self.write("else {")
+        self.indent()
+        # Deep search by color and type attributes
+        self.write("// Deep search by attributes (color, shape type)")
+        self.write("const colorHexMap = {0xff0000:'red', 0x00ff00:'green', 0x0000ff:'blue', 0xffff00:'yellow', 0x00ffff:'cyan', 0xff00ff:'magenta', 0xffffff:'white', 0x000000:'black', 0x111111:'black', 0xff8800:'orange', 0x8800ff:'purple', 0xff88ff:'pink', 0xff88cc:'pink', 0x888888:'gray', 0xffd700:'gold', 0xc0c0c0:'silver'};")
+        self.write("const knownColors = {red:1, green:1, blue:1, yellow:1, cyan:1, magenta:1, white:1, black:1, orange:1, purple:1, pink:1, gray:1, grey:1, gold:1, silver:1};")
+        self.write("const shapeSynonyms = {box:'cube', cube:'cube', ball:'sphere', sphere:'sphere', cylinder:'cylinder', tube:'cylinder', cone:'cone', torus:'torus', ring:'torus'};")
+        self.write("const getColorName = (mesh) => {")
+        self.indent()
+        self.write("if (mesh.userData && mesh.userData._color) return mesh.userData._color.toLowerCase();")
+        self.write("if (mesh.material && mesh.material.color) {")
+        self.indent()
+        self.write("const hex = mesh.material.color.getHex();")
+        self.write("if (colorHexMap[hex]) return colorHexMap[hex];")
+        # Fuzzy color matching - check if close to known colors
+        self.write("const r = (hex >> 16) & 0xff, g = (hex >> 8) & 0xff, b = hex & 0xff;")
+        self.write("if (r > 200 && g < 100 && b < 100) return 'red';")
+        self.write("if (r < 100 && g > 200 && b < 100) return 'green';")
+        self.write("if (r < 100 && g < 100 && b > 200) return 'blue';")
+        self.write("if (r > 200 && g > 200 && b < 100) return 'yellow';")
+        self.write("if (r < 100 && g > 200 && b > 200) return 'cyan';")
+        self.write("if (r > 200 && g < 100 && b > 200) return 'magenta';")
+        self.write("if (r > 200 && g > 100 && b < 100) return 'orange';")
+        self.write("if (r > 100 && g < 100 && b > 200) return 'purple';")
+        self.write("if (r > 200 && g > 100 && b > 150) return 'pink';")
+        self.write("if (r > 220 && g > 220 && b > 220) return 'white';")
+        self.write("if (r < 50 && g < 50 && b < 50) return 'black';")
+        self.write("if (Math.abs(r-g) < 30 && Math.abs(g-b) < 30) return 'gray';")
+        self.dedent()
+        self.write("}")
+        self.write("return '';")
+        self.dedent()
+        self.write("};")
+        self.write("const getTypeName = (mesh) => {")
+        self.indent()
+        self.write("if (mesh.userData && mesh.userData._type) return mesh.userData._type.toLowerCase();")
+        self.write("if (mesh.geometry) {")
+        self.indent()
+        self.write("const gt = mesh.geometry.type.toLowerCase();")
+        self.write("if (gt.includes('box')) return 'cube';")
+        self.write("if (gt.includes('sphere')) return 'sphere';")
+        self.write("if (gt.includes('cylinder')) return 'cylinder';")
+        self.write("if (gt.includes('cone')) return 'cone';")
+        self.write("if (gt.includes('torus')) return 'torus';")
+        self.write("if (gt.includes('plane')) return 'plane';")
+        self.dedent()
+        self.write("}")
+        self.write("return '';")
+        self.dedent()
+        self.write("};")
+        self.write("let targetColor = null, targetShape = null;")
+        self.write("for (const w of queryParts) {")
+        self.indent()
+        self.write("const wl = w.toLowerCase();")
+        self.write("if (knownColors[wl]) targetColor = wl;")
+        self.write("if (shapeSynonyms[wl]) targetShape = shapeSynonyms[wl];")
+        self.dedent()
+        self.write("}")
+        self.write("if (!targetColor && !targetShape) {")
+        self.indent()
+        self.write("log('Not found: ' + queryParts[0], 'err');")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("const matches = [];")
+        self.write("scene.traverse(child => {")
+        self.indent()
+        self.write("if (child.isMesh && child.name && !child.name.startsWith('_')) {")
+        self.indent()
+        self.write("const cType = getTypeName(child);")
+        self.write("const cColor = getColorName(child);")
+        self.write("const typeMatch = !targetShape || cType.includes(targetShape);")
+        self.write("const colorMatch = !targetColor || cColor === targetColor || (targetColor === 'grey' && cColor === 'gray');")
+        self.write("if (typeMatch && colorMatch) matches.push(child.name);")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("});")
+        self.write("if (matches.length === 0) {")
+        self.indent()
+        self.write("log('Not found: no ' + (targetColor || '') + ' ' + (targetShape || 'objects'), 'err');")
+        self.dedent()
+        self.write("} else if (matches.length === 1) {")
+        self.indent()
+        self.write("const found = scene.getObjectByName(matches[0]);")
+        self.write("currentObject = found; currentObjectName = matches[0];")
+        self.write("log('[deep search] <object: ' + matches[0] + '>', 'ok');")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("log('[deep search] Found ' + matches.length + ': ' + matches.join(', '), 'ok');")
+        self.write("const found = scene.getObjectByName(matches[0]);")
+        self.write("currentObject = found; currentObjectName = matches[0];")
+        self.write("log('Selected: ' + matches[0], 'ok');")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
         self.dedent()
         self.write("}")
 
