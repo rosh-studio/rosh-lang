@@ -103,8 +103,9 @@ class TokenType(Enum):
     # Metadata system
     META = auto()
 
-    # Test system
-    TEST = auto()       # test "name" ... end
+    # Test system (only active when lexer is in test_mode)
+    TEST = auto()       # test "name" ... endtest
+    ENDTEST = auto()    # endtest - closes test block (allows nested end)
     EXPECT = auto()     # expect <condition>
     SECTION = auto()    # section "core" / "standard" / "full"
     TRY = auto()        # try <command> - capture errors
@@ -114,6 +115,7 @@ class TokenType(Enum):
     VOICE = auto()      # test "x" with voice
     CORRECTION = auto() # expect correction "x" to "y"
     NO = auto()         # expect no correction
+    ERROR = auto()      # expect error / expect error contains
 
     # Comparison operators (multi-word)
     IS = auto()
@@ -180,12 +182,13 @@ class Token:
 
 
 class Lexer:
-    def __init__(self, source: str):
+    def __init__(self, source: str, test_mode: bool = False):
         self.source = source
         self.pos = 0
         self.line = 1
         self.column = 1
         self.tokens: List[Token] = []
+        self.test_mode = test_mode  # When True, enables test keywords
         # Note: Indentation is cosmetic in Rosh - no tracking needed
 
     def error(self, message: str):
@@ -452,17 +455,6 @@ class Lexer:
             'sound': TokenType.SOUND,
             'music': TokenType.MUSIC,
             'meta': TokenType.META,
-            # Test system keywords
-            'test': TokenType.TEST,
-            'expect': TokenType.EXPECT,
-            'section': TokenType.SECTION,
-            'try': TokenType.TRY,
-            'skip': TokenType.SKIP,
-            'todo': TokenType.TODO,
-            'exists': TokenType.EXISTS,
-            'voice': TokenType.VOICE,
-            'correction': TokenType.CORRECTION,
-            'no': TokenType.NO,
             'is': TokenType.IS,
             'equal': TokenType.EQUAL,
             'not': TokenType.NOT,
@@ -493,6 +485,23 @@ class Lexer:
             'at': TokenType.AT,  # 'at' for position shorthand (create object at x, y)
             'say': TokenType.PRINT,  # 'say' is alias for 'print' (backwards compat)
         }
+
+        # Test system keywords - only active in test_mode to avoid breaking user programs
+        if self.test_mode:
+            keyword_map.update({
+                'test': TokenType.TEST,
+                'endtest': TokenType.ENDTEST,
+                'expect': TokenType.EXPECT,
+                'section': TokenType.SECTION,
+                'try': TokenType.TRY,
+                'skip': TokenType.SKIP,
+                'todo': TokenType.TODO,
+                'exists': TokenType.EXISTS,
+                'voice': TokenType.VOICE,
+                'correction': TokenType.CORRECTION,
+                'no': TokenType.NO,
+                'error': TokenType.ERROR,
+            })
 
         token_type = keyword_map.get(identifier_lower, TokenType.IDENTIFIER)
 

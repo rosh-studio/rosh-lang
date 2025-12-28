@@ -537,6 +537,21 @@ scaleZ = 0.4
 # EFFECTS - Visual effects and particles
 # =============================================================================
 
+[castle]
+description = "A stone castle with towers and walls"
+category = "structure"
+[castle.2d]
+color = "gray"
+shape = "rectangle"
+width = 2.0
+height = 1.5
+[castle.3d]
+shape = "box"
+color = 0x808080
+model = "3d_glb/castle.glb"
+credit = "Castle by hamidkhan224 (CC BY 4.0)"
+credit_url = "https://skfb.ly/otLpZ"
+
 [explosion]
 description = "A fiery explosion"
 category = "effect"

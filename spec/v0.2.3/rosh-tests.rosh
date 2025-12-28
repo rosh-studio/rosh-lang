@@ -14,6 +14,12 @@
 # Run level:    rosh test spec/v0.2.3/rosh-tests.rosh --level core
 #
 # =============================================================================
+#
+# KNOWN LIMITATION: Multi-line blocks (if/when/define...end) cannot be tested.
+# Test bodies execute line-by-line. Use `skip` for multi-line block tests.
+# See: rosh-dev/reviews/2025-12-28-spec-test-review.md
+#
+# =============================================================================
 
 # =============================================================================
 # CORE TESTS - Required for "Rosh Core Compliant"
@@ -28,18 +34,18 @@ section "core"
 test "create simple object"
     create box
     expect box exists
-end
+endtest
 
 test "create object exists"
     create ball
     expect ball exists
-end
+endtest
 
 test "set color on created object"
     create thing
     set thing color to "green"
     expect thing.color is "green"
-end
+endtest
 
 # -----------------------------------------------------------------------------
 # Property Setting
@@ -48,20 +54,20 @@ end
 test "set property with to keyword"
     create player
     set player x to 100
-    expect player.x is "100"
-end
+    expect player.x is 100
+endtest
 
 test "set property with dot notation"
     create enemy
     set enemy.y to 200
-    expect enemy.y is "200"
-end
+    expect enemy.y is 200
+endtest
 
 test "set color property"
     create cube
     set cube color to "red"
     expect cube.color is "red"
-end
+endtest
 
 # -----------------------------------------------------------------------------
 # Variables
@@ -69,14 +75,14 @@ end
 
 test "create variable with value"
     set score to 0
-    expect score is "0"
-end
+    expect score is 0
+endtest
 
 test "set variable to new value"
     set counter to 5
     set counter to 10
-    expect counter is "10"
-end
+    expect counter is 10
+endtest
 
 # -----------------------------------------------------------------------------
 # Basic Math
@@ -85,14 +91,71 @@ end
 test "addition expression"
     set a to 5
     set b to a plus 3
-    expect b is "8"
-end
+    expect b is 8
+endtest
 
 test "subtraction expression"
     set x to 10
     set y to x minus 4
-    expect y is "6"
-end
+    expect y is 6
+endtest
+
+test "type-aware numeric comparison"
+    set num to 42
+    expect num is 42
+endtest
+
+test "type-aware boolean comparison"
+    create obj
+    hide obj
+    expect obj.visible is False
+endtest
+
+test "quoted string preserves literal value"
+    create item
+    set item status to "True"
+    expect item.status is "True"
+endtest
+
+test "quoted numeric string stays as string"
+    create data
+    set data code to "42"
+    expect data.code is "42"
+endtest
+
+test "quoted vs unquoted type mismatch - number" todo
+    set num to 42
+    expect num is "42"
+endtest
+
+test "quoted vs unquoted type mismatch - boolean" todo
+    create flag
+    set flag active to True
+    expect flag.active is "True"
+endtest
+
+# -----------------------------------------------------------------------------
+# Todo Tests (expected failures)
+# -----------------------------------------------------------------------------
+
+test "animate object" todo
+    create sprite
+    animate sprite from "idle" to "walk"
+    expect sprite.animation is "walk"
+endtest
+
+# -----------------------------------------------------------------------------
+# Conditionals (tests nested end)
+# -----------------------------------------------------------------------------
+
+test "if block with end inside test" skip "Multi-line block execution not implemented"
+    create player
+    set player health to 100
+    if player.health is above 50
+        set player status to "healthy"
+    end
+    expect player.status is "healthy"
+endtest
 
 # =============================================================================
 # STANDARD TESTS - Required for "Rosh Standard Compliant"
@@ -107,15 +170,15 @@ section "standard"
 test "hide makes object invisible"
     create target
     hide target
-    expect target.visible is "False"
-end
+    expect target.visible is False
+endtest
 
 test "show makes object visible"
     create item
     hide item
     show item
-    expect item.visible is "True"
-end
+    expect item.visible is True
+endtest
 
 # -----------------------------------------------------------------------------
 # Delete
@@ -125,7 +188,7 @@ test "delete removes object"
     create temp
     delete temp
     expect temp not exists
-end
+endtest
 
 # -----------------------------------------------------------------------------
 # Error Handling
@@ -134,7 +197,22 @@ end
 test "try captures error for nonexistent object"
     try set nonexistent x to 5
     expect nonexistent not exists
-end
+endtest
+
+test "expect error validates error occurred"
+    try set missing_object x to 5
+    expect error
+endtest
+
+test "expect error contains validates error message"
+    try set unknown_obj x to 5
+    expect error "Undefined variable"
+endtest
+
+test "successful command has no error"
+    create valid_obj
+    expect no error
+endtest
 
 # =============================================================================
 # FULL TESTS - Required for "Rosh Full Compliant"
@@ -149,15 +227,16 @@ section "full"
 test "undo placeholder" skip "Undo not implemented in interpreter"
     create undotest
     expect undotest exists
-end
+endtest
 
 # -----------------------------------------------------------------------------
 # Voice Corrections (placeholder - needs voice layer)
 # -----------------------------------------------------------------------------
 
-test "voice correction placeholder" skip "Voice testing not implemented"
+test "voice normalization" voice
+    create bocks
     expect box exists
-end
+endtest
 
 # =============================================================================
 # KEYWORDS REFERENCE (for parser development)
@@ -165,6 +244,7 @@ end
 #
 # New keywords added for test system:
 #   - test      : Define a test block
+#   - endtest   : End a test block (allows nested 'end' in test bodies)
 #   - expect    : Assertion statement
 #   - section   : Group tests by compliance level
 #   - try       : Wrap command to capture errors
@@ -174,5 +254,6 @@ end
 #   - voice     : Enable voice preprocessing for test
 #   - correction: Check for voice correction
 #   - no        : Negation (expect no correction)
+#   - error     : Check for error (expect error / expect error contains)
 #
 # =============================================================================

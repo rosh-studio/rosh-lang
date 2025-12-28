@@ -1506,6 +1506,17 @@ def run_repl(interpreter: Interpreter = None):
                                 out.info("Type 'yes' or 'go' to execute")
                             else:
                                 out.dim("Type 'alias' to see available aliases, or use Rosh syntax")
+                    elif "Incomplete command" in error_msg:
+                        # Check if they started with a known command
+                        first_word = source.strip().split()[0] if source.strip() else ""
+                        if first_word in COMMAND_USAGE_HINTS:
+                            hint = COMMAND_USAGE_HINTS[first_word]
+                            out.warning(hint['message'])
+                            out.print("Try one of these:", style="dim")
+                            for ex in hint['examples']:
+                                out.print(f"  {ex}", style="dim")
+                        else:
+                            out.error(str(e))
                     else:
                         out.error(str(e))
 
@@ -1956,6 +1967,8 @@ def run_tests(filepath: str, verbose: bool = False, fail_fast: bool = False,
     passed = 0
     failed = 0
     skipped = 0
+    todo_ok = 0      # Expected failures that failed (good)
+    todo_fail = 0    # Expected failures that passed (bad - needs attention)
 
     for test in filtered_tests:
         if test.get('skip'):
@@ -1964,10 +1977,30 @@ def run_tests(filepath: str, verbose: bool = False, fail_fast: bool = False,
             skipped += 1
             continue
 
+        # Voice tests require normalizer - auto-skip with warning until implemented
+        if test.get('voice'):
+            print(f"  - {test['name']} (skipped: voice normalizer not implemented)")
+            skipped += 1
+            continue
+
         # Run the test
         result = _run_single_test(test, verbose)
+        is_todo = test.get('todo', False)
 
-        if result['passed']:
+        if is_todo:
+            # TODO test: expected to fail
+            if result['passed']:
+                # Unexpectedly passed - this needs attention
+                print(f"  ! {test['name']} (todo: unexpectedly passed)")
+                todo_fail += 1
+            else:
+                # Failed as expected
+                if verbose:
+                    print(f"  ~ {test['name']} (todo: expected failure)")
+                else:
+                    print(f"  ~ {test['name']}")
+                todo_ok += 1
+        elif result['passed']:
             print(f"  \u2713 {test['name']}")
             passed += 1
         else:
@@ -1982,9 +2015,16 @@ def run_tests(filepath: str, verbose: bool = False, fail_fast: bool = False,
                 break
 
     # Summary
-    print(f"\nResults: {passed} passed, {failed} failed" + (f", {skipped} skipped" if skipped else ""))
+    summary_parts = [f"{passed} passed", f"{failed} failed"]
+    if skipped:
+        summary_parts.append(f"{skipped} skipped")
+    if todo_ok:
+        summary_parts.append(f"{todo_ok} todo")
+    if todo_fail:
+        summary_parts.append(f"{todo_fail} todo-passed")
+    print(f"\nResults: {', '.join(summary_parts)}")
 
-    if failed > 0:
+    if failed > 0 or todo_fail > 0:
         sys.exit(1)
 
 
@@ -2004,7 +2044,8 @@ def _parse_test_file(source: str) -> list:
     """
     from .lexer import Lexer, TokenType
 
-    lexer = Lexer(source)
+    # Use test_mode=True to enable test keywords without polluting user namespace
+    lexer = Lexer(source, test_mode=True)
     tokens = lexer.tokenize()
 
     tests = []
@@ -2061,6 +2102,10 @@ def _parse_test_file(source: str) -> list:
                     if i < len(tokens) and tokens[i].type == TokenType.VOICE:
                         test['voice'] = True
                         i += 1
+                elif tokens[i].type == TokenType.VOICE:
+                    # Also support just "voice" without "with"
+                    test['voice'] = True
+                    i += 1
                 else:
                     i += 1
 
@@ -2068,17 +2113,17 @@ def _parse_test_file(source: str) -> list:
             while i < len(tokens) and tokens[i].type == TokenType.NEWLINE:
                 i += 1
 
-            # Parse test body until END
+            # Parse test body until ENDTEST (allows nested end in test bodies)
             body_tokens = []
-            while i < len(tokens) and tokens[i].type != TokenType.END:
+            while i < len(tokens) and tokens[i].type != TokenType.ENDTEST:
                 body_tokens.append(tokens[i])
                 i += 1
 
             # Parse body into commands and expects
             test['commands'], test['expects'] = _parse_test_body(body_tokens)
 
-            # Skip END token
-            if i < len(tokens) and tokens[i].type == TokenType.END:
+            # Skip ENDTEST token
+            if i < len(tokens) and tokens[i].type == TokenType.ENDTEST:
                 i += 1
 
             tests.append(test)
@@ -2219,15 +2264,36 @@ def _parse_expect(tokens: list) -> dict:
         target = _tokens_to_string(target_tokens)
         value = _tokens_to_string(value_tokens)
 
-        # Strip quotes if present
-        if value.startswith('"') and value.endswith('"'):
+        # Track if value was quoted (for type coercion decision)
+        # Quoted values like "True" or "42" should stay as strings
+        was_quoted = value.startswith('"') and value.endswith('"')
+        if was_quoted:
             value = value[1:-1]
 
         return {
             'type': 'equals',
             'target': target,
-            'value': value
+            'value': value,
+            'quoted': was_quoted  # If True, skip type coercion
         }
+
+    # expect error - check that last command produced an error
+    if len(tokens) >= 1 and tokens[0].type == TokenType.ERROR:
+        # expect error contains "message"
+        if len(tokens) >= 2:
+            # Look for CONTAINS or a string
+            for idx, t in enumerate(tokens[1:], 1):
+                if t.type == TokenType.STRING:
+                    return {
+                        'type': 'error_contains',
+                        'pattern': t.value
+                    }
+        # Just "expect error" - any error is fine
+        return {'type': 'error'}
+
+    # expect no error
+    if len(tokens) >= 2 and tokens[0].type == TokenType.NO and tokens[1].type == TokenType.ERROR:
+        return {'type': 'no_error'}
 
     # expect no correction
     if len(tokens) >= 2 and tokens[0].type == TokenType.NO and tokens[1].type == TokenType.CORRECTION:
@@ -2345,13 +2411,81 @@ def _check_expect(expect: dict, interpreter, last_error: str) -> dict:
         else:
             actual_value = obj
 
-        # Normalize for comparison
-        actual_str = str(actual_value) if actual_value is not None else 'None'
+        # Type-aware comparison
+        def normalize_value(val):
+            """Convert value to comparable form, preserving type info."""
+            if val is None:
+                return None, 'None'
+            # Handle booleans (Python's bool is subclass of int)
+            if isinstance(val, bool):
+                return val, str(val)
+            # Handle numbers
+            if isinstance(val, (int, float)):
+                return val, str(val)
+            # Handle strings
+            return str(val), str(val)
+
+        def parse_expected(val_str):
+            """Parse expected value string to typed value."""
+            if val_str in ('True', 'true'):
+                return True
+            if val_str in ('False', 'false'):
+                return False
+            if val_str == 'None':
+                return None
+            # Try as number
+            try:
+                if '.' in val_str:
+                    return float(val_str)
+                return int(val_str)
+            except (ValueError, TypeError):
+                pass
+            return val_str
+
+        actual_typed, actual_str = normalize_value(actual_value)
         expected_str = str(expected_value)
 
-        if actual_str != expected_str:
-            return {'passed': False, 'expected': f'{target} is {expected_str}', 'actual': f'{target} is {actual_str}'}
+        # If value was quoted, require actual value to BE a string (type check)
+        # This ensures `expect x is "42"` fails if x is integer 42
+        was_quoted = expect.get('quoted', False)
+        if was_quoted:
+            # Quoted means: actual must be a string AND match the expected string
+            if not isinstance(actual_value, str):
+                actual_type = type(actual_value).__name__
+                return {'passed': False, 'expected': f'{target} is "{expected_str}" (string)', 'actual': f'{target} is {actual_str} ({actual_type})'}
+            if actual_value != expected_value:
+                return {'passed': False, 'expected': f'{target} is "{expected_str}"', 'actual': f'{target} is "{actual_str}"'}
+        else:
+            # Type-aware comparison for unquoted values
+            expected_typed = parse_expected(expected_value)
+            if actual_typed != expected_typed:
+                return {'passed': False, 'expected': f'{target} is {expected_str}', 'actual': f'{target} is {actual_str}'}
 
+        return {'passed': True}
+
+    if expect_type == 'error':
+        # Expect an error occurred
+        # TODO: When interpreter moves to error-stack semantics (Go-style .error property),
+        # wire last_error to interpreter.error_stack or equivalent state instead of
+        # relying solely on Python exceptions. See ROSH-SPEC-FORMALIZATION.md.
+        if last_error is None:
+            return {'passed': False, 'expected': 'an error', 'actual': 'no error'}
+        return {'passed': True}
+
+    if expect_type == 'error_contains':
+        # Expect error message contains a pattern
+        # TODO: Same error-stack integration needed here
+        pattern = expect.get('pattern', '')
+        if last_error is None:
+            return {'passed': False, 'expected': f'error containing "{pattern}"', 'actual': 'no error'}
+        if pattern not in last_error:
+            return {'passed': False, 'expected': f'error containing "{pattern}"', 'actual': f'error: {last_error}'}
+        return {'passed': True}
+
+    if expect_type == 'no_error':
+        # Expect no error occurred
+        if last_error is not None:
+            return {'passed': False, 'expected': 'no error', 'actual': f'error: {last_error}'}
         return {'passed': True}
 
     if expect_type == 'no_correction':
