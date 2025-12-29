@@ -253,11 +253,13 @@ def _fuzzy_match_command(word: str, interpreter=None):
     return matches[0] if matches else None
 
 
-def _list_scenes(interpreter, out):
-    """List all scenes defined in objects (Universal REPL command)"""
+def _get_all_scenes(interpreter):
+    """Get all scenes (from objects + explicitly created)"""
     from .values import RoshObject, rosh_to_python
 
     scenes = set()
+
+    # Get scenes from objects
     for name in interpreter.current_env.bindings.keys():
         try:
             value = interpreter.current_env.get(name)
@@ -268,8 +270,44 @@ def _list_scenes(interpreter, out):
         except:
             pass
 
+    # Get explicitly created scenes (stored in _rosh_scenes variable)
+    if interpreter.current_env.exists('_rosh_scenes'):
+        explicit = interpreter.current_env.get('_rosh_scenes')
+        if isinstance(explicit, list):
+            scenes.update(explicit)
+
+    return scenes
+
+
+def _create_scene(interpreter, out, scene_name: str):
+    """Create a scene explicitly (Universal REPL command)"""
+    existing = _get_all_scenes(interpreter)
+
+    # Check if scene already exists
+    if scene_name in existing or scene_name.lower() in [s.lower() for s in existing]:
+        out.warning(f"Scene '{scene_name}' already exists.")
+        return
+
+    # Store in _rosh_scenes list
+    if interpreter.current_env.exists('_rosh_scenes'):
+        scenes_list = interpreter.current_env.get('_rosh_scenes')
+        if isinstance(scenes_list, list):
+            scenes_list.append(scene_name)
+        else:
+            interpreter.current_env.set('_rosh_scenes', [scene_name])
+    else:
+        interpreter.current_env.define('_rosh_scenes', [scene_name])
+
+    out.success(f"Created scene '{scene_name}'")
+    out.dim(f"Use 'go {scene_name}' to navigate, or assign objects with 'set <obj> scene to {scene_name}'")
+
+
+def _list_scenes(interpreter, out):
+    """List all scenes defined in objects (Universal REPL command)"""
+    scenes = _get_all_scenes(interpreter)
+
     if not scenes:
-        out.dim("No scenes defined. Use 'set <object> scene to <name>' to assign objects to scenes.")
+        out.dim("No scenes defined. Use 'create scene <name>' or 'set <object> scene to <name>'.")
         return
 
     # Get current scene if set
@@ -1242,6 +1280,15 @@ def run_repl(interpreter: Interpreter = None):
                 if _show_command_usage(out, parts[0].lower()):
                     continue
 
+            # create scene <name> - explicitly create a scene
+            if stripped.startswith('create scene '):
+                scene_name = line.strip().split(None, 2)[2] if len(line.strip().split()) > 2 else None
+                if scene_name:
+                    _create_scene(interpreter, out, scene_name)
+                else:
+                    out.warning("Usage: create scene <name>")
+                continue
+
             # scenes / list scenes - show available scenes
             if stripped in ('scenes', 'list scenes', 'ls scenes'):
                 _list_scenes(interpreter, out)
@@ -1295,21 +1342,9 @@ def run_repl(interpreter: Interpreter = None):
             if stripped.startswith('go ') and interpreter.pending_operation is None:
                 place = stripped[3:].strip()
                 if place:
-                    # Check if this is a scene (any objects have this scene)
-                    from .values import RoshObject, rosh_to_python
-                    is_scene = False
-                    available_scenes = set()
-                    for name in interpreter.current_env.bindings.keys():
-                        try:
-                            value = interpreter.current_env.get(name)
-                            if isinstance(value, RoshObject) and value.has('scene'):
-                                obj_scene = rosh_to_python(value.get('scene'))
-                                if obj_scene:
-                                    available_scenes.add(obj_scene)
-                                    if obj_scene.lower() == place.lower():
-                                        is_scene = True
-                        except:
-                            pass
+                    # Check if this is a scene (including explicitly created ones)
+                    available_scenes = _get_all_scenes(interpreter)
+                    is_scene = place in available_scenes or place.lower() in [s.lower() for s in available_scenes]
 
                     if is_scene:
                         # Navigate to scene directly

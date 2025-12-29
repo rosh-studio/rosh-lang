@@ -3648,37 +3648,41 @@ Focus on the specific syntax or concept they need to correct."""
             print("\nNo obvious exits.", file=self.output_stream)
         print(file=self.output_stream)
 
+    def _get_all_scenes(self) -> set:
+        """Get all scenes (from objects + explicitly created)"""
+        from .values import rosh_to_python
+
+        scenes = set()
+
+        # Get scenes from objects
+        for name in self.current_env.bindings.keys():
+            try:
+                value = self.current_env.get(name)
+                if isinstance(value, RoshObject) and value.has('scene'):
+                    obj_scene = rosh_to_python(value.get('scene'))
+                    if obj_scene:
+                        scenes.add(obj_scene)
+            except:
+                pass
+
+        # Get explicitly created scenes (stored in _rosh_scenes variable)
+        if self.current_env.exists('_rosh_scenes'):
+            explicit = self.current_env.get('_rosh_scenes')
+            if isinstance(explicit, list):
+                scenes.update(explicit)
+
+        return scenes
+
     def eval_goto_scene(self, node: GotoScene) -> None:
         """Execute: goto scene <name> - Navigate to a scene"""
         from .values import rosh_to_python
 
         if node.scene:
-            # Find objects in the target scene to verify it exists
-            scene_exists = False
-            for name in self.current_env.bindings.keys():
-                try:
-                    value = self.current_env.get(name)
-                    if isinstance(value, RoshObject) and value.has('scene'):
-                        obj_scene = rosh_to_python(value.get('scene'))
-                        if obj_scene and obj_scene.lower() == node.scene.lower():
-                            scene_exists = True
-                            break
-                except:
-                    pass
+            # Check if scene exists (objects or explicitly created)
+            available_scenes = self._get_all_scenes()
+            scene_exists = node.scene in available_scenes or node.scene.lower() in [s.lower() for s in available_scenes]
 
             if not scene_exists:
-                # Fuzzy match scenes
-                available_scenes = set()
-                for name in self.current_env.bindings.keys():
-                    try:
-                        value = self.current_env.get(name)
-                        if isinstance(value, RoshObject) and value.has('scene'):
-                            obj_scene = rosh_to_python(value.get('scene'))
-                            if obj_scene:
-                                available_scenes.add(obj_scene)
-                    except:
-                        pass
-
                 if available_scenes:
                     # Try fuzzy match
                     import difflib
