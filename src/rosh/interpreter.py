@@ -691,6 +691,8 @@ class Interpreter:
             return self.eval_properties(node)
         elif isinstance(node, GotoRoom):
             return self.eval_goto(node)
+        elif isinstance(node, GotoScene):
+            return self.eval_goto_scene(node)
         elif isinstance(node, LookCommand):
             return self.eval_look(node)
         elif isinstance(node, ConnectRooms):
@@ -3645,6 +3647,82 @@ Focus on the specific syntax or concept they need to correct."""
         else:
             print("\nNo obvious exits.", file=self.output_stream)
         print(file=self.output_stream)
+
+    def eval_goto_scene(self, node: GotoScene) -> None:
+        """Execute: goto scene <name> - Navigate to a scene"""
+        from .values import rosh_to_python
+
+        if node.scene:
+            # Find objects in the target scene to verify it exists
+            scene_exists = False
+            for name in self.current_env.bindings.keys():
+                try:
+                    value = self.current_env.get(name)
+                    if isinstance(value, RoshObject) and value.has('scene'):
+                        obj_scene = rosh_to_python(value.get('scene'))
+                        if obj_scene and obj_scene.lower() == node.scene.lower():
+                            scene_exists = True
+                            break
+                except:
+                    pass
+
+            if not scene_exists:
+                # Fuzzy match scenes
+                available_scenes = set()
+                for name in self.current_env.bindings.keys():
+                    try:
+                        value = self.current_env.get(name)
+                        if isinstance(value, RoshObject) and value.has('scene'):
+                            obj_scene = rosh_to_python(value.get('scene'))
+                            if obj_scene:
+                                available_scenes.add(obj_scene)
+                    except:
+                        pass
+
+                if available_scenes:
+                    # Try fuzzy match
+                    import difflib
+                    matches = difflib.get_close_matches(node.scene, available_scenes, n=1, cutoff=0.6)
+                    if matches:
+                        print(f"Scene '{node.scene}' not found. Did you mean '{matches[0]}'?", file=self.output_stream)
+                        print(f"Type 'go {matches[0]}' to confirm.", file=self.output_stream)
+                    else:
+                        print(f"Scene '{node.scene}' not found.", file=self.output_stream)
+                        print(f"Available scenes: {', '.join(sorted(available_scenes))}", file=self.output_stream)
+                else:
+                    print(f"No scenes defined. Use 'set <object> scene to <name>' to assign objects to scenes.", file=self.output_stream)
+                return
+
+            # Update current-scene variable
+            if self.current_env.exists('current-scene'):
+                self.current_env.set('current-scene', node.scene)
+            else:
+                self.current_env.define('current-scene', node.scene)
+
+            # Count objects in this scene
+            count = 0
+            for name in self.current_env.bindings.keys():
+                try:
+                    value = self.current_env.get(name)
+                    if isinstance(value, RoshObject) and value.has('scene'):
+                        obj_scene = rosh_to_python(value.get('scene'))
+                        if obj_scene and obj_scene.lower() == node.scene.lower():
+                            count += 1
+                except:
+                    pass
+
+            print(f"\n=== {node.scene} ===", file=self.output_stream)
+            print(f"{count} object{'s' if count != 1 else ''} in this scene.", file=self.output_stream)
+            print(f"Use 'list' to see objects, 'scenes' for other scenes.", file=self.output_stream)
+            print(file=self.output_stream)
+
+        if node.level is not None:
+            # Update current-level variable
+            if self.current_env.exists('current-level'):
+                self.current_env.set('current-level', node.level)
+            else:
+                self.current_env.define('current-level', node.level)
+            print(f"Level set to {node.level}", file=self.output_stream)
 
     def eval_look(self, node: LookCommand) -> None:
         """Execute: look [object] - Show current room or examine object"""

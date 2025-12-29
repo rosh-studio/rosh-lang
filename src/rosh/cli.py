@@ -253,7 +253,39 @@ def _fuzzy_match_command(word: str, interpreter=None):
     return matches[0] if matches else None
 
 
-def _list_objects(interpreter, out, max_display=10):
+def _list_scenes(interpreter, out):
+    """List all scenes defined in objects (Universal REPL command)"""
+    from .values import RoshObject, rosh_to_python
+
+    scenes = set()
+    for name in interpreter.current_env.bindings.keys():
+        try:
+            value = interpreter.current_env.get(name)
+            if isinstance(value, RoshObject) and value.has('scene'):
+                scene = rosh_to_python(value.get('scene'))
+                if scene:
+                    scenes.add(scene)
+        except:
+            pass
+
+    if not scenes:
+        out.dim("No scenes defined. Use 'set <object> scene to <name>' to assign objects to scenes.")
+        return
+
+    # Get current scene if set
+    current = None
+    if interpreter.current_env.exists('current-scene'):
+        current = interpreter.current_env.get('current-scene')
+
+    out.print(f"Scenes ({len(scenes)}):", style="bold cyan")
+    for scene in sorted(scenes):
+        marker = " ← current" if scene == current else ""
+        out.print(f"  {scene}{marker}", style="green")
+
+    out.dim(f"\nUse 'go <scene>' to navigate, 'list <scene>' to see objects.")
+
+
+def _list_objects(interpreter, out, max_display=10, scene_filter=None, group_by_scene=False):
     """List all objects in the current environment (Universal REPL command)"""
     from .values import RoshObject, rosh_to_python
 
@@ -270,11 +302,61 @@ def _list_objects(interpreter, out, max_display=10):
         out.dim("No objects defined. Use 'create object <name>' to create one.")
         return
 
-    total = len(objects)
-    out.print(f"Objects ({total}):", style="bold cyan")
+    # Filter by scene if requested
+    if scene_filter:
+        filtered = []
+        for name, obj in objects:
+            obj_scene = rosh_to_python(obj.get('scene')) if obj.has('scene') else None
+            if obj_scene and obj_scene.lower() == scene_filter.lower():
+                filtered.append((name, obj))
+        if not filtered:
+            out.warning(f"No objects in scene '{scene_filter}'")
+            # Suggest similar scenes
+            scenes = set()
+            for name, obj in objects:
+                if obj.has('scene'):
+                    scenes.add(rosh_to_python(obj.get('scene')))
+            if scenes:
+                out.dim(f"Available scenes: {', '.join(sorted(scenes))}")
+            return
+        objects = filtered
+        out.print(f"Objects in '{scene_filter}' ({len(objects)}):", style="bold cyan")
+    elif group_by_scene:
+        # Group objects by scene
+        by_scene = {}
+        no_scene = []
+        for name, obj in objects:
+            obj_scene = rosh_to_python(obj.get('scene')) if obj.has('scene') else None
+            if obj_scene:
+                if obj_scene not in by_scene:
+                    by_scene[obj_scene] = []
+                by_scene[obj_scene].append((name, obj))
+            else:
+                no_scene.append((name, obj))
+
+        # Display grouped
+        total = len(objects)
+        out.print(f"All Objects ({total}):", style="bold cyan")
+
+        for scene in sorted(by_scene.keys()):
+            out.print(f"\n  [{scene}]", style="bold yellow")
+            for name, obj in by_scene[scene]:
+                obj_type = obj.name if hasattr(obj, 'name') and obj.name else "object"
+                out.print(f"    {name} ({obj_type})", style="green")
+
+        if no_scene:
+            out.print(f"\n  [global]", style="bold yellow")
+            for name, obj in no_scene:
+                obj_type = obj.name if hasattr(obj, 'name') and obj.name else "object"
+                out.print(f"    {name} ({obj_type})", style="green")
+        return
+    else:
+        total = len(objects)
+        out.print(f"Objects ({total}):", style="bold cyan")
 
     # Show first max_display objects
-    for name, obj in objects[:max_display]:
+    display_list = objects if max_display is None else objects[:max_display]
+    for name, obj in display_list:
         # Get type (object name)
         obj_type = obj.name if hasattr(obj, 'name') and obj.name else "object"
         # Get position if available
@@ -285,13 +367,15 @@ def _list_objects(interpreter, out, max_display=10):
             props.append(f"at [{x}, {y}]")
         if obj.has('color'):
             props.append(f"color={rosh_to_python(obj.get('color'))}")
+        if obj.has('scene') and not scene_filter:
+            props.append(f"scene={rosh_to_python(obj.get('scene'))}")
 
         prop_str = f" ({', '.join(props)})" if props else ""
         out.print(f"  {name} ({obj_type}){prop_str}", style="green")
 
     # Show "and X more" if truncated
-    if max_display is not None and total > max_display:
-        remaining = total - max_display
+    if max_display is not None and len(objects) > max_display:
+        remaining = len(objects) - max_display
         out.dim(f"  ... and {remaining} more (use 'list all' to see all)")
 
 
@@ -537,6 +621,97 @@ def _show_command_usage(out, command: str) -> bool:
         for example in examples:
             out.print(f"  {example}", style="green")
     return True
+
+
+# Known colors and size modifiers for deep search
+KNOWN_COLORS = {'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'white', 'black', 'gray', 'grey', 'cyan', 'magenta', 'brown', 'gold', 'silver'}
+SIZE_MODIFIERS = {'big': 2.0, 'large': 2.0, 'huge': 3.0, 'giant': 4.0, 'small': 0.5, 'tiny': 0.25, 'little': 0.5}
+
+
+def _deep_search(interpreter, words):
+    """Deep search: find object by type + modifiers (color, size).
+
+    Examples:
+        _deep_search(interp, ['blue', 'sphere']) → finds sphere with color=blue
+        _deep_search(interp, ['big', 'red', 'cube']) → finds cube with color=red, size>=2
+
+    Returns: (obj, obj_name) or (None, None)
+    """
+    from .values import RoshObject, rosh_to_python
+
+    # Parse modifiers and type from words
+    colors = []
+    sizes = []
+    type_word = None
+
+    for word in words:
+        w = word.lower()
+        if w in KNOWN_COLORS:
+            colors.append(w)
+        elif w in SIZE_MODIFIERS:
+            sizes.append(w)
+        else:
+            type_word = w
+
+    if not type_word:
+        return None, None
+
+    # Search for matching objects
+    candidates = []
+    for name in interpreter.current_env.bindings.keys():
+        try:
+            value = interpreter.current_env.get(name)
+            if not isinstance(value, RoshObject):
+                continue
+
+            # Check type match
+            obj_type = value.name if hasattr(value, 'name') and value.name else None
+            # Also check if name contains the type word
+            if obj_type and obj_type.lower() == type_word.lower():
+                pass  # Type matches
+            elif type_word.lower() in name.lower():
+                pass  # Name contains type
+            else:
+                continue
+
+            # Check color match
+            color_match = True
+            if colors:
+                obj_color = rosh_to_python(value.get('color')) if value.has('color') else None
+                if obj_color:
+                    color_match = any(c in obj_color.lower() for c in colors)
+                else:
+                    color_match = False
+
+            # Check size match
+            size_match = True
+            if sizes:
+                obj_size = rosh_to_python(value.get('size')) if value.has('size') else None
+                if obj_size is None:
+                    obj_size = rosh_to_python(value.get('scale')) if value.has('scale') else 1.0
+                if obj_size is not None:
+                    # Check if size matches modifier
+                    expected_size = SIZE_MODIFIERS.get(sizes[0], 1.0)
+                    if expected_size > 1:
+                        size_match = obj_size >= expected_size * 0.8  # Within 20%
+                    else:
+                        size_match = obj_size <= expected_size * 1.2
+                else:
+                    size_match = False
+
+            if color_match and size_match:
+                candidates.append((name, value))
+
+        except:
+            pass
+
+    if len(candidates) == 1:
+        return candidates[0][1], candidates[0][0]
+    elif len(candidates) > 1:
+        # Multiple matches - return first but could improve with scoring
+        return candidates[0][1], candidates[0][0]
+
+    return None, None
 
 
 def _get_command(interpreter, out, identifier: str, prop_name: str = None):
@@ -1067,14 +1242,25 @@ def run_repl(interpreter: Interpreter = None):
                 if _show_command_usage(out, parts[0].lower()):
                     continue
 
+            # scenes / list scenes - show available scenes
+            if stripped in ('scenes', 'list scenes', 'ls scenes'):
+                _list_scenes(interpreter, out)
+                continue
+
+            # list <scene> - show objects in specific scene
+            if stripped.startswith('list ') and stripped.split()[1] not in ('all', 'objects'):
+                scene_name = stripped.split(None, 1)[1]
+                _list_objects(interpreter, out, scene_filter=scene_name)
+                continue
+
             # list / ls / objects (no args) - show all objects
             if stripped in ('list', 'ls', 'objects', 'list objects'):
                 _list_objects(interpreter, out)
                 continue
 
-            # list all - show all objects without truncation
+            # list all - show all objects grouped by scene
             if stripped in ('list all', 'ls all', 'objects all'):
-                _list_objects(interpreter, out, max_display=None)
+                _list_objects(interpreter, out, max_display=None, group_by_scene=True)
                 continue
 
             # look (no args) - same as list
@@ -1105,12 +1291,47 @@ def run_repl(interpreter: Interpreter = None):
                     out.dim(f"→ {line}")
                     # Fall through to normal processing
 
-            # go <place> - alias for goto <place> (when not just "go" for confirm)
+            # go <place> - navigate to scene or room (when not just "go" for confirm)
             if stripped.startswith('go ') and interpreter.pending_operation is None:
                 place = stripped[3:].strip()
                 if place:
-                    line = f"goto {place}"
-                    stripped = line
+                    # Check if this is a scene (any objects have this scene)
+                    from .values import RoshObject, rosh_to_python
+                    is_scene = False
+                    available_scenes = set()
+                    for name in interpreter.current_env.bindings.keys():
+                        try:
+                            value = interpreter.current_env.get(name)
+                            if isinstance(value, RoshObject) and value.has('scene'):
+                                obj_scene = rosh_to_python(value.get('scene'))
+                                if obj_scene:
+                                    available_scenes.add(obj_scene)
+                                    if obj_scene.lower() == place.lower():
+                                        is_scene = True
+                        except:
+                            pass
+
+                    if is_scene:
+                        # Navigate to scene directly
+                        line = f"goto scene {place}"
+                        stripped = line
+                        # Fall through to normal processing
+                    elif available_scenes:
+                        # Try fuzzy match against scenes
+                        import difflib
+                        matches = difflib.get_close_matches(place, available_scenes, n=1, cutoff=0.6)
+                        if matches:
+                            out.warning(f"Scene '{place}' not found. Did you mean '{matches[0]}'?")
+                            out.dim(f"Type 'go {matches[0]}' to confirm.")
+                            continue
+                        else:
+                            # Fall back to room navigation
+                            line = f"goto {place}"
+                            stripped = line
+                    else:
+                        # No scenes defined, try room navigation
+                        line = f"goto {place}"
+                        stripped = line
                     # Fall through to normal processing
 
             # move <obj> to <x> <y> [z] - set position with one command
@@ -1385,7 +1606,7 @@ def run_repl(interpreter: Interpreter = None):
                     continue
 
             # get <obj> or get <obj> <prop> - unified get command (#017)
-            # Also: get all <type>, get <type> <n>
+            # Also: get all <type>, get <type> <n>, get blue sphere (deep search)
             # Note: bulk get (get N type) handled by parser - skip this handler
             is_bulk_get = (len(parts) >= 3 and parts[0].lower() == 'get' and parts[1].isdigit())
             if len(parts) >= 2 and parts[0].lower() == 'get' and not is_bulk_get:
@@ -1408,6 +1629,16 @@ def run_repl(interpreter: Interpreter = None):
                     # Also try without suffix for instance 1
                     if prop_name == "1" and interpreter.current_env.exists(identifier):
                         _get_command(interpreter, out, identifier, None)
+                        continue
+
+                # Deep search: "get blue sphere", "get big red cube"
+                # If identifier doesn't exist and we have multiple words, try deep search
+                if not interpreter.current_env.exists(identifier) and len(parts) >= 3:
+                    search_words = parts[1:]  # Everything after 'get'
+                    obj, obj_name = _deep_search(interpreter, search_words)
+                    if obj:
+                        out.dim(f"→ found: {obj_name}")
+                        _get_command(interpreter, out, obj_name, None)
                         continue
 
                 _get_command(interpreter, out, identifier, prop_name)
