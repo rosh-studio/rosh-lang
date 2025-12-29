@@ -2402,7 +2402,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("'why': 'y', 'wie': 'y',")
         self.write("'see': 'z', 'zee': 'z', 'zed': 'z',")
         self.write("'with': 'width', 'whith': 'width',")
-        self.write("'height': 'height', 'hide': 'height', 'hight': 'height',")
+        self.write("'height': 'height', 'hight': 'height',")
         self.write("'visible': 'visible', 'fizzy ball': 'visible',")
         self.write("'scale': 'scale', 'skill': 'scale',")
         self.write("'polls': 'pulse', 'pulls': 'pulse', 'pals': 'pulse',")
