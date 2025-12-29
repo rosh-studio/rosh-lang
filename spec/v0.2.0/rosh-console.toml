@@ -24,7 +24,7 @@
 #   See: docs/SPEC-CHAIN.md
 
 [meta]
-version = "0.2.4"
+version = "0.2.5"
 description = "In-game runtime console commands"
 applies_to = ["emitters/phaser.py", "emitters/pygame.py", "emitters/threejs.py"]
 
@@ -36,6 +36,40 @@ applies_to = ["emitters/phaser.py", "emitters/pygame.py", "emitters/threejs.py"]
 key = "backtick"
 description = "Press ` (backtick) to toggle console visibility"
 required = true
+
+# =============================================================================
+# OBJECT REFERENCES
+# =============================================================================
+
+[references]
+description = """
+'it' and 'this' refer to the current object (last created or selected).
+These are resolved before command execution.
+"""
+
+[references.it]
+description = "Refers to the last created or selected object"
+examples = [
+    "create big blue ball",
+    "move it to center",
+    "make it spin",
+]
+behavior = "Resolved to object name before parsing"
+feedback = "[resolved: it/this → <objectName>]"
+
+[references.this]
+description = "Alias for 'it'"
+examples = [
+    "get player",
+    "set this color to red",
+]
+
+[references.current_object]
+set_by = [
+    "create - sets to newly created object",
+    "get - sets to found object",
+    "clone - sets to cloned object",
+]
 
 # =============================================================================
 # REQUIRED COMMANDS - All emitters MUST implement these
@@ -100,18 +134,28 @@ named_colors = [
 ]
 
 [commands.hide]
-syntax = "hide <object>"
+syntax = "hide <object> | hide all [<type>]"
 aliases = []
-description = "Hide an object (set visible to false)"
+description = "Hide an object or all objects (optionally filtered by type/color)"
 required = true
-example = "hide enemy"
+examples = [
+    "hide enemy",
+    "hide all",
+    "hide all spheres",
+    "hide all blue",
+]
 
 [commands.show]
-syntax = "show <object>"
+syntax = "show <object> | show all [<type>]"
 aliases = ["unhide"]
-description = "Show an object (set visible to true)"
+description = "Show an object or all objects (optionally filtered by type/color)"
 required = true
-example = "show enemy"
+examples = [
+    "show enemy",
+    "show all",
+    "show all cubes",
+    "show all red",
+]
 
 [commands.create]
 syntax = "create [modifiers...] <name> [at <x> <y>]"
@@ -199,11 +243,22 @@ description = "Remove an object from the scene"
 required = false
 
 [commands.move]
-syntax = "move <object> to <x> <y>"
+syntax = "move <object> to <x> <y> [<z>] | move <object> to <named_position>"
 aliases = []
-description = "Move an object to a position"
+description = "Move an object to coordinates or a named position"
 required = false
-note = "Shorthand for set x/y"
+examples = [
+    "move ball to 0 5 0",
+    "move ball to center",
+    "move ball to the center",
+    "move ball to origin",
+    "move ball to ground",
+]
+
+[commands.move.named_positions]
+center = "Move to world center (0, currentY, 0) - keeps current height"
+origin = "Move to world origin (0, 0, 0)"
+ground = "Move to ground level (currentX, 0, currentZ) - keeps X/Z position"
 
 [commands.clear]
 syntax = "clear"
