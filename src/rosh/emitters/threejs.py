@@ -793,6 +793,26 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("document.body.appendChild(renderer.domElement);")
         self.write_blank()
 
+        # Scene transition overlay (cheap fade effect)
+        if self.uses_scenes:
+            self.write_comment("Scene transition overlay")
+            self.write("const transitionOverlay = document.createElement('div');")
+            self.write("transitionOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#000;opacity:0;pointer-events:none;transition:opacity 0.3s ease;z-index:999';")
+            self.write("document.body.appendChild(transitionOverlay);")
+            self.write("function transitionToScene(newScene) {")
+            self.indent()
+            self.write("transitionOverlay.style.opacity = '1';")
+            self.write("setTimeout(() => {")
+            self.indent()
+            self.write("currentScene = newScene;")
+            self.write("updateSceneVisibility();")
+            self.write("setTimeout(() => { transitionOverlay.style.opacity = '0'; }, 50);")
+            self.dedent()
+            self.write("}, 300);")
+            self.dedent()
+            self.write("}")
+            self.write_blank()
+
         # OrbitControls
         self.write_comment("OrbitControls")
         self.write("const controls = new THREE.OrbitControls(camera, renderer.domElement);")
@@ -889,6 +909,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("let consoleVisible = false;")
         self.write("let pendingOp = null;")  # For confirmation on bulk operations
         self.write("// pendingOp = { type: 'delete'|'create', count: N, execute: () => {...} }")
+        self.write("let pendingScene = null;")  # For fuzzy scene match confirmation
+        self.write("let pendingAction = null;")  # For other confirmations
 
         # Scene/level state
         if self.uses_scenes:
@@ -987,7 +1009,8 @@ class ThreeJSEmitter(BaseEmitter):
             object_kind = 'hud'
         elif is_text:
             text = self._get_prop_string(obj, 'text', name)
-            self._emit_text_sprite(name, text, color, world_x, world_y, world_z)
+            font_size = self._get_prop_number(obj, 'font_size', 48)
+            self._emit_text_sprite(name, text, color, world_x, world_y, world_z, font_size)
             object_kind = 'text'
         elif 'sprite' in obj.properties:
             sprite = obj.properties['sprite'].value
@@ -1099,6 +1122,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("function updateSceneVisibility() {")
         self.indent()
 
+        # Static objects from source
         for obj in self.ir.objects:
             if obj.scene is None and obj.level is None:
                 continue  # Always visible, skip
@@ -1112,18 +1136,18 @@ class ThreeJSEmitter(BaseEmitter):
             condition = " && ".join(conditions)
             self.write(f"if ({obj.name}) {obj.name}.visible = ({condition});")
 
+        # Dynamic objects created at runtime
+        self.write("// Handle dynamically created objects")
+        self.write("scene.traverse((obj) => {")
+        self.indent()
+        self.write("if (obj.userData && obj.userData._scene) {")
+        self.indent()
+        self.write("obj.visible = (obj.userData._scene === currentScene);")
         self.dedent()
         self.write("}")
-        self.write("else if (parts[0] === 'capabilities') {")
-        self.indent()
-        self.write("const allowedTags = Array.from(CAPABILITY_POLICY.allowTags);")
-        self.write("const deniedTags = Array.from(CAPABILITY_POLICY.denyTags);")
-        self.write("const allowedCaps = Array.from(CAPABILITY_POLICY.allowCapabilities || []);")
-        self.write("log('Enabled capability tags: ' + (allowedTags.length ? allowedTags.join(', ') : 'safe (default)'), 'cyan');")
-        self.write("if (deniedTags.length) log('Denied tags: ' + deniedTags.join(', '), 'cyan');")
-        self.write("if (allowedCaps.length) log('Explicit allowlist: ' + allowedCaps.join(', '), 'cyan');")
-        self.write("log('Use help <object> or help <capability> for details.', 'dim');")
-        self.write("log('Configure via _meta/threejs.toml [engine_capabilities] allow = [\"safe\",\"experimental\"], deny = [\"destructive\"], etc.', 'dim');")
+        self.dedent()
+        self.write("});")
+
         self.dedent()
         self.write("}")
         self.write_blank()
@@ -1210,16 +1234,19 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("}")
         self.write_blank()
 
-    def _emit_text_sprite(self, name: str, text: str, color: int, x: float, y: float, z: float):
+    def _emit_text_sprite(self, name: str, text: str, color: int, x: float, y: float, z: float, font_size: int = 48):
         """Emit a text sprite using canvas texture."""
         css_color = f"#{color:06x}"
+        # Scale sprite based on font size (larger font = larger sprite)
+        scale_x = 20 * (font_size / 48)
+        scale_y = 5 * (font_size / 48)
 
         self.write(f"const {name}Canvas = document.createElement('canvas');")
         self.write(f"const {name}Ctx = {name}Canvas.getContext('2d');")
         self.write(f"{name}Canvas.width = 1024;")
         self.write(f"{name}Canvas.height = 256;")
         self.write(f"{name}Ctx.fillStyle = '{css_color}';")
-        self.write(f"{name}Ctx.font = 'bold 48px Arial';")
+        self.write(f"{name}Ctx.font = 'bold {font_size}px Arial';")
         self.write(f"{name}Ctx.textAlign = 'center';")
         self.write(f"{name}Ctx.textBaseline = 'middle';")
         self.write(f"{name}Ctx.fillText('{text}', 512, 128);")
@@ -1227,7 +1254,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write(f"const {name}Material = new THREE.SpriteMaterial({{ map: {name}Texture, transparent: true }});")
         self.write(f"const {name} = new THREE.Sprite({name}Material);")
         self.write(f"{name}.position.set({x:.2f}, {y:.2f}, {z:.2f});")
-        self.write(f"{name}.scale.set(20, 5, 1);")
+        self.write(f"{name}.scale.set({scale_x:.2f}, {scale_y:.2f}, 1);")
         self.write(f"{name}.name = '{name}';")
         self.write(f"{name}._canvas = {name}Canvas;")
         self.write(f"{name}._ctx = {name}Ctx;")
@@ -1235,7 +1262,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write(f"{name}._color = '{css_color}';")
         self.write(f"{name}._font = 'Inter';")
         self.write(f"scene.add({name});")
-        self.write(f"{name}.userData.font_size = 48;")
+        self.write(f"{name}.userData.font_size = {font_size};")
 
     def _emit_textured_plane(self, name: str, image: str, x: float, y: float, z: float, w: float, h: float):
         """Emit a textured plane for 2D sprites."""
@@ -2447,7 +2474,13 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const KNOWN_PROPERTIES = ['x', 'y', 'z', 'color', 'text', 'font', 'font_size', 'scale', 'visible', 'pulse', 'width', 'height', 'rotation', 'opacity', 'active'];")
         self.write("const KNOWN_COLORS = ['red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'white', 'black', 'orange', 'purple', 'pink', 'gray'];")
         self.write("const KNOWN_FONTS = ['Inter', 'Arial', 'Helvetica', 'Times', 'Georgia', 'Courier', 'Verdana', 'Roboto'];")
-        self.write("const KNOWN_COMMANDS = ['set', 'get', 'list', 'create', 'delete', 'remove', 'reset', 'hide', 'show', 'clone', 'look', 'examine', 'inspect', 'x', 'ex', 'help', 'prompt', 'save', 'load', 'capabilities', 'camera', 'undo', 'redo', 'count', 'move', 'make', 'credits', 'clear', 'redraw', 'repeat', ':repeat', ':r'];")
+        self.write("const KNOWN_COMMANDS = ['set', 'get', 'list', 'create', 'delete', 'remove', 'reset', 'hide', 'show', 'clone', 'look', 'examine', 'inspect', 'x', 'ex', 'help', 'prompt', 'save', 'load', 'capabilities', 'camera', 'undo', 'redo', 'count', 'move', 'make', 'credits', 'clear', 'redraw', 'repeat', ':repeat', ':r', 'go', 'goto', 'scene', 'scenes', 'rooms', 'galleries'];")
+        # Emit SCENE_LIST for scene navigation
+        if self.uses_scenes and self.scene_objects:
+            scenes = list(self.scene_objects.keys())
+            self.write(f"const SCENE_LIST = {scenes};")
+        else:
+            self.write("const SCENE_LIST = [];")
         # Known objects with preset shapes/colors - loaded from known_objects.toml
         self._emit_known_objects()
         self.write_blank()
@@ -3120,6 +3153,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("log('Commands: list, get, set, make, look/examine, create, delete/remove', 'cyan');")
         self.write("log('          reset, hide, show, clone, count, move', 'cyan');")
         self.write("log('          prompt, save, load, undo, redo, camera reset, capabilities', 'cyan');")
+        self.write("if (SCENE_LIST.length > 0) log('Scenes:   go <scene>, scenes - navigate between scenes', 'cyan');")
         self.write("log('Natural: make <obj> red, make <obj> big, make <obj> visible', 'dim');")
         self.write("log('Type \"help create\" to see available object types', 'dim');")
         self.dedent()
@@ -3160,6 +3194,92 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("} else {")
         self.indent()
         self.write("log('No command to repeat', 'err');")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+
+        # Scene navigation - "go <scene>" or "goto <scene>" or "scene <scene>"
+        self.write("else if ((parts[0] === 'go' || parts[0] === 'goto' || parts[0] === 'scene') && parts[1]) {")
+        self.indent()
+        self.write("const targetScene = parts.slice(1).join(' ').toLowerCase().replace(/^(to\\s+)?the\\s+/, '').replace(/\\s+room$/, '').replace(/\\s+gallery$/, '').replace(/\\s+scene$/, '');")
+        self.write("if (typeof SCENE_LIST !== 'undefined' && SCENE_LIST.length > 0) {")
+        self.indent()
+        self.write("// Try exact match first")
+        self.write("const exactMatch = SCENE_LIST.find(s => s.toLowerCase() === targetScene);")
+        self.write("if (exactMatch) {")
+        self.indent()
+        self.write("pendingScene = null;")
+        self.write("if (typeof transitionToScene === 'function') { transitionToScene(exactMatch); } else { currentScene = exactMatch; updateSceneVisibility(); }")
+        self.write("log('Entered: ' + exactMatch, 'ok');")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("// Try fuzzy match")
+        self.write("const fuzzyMatch = SCENE_LIST.find(s => s.toLowerCase().includes(targetScene) || targetScene.includes(s.toLowerCase()));")
+        self.write("if (fuzzyMatch) {")
+        self.indent()
+        self.write("pendingScene = fuzzyMatch;")
+        self.write("log('Did you mean: ' + fuzzyMatch + '?', 'warn');")
+        self.write("log('Type go to confirm', 'dim');")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("log('Scene not found: ' + targetScene, 'err');")
+        self.write("log('Available: ' + SCENE_LIST.join(', '), 'dim');")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("log('No scenes defined in this demo', 'err');")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+
+        # "go" without arguments - confirm pending or show help
+        self.write("else if (parts[0] === 'go' || parts[0] === 'goto' || parts[0] === 'scene') {")
+        self.indent()
+        self.write("if (pendingScene) {")
+        self.indent()
+        self.write("const target = pendingScene;")
+        self.write("pendingScene = null;")
+        self.write("if (typeof transitionToScene === 'function') { transitionToScene(target); } else { currentScene = target; updateSceneVisibility(); }")
+        self.write("log('Entered: ' + target, 'ok');")
+        self.dedent()
+        self.write("} else if (pendingAction) {")
+        self.indent()
+        self.write("pendingAction(); pendingAction = null;")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("log('go - Move to a scene or confirm a pending command', 'cyan');")
+        self.write("if (typeof SCENE_LIST !== 'undefined' && SCENE_LIST.length > 0) {")
+        self.indent()
+        self.write("log('Scenes: ' + SCENE_LIST.join(', '), 'dim');")
+        self.write("log('Usage: go <scene>', 'dim');")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+
+        # List scenes - "scenes" or "rooms"
+        self.write("else if (parts[0] === 'scenes' || parts[0] === 'rooms' || parts[0] === 'galleries') {")
+        self.indent()
+        self.write("if (typeof SCENE_LIST !== 'undefined' && SCENE_LIST.length > 0) {")
+        self.indent()
+        self.write("log('Scenes: ' + SCENE_LIST.join(', '), 'cyan');")
+        self.write("log('Current: ' + currentScene, 'dim');")
+        self.write("log('Type \"go <scene>\" to change', 'dim');")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("log('No scenes defined in this demo', 'dim');")
         self.dedent()
         self.write("}")
         self.dedent()
@@ -3250,6 +3370,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("mesh.userData._type = name;")
         self.write("mesh.userData._consoleTemplate = { type: 'mesh', shape: shape, size: size, color: color };")
         self.write("if (objDescription) mesh.userData._description = objDescription;")
+        self.write("if (currentScene) mesh.userData._scene = currentScene;")
         self.write("if (preset.scaleX || preset.scaleY || preset.scaleZ) mesh.scale.set(preset.scaleX || 1, preset.scaleY || 1, preset.scaleZ || 1);")
         self.write("mesh.position.set((Math.random()-0.5)*10, size, (Math.random()-0.5)*10);")
         self.write("scene.add(mesh);")
@@ -3271,6 +3392,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("mesh.userData._type = name;")
         self.write("mesh.userData._consoleTemplate = { type: 'mesh', shape: shape, size: size, color: color };")
         self.write("if (objDescription) mesh.userData._description = objDescription;")
+        self.write("if (currentScene) mesh.userData._scene = currentScene;")
         self.write("scene.add(mesh);")
         self.write("pushUndo('create ' + mesh.name, () => { scene.remove(mesh); }, () => { scene.add(mesh); });")
         self.write("if (!bulkCreateMode || bulkCreateCount < BULK_LOG_LIMIT) log('Created ' + name, 'ok');")
@@ -3308,15 +3430,73 @@ class ThreeJSEmitter(BaseEmitter):
         self.dedent()
         self.write("}")
 
-        # List
+        # List - supports: list, list all, list <scene>
         self.write("else if (parts[0] === 'list') {")
         self.indent()
+        self.write("const arg = parts.slice(1).join(' ').toLowerCase();")
+        self.write("if (arg === 'all') {")
+        self.indent()
+        self.write("// List all objects grouped by scene")
+        self.write("const byScene = {};")
+        self.write("scene.traverse(o => {")
+        self.indent()
+        self.write("if (!o.name || o.name.startsWith('_')) return;")
+        self.write("const s = (o.userData && o.userData._scene) || 'Global';")
+        self.write("if (!byScene[s]) byScene[s] = [];")
+        self.write("byScene[s].push(o.name);")
+        self.dedent()
+        self.write("});")
+        self.write("Object.keys(byScene).forEach(s => {")
+        self.indent()
+        self.write("log(s + ' (' + byScene[s].length + '):', 'cyan');")
+        self.write("byScene[s].slice(0, 10).forEach(n => log('  ' + n));")
+        self.write("if (byScene[s].length > 10) log('  ...' + (byScene[s].length - 10) + ' more', 'dim');")
+        self.dedent()
+        self.write("});")
+        self.dedent()
+        self.write("} else if (arg && typeof SCENE_LIST !== 'undefined') {")
+        self.indent()
+        self.write("// List objects for specific scene")
+        self.write("const match = SCENE_LIST.find(s => s.toLowerCase() === arg || s.toLowerCase().includes(arg));")
+        self.write("if (match) {")
+        self.indent()
         self.write("const objs = [];")
-        self.write("scene.traverse(o => { if (o.name && !o.name.startsWith('_')) objs.push(o.name); });")
+        self.write("scene.traverse(o => {")
+        self.indent()
+        self.write("if (!o.name || o.name.startsWith('_')) return;")
+        self.write("const objScene = o.userData && o.userData._scene;")
+        self.write("if (objScene === match || (!objScene && match === 'Global')) objs.push(o.name);")
+        self.dedent()
+        self.write("});")
+        self.write("log('Scene: ' + match + ' (' + objs.length + ' objects)', 'cyan');")
+        self.write("objs.slice(0, 15).forEach(n => log('  ' + n));")
+        self.write("if (objs.length > 15) log('  ...' + (objs.length - 15) + ' more', 'dim');")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("log('Scene not found: ' + arg, 'err');")
+        self.write("log('Available: ' + SCENE_LIST.join(', '), 'dim');")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("// List objects in current scene")
+        self.write("const objs = [];")
+        self.write("scene.traverse(o => {")
+        self.indent()
+        self.write("if (!o.name || o.name.startsWith('_')) return;")
+        self.write("const objScene = o.userData && o.userData._scene;")
+        self.write("if (currentScene && objScene && objScene !== currentScene) return;")
+        self.write("objs.push(o.name);")
+        self.dedent()
+        self.write("});")
+        self.write("if (currentScene) log('Scene: ' + currentScene, 'cyan');")
         self.write("log(objs.length + ' objects:', 'cyan');")
-        self.write("// Show first 10, then '...N more'")
-        self.write("objs.slice(0, 10).forEach(n => log('  ' + n));")
-        self.write("if (objs.length > 10) log('  ...' + (objs.length - 10) + ' more', 'dim');")
+        self.write("objs.slice(0, 15).forEach(n => log('  ' + n));")
+        self.write("if (objs.length > 15) log('  ...' + (objs.length - 15) + ' more', 'dim');")
+        self.dedent()
+        self.write("}")
         self.dedent()
         self.write("}")
 
@@ -4896,6 +5076,14 @@ class ThreeJSEmitter(BaseEmitter):
         if prop in obj.properties:
             val = obj.properties[prop]
             if val.type == 'string':
+                return val.value
+        return default
+
+    def _get_prop_number(self, obj: IR_Object, prop: str, default: float) -> float:
+        """Get numeric property value."""
+        if prop in obj.properties:
+            val = obj.properties[prop]
+            if val.type == 'number':
                 return val.value
         return default
 

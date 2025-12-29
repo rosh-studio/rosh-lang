@@ -89,6 +89,12 @@ uv run rosh build demos/block-pusher/game.rosh \
     --copy-assets
 cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/block-pusher-threejs/"
 
+echo ""
+echo "📦 Building virtual-gallery (Three.js)..."
+uv run rosh build demos/virtual-gallery/game.rosh \
+    --target threejs \
+    --output "$ROSH_PORTAL/demos/virtual-gallery-threejs/"
+
 # =============================================================================
 # PYGAME BUILDS (Desktop - local testing only)
 # =============================================================================

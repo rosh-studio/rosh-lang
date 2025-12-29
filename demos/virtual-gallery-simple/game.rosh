@@ -1,0 +1,110 @@
+# =============================================================================
+# VIRTUAL GALLERY (Simple) - Single Room Demo
+# =============================================================================
+#
+# A simple single-room gallery for quick demos.
+# For multi-room version, see: demos/virtual-gallery/
+#
+# Target: Three.js (3D browser)
+# Run: rosh build demos/virtual-gallery-simple/game.rosh --target threejs
+#
+# =============================================================================
+
+meta
+    title "Virtual Gallery"
+    author "Rosh"
+    version "0.1.0"
+    description "Interactive museum exhibit - create and explore 3D art"
+end
+
+# Central floating sculpture - a spinning blue sphere
+create object sculpture
+    set type to "sphere"
+    set x to 50%
+    set y to 50%
+    set z to 0
+    set color to "blue"
+    set size to 2
+    set spin to "0 20 0"
+end
+
+# Orbiting spheres
+create object orbiter1
+    set type to "sphere"
+    set x to 70%
+    set y to 50%
+    set z to 0
+    set color to "red"
+    set size to 0.5
+    set orbit to "3 30 2"
+end
+
+create object orbiter2
+    set type to "sphere"
+    set x to 30%
+    set y to 50%
+    set z to 0
+    set color to "green"
+    set size to 0.5
+    set orbit to "3 -30 2"
+end
+
+create object orbiter3
+    set type to "sphere"
+    set x to 50%
+    set y to 50%
+    set z to 3
+    set color to "yellow"
+    set size to 0.5
+    set orbit to "3 45 2"
+end
+
+# Floating cubes in corners
+create object cube1
+    set type to "cube"
+    set x to 20%
+    set y to 60%
+    set z to -3
+    set color to "purple"
+    set bounce to "0.5 1"
+    set spin to "0 10 0"
+end
+
+create object cube2
+    set type to "cube"
+    set x to 80%
+    set y to 60%
+    set z to -3
+    set color to "orange"
+    set bounce to "0.5 1.2"
+    set spin to "0 -10 0"
+end
+
+# Welcome text
+create object title
+    set text to "Virtual Gallery"
+    set x to 50%
+    set y to 10%
+    set z to -8
+    set color to "white"
+    set font_size to 72
+end
+
+create object subtitle
+    set text to "Speak or type to create art"
+    set x to 50%
+    set y to 20%
+    set z to -8
+    set color to "gray"
+    set font_size to 28
+end
+
+# Floor
+create object floor
+    set type to "cube"
+    set x to 50%
+    set y to 85%
+    set z to 0
+    set color to "white"
+    set scale to "20 0.1 20"
+end

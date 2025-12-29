@@ -1,29 +1,122 @@
 # =============================================================================
-# VIRTUAL GALLERY - Interactive Museum Demo
+# VIRTUAL GALLERY - Interactive Multi-Room Museum Demo
 # =============================================================================
 #
 # A demonstration for Glasgow Life showing how visitors could interact
 # with a virtual museum exhibit using voice or text commands.
 #
+# Features multiple themed rooms that visitors can navigate between.
+#
 # Target: Three.js (3D browser)
 # Run: rosh build demos/virtual-gallery/game.rosh --target threejs --output build/
+#
+# For simple single-room version, see: demos/virtual-gallery-simple/
 #
 # =============================================================================
 
 meta
     title "Virtual Gallery"
     author "Rosh"
-    version "0.1.0"
-    description "Interactive museum exhibit - create and explore 3D art"
+    version "0.2.0"
+    description "Interactive museum exhibit - explore themed art galleries"
+    initial_scene "Lobby"
 end
 
-# -----------------------------------------------------------------------------
-# Gallery Setup - Pre-placed Art Pieces
-# -----------------------------------------------------------------------------
+# =============================================================================
+# LOBBY - Welcome & Instructions
+# =============================================================================
+
+create object lobby_title
+    set scene to "Lobby"
+    set text to "Virtual Gallery"
+    set x to 50%
+    set y to 20%
+    set z to -8
+    set color to "white"
+    set font_size to 72
+end
+
+create object lobby_subtitle
+    set scene to "Lobby"
+    set text to "Interactive Museum Experience"
+    set x to 50%
+    set y to 30%
+    set z to -8
+    set color to "gray"
+    set font_size to 24
+end
+
+create object lobby_instruction1
+    set scene to "Lobby"
+    set text to "Press backtick key to open the console"
+    set x to 50%
+    set y to 50%
+    set z to -8
+    set color to "cyan"
+    set font_size to 36
+end
+
+create object lobby_instruction2
+    set scene to "Lobby"
+    set text to "Type: go abstract | go sculpture | go creative"
+    set x to 50%
+    set y to 58%
+    set z to -8
+    set color to "cyan"
+    set font_size to 36
+end
+
+create object lobby_instruction3
+    set scene to "Lobby"
+    set text to "Reload page to restart"
+    set x to 50%
+    set y to 75%
+    set z to -8
+    set color to "gray"
+    set font_size to 28
+end
+
+# Decorative spinning cube in lobby
+create object lobby_cube
+    set scene to "Lobby"
+    set type to "cube"
+    set x to 50%
+    set y to 45%
+    set z to 2
+    set color to "purple"
+    set size to 1.5
+    set spin to "10 20 5"
+end
+
+# =============================================================================
+# ABSTRACT GALLERY - Kinetic Art
+# =============================================================================
+
+# Room title - very large, at top
+create object abstract_title
+    set scene to "Abstract"
+    set text to "Abstract Gallery"
+    set x to 50%
+    set y to 5%
+    set z to -12
+    set color to "white"
+    set font_size to 96
+end
+
+# Navigation hint - smaller, under title
+create object abstract_hint
+    set scene to "Abstract"
+    set text to "go lobby | go sculpture | go creative"
+    set x to 50%
+    set y to 12%
+    set z to -12
+    set color to "cyan"
+    set font_size to 16
+end
 
 # Central floating sculpture - a spinning blue sphere
-# Using percentages: 50% = center, smaller % = higher position (y inverted)
 create object sculpture
+    set scene to "Abstract"
     set type to "sphere"
     set x to 50%
     set y to 50%
@@ -35,6 +128,7 @@ end
 
 # Orbiting red sphere
 create object orbiter1
+    set scene to "Abstract"
     set type to "sphere"
     set x to 70%
     set y to 50%
@@ -46,6 +140,7 @@ end
 
 # Orbiting green sphere
 create object orbiter2
+    set scene to "Abstract"
     set type to "sphere"
     set x to 30%
     set y to 50%
@@ -57,6 +152,7 @@ end
 
 # Orbiting yellow sphere
 create object orbiter3
+    set scene to "Abstract"
     set type to "sphere"
     set x to 50%
     set y to 50%
@@ -66,80 +162,166 @@ create object orbiter3
     set orbit to "3 45 2"
 end
 
-# Floating cubes in the gallery corners
-create object cube1
+# =============================================================================
+# SCULPTURE GARDEN - Static Forms with Subtle Animation
+# =============================================================================
+
+create object sculpture_title
+    set scene to "Sculpture"
+    set text to "Sculpture Garden"
+    set x to 50%
+    set y to 5%
+    set z to -12
+    set color to "white"
+    set font_size to 96
+end
+
+create object sculpture_hint
+    set scene to "Sculpture"
+    set text to "go lobby | go abstract | go creative"
+    set x to 50%
+    set y to 12%
+    set z to -12
+    set color to "cyan"
+    set font_size to 16
+end
+
+create object pedestal1
+    set scene to "Sculpture"
     set type to "cube"
-    set x to 20%
-    set y to 60%
-    set z to -3
+    set x to 30%
+    set y to 65%
+    set z to -2
+    set color to "white"
+    set scale to "2 0.5 2"
+end
+
+create object statue1
+    set scene to "Sculpture"
+    set type to "cylinder"
+    set x to 30%
+    set y to 50%
+    set z to -2
     set color to "purple"
-    set bounce to "0.5 1"
-    set spin to "0 10 0"
+    set size to 1.5
+    set bounce to "0.3 0.5"
 end
 
-create object cube2
+create object pedestal2
+    set scene to "Sculpture"
     set type to "cube"
-    set x to 80%
-    set y to 60%
-    set z to -3
+    set x to 70%
+    set y to 65%
+    set z to -2
+    set color to "white"
+    set scale to "2 0.5 2"
+end
+
+create object statue2
+    set scene to "Sculpture"
+    set type to "sphere"
+    set x to 70%
+    set y to 50%
+    set z to -2
     set color to "orange"
-    set bounce to "0.5 1.2"
-    set spin to "0 -10 0"
+    set size to 1.5
+    set pulse to "0.15 0.3"
 end
 
-create object cube3
+create object pedestal3
+    set scene to "Sculpture"
     set type to "cube"
-    set x to 20%
-    set y to 60%
+    set x to 50%
+    set y to 65%
+    set z to 3
+    set color to "white"
+    set scale to "2 0.5 2"
+end
+
+create object statue3
+    set scene to "Sculpture"
+    set type to "cube"
+    set x to 50%
+    set y to 50%
     set z to 3
     set color to "cyan"
-    set pulse to "0.2 0.5"
+    set size to 2
+    set spin to "0 5 0"
 end
 
-create object cube4
-    set type to "cube"
-    set x to 80%
-    set y to 60%
-    set z to 3
-    set color to "pink"
-    set pulse to "0.2 0.7"
-end
+# =============================================================================
+# CREATIVE STUDIO - Visitor Creation Space
+# =============================================================================
 
-# Welcome text - positioned above and behind the scene
-# Give each text different z to prevent z-fighting
-create object title
-    set text to "Virtual Gallery"
+create object creative_title
+    set scene to "Creative"
+    set text to "Creative Studio"
     set x to 50%
-    set y to 0%
-    set z to -10
+    set y to 5%
+    set z to -12
     set color to "white"
-    set font_size to 64
+    set font_size to 96
 end
 
-create object subtitle
-    set text to "Speak or type to create art"
+create object creative_subtitle
+    set scene to "Creative"
+    set text to "Your space to create"
     set x to 50%
-    set y to 15%
-    set z to -10.1
+    set y to 12%
+    set z to -12
     set color to "gray"
-    set font_size to 32
+    set font_size to 24
 end
 
-# Floor marker (flat white box)
+create object creative_hint
+    set scene to "Creative"
+    set text to "try: create big red sphere | go lobby"
+    set x to 50%
+    set y to 17%
+    set z to -12
+    set color to "cyan"
+    set font_size to 16
+end
+
+create object easel
+    set scene to "Creative"
+    set type to "cube"
+    set x to 30%
+    set y to 55%
+    set z to 0
+    set color to "brown"
+    set scale to "0.2 3 2"
+end
+
+create object canvas
+    set scene to "Creative"
+    set type to "cube"
+    set x to 30%
+    set y to 40%
+    set z to 0.3
+    set color to "white"
+    set scale to "0.1 2 1.5"
+end
+
+# =============================================================================
+# SHARED ELEMENTS - Present in all scenes (no scene property)
+# =============================================================================
+
+# Floor - visible in all rooms
 create object floor
     set type to "cube"
     set x to 50%
-    set y to 80%
+    set y to 85%
     set z to 0
     set color to "white"
     set scale to "20 0.1 20"
 end
 
-# -----------------------------------------------------------------------------
-# Gallery is ready - visitors can now use voice/text commands:
-#   - "create sphere"
-#   - "set sphere color to red"
-#   - "set cube1 spin to 0 30 0"
-#   - "hide sculpture"
-#   - "create text Hello World"
-# -----------------------------------------------------------------------------
+# =============================================================================
+# Scene Navigation:
+#   - "scenes" - list available rooms
+#   - "go lobby" - return to Lobby
+#   - "go abstract" - enter Abstract Gallery
+#   - "go sculpture" - enter Sculpture Garden
+#   - "go creative" - enter Creative Studio
+# =============================================================================

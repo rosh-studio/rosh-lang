@@ -1741,7 +1741,8 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             ir = transform_ast_to_ir(
                 program,
                 canvas_width=meta.get('canvas', {}).get('width', 800),
-                canvas_height=meta.get('canvas', {}).get('height', 600)
+                canvas_height=meta.get('canvas', {}).get('height', 600),
+                meta=meta
             )
             emitter = ThreeJSEmitter(ir, meta=meta)
             js_code = emitter.emit()

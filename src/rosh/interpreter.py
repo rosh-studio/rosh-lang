@@ -104,6 +104,10 @@ class Interpreter:
         # Remote imports removed for security (offline-first for VR/AR)
 
         # Current object context (v0.2.6+) - for contextual set/get commands
+        # TODO (BACKLOG - Console Features Parity):
+        # - Add 'it'/'this' as aliases that resolve to current_object_name
+        # - Update create/clone to set current_object (like get does)
+        # See: rosh-console.toml v0.2.5, BACKLOG.md "Console Features Parity"
         self.current_object = None
         self.current_object_name = None
 

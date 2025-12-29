@@ -1904,7 +1904,14 @@ class Parser:
         return ResetObject(name=name, line=line)
 
     def parse_hide(self) -> HideObject:
-        """Parse: hide <name> - Set object visible to false"""
+        """Parse: hide <name> - Set object visible to false
+
+        TODO (BACKLOG - Console Features Parity):
+        - Support 'hide all' to hide all objects
+        - Support 'hide all spheres' / 'hide all blue' for type/color filtering
+        - Support 'hide it' / 'hide this' to hide current object
+        See: rosh-console.toml v0.2.5, BACKLOG.md "Console Features Parity"
+        """
         line = self.current_token().line
         self.expect(TokenType.HIDE)
 
@@ -1914,7 +1921,14 @@ class Parser:
         return HideObject(name=name, line=line)
 
     def parse_show(self) -> ShowObject:
-        """Parse: show <name> - Set object visible to true"""
+        """Parse: show <name> - Set object visible to true
+
+        TODO (BACKLOG - Console Features Parity):
+        - Support 'show all' to show all objects
+        - Support 'show all cubes' / 'show all red' for type/color filtering
+        - Support 'show it' / 'show this' to show current object
+        See: rosh-console.toml v0.2.5, BACKLOG.md "Console Features Parity"
+        """
         line = self.current_token().line
         self.expect(TokenType.SHOW)
 
@@ -1936,7 +1950,13 @@ class Parser:
         return CountObjects(object_type=object_type, line=line)
 
     def parse_move(self) -> MoveObject:
-        """Parse: move <name> to x,y[,z] or move <name> x y [z]"""
+        """Parse: move <name> to x,y[,z] or move <name> x y [z]
+
+        TODO (BACKLOG - Console Features Parity):
+        - Support named positions: 'move ball to center', 'move ball to origin', 'move ball to ground'
+        - Support 'move it to ...' / 'move this to ...' for current object
+        See: rosh-console.toml v0.2.5, BACKLOG.md "Console Features Parity"
+        """
         line = self.current_token().line
         self.expect(TokenType.MOVE)
 

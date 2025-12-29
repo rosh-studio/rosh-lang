@@ -23,7 +23,8 @@ from .ast_nodes import (
     FunctionDef, FunctionCall, Return, Break, Continue,
     Print, PlaySound, PlayMusic, StopMusic, Save, Load,
     CloneObject, DeleteObject, Increment, Decrement, Random, Length,
-    ListLiteral, ListIndex, Append, Remove, Get, GotoScene, SaveGame, LoadGame
+    ListLiteral, ListIndex, Append, Remove, Get, GotoScene, SaveGame, LoadGame,
+    Metadata
 )
 from .ir import (
     IR_Program, IR_Object, IR_Event, IR_Action, IR_Function,
@@ -92,12 +93,27 @@ class IRTransformer:
         Returns:
             IR_Program with normalized, target-agnostic representation
         """
+        # Pre-pass: extract metadata from AST Metadata nodes
+        ast_meta = {}
+        for stmt in program.statements:
+            if isinstance(stmt, Metadata) and stmt.scope is None:
+                # Core metadata (no scope) - extract field values
+                for key, value_expr in stmt.fields.items():
+                    if isinstance(value_expr, Literal):
+                        ast_meta[key] = value_expr.value
+                    elif isinstance(value_expr, Identifier):
+                        ast_meta[key] = value_expr.name
+
+        # Merge AST metadata with config meta (AST takes precedence)
+        merged_meta = {**self.meta, **ast_meta}
+
         ir_program = IR_Program(
             metadata=IR_Metadata(
                 canvas_width=self.canvas_width,
                 canvas_height=self.canvas_height,
-                title=self.meta.get('title'),
-                version=self.meta.get('version'),
+                title=merged_meta.get('title'),
+                version=merged_meta.get('version'),
+                initial_scene=merged_meta.get('initial_scene'),
             )
         )
 
