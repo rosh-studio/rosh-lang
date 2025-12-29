@@ -3152,7 +3152,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.indent()
         self.write("log('Commands: list, get, set, make, look/examine, create, delete/remove', 'cyan');")
         self.write("log('          reset, hide, show, clone, count, move', 'cyan');")
-        self.write("log('          prompt, save, load, undo, redo, camera reset, capabilities', 'cyan');")
+        self.write("log('          prompt, save, load, undo, redo, camera reset', 'cyan');")
         self.write("if (SCENE_LIST.length > 0) log('Scenes:   go <scene>, scenes - navigate between scenes', 'cyan');")
         self.write("log('Natural: make <obj> red, make <obj> big, make <obj> visible', 'dim');")
         self.write("log('Type \"help create\" to see available object types', 'dim');")
