@@ -97,7 +97,7 @@ create object abstract_title
     set scene to "Abstract"
     set text to "Abstract Gallery"
     set x to 50%
-    set y to 5%
+    set y to 10%
     set z to -12
     set color to "white"
     set font_size to 96
@@ -108,7 +108,7 @@ create object abstract_hint
     set scene to "Abstract"
     set text to "go lobby | go sculpture | go creative"
     set x to 50%
-    set y to 12%
+    set y to 25%
     set z to -12
     set color to "cyan"
     set font_size to 16
@@ -170,7 +170,7 @@ create object sculpture_title
     set scene to "Sculpture"
     set text to "Sculpture Garden"
     set x to 50%
-    set y to 5%
+    set y to 10%
     set z to -12
     set color to "white"
     set font_size to 96
@@ -180,7 +180,7 @@ create object sculpture_hint
     set scene to "Sculpture"
     set text to "go lobby | go abstract | go creative"
     set x to 50%
-    set y to 12%
+    set y to 25%
     set z to -12
     set color to "cyan"
     set font_size to 16
@@ -257,7 +257,7 @@ create object creative_title
     set scene to "Creative"
     set text to "Creative Studio"
     set x to 50%
-    set y to 5%
+    set y to 10%
     set z to -12
     set color to "white"
     set font_size to 96
@@ -267,7 +267,7 @@ create object creative_subtitle
     set scene to "Creative"
     set text to "Your space to create"
     set x to 50%
-    set y to 12%
+    set y to 25%
     set z to -12
     set color to "gray"
     set font_size to 24
@@ -277,7 +277,7 @@ create object creative_hint
     set scene to "Creative"
     set text to "try: create big red sphere | go lobby"
     set x to 50%
-    set y to 17%
+    set y to 35%
     set z to -12
     set color to "cyan"
     set font_size to 16
