@@ -812,10 +812,10 @@ const RoshRuntime = (function() {
   function handleSet(cmd, args) {
     if (!adapter.setProperty) return;
 
-    // Parse: set <obj> <prop> to <value>
-    const match = cmd.match(/^set\s+(\S+)\s+(\S+)\s+to\s+(.+)$/i);
+    // Parse: set <obj> <prop> [to] <value> - "to" is optional
+    const match = cmd.match(/^set\s+(\S+)\s+(\S+)\s+(?:to\s+)?(.+)$/i);
     if (!match) {
-      log('Usage: set <object> <property> to <value>', 'err');
+      log('Usage: set <object> <property> [to] <value>', 'err');
       return;
     }
 

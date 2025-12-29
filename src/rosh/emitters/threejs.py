@@ -1241,9 +1241,10 @@ class ThreeJSEmitter(BaseEmitter):
     def _emit_text_sprite(self, name: str, text: str, color: int, x: float, y: float, z: float, font_size: int = 48):
         """Emit a text sprite using canvas texture."""
         css_color = f"#{color:06x}"
-        # Scale sprite based on font size (larger font = larger sprite)
-        scale_x = 20 * (font_size / 48)
-        scale_y = 5 * (font_size / 48)
+        # Use fixed sprite scale - font_size only affects canvas text rendering
+        # This allows font_size animation to work (text grows within fixed sprite)
+        scale_x = 20
+        scale_y = 5
 
         self.write(f"const {name}Canvas = document.createElement('canvas');")
         self.write(f"const {name}Ctx = {name}Canvas.getContext('2d');")
@@ -2122,9 +2123,9 @@ class ThreeJSEmitter(BaseEmitter):
 
     def _get_shared_runtime_path(self) -> Path:
         """Get path to shared runtime files."""
-        # Try relative to this file first
-        emitter_dir = Path(__file__).parent.parent.parent  # rosh-lang/src/rosh -> rosh-lang
-        static_dir = emitter_dir / 'static'
+        # Path: threejs.py -> emitters -> rosh -> src -> rosh-lang
+        rosh_lang_dir = Path(__file__).parent.parent.parent.parent
+        static_dir = rosh_lang_dir / 'static'
         return static_dir
 
     def _emit_shared_runtime_console(self):
@@ -2164,6 +2165,9 @@ class ThreeJSEmitter(BaseEmitter):
         else:
             self.write_comment(f"WARNING: rosh-adapter-threejs.js not found at {adapter_file}")
             self.write_blank()
+
+        # Emit KNOWN_OBJECTS for the adapter
+        self._emit_known_objects()
 
         # Initialize the adapter with the scene
         self.write_comment("Initialize Rosh Runtime with Three.js adapter")

@@ -12,8 +12,6 @@
  */
 
 function createThreeJSAdapter(scene, camera, renderer, options = {}) {
-  'use strict';
-
   // Object registry: name -> THREE.Object3D
   const objects = {};
 
@@ -392,6 +390,34 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         case 'scene':
           obj.userData._scene = value;
           scenes.add(value);
+          break;
+        case 'font_size':
+          const fontSize = parseFloat(value);
+          obj.userData.font_size = fontSize;
+          // Re-render canvas texture if this is a text sprite
+          if (obj._ctx && obj._canvas && obj.material && obj.material.map) {
+            obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);
+            obj._ctx.font = 'bold ' + fontSize + 'px ' + (obj._font || 'Arial');
+            obj._ctx.fillStyle = obj._color || '#ffffff';
+            obj._ctx.textAlign = 'center';
+            obj._ctx.textBaseline = 'middle';
+            obj._ctx.fillText(obj._text || '', obj._canvas.width / 2, obj._canvas.height / 2);
+            obj.material.map.needsUpdate = true;
+          }
+          break;
+        case 'text':
+          obj._text = value;
+          // Re-render canvas texture
+          if (obj._ctx && obj._canvas && obj.material && obj.material.map) {
+            const fs = obj.userData.font_size || 48;
+            obj._ctx.clearRect(0, 0, obj._canvas.width, obj._canvas.height);
+            obj._ctx.font = 'bold ' + fs + 'px ' + (obj._font || 'Arial');
+            obj._ctx.fillStyle = obj._color || '#ffffff';
+            obj._ctx.textAlign = 'center';
+            obj._ctx.textBaseline = 'middle';
+            obj._ctx.fillText(value, obj._canvas.width / 2, obj._canvas.height / 2);
+            obj.material.map.needsUpdate = true;
+          }
           break;
         default:
           obj.userData[lower] = value;
