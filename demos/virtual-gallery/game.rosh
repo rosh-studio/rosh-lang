@@ -92,7 +92,7 @@ end
 # ABSTRACT GALLERY - Kinetic Art
 # =============================================================================
 
-# Room title - very large, at top
+# Room title - at top
 create object abstract_title
     set scene to "Abstract"
     set text to "Abstract Gallery"
@@ -100,18 +100,18 @@ create object abstract_title
     set y to 10%
     set z to -12
     set color to "white"
-    set font_size to 96
+    set font_size to 72
 end
 
-# Navigation hint - smaller, under title
+# Navigation hint - well below title
 create object abstract_hint
     set scene to "Abstract"
     set text to "go lobby | go sculpture | go creative"
     set x to 50%
-    set y to 25%
+    set y to 30%
     set z to -12
     set color to "cyan"
-    set font_size to 16
+    set font_size to 24
 end
 
 # Central floating sculpture - a spinning blue sphere
@@ -173,17 +173,17 @@ create object sculpture_title
     set y to 10%
     set z to -12
     set color to "white"
-    set font_size to 96
+    set font_size to 72
 end
 
 create object sculpture_hint
     set scene to "Sculpture"
     set text to "go lobby | go abstract | go creative"
     set x to 50%
-    set y to 25%
+    set y to 30%
     set z to -12
     set color to "cyan"
-    set font_size to 16
+    set font_size to 24
 end
 
 create object pedestal1
@@ -260,27 +260,27 @@ create object creative_title
     set y to 10%
     set z to -12
     set color to "white"
-    set font_size to 96
+    set font_size to 72
 end
 
 create object creative_subtitle
     set scene to "Creative"
     set text to "Your space to create"
     set x to 50%
-    set y to 25%
+    set y to 30%
     set z to -12
     set color to "gray"
-    set font_size to 24
+    set font_size to 36
 end
 
 create object creative_hint
     set scene to "Creative"
     set text to "try: create big red sphere | go lobby"
     set x to 50%
-    set y to 35%
+    set y to 42%
     set z to -12
     set color to "cyan"
-    set font_size to 16
+    set font_size to 24
 end
 
 create object easel
