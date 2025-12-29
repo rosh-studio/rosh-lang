@@ -15,6 +15,7 @@ See: rosh-dev/proposals/ROSH-IR-SPECIFICATION.md
 """
 
 import re
+from pathlib import Path
 from typing import Dict, Any, Set
 from .base import BaseEmitter
 from .. import __version__
@@ -73,6 +74,9 @@ class PhaserEmitter(BaseEmitter):
 
         # Save/Load support
         self.uses_save_load = False  # True if save/load commands used
+
+        # Shared runtime option (new architecture)
+        self.use_shared_runtime = self.meta.get('use_shared_runtime', False)
 
         # Scan IR to detect features
         self._detect_features()
@@ -568,12 +572,77 @@ class PhaserEmitter(BaseEmitter):
         self.write_blank()
         self.write("const game = new Phaser.Game(config);")
 
+    def _get_shared_runtime_path(self) -> Path:
+        """Get path to shared runtime files."""
+        emitter_dir = Path(__file__).parent.parent.parent
+        static_dir = emitter_dir / 'static'
+        return static_dir
+
+    def _emit_shared_runtime_console(self):
+        """Emit REPL console using shared runtime files."""
+        self.write_blank()
+        self.write_comment("=" * 70)
+        self.write_comment("Rosh Console (Shared Runtime v0.1.0)")
+        self.write_comment("=" * 70)
+        self.write_blank()
+
+        static_dir = self._get_shared_runtime_path()
+
+        # Read and emit the shared runtime
+        runtime_file = static_dir / 'rosh-runtime.js'
+        if runtime_file.exists():
+            self.write_comment("Rosh Runtime - Shared REPL")
+            runtime_code = runtime_file.read_text()
+            for line in runtime_code.split('\n'):
+                self.write(line)
+            self.write_blank()
+        else:
+            self.write_comment(f"WARNING: rosh-runtime.js not found")
+            self.write_blank()
+
+        # Read and emit the Phaser adapter
+        adapter_file = static_dir / 'rosh-adapter-phaser.js'
+        if adapter_file.exists():
+            self.write_comment("Phaser Adapter")
+            adapter_code = adapter_file.read_text()
+            for line in adapter_code.split('\n'):
+                self.write(line)
+            self.write_blank()
+        else:
+            self.write_comment(f"WARNING: rosh-adapter-phaser.js not found")
+            self.write_blank()
+
+        # Get the Phaser scene reference
+        self.write_comment("Initialize Rosh Runtime with Phaser adapter")
+        self.write("// Note: phaserScene is set in GameScene.create()")
+        self.write("let phaserScene = null;")
+        self.write("function initRoshRuntime(scene) {")
+        self.indent()
+        self.write("phaserScene = scene;")
+        self.write("const roshAdapter = createPhaserAdapter(phaserScene, {});")
+
+        # Register existing objects
+        self.write("// Register pre-defined objects with the adapter")
+        for obj in self.ir.objects:
+            self.write(f"if (typeof rosh_{obj.name} !== 'undefined') roshAdapter.registerObject('{obj.name}', rosh_{obj.name});")
+
+        self.write("RoshRuntime.init(roshAdapter);")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
     def _emit_console(self):
         """Emit in-game console with voice support.
 
         SPEC CHAIN: rosh-console.toml → phaser.py
         Must implement: list, look, set, hide, show, create, help
         """
+        # Use shared runtime if enabled
+        if self.use_shared_runtime:
+            self._emit_shared_runtime_console()
+            return
+
+        # Legacy inline console code below
         self.write_blank()
         self.write_comment("=" * 70)
         self.write_comment("Rosh Console - Press ` (backtick) to toggle")

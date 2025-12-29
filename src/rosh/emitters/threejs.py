@@ -32,6 +32,7 @@ IMPLEMENTS_IR_VERSION = "0.2.1"
 # Priority: Sync emitters to 0.2.3 when parity tests are implemented.
 
 import json
+from pathlib import Path
 from typing import Dict, Any, Set, List
 from .base import BaseEmitter
 from ..ir import (
@@ -93,6 +94,9 @@ class ThreeJSEmitter(BaseEmitter):
 
         # Arcade mode (2D game on 3D plane)
         self.arcade_mode = self.ir.metadata.extra.get('mode') == 'arcade'
+
+        # Shared runtime option (new architecture)
+        self.use_shared_runtime = self.meta.get('use_shared_runtime', False)
 
         # Scan IR to detect features
         self._detect_features()
@@ -2116,8 +2120,79 @@ class ThreeJSEmitter(BaseEmitter):
     # REPL Console
     # =========================================================================
 
+    def _get_shared_runtime_path(self) -> Path:
+        """Get path to shared runtime files."""
+        # Try relative to this file first
+        emitter_dir = Path(__file__).parent.parent.parent  # rosh-lang/src/rosh -> rosh-lang
+        static_dir = emitter_dir / 'static'
+        return static_dir
+
+    def _emit_shared_runtime_console(self):
+        """Emit REPL console using shared runtime files.
+
+        This is the new architecture that uses external JS files for the REPL,
+        making it easier to maintain parity across emitters.
+        """
+        self.write_comment("=" * 50)
+        self.write_comment("ROSH CONSOLE (Shared Runtime v0.1.0)")
+        self.write_comment("=" * 50)
+        self.write_blank()
+
+        static_dir = self._get_shared_runtime_path()
+
+        # Read and emit the shared runtime
+        runtime_file = static_dir / 'rosh-runtime.js'
+        if runtime_file.exists():
+            self.write_comment("Rosh Runtime - Shared REPL")
+            runtime_code = runtime_file.read_text()
+            # Write as-is (it's already valid JS)
+            for line in runtime_code.split('\n'):
+                self.write(line)
+            self.write_blank()
+        else:
+            self.write_comment(f"WARNING: rosh-runtime.js not found at {runtime_file}")
+            self.write_blank()
+
+        # Read and emit the Three.js adapter
+        adapter_file = static_dir / 'rosh-adapter-threejs.js'
+        if adapter_file.exists():
+            self.write_comment("Three.js Adapter")
+            adapter_code = adapter_file.read_text()
+            for line in adapter_code.split('\n'):
+                self.write(line)
+            self.write_blank()
+        else:
+            self.write_comment(f"WARNING: rosh-adapter-threejs.js not found at {adapter_file}")
+            self.write_blank()
+
+        # Initialize the adapter with the scene
+        self.write_comment("Initialize Rosh Runtime with Three.js adapter")
+        self.write("const roshAdapter = createThreeJSAdapter(scene, camera, renderer, {")
+        self.indent()
+        self.write("knownObjects: KNOWN_OBJECTS,")
+        self.write(f"defaultScene: '{self.ir.metadata.extra.get('scene', 'default')}'")
+        self.dedent()
+        self.write("});")
+        self.write_blank()
+
+        # Register existing objects with the adapter
+        self.write("// Register pre-defined objects with the adapter")
+        for obj in self.ir.objects:
+            self.write(f"if (typeof {obj.name} !== 'undefined') roshAdapter.registerObject('{obj.name}', {obj.name});")
+        self.write_blank()
+
+        # Initialize the runtime
+        self.write("RoshRuntime.init(roshAdapter);")
+        self.write_blank()
+
     def _emit_repl_console(self):
         """Emit in-game REPL console."""
+        # Use shared runtime if enabled
+        if self.use_shared_runtime:
+            self._emit_shared_runtime_console()
+            return
+
+        # Legacy inline REPL code below
         self.write_comment("=" * 50)
         self.write_comment("ROSH CONSOLE - Press ` to toggle")
         self.write_comment("=" * 50)
