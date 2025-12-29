@@ -28,9 +28,9 @@ end
 
 create object lobby_title
     set scene to "Lobby"
-    set text to "Virtual Gallery"
+    set text to "Rosh Virtual Gallery"
     set x to 50%
-    set y to 20%
+    set y to 10%
     set z to -8
     set color to "white"
     set font_size to 72
@@ -43,12 +43,12 @@ create object lobby_subtitle
     set y to 30%
     set z to -8
     set color to "gray"
-    set font_size to 24
+    set font_size to 48
 end
 
 create object lobby_instruction1
     set scene to "Lobby"
-    set text to "Press backtick key to open the console"
+    set text to "Press backtick ` key to open the console"
     set x to 50%
     set y to 50%
     set z to -8
@@ -73,7 +73,7 @@ create object lobby_instruction3
     set y to 75%
     set z to -8
     set color to "gray"
-    set font_size to 28
+    set font_size to 32
 end
 
 # Decorative spinning cube in lobby
@@ -81,7 +81,7 @@ create object lobby_cube
     set scene to "Lobby"
     set type to "cube"
     set x to 50%
-    set y to 45%
+    set y to -20%
     set z to 2
     set color to "purple"
     set size to 1.5
