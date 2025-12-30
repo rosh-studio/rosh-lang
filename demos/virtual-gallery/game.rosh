@@ -341,19 +341,19 @@ end
 create object linen_bank
     set scene to "Glasgow"
     set model to "linen_bank"
-    set x to 30%
-    set y to 60%
-    set z to 0
-    set size to 2
+    set x to 25%
+    set y to 55%
+    set z to -3
+    set size to 2.5
     set spin to "0 5 0"
 end
 
 create object linen_bank_label
     set scene to "Glasgow"
     set text to "Linen Bank"
-    set x to 30%
-    set y to 35%
-    set z to 0
+    set x to 25%
+    set y to 30%
+    set z to -3
     set color to "white"
     set font_size to 32
 end
@@ -361,9 +361,9 @@ end
 create object linen_bank_info
     set scene to "Glasgow"
     set text to "Historic building in Glasgow"
-    set x to 30%
-    set y to 42%
-    set z to 0
+    set x to 25%
+    set y to 37%
+    set z to -3
     set color to "gray"
     set font_size to 20
 end
@@ -371,9 +371,9 @@ end
 create object linen_bank_credit
     set scene to "Glasgow"
     set text to "3D model by CheriePotter (CC BY)"
-    set x to 30%
-    set y to 48%
-    set z to 0
+    set x to 25%
+    set y to 43%
+    set z to -3
     set color to "cyan"
     set font_size to 16
 end
@@ -382,19 +382,19 @@ end
 create object baillie_monument
     set scene to "Glasgow"
     set model to "joanna_baillie_monument"
-    set x to 70%
-    set y to 60%
-    set z to 0
-    set size to 1.5
+    set x to 75%
+    set y to 55%
+    set z to 3
+    set size to 2
     set spin to "0 5 0"
 end
 
 create object baillie_label
     set scene to "Glasgow"
     set text to "Joanna Baillie Monument"
-    set x to 70%
-    set y to 35%
-    set z to 0
+    set x to 75%
+    set y to 30%
+    set z to 3
     set color to "white"
     set font_size to 32
 end
@@ -402,9 +402,9 @@ end
 create object baillie_info
     set scene to "Glasgow"
     set text to "Bothwell, Scotland"
-    set x to 70%
-    set y to 42%
-    set z to 0
+    set x to 75%
+    set y to 37%
+    set z to 3
     set color to "gray"
     set font_size to 20
 end
@@ -412,9 +412,9 @@ end
 create object baillie_desc
     set scene to "Glasgow"
     set text to "Scottish poet and dramatist (1762-1851)"
-    set x to 70%
-    set y to 48%
-    set z to 0
+    set x to 75%
+    set y to 43%
+    set z to 3
     set color to "gray"
     set font_size to 18
 end
@@ -422,9 +422,9 @@ end
 create object baillie_credit
     set scene to "Glasgow"
     set text to "3D model by Andras Sandor (CC BY)"
-    set x to 70%
-    set y to 54%
-    set z to 0
+    set x to 75%
+    set y to 49%
+    set z to 3
     set color to "cyan"
     set font_size to 16
 end

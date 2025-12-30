@@ -73,6 +73,23 @@ Game assets from Kenney (www.kenney.nl)
 
 ---
 
+## 3D Models (3d_glb/)
+
+| File | Source | Author | License |
+|------|--------|--------|---------|
+| `linen_bank.glb` | [Sketchfab](https://skfb.ly/6TBqA) | CheriePotter | CC BY 4.0 |
+| `joanna_baillie_monument.glb` | [Sketchfab](https://skfb.ly/pyWRH) | Andras Sandor | CC BY 4.0 |
+| `castle.glb` | Sketchfab | Various | CC BY 4.0 |
+| `orc_warrior.glb` | Sketchfab | Various | CC BY 4.0 |
+| `apple.glb` | Sketchfab | Various | CC BY 4.0 |
+| `banana.glb` | Sketchfab | Various | CC BY 4.0 |
+| `pine_tree.glb` | Sketchfab | Various | CC BY 4.0 |
+| `cheap_soccer_ball.glb` | Sketchfab | Various | CC BY 4.0 |
+| `crate_box.glb` | Sketchfab | Various | CC BY 4.0 |
+| `stylized_low_poly_wooden_barrell.glb` | Sketchfab | Various | CC BY 4.0 |
+
+---
+
 ## Note for Distribution
 
 When distributing games built with Rosh:
