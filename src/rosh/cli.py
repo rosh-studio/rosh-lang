@@ -1130,6 +1130,20 @@ def run_repl(interpreter: Interpreter = None):
         except Exception as e:
             out.dim(f"[twin] broadcast failed: {e}")
 
+    def twin_broadcast_delete(obj_name):
+        """Broadcast object deletion to connected world"""
+        nonlocal twin_ws
+        if twin_ws is None:
+            return
+        try:
+            import json
+            twin_ws.send(json.dumps({
+                "type": "DELETE",
+                "id": obj_name
+            }))
+        except Exception as e:
+            out.dim(f"[twin] delete broadcast failed: {e}")
+
     def get_object_names():
         """Get set of current object names in interpreter"""
         from .values import RoshObject
@@ -1144,11 +1158,12 @@ def run_repl(interpreter: Interpreter = None):
                     pass
         return names
 
-    def broadcast_new_objects(before_names):
-        """Check for new objects and broadcast them"""
+    def broadcast_object_changes(before_names):
+        """Check for new/deleted objects and broadcast them"""
         if twin_ws is None:
             return
         after_names = get_object_names()
+        # Broadcast new objects
         new_names = after_names - before_names
         for name in new_names:
             try:
@@ -1156,6 +1171,10 @@ def run_repl(interpreter: Interpreter = None):
                 twin_broadcast_create(name, obj)
             except:
                 pass
+        # Broadcast deleted objects
+        deleted_names = before_names - after_names
+        for name in deleted_names:
+            twin_broadcast_delete(name)
 
     # Set up readline for command history and tab completion
     if READLINE_AVAILABLE:
@@ -1428,7 +1447,7 @@ def run_repl(interpreter: Interpreter = None):
                     try:
                         _before = get_object_names()
                         interpreter = run_source(source, "<repl>", interpreter)
-                        broadcast_new_objects(_before)
+                        broadcast_object_changes(_before)
                     except RoshError as e:
                         out.error(str(e))
                     continue
@@ -1837,7 +1856,7 @@ def run_repl(interpreter: Interpreter = None):
                     try:
                         _before = get_object_names()
                         interpreter = run_source(source, "<repl>", interpreter)
-                        broadcast_new_objects(_before)
+                        broadcast_object_changes(_before)
                     except RoshError as e:
                         out.error(str(e))
                     continue
@@ -1914,7 +1933,7 @@ def run_repl(interpreter: Interpreter = None):
                     try:
                         _before = get_object_names()
                         interpreter = run_source(source, "<repl>", interpreter)
-                        broadcast_new_objects(_before)
+                        broadcast_object_changes(_before)
                     except RoshError as e:
                         out.error(str(e))
                     continue
@@ -1938,7 +1957,7 @@ def run_repl(interpreter: Interpreter = None):
                 try:
                     _before = get_object_names()
                     interpreter = run_source(source, "<repl>", interpreter)
-                    broadcast_new_objects(_before)
+                    broadcast_object_changes(_before)
                 except RoshError as e:
                     out.error(str(e))
                 continue
@@ -1951,7 +1970,7 @@ def run_repl(interpreter: Interpreter = None):
                 try:
                     _before = get_object_names()
                     interpreter = run_source(source, "<repl>", interpreter)
-                    broadcast_new_objects(_before)
+                    broadcast_object_changes(_before)
                 except RoshError as e:
                     error_msg = str(e)
 
