@@ -75,6 +75,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.color_index = 0
         self.sprite_assets: Set[str] = set()
         self.sound_assets: Set[str] = set()
+        self.model_assets: Set[str] = set()  # GLB model files needed
         self.text_objects: List[str] = []
         self.player_objects: Set[str] = set()
         self.hud_objects: List[tuple] = []  # (hud_name, target_name)
@@ -1065,6 +1066,18 @@ class ThreeJSEmitter(BaseEmitter):
             self.write(f"scene.add({name});")
 
         self.write(f"{name}.userData._rosh_kind = '{object_kind}';")
+
+        # Store type for known object model loading at runtime
+        if 'type' in obj.properties:
+            type_val = self.get_value(obj.properties['type'])
+            if isinstance(type_val, str):
+                self.write(f"{name}.userData._type = '{type_val}';")
+                # Mark as needing model load at startup
+                self.write(f"{name}.userData._needsModelLoad = true;")
+                # Track model assets needed for build
+                known_objects = get_known_objects_3d()
+                if type_val in known_objects and 'model' in known_objects[type_val]:
+                    self.model_assets.add(known_objects[type_val]['model'])
 
         # Apply initial visible property if set to false
         if 'visible' in obj.properties:
@@ -2102,6 +2115,57 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("});")
         self.write_blank()
 
+        # Emit KNOWN_OBJECTS early so model loading can use it
+        self._emit_known_objects()
+        self.write_blank()
+
+        # Load models for objects with known types
+        self.write("// Load 3D models for pre-placed objects with known types")
+        self.write("scene.traverse(obj => {")
+        self.indent()
+        self.write("if (obj.userData && obj.userData._needsModelLoad && obj.userData._type) {")
+        self.indent()
+        self.write("const typeName = obj.userData._type;")
+        self.write("const preset = KNOWN_OBJECTS[typeName];")
+        self.write("if (preset && preset.model && meta.useModels) {")
+        self.indent()
+        self.write("const pos = obj.position.clone();")
+        self.write("const size = obj.userData.size || 1;")
+        self.write("const spin = obj.userData._spin;")
+        self.write("const objScene = obj.userData._scene;")
+        self.write("const objName = obj.name;")
+        self.write("gltfLoader.load(preset.model, (gltf) => {")
+        self.indent()
+        self.write("const model = gltf.scene;")
+        self.write("model.name = objName;")
+        self.write("model.userData._type = typeName;")
+        self.write("model.userData._rosh_kind = 'model';")
+        self.write("if (objScene) model.userData._scene = objScene;")
+        self.write("if (spin) model.userData._spin = spin;")
+        self.write("if (preset.credit) model.userData._credit = preset.credit;")
+        self.write("const box = new THREE.Box3().setFromObject(model);")
+        self.write("const modelSize = box.getSize(new THREE.Vector3());")
+        self.write("const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z);")
+        self.write("const normalizeScale = 1 / maxDim;")
+        self.write("const gs = meta.modelScale || 2;")
+        self.write("model.scale.set(normalizeScale * size * gs, normalizeScale * size * gs, normalizeScale * size * gs);")
+        self.write("// Center the model based on its bounding box (fixes models with offset origins)")
+        self.write("const scaledBox = new THREE.Box3().setFromObject(model);")
+        self.write("const center = scaledBox.getCenter(new THREE.Vector3());")
+        self.write("model.position.set(pos.x - center.x, pos.y - center.y, pos.z - center.z);")
+        self.write("scene.remove(obj);")
+        self.write("scene.add(model);")
+        self.write("if (objScene && objScene !== currentScene) model.visible = false;")
+        self.dedent()
+        self.write("});")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("});")
+        self.write_blank()
+
         self.write("animate();")
         self.write_blank()
 
@@ -2657,6 +2721,11 @@ class ThreeJSEmitter(BaseEmitter):
 
     def _emit_known_objects(self):
         """Emit KNOWN_OBJECTS constant from known_objects.toml."""
+        # Only emit once (may be called from multiple places)
+        if hasattr(self, '_known_objects_emitted') and self._known_objects_emitted:
+            return
+        self._known_objects_emitted = True
+
         objects = get_known_objects_3d()
 
         # Build JavaScript object literal

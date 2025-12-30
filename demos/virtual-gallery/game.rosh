@@ -337,96 +337,114 @@ create object glasgow_hint
     set font_size to 24
 end
 
-# --- Linen Bank Building ---
+# --- Linen Bank Building (left side) ---
+# Position: x=20% puts it on the left third of the screen
+# y=65% places it near floor level (higher % = lower on screen)
+# z=0 keeps both objects on the same depth plane
+# size=2.5 scales the model to be prominent but not overwhelming
 create object linen_bank
     set scene to "Glasgow"
-    set model to "linen_bank"
-    set x to 25%
-    set y to 55%
-    set z to -3
+    set type to "linen_bank"
+    set x to 20%
+    set y to 65%
+    set z to 0
     set size to 2.5
     set spin to "0 5 0"
 end
 
+# Labels to the LEFT of Linen Bank (x=2% - far left edge)
 create object linen_bank_label
     set scene to "Glasgow"
     set text to "Linen Bank"
-    set x to 25%
-    set y to 30%
-    set z to -3
+    set x to 2%
+    set y to 55%
+    set z to 0
     set color to "white"
-    set font_size to 32
+    set font_size to 24
 end
 
 create object linen_bank_info
     set scene to "Glasgow"
-    set text to "Historic building in Glasgow"
-    set x to 25%
-    set y to 37%
-    set z to -3
+    set text to "Historic building"
+    set x to 2%
+    set y to 60%
+    set z to 0
     set color to "gray"
-    set font_size to 20
+    set font_size to 16
 end
 
 create object linen_bank_credit
     set scene to "Glasgow"
-    set text to "3D model by CheriePotter (CC BY)"
-    set x to 25%
-    set y to 43%
-    set z to -3
+    set text to "CheriePotter (CC BY)"
+    set x to 2%
+    set y to 65%
+    set z to 0
     set color to "cyan"
-    set font_size to 16
+    set font_size to 14
 end
 
-# --- Joanna Baillie Monument ---
+# --- Joanna Baillie Monument (right side) ---
+# Position: x=80% puts it on the right third of the screen
+# Same y and z as Linen Bank for visual balance
 create object baillie_monument
     set scene to "Glasgow"
-    set model to "joanna_baillie_monument"
-    set x to 75%
-    set y to 55%
-    set z to 3
-    set size to 2
+    set type to "joanna_baillie_monument"
+    set x to 80%
+    set y to 65%
+    set z to 0
+    set size to 2.5
     set spin to "0 5 0"
 end
 
+# Labels to the RIGHT of Baillie Monument (x=98% - far right edge)
 create object baillie_label
     set scene to "Glasgow"
-    set text to "Joanna Baillie Monument"
-    set x to 75%
-    set y to 30%
-    set z to 3
+    set text to "Joanna Baillie"
+    set x to 98%
+    set y to 50%
+    set z to 0
     set color to "white"
-    set font_size to 32
+    set font_size to 24
 end
 
 create object baillie_info
     set scene to "Glasgow"
-    set text to "Bothwell, Scotland"
-    set x to 75%
-    set y to 37%
-    set z to 3
-    set color to "gray"
-    set font_size to 20
+    set text to "Monument"
+    set x to 98%
+    set y to 55%
+    set z to 0
+    set color to "white"
+    set font_size to 24
 end
 
 create object baillie_desc
     set scene to "Glasgow"
-    set text to "Scottish poet and dramatist (1762-1851)"
-    set x to 75%
-    set y to 43%
-    set z to 3
+    set text to "Bothwell, Scotland"
+    set x to 98%
+    set y to 62%
+    set z to 0
     set color to "gray"
-    set font_size to 18
+    set font_size to 16
+end
+
+create object baillie_poet
+    set scene to "Glasgow"
+    set text to "Poet (1762-1851)"
+    set x to 98%
+    set y to 67%
+    set z to 0
+    set color to "gray"
+    set font_size to 14
 end
 
 create object baillie_credit
     set scene to "Glasgow"
-    set text to "3D model by Andras Sandor (CC BY)"
-    set x to 75%
-    set y to 49%
-    set z to 3
+    set text to "Andras Sandor (CC BY)"
+    set x to 98%
+    set y to 72%
+    set z to 0
     set color to "cyan"
-    set font_size to 16
+    set font_size to 12
 end
 
 # =============================================================================

@@ -1887,6 +1887,63 @@ def copy_sprite_assets(source_path: Path, output_dir: Path, sprite_assets: dict)
         print(f"   This path will be removed in v0.2.0. Move assets to assets/sprites/ or assets/sounds/", file=sys.stderr)
 
 
+def copy_model_assets(source_path: Path, output_dir: Path, model_assets: set):
+    """Copy 3D model assets (GLB files) that are used in the game.
+
+    Searches for model files in these locations (in order):
+    1. rosh-lang/assets/3d_glb/ (distributed assets)
+    2. Same directory as source file
+    3. ../assets/3d_glb/ relative to source file
+
+    Args:
+        source_path: Path to the source .rosh file
+        output_dir: Output directory for the game
+        model_assets: Set of model file paths (e.g., '3d_glb/linen_bank.glb')
+    """
+    import shutil
+    from pathlib import Path
+
+    if not model_assets:
+        return
+
+    # Find rosh-lang root (look for assets/3d_glb folder)
+    source_dir = source_path.parent
+    rosh_lang_root = source_dir
+    for _ in range(5):  # Search up to 5 levels
+        if (rosh_lang_root / 'assets' / '3d_glb').exists():
+            break
+        rosh_lang_root = rosh_lang_root.parent
+
+    search_paths = [
+        rosh_lang_root / 'assets',  # rosh-lang/assets/ (models are in 3d_glb/)
+        source_dir / 'assets',  # Same dir as .rosh file
+        source_dir.parent / 'assets',  # ../assets/
+    ]
+
+    copied_count = 0
+    for model_path in model_assets:
+        # model_path is like '3d_glb/linen_bank.glb'
+        model_file = Path(model_path)
+
+        # Try each search path
+        for search_path in search_paths:
+            full_path = search_path / model_file
+            if full_path.exists():
+                # Create destination directory (preserving structure like 3d_glb/)
+                dest_path = output_dir / model_file
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(full_path, dest_path)
+                print(f"  🎨 Copied 3D model: {model_file}", file=sys.stderr)
+                copied_count += 1
+                break
+        else:
+            # Model not found in any search path
+            print(f"  ⚠️  3D model not found: {model_path}", file=sys.stderr)
+
+    if copied_count > 0:
+        print(f"✅ Copied {copied_count} 3D model(s)", file=sys.stderr)
+
+
 def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = False, enable_repl: bool = False):
     """Transpile Rosh code to target platform
 
@@ -2017,6 +2074,10 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             # Copy assets if requested
             if copy_assets and emitter.sprite_assets:
                 copy_sprite_assets(path, Path(output_dir), emitter.sprite_assets)
+
+            # Always copy 3D model assets if they exist (essential for scene)
+            if emitter.model_assets:
+                copy_model_assets(path, Path(output_dir), emitter.model_assets)
 
             print(f"✅ Build successful!", file=sys.stderr)
             print(f"📁 Output: {output_dir}", file=sys.stderr)
