@@ -552,6 +552,40 @@ model = "3d_glb/castle.glb"
 credit = "Castle by hamidkhan224 (CC BY 4.0)"
 credit_url = "https://skfb.ly/otLpZ"
 
+# =============================================================================
+# GLASGOW HERITAGE - Local historical artifacts
+# =============================================================================
+
+[linen_bank]
+description = "Historic Linen Bank building in Glasgow"
+category = "structure"
+[linen_bank.2d]
+color = "gray"
+shape = "rectangle"
+width = 2.0
+height = 1.5
+[linen_bank.3d]
+shape = "box"
+color = 0x808080
+model = "3d_glb/linen_bank.glb"
+credit = "Linen Bank by CheriePotter (CC BY 4.0)"
+credit_url = "https://skfb.ly/6TBqA"
+
+[joanna_baillie_monument]
+description = "Monument to Scottish poet Joanna Baillie (1762-1851) in Bothwell, Scotland"
+category = "structure"
+[joanna_baillie_monument.2d]
+color = "gray"
+shape = "rectangle"
+width = 1.0
+height = 2.0
+[joanna_baillie_monument.3d]
+shape = "box"
+color = 0x808080
+model = "3d_glb/joanna_baillie_monument.glb"
+credit = "Joanna Baillie Monument by Andras Sandor (CC BY 4.0)"
+credit_url = "https://skfb.ly/pyWRH"
+
 [explosion]
 description = "A fiery explosion"
 category = "effect"
