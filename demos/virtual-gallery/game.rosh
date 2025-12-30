@@ -58,12 +58,12 @@ end
 
 create object lobby_instruction2
     set scene to "Lobby"
-    set text to "Type: go abstract | go sculpture | go creative"
+    set text to "Type: go glasgow | go abstract | go sculpture | go creative"
     set x to 50%
     set y to 58%
     set z to -8
     set color to "cyan"
-    set font_size to 36
+    set font_size to 32
 end
 
 create object lobby_instruction3
@@ -106,7 +106,7 @@ end
 # Navigation hint - well below title
 create object abstract_hint
     set scene to "Abstract"
-    set text to "go lobby | go sculpture | go creative"
+    set text to "go lobby | go glasgow | go sculpture | go creative"
     set x to 50%
     set y to 30%
     set z to -12
@@ -178,7 +178,7 @@ end
 
 create object sculpture_hint
     set scene to "Sculpture"
-    set text to "go lobby | go abstract | go creative"
+    set text to "go lobby | go glasgow | go abstract | go creative"
     set x to 50%
     set y to 30%
     set z to -12
@@ -275,7 +275,7 @@ end
 
 create object creative_hint
     set scene to "Creative"
-    set text to "try: create big red sphere | go lobby"
+    set text to "try: create big red sphere | go lobby | go glasgow"
     set x to 50%
     set y to 42%
     set z to -12
@@ -304,6 +304,132 @@ create object canvas
 end
 
 # =============================================================================
+# GLASGOW HERITAGE - Local Historical Artifacts
+# =============================================================================
+
+create object glasgow_title
+    set scene to "Glasgow"
+    set text to "Glasgow Heritage"
+    set x to 50%
+    set y to 10%
+    set z to -12
+    set color to "white"
+    set font_size to 72
+end
+
+create object glasgow_subtitle
+    set scene to "Glasgow"
+    set text to "Historical artifacts from Glasgow and surrounding areas"
+    set x to 50%
+    set y to 25%
+    set z to -12
+    set color to "gray"
+    set font_size to 28
+end
+
+create object glasgow_hint
+    set scene to "Glasgow"
+    set text to "go lobby | go abstract | go sculpture | go creative"
+    set x to 50%
+    set y to 38%
+    set z to -12
+    set color to "cyan"
+    set font_size to 24
+end
+
+# --- Linen Bank Building ---
+create object linen_bank
+    set scene to "Glasgow"
+    set model to "linen_bank"
+    set x to 30%
+    set y to 60%
+    set z to 0
+    set size to 2
+    set spin to "0 5 0"
+end
+
+create object linen_bank_label
+    set scene to "Glasgow"
+    set text to "Linen Bank"
+    set x to 30%
+    set y to 35%
+    set z to 0
+    set color to "white"
+    set font_size to 32
+end
+
+create object linen_bank_info
+    set scene to "Glasgow"
+    set text to "Historic building in Glasgow"
+    set x to 30%
+    set y to 42%
+    set z to 0
+    set color to "gray"
+    set font_size to 20
+end
+
+create object linen_bank_credit
+    set scene to "Glasgow"
+    set text to "3D model by CheriePotter (CC BY)"
+    set x to 30%
+    set y to 48%
+    set z to 0
+    set color to "cyan"
+    set font_size to 16
+end
+
+# --- Joanna Baillie Monument ---
+create object baillie_monument
+    set scene to "Glasgow"
+    set model to "joanna_baillie_monument"
+    set x to 70%
+    set y to 60%
+    set z to 0
+    set size to 1.5
+    set spin to "0 5 0"
+end
+
+create object baillie_label
+    set scene to "Glasgow"
+    set text to "Joanna Baillie Monument"
+    set x to 70%
+    set y to 35%
+    set z to 0
+    set color to "white"
+    set font_size to 32
+end
+
+create object baillie_info
+    set scene to "Glasgow"
+    set text to "Bothwell, Scotland"
+    set x to 70%
+    set y to 42%
+    set z to 0
+    set color to "gray"
+    set font_size to 20
+end
+
+create object baillie_desc
+    set scene to "Glasgow"
+    set text to "Scottish poet and dramatist (1762-1851)"
+    set x to 70%
+    set y to 48%
+    set z to 0
+    set color to "gray"
+    set font_size to 18
+end
+
+create object baillie_credit
+    set scene to "Glasgow"
+    set text to "3D model by Andras Sandor (CC BY)"
+    set x to 70%
+    set y to 54%
+    set z to 0
+    set color to "cyan"
+    set font_size to 16
+end
+
+# =============================================================================
 # SHARED ELEMENTS - Present in all scenes (no scene property)
 # =============================================================================
 
@@ -324,4 +450,5 @@ end
 #   - "go abstract" - enter Abstract Gallery
 #   - "go sculpture" - enter Sculpture Garden
 #   - "go creative" - enter Creative Studio
+#   - "go glasgow" - enter Glasgow Heritage
 # =============================================================================
