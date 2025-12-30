@@ -2883,7 +2883,6 @@ def run_twin(world: str, server: str):
                                     for oid, odata in msg['state']['objects'].items():
                                         print(f"  {CYAN}{oid}{RESET}: {odata['type']} ({odata.get('color', 'unknown')})")
                                 print(f"\n{DIM}Commands: create <type> [color], list, delete <id>, say <message>, quit{RESET}")
-                                print(f"{YELLOW}twin>{RESET} ", end='', flush=True)
                             elif msg['type'] == 'USER_JOINED':
                                 print(f"\n{CYAN}→ User {msg['user_id']} joined (total: {msg['user_count']}){RESET}")
                                 print(f"{YELLOW}twin>{RESET} ", end='', flush=True)
