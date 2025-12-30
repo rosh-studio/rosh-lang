@@ -1069,6 +1069,94 @@ def run_repl(interpreter: Interpreter = None):
     aliases = {}  # Store command aliases
     blank_line_count = 0  # Track consecutive blank lines for triple-newline → go
 
+    # === Project Twin: Shared World Connection State ===
+    twin_ws = None  # WebSocket connection
+    twin_user_id = None
+    twin_world_id = None
+    twin_world_state = {"objects": {}}
+    twin_receiver_thread = None
+    twin_stop_event = None
+    twin_message_queue = []  # Messages from server to display
+    TWIN_SERVER = "wss://rosh.cloud/ws/world/"
+
+    def twin_display_messages():
+        """Display any pending messages from the twin server"""
+        nonlocal twin_message_queue
+        while twin_message_queue:
+            msg = twin_message_queue.pop(0)
+            if msg['type'] == 'USER_JOINED':
+                out.print(f"\n[twin] User {msg['user_id']} joined (total: {msg['user_count']})", style="cyan")
+            elif msg['type'] == 'USER_LEFT':
+                out.dim(f"\n[twin] User {msg['user_id']} left (total: {msg['user_count']})")
+            elif msg['type'] == 'OBJECT_CREATED':
+                twin_world_state['objects'][msg['id']] = msg['data']
+                if msg['by'] != twin_user_id:
+                    out.print(f"\n[twin] + {msg['id']}: {msg['data']['type']} created by {msg['by']}", style="cyan")
+            elif msg['type'] == 'OBJECT_DELETED':
+                if msg['id'] in twin_world_state['objects']:
+                    del twin_world_state['objects'][msg['id']]
+                if msg['by'] != twin_user_id:
+                    out.dim(f"\n[twin] - {msg['id']} deleted by {msg['by']}")
+            elif msg['type'] == 'CHAT':
+                out.print(f"\n[twin] [{msg['user_id']}] {msg['message']}", style="cyan")
+            elif msg['type'] == 'ERROR':
+                out.error(f"[twin] {msg.get('message', 'Unknown error')}")
+            elif msg['type'] == 'WORLD_RESET':
+                twin_world_state['objects'] = {}
+                out.warning(f"\n[twin] World reset by {msg['by']} ({msg.get('deleted_count', 0)} objects cleared)")
+
+    def twin_broadcast_create(obj_name, obj):
+        """Broadcast object creation to connected world"""
+        nonlocal twin_ws
+        if twin_ws is None:
+            return
+        try:
+            import json
+            from .values import rosh_to_python
+            obj_type = obj.name if hasattr(obj, 'name') and obj.name else 'cube'
+            color = rosh_to_python(obj.get('color')) if obj.has('color') else 'green'
+            x = rosh_to_python(obj.get('x')) if obj.has('x') else 0
+            y = rosh_to_python(obj.get('y')) if obj.has('y') else 0
+            z = rosh_to_python(obj.get('z')) if obj.has('z') else 0
+            size = rosh_to_python(obj.get('size')) if obj.has('size') else 1
+            twin_ws.send(json.dumps({
+                "type": "CREATE",
+                "id": obj_name,
+                "object_type": obj_type,
+                "color": color,
+                "x": x, "y": y, "z": z,
+                "size": size
+            }))
+        except Exception as e:
+            out.dim(f"[twin] broadcast failed: {e}")
+
+    def get_object_names():
+        """Get set of current object names in interpreter"""
+        from .values import RoshObject
+        names = set()
+        if interpreter and hasattr(interpreter, 'current_env'):
+            for name in interpreter.current_env.bindings.keys():
+                try:
+                    value = interpreter.current_env.get(name)
+                    if isinstance(value, RoshObject):
+                        names.add(name)
+                except:
+                    pass
+        return names
+
+    def broadcast_new_objects(before_names):
+        """Check for new objects and broadcast them"""
+        if twin_ws is None:
+            return
+        after_names = get_object_names()
+        new_names = after_names - before_names
+        for name in new_names:
+            try:
+                obj = interpreter.current_env.get(name)
+                twin_broadcast_create(name, obj)
+            except:
+                pass
+
     # Set up readline for command history and tab completion
     if READLINE_AVAILABLE:
         # History file location
@@ -1141,6 +1229,120 @@ def run_repl(interpreter: Interpreter = None):
                 out.dim("https://rosh.cloud")
                 out.print()
                 continue
+
+            # === Project Twin: connect/disconnect commands ===
+            if line.strip().startswith('connect'):
+                parts = line.strip().split()
+                world = parts[1] if len(parts) > 1 else 'default'
+                if twin_ws is not None:
+                    out.warning(f"Already connected to '{twin_world_id}'. Use 'disconnect' first.")
+                    continue
+                try:
+                    import websocket
+                    import json
+                    import threading
+
+                    uri = f"{TWIN_SERVER}{world}"
+                    out.dim(f"Connecting to {uri}...")
+
+                    # Create WebSocket connection (synchronous)
+                    twin_ws = websocket.create_connection(uri)
+                    twin_world_id = world
+
+                    # Receive initial CONNECTED message
+                    initial = json.loads(twin_ws.recv())
+                    if initial['type'] == 'CONNECTED':
+                        twin_user_id = initial['user_id']
+                        twin_world_state.update(initial['state'])
+                        out.success(f"Connected to world '{world}' as {twin_user_id}")
+                        out.dim(f"Users online: {initial['user_count']}")
+                        if initial['state']['objects']:
+                            out.print(f"Objects in world: {len(initial['state']['objects'])}", style="cyan")
+                            for oid, odata in initial['state']['objects'].items():
+                                out.print(f"  {oid}: {odata['type']} ({odata.get('color', '?')})", style="dim")
+                        out.print()
+                        out.dim("Objects you create will sync to the shared world.")
+                        out.dim("Use 'disconnect' to leave, 'twin' to see world state.")
+
+                    # Start background receiver thread
+                    twin_stop_event = threading.Event()
+
+                    def receiver_loop():
+                        nonlocal twin_ws, twin_user_id, twin_world_id
+                        while not twin_stop_event.is_set():
+                            try:
+                                twin_ws.settimeout(0.5)
+                                msg_str = twin_ws.recv()
+                                msg = json.loads(msg_str)
+                                twin_message_queue.append(msg)
+                            except websocket.WebSocketTimeoutException:
+                                continue
+                            except Exception:
+                                break
+
+                    twin_receiver_thread = threading.Thread(target=receiver_loop, daemon=True)
+                    twin_receiver_thread.start()
+
+                except ImportError:
+                    out.error("websocket-client package required. Install with: uv add websocket-client")
+                except Exception as e:
+                    out.error(f"Connection failed: {e}")
+                    twin_ws = None
+                    twin_world_id = None
+                continue
+
+            if line.strip() == 'disconnect':
+                if twin_ws is None:
+                    out.dim("Not connected to any world.")
+                else:
+                    try:
+                        if twin_stop_event:
+                            twin_stop_event.set()
+                        twin_ws.close()
+                    except:
+                        pass
+                    out.success(f"Disconnected from world '{twin_world_id}'")
+                    twin_ws = None
+                    twin_user_id = None
+                    twin_world_id = None
+                    twin_world_state.clear()
+                    twin_world_state['objects'] = {}
+                continue
+
+            if line.strip() == 'twin':
+                if twin_ws is None:
+                    out.dim("Not connected. Use 'connect <world>' to join a shared world.")
+                else:
+                    out.print(f"Connected to: {twin_world_id}", style="cyan")
+                    out.print(f"Your ID: {twin_user_id}", style="dim")
+                    if twin_world_state['objects']:
+                        out.print(f"Objects ({len(twin_world_state['objects'])}):", style="cyan")
+                        for oid, odata in twin_world_state['objects'].items():
+                            out.print(f"  {oid}: {odata['type']} ({odata.get('color', '?')})", style="dim")
+                    else:
+                        out.dim("No objects in world")
+                continue
+
+            if line.strip().startswith('say '):
+                if twin_ws is None:
+                    out.dim("Not connected. Use 'connect <world>' first.")
+                else:
+                    import json
+                    message = line.strip()[4:]
+                    twin_ws.send(json.dumps({"type": "CHAT", "message": message}))
+                continue
+
+            if line.strip() == 'reset world':
+                if twin_ws is None:
+                    out.dim("Not connected. Use 'connect <world>' first.")
+                else:
+                    import json
+                    twin_ws.send(json.dumps({"type": "RESET"}))
+                    out.success(f"Reset sent to world '{twin_world_id}'")
+                continue
+
+            # Display any pending twin messages before processing commands
+            twin_display_messages()
 
             # Handle alias command: alias <name> <expansion>
             if line.strip() == 'alias' or line.strip().startswith('alias '):
@@ -1224,7 +1426,9 @@ def run_repl(interpreter: Interpreter = None):
                     buffer = []
                     blank_line_count = 0
                     try:
+                        _before = get_object_names()
                         interpreter = run_source(source, "<repl>", interpreter)
+                        broadcast_new_objects(_before)
                     except RoshError as e:
                         out.error(str(e))
                     continue
@@ -1631,7 +1835,9 @@ def run_repl(interpreter: Interpreter = None):
                     source = '\n'.join(buffer)
                     buffer = []
                     try:
+                        _before = get_object_names()
                         interpreter = run_source(source, "<repl>", interpreter)
+                        broadcast_new_objects(_before)
                     except RoshError as e:
                         out.error(str(e))
                     continue
@@ -1706,7 +1912,9 @@ def run_repl(interpreter: Interpreter = None):
                     source = '\n'.join(buffer)
                     buffer = []
                     try:
+                        _before = get_object_names()
                         interpreter = run_source(source, "<repl>", interpreter)
+                        broadcast_new_objects(_before)
                     except RoshError as e:
                         out.error(str(e))
                     continue
@@ -1728,7 +1936,9 @@ def run_repl(interpreter: Interpreter = None):
                 source = '\n'.join(buffer)
                 buffer = []
                 try:
+                    _before = get_object_names()
                     interpreter = run_source(source, "<repl>", interpreter)
+                    broadcast_new_objects(_before)
                 except RoshError as e:
                     out.error(str(e))
                 continue
@@ -1739,7 +1949,9 @@ def run_repl(interpreter: Interpreter = None):
                 source = '\n'.join(buffer)
                 buffer = []
                 try:
+                    _before = get_object_names()
                     interpreter = run_source(source, "<repl>", interpreter)
+                    broadcast_new_objects(_before)
                 except RoshError as e:
                     error_msg = str(e)
 
@@ -2828,170 +3040,6 @@ def _check_expect(expect: dict, interpreter, last_error: str) -> dict:
     return {'passed': True}
 
 
-def run_twin(world: str, server: str):
-    """Run Project Twin - connect to a shared world via WebSocket."""
-    import asyncio
-    import json
-    import sys
-    import readline  # For better input handling
-
-    # ANSI colors
-    CYAN = '\033[96m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    RED = '\033[91m'
-    DIM = '\033[2m'
-    RESET = '\033[0m'
-    BOLD = '\033[1m'
-
-    print(f"{BOLD}╔══════════════════════════════════════════════════════════════╗{RESET}")
-    print(f"{BOLD}║  {CYAN}PROJECT TWIN{RESET}{BOLD} - Shared World CLI                            ║{RESET}")
-    print(f"{BOLD}╚══════════════════════════════════════════════════════════════╝{RESET}")
-    print()
-
-    try:
-        import websockets
-    except ImportError:
-        print(f"{RED}Error: websockets package required. Install with:{RESET}")
-        print(f"  uv add websockets")
-        sys.exit(1)
-
-    user_id = None
-    world_state = {"objects": {}}
-
-    async def twin_repl():
-        nonlocal user_id, world_state
-        uri = f"{server}{world}"
-
-        print(f"{DIM}Connecting to {uri}...{RESET}")
-
-        try:
-            async with websockets.connect(uri) as ws:
-                # Handle incoming messages in background
-                async def message_handler():
-                    nonlocal user_id, world_state
-                    try:
-                        async for message in ws:
-                            msg = json.loads(message)
-                            if msg['type'] == 'CONNECTED':
-                                user_id = msg['user_id']
-                                world_state = msg['state']
-                                print(f"\n{GREEN}Connected to world '{world}' as {user_id}{RESET}")
-                                print(f"{DIM}Users online: {msg['user_count']}{RESET}")
-                                if msg['state']['objects']:
-                                    print(f"{DIM}Objects in world: {len(msg['state']['objects'])}{RESET}")
-                                    for oid, odata in msg['state']['objects'].items():
-                                        print(f"  {CYAN}{oid}{RESET}: {odata['type']} ({odata.get('color', 'unknown')})")
-                                print(f"\n{DIM}Commands: create <type> [color], list, delete <id>, say <message>, quit{RESET}")
-                            elif msg['type'] == 'USER_JOINED':
-                                print(f"\n{CYAN}→ User {msg['user_id']} joined (total: {msg['user_count']}){RESET}")
-                                print(f"{YELLOW}twin>{RESET} ", end='', flush=True)
-                            elif msg['type'] == 'USER_LEFT':
-                                print(f"\n{DIM}← User {msg['user_id']} left (total: {msg['user_count']}){RESET}")
-                                print(f"{YELLOW}twin>{RESET} ", end='', flush=True)
-                            elif msg['type'] == 'OBJECT_CREATED':
-                                world_state['objects'][msg['id']] = msg['data']
-                                if msg['by'] != user_id:
-                                    print(f"\n{CYAN}+ {msg['id']}: {msg['data']['type']} created by {msg['by']}{RESET}")
-                                    print(f"{YELLOW}twin>{RESET} ", end='', flush=True)
-                            elif msg['type'] == 'OBJECT_DELETED':
-                                if msg['id'] in world_state['objects']:
-                                    del world_state['objects'][msg['id']]
-                                if msg['by'] != user_id:
-                                    print(f"\n{DIM}- {msg['id']} deleted by {msg['by']}{RESET}")
-                                    print(f"{YELLOW}twin>{RESET} ", end='', flush=True)
-                            elif msg['type'] == 'CHAT':
-                                print(f"\n{CYAN}[{msg['user_id']}]{RESET} {msg['message']}")
-                                print(f"{YELLOW}twin>{RESET} ", end='', flush=True)
-                    except websockets.exceptions.ConnectionClosed:
-                        print(f"\n{RED}Connection closed{RESET}")
-
-                # Start message handler
-                handler_task = asyncio.create_task(message_handler())
-
-                # Wait for initial connection
-                await asyncio.sleep(0.5)
-
-                # Interactive command loop
-                try:
-                    while True:
-                        # Use asyncio-compatible input
-                        loop = asyncio.get_event_loop()
-                        try:
-                            cmd = await loop.run_in_executor(None, lambda: input(f"{YELLOW}twin>{RESET} "))
-                        except EOFError:
-                            break
-
-                        cmd = cmd.strip().lower()
-                        if not cmd:
-                            continue
-
-                        if cmd in ('quit', 'exit', 'q'):
-                            print(f"{DIM}Disconnecting...{RESET}")
-                            break
-
-                        elif cmd == 'list':
-                            if not world_state['objects']:
-                                print(f"{DIM}No objects in world{RESET}")
-                            else:
-                                print(f"{CYAN}Objects in world:{RESET}")
-                                for oid, odata in world_state['objects'].items():
-                                    print(f"  {oid}: {odata['type']} ({odata.get('color', '?')}) at ({odata.get('x', 0):.1f}, {odata.get('y', 0):.1f}, {odata.get('z', 0):.1f})")
-
-                        elif cmd.startswith('create '):
-                            parts = cmd.split()[1:]
-                            obj_type = parts[-1] if parts else 'cube'
-                            color = parts[0] if len(parts) > 1 else 'green'
-                            import random
-                            x = random.uniform(-5, 5)
-                            z = random.uniform(-5, 5)
-                            await ws.send(json.dumps({
-                                "type": "CREATE",
-                                "object_type": obj_type,
-                                "color": color,
-                                "x": x, "y": 1, "z": z,
-                                "size": 1
-                            }))
-                            print(f"{GREEN}Created {color} {obj_type}{RESET}")
-
-                        elif cmd.startswith('delete ') or cmd.startswith('remove '):
-                            obj_id = cmd.split()[1] if len(cmd.split()) > 1 else ''
-                            if obj_id and obj_id in world_state['objects']:
-                                await ws.send(json.dumps({"type": "DELETE", "id": obj_id}))
-                                print(f"{DIM}Deleted {obj_id}{RESET}")
-                            else:
-                                print(f"{RED}Object not found: {obj_id}{RESET}")
-
-                        elif cmd.startswith('say ') or cmd.startswith('chat '):
-                            message = cmd.split(' ', 1)[1] if ' ' in cmd else ''
-                            if message:
-                                await ws.send(json.dumps({"type": "CHAT", "message": message}))
-
-                        elif cmd == 'help':
-                            print(f"{CYAN}Commands:{RESET}")
-                            print(f"  create [color] <type>  - Create object (e.g., create red sphere)")
-                            print(f"  list                   - List all objects")
-                            print(f"  delete <id>            - Delete an object")
-                            print(f"  say <message>          - Send chat message")
-                            print(f"  quit                   - Disconnect and exit")
-
-                        else:
-                            print(f"{DIM}Unknown command. Type 'help' for commands.{RESET}")
-
-                except KeyboardInterrupt:
-                    print(f"\n{DIM}Interrupted{RESET}")
-
-                handler_task.cancel()
-
-        except Exception as e:
-            print(f"{RED}Connection error: {e}{RESET}")
-            sys.exit(1)
-
-    # Run the async REPL
-    asyncio.run(twin_repl())
-    print(f"{GREEN}Disconnected from '{world}'{RESET}")
-
-
 def main():
     """Main entry point for the Rosh CLI"""
     parser = argparse.ArgumentParser(
@@ -3001,7 +3049,7 @@ def main():
 
     # Check if using subcommand (peek at args)
     import sys
-    using_subcommand = len(sys.argv) > 1 and sys.argv[1] in ('build', 'test', 'twin')
+    using_subcommand = len(sys.argv) > 1 and sys.argv[1] in ('build', 'test')
 
     if using_subcommand:
         # Add subparsers for commands
@@ -3032,12 +3080,7 @@ def main():
                                  default='standard',
                                  help='Compliance level to check (default: standard)')
 
-        # Twin subcommand - Project Twin shared world
-        twin_parser = subparsers.add_parser('twin', help='Connect to a shared world (Project Twin)')
-        twin_parser.add_argument('world', nargs='?', default='default',
-                                 help='World name to join (default: "default")')
-        twin_parser.add_argument('--server', default='wss://rosh.cloud/ws/world/',
-                                 help='WebSocket server URL (default: wss://rosh.cloud/ws/world/)')
+        # Note: Project Twin is now integrated into the REPL via 'connect <world>' command
     else:
         # Default behavior (run/REPL) - preserve existing arguments
         parser.add_argument(
@@ -3140,11 +3183,6 @@ def main():
             filter_pattern=args.filter,
             level=args.level
         )
-        return
-
-    # Handle twin subcommand
-    if hasattr(args, 'subcommand') and args.subcommand == 'twin':
-        run_twin(args.world, args.server)
         return
 
     if args.command:
