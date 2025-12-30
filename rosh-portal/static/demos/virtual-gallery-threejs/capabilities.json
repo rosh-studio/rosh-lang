@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "capabilities": [
+    {
+      "name": "color",
+      "handler": "color",
+      "applies_to": [
+        "mesh",
+        "text",
+        "sprite",
+        "hud"
+      ],
+      "tags": [
+        "safe"
+      ],
+      "args": [
+        "css_or_hex"
+      ],
+      "doc": "Change mesh or text color."
+    },
+    {
+      "name": "font_size",
+      "handler": "font_size",
+      "applies_to": [
+        "text",
+        "hud"
+      ],
+      "tags": [
+        "safe"
+      ],
+      "args": [
+        "pixels"
+      ],
+      "doc": "Adjust text sprite font size."
+    },
+    {
+      "name": "font",
+      "handler": "font",
+      "applies_to": [
+        "text",
+        "hud"
+      ],
+      "tags": [
+        "safe"
+      ],
+      "args": [
+        "font_family"
+      ],
+      "doc": "Set font family (default: Inter). Examples: 'Arial', 'Georgia', 'Courier New'."
+    },
+    {
+      "name": "text",
+      "handler": "text",
+      "applies_to": [
+        "text",
+        "hud"
+      ],
+      "tags": [
+        "safe"
+      ],
+      "args": [
+        "value"
+      ],
+      "doc": "Update HUD/text sprite contents."
+    },
+    {
+      "name": "scale",
+      "handler": "scale",
+      "applies_to": [
+        "mesh",
+        "sprite"
+      ],
+      "tags": [
+        "safe"
+      ],
+      "args": [
+        "uniform|x y z"
+      ],
+      "doc": "Scale objects uniformly or per-axis."
+    },
+    {
+      "name": "spin",
+      "handler": "spin",
+      "applies_to": [
+        "mesh",
+        "sprite"
+      ],
+      "tags": [
+        "safe"
+      ],
+      "args": [
+        "xSpeed ySpeed zSpeed"
+      ],
+      "doc": "Rotate objects continuously (degrees per second)."
+    },
+    {
+      "name": "bounce",
+      "handler": "bounce",
+      "applies_to": [
+        "mesh",
+        "sprite"
+      ],
+      "tags": [
+        "safe"
+      ],
+      "args": [
+        "amplitude frequency"
+      ],
+      "doc": "Apply vertical bounce animation (frequency per second)."
+    },
+    {
+      "name": "pulse",
+      "handler": "pulse",
+      "applies_to": [
+        "mesh",
+        "sprite",
+        "text",
+        "hud"
+      ],
+      "tags": [
+        "safe"
+      ],
+      "args": [
+        "amplitude frequency"
+      ],
+      "doc": "Scale object in/out with a sine wave (amplitude multiplier, frequency in Hz)."
+    },
+    {
+      "name": "orbit",
+      "handler": "orbit",
+      "applies_to": [
+        "mesh",
+        "sprite"
+      ],
+      "tags": [
+        "safe"
+      ],
+      "args": [
+        "radius speed [height]"
+      ],
+      "doc": "Orbit around the object's starting point (radius in world units, speed in degrees/sec, optional height override)."
+    }
+  ]
+}
