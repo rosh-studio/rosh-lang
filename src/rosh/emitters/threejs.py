@@ -626,7 +626,7 @@ class ThreeJSEmitter(BaseEmitter):
         # Keyboard event listeners
         self.write("document.addEventListener('keydown', (e) => {")
         self.indent()
-        self.write("if (consoleVisible) return;")
+        self.write("if (window.consoleVisible) return;  // Skip when console open")
         self.write("keyState[e.code] = true;")
 
         for key, actions in keydown_handlers.items():
@@ -850,7 +850,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const arrowState = { left: false, right: false, up: false, down: false, rise: false, fall: false };")
         self.write("document.addEventListener('keydown', (e) => {")
         self.indent()
-        self.write("if (consoleVisible) return;")
+        self.write("if (window.consoleVisible || consoleVisible) return;  // Skip when any console open")
 
         # Game keydown events
         if self.keydown_events:
@@ -1100,7 +1100,7 @@ class ThreeJSEmitter(BaseEmitter):
                 self.write(f"{name}.visible = false;")
 
         # Custom properties in userData
-        known = {'x', 'y', 'z', 'width', 'height', 'depth', 'color', 'shape', 'radius', 'text', 'sprite', 'visible', 'saveable', 'type'}
+        known = {'x', 'y', 'z', 'width', 'height', 'depth', 'color', 'shape', 'radius', 'text', 'sprite', 'visible', 'saveable', 'type', 'fixed'}
         # Capability properties need special handling - stored as _name with array values
         capability_props = {'spin', 'orbit', 'bounce', 'pulse'}
         for prop_name, prop_value in obj.properties.items():
@@ -1132,6 +1132,20 @@ class ThreeJSEmitter(BaseEmitter):
 
         # UUID for REPL
         self.write(f"{name}.userData._rosh_uuid = crypto.randomUUID();")
+
+        # Scene objects are fixed by default (immune to gravity) unless explicitly set to false
+        # Text objects are always fixed (never affected by gravity)
+        if object_kind in ('text', 'hud', 'sprite'):
+            self.write(f"{name}.userData.fixed = true;  // Text/sprites never fall")
+        elif 'fixed' in obj.properties:
+            fixed_val = self.get_value(obj.properties['fixed'])
+            if fixed_val is False or fixed_val == 'false':
+                self.write(f"{name}.userData.fixed = false;")
+            else:
+                self.write(f"{name}.userData.fixed = true;")
+        else:
+            # Scene objects default to fixed=true
+            self.write(f"{name}.userData.fixed = true;  // Scene objects fixed by default")
         self.write_blank()
         self.color_index += 1
 
@@ -1993,7 +2007,7 @@ class ThreeJSEmitter(BaseEmitter):
         # Player object movement with arrow keys
         if self.player_objects:
             self.write_comment("Player movement (arrows=XZ, Space/Shift=Y)")
-            self.write("if (!consoleVisible) {")
+            self.write("if (!window.consoleVisible && !consoleVisible) {")
             self.indent()
             for player in self.player_objects:
                 self.write(f"const {player}Speed = {player}.userData.speed || 0.2;")
@@ -2076,7 +2090,7 @@ class ThreeJSEmitter(BaseEmitter):
 
         # WASD camera movement
         self.write_comment("WASD camera movement (disabled when console open)")
-        self.write("if (!consoleVisible) {")
+        self.write("if (!window.consoleVisible && !consoleVisible) {")
         self.indent()
         self.write("const moveSpeed = 0.5;")
         self.write("if (moveState.forward) { camera.position.z -= moveSpeed; controls.target.z -= moveSpeed; }")
@@ -3528,8 +3542,22 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("twinSocket = new WebSocket(TWIN_SERVER + worldId);")
         self.write("twinWorldId = worldId;")
         self.write("twinSocket.onopen = () => log('WebSocket connected', 'dim');")
-        self.write("twinSocket.onclose = () => { log('Disconnected from shared world', 'warn'); twinSocket = null; twinUserId = null; };")
-        self.write("twinSocket.onerror = (e) => log('Connection error: ' + e.message, 'err');")
+        self.write("twinSocket.onclose = (e) => {")
+        self.indent()
+        self.write("if (e.code === 1006) {")
+        self.indent()
+        self.write("log('Connection failed - server may be offline', 'err');")
+        self.write("log('You can still work offline. Use \"save\" to keep your work.', 'dim');")
+        self.dedent()
+        self.write("} else if (twinUserId) {")
+        self.indent()
+        self.write("log('Disconnected from shared world', 'warn');")
+        self.dedent()
+        self.write("}")
+        self.write("twinSocket = null; twinUserId = null;")
+        self.dedent()
+        self.write("};")
+        self.write("twinSocket.onerror = () => {};  // onclose handles errors")
         self.write("twinSocket.onmessage = (event) => {")
         self.indent()
         self.write("const msg = JSON.parse(event.data);")

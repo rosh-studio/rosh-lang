@@ -45,7 +45,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
 
   // Player keyboard movement state
   let playerKeyboardEnabled = false;
-  const playerKeyState = { left: false, right: false, forward: false, back: false };
+  const playerKeyState = { left: false, right: false, forward: false, back: false, up: false, down: false };
 
   // Color mappings
   const COLOR_MAP = {
@@ -289,6 +289,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       mesh.userData._type = typeName;
       mesh.userData._color = color;
       mesh.userData._roshId = objName;
+      mesh.userData.fixed = false;  // Console-created objects affected by physics
 
       // Random position to avoid stacking
       mesh.position.set(
@@ -693,6 +694,9 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       // Apply gravity to objects
       if (gravityEnabled) {
         for (const [name, obj] of Object.entries(objects)) {
+          // Skip text/hud/sprites (never affected by gravity)
+          const kind = obj.userData._rosh_kind;
+          if (kind === 'text' || kind === 'hud' || kind === 'sprite') continue;
           // Skip fixed objects or objects with gravity disabled
           if (obj.userData.fixed === true) continue;
           if (obj.userData.gravity === false) continue;
@@ -754,6 +758,8 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
           if (playerKeyState.right) player.position.x += step;
           if (playerKeyState.forward) player.position.z -= step;
           if (playerKeyState.back) player.position.z += step;
+          if (playerKeyState.up) player.position.y += step;      // Space = up
+          if (playerKeyState.down) player.position.y -= step;    // Shift = down
         }
       }
     }
@@ -794,13 +800,15 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
   function setupPlayerKeyboard() {
     window.addEventListener('keydown', (e) => {
       // Don't capture keys when console is open
-      if (typeof consoleVisible !== 'undefined' && consoleVisible) return;
+      if (window.consoleVisible) return;
 
       switch (e.key) {
         case 'ArrowLeft': playerKeyState.left = true; break;
         case 'ArrowRight': playerKeyState.right = true; break;
         case 'ArrowUp': playerKeyState.forward = true; break;
         case 'ArrowDown': playerKeyState.back = true; break;
+        case '/': playerKeyState.up = true; e.preventDefault(); break;    // / = up
+        case '.': playerKeyState.down = true; break;                      // . = down
       }
     });
 
@@ -810,6 +818,8 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         case 'ArrowRight': playerKeyState.right = false; break;
         case 'ArrowUp': playerKeyState.forward = false; break;
         case 'ArrowDown': playerKeyState.back = false; break;
+        case '/': playerKeyState.up = false; break;
+        case '.': playerKeyState.down = false; break;
       }
     });
   }

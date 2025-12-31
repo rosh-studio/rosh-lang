@@ -154,6 +154,11 @@ const RoshRuntime = (function() {
     consoleVisible = !consoleVisible;
     el.classList.toggle('visible', consoleVisible);
     if (consoleVisible && inputEl) inputEl.focus();
+
+    // Sync with global consoleVisible (for emitter's WASD handler)
+    if (typeof window !== 'undefined') {
+      window.consoleVisible = consoleVisible;
+    }
   }
 
   // ==========================================================================
@@ -748,9 +753,12 @@ const RoshRuntime = (function() {
     const objects = adapter.getObjects();
     const typeName = args[0] ? singularize(args[0]) : null;
 
-    let filtered = objects;
+    // Filter by visibility (only show objects in current scene)
+    let filtered = objects.filter(o => o.visible !== false);
+
+    // Filter by type if specified
     if (typeName) {
-      filtered = objects.filter(o =>
+      filtered = filtered.filter(o =>
         o.type === typeName ||
         o.name === typeName ||
         o.name.startsWith(typeName + '-')
