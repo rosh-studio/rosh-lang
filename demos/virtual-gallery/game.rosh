@@ -20,6 +20,7 @@ meta
     version "0.2.0"
     description "Interactive museum exhibit - explore themed art galleries"
     initial_scene "Lobby"
+    use_shared_runtime true
 end
 
 # =============================================================================

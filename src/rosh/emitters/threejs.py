@@ -97,7 +97,11 @@ class ThreeJSEmitter(BaseEmitter):
         self.arcade_mode = self.ir.metadata.extra.get('mode') == 'arcade'
 
         # Shared runtime option (new architecture)
-        self.use_shared_runtime = self.meta.get('use_shared_runtime', False)
+        # Check both external meta (TOML) and IR metadata (inline meta block)
+        self.use_shared_runtime = (
+            self.meta.get('use_shared_runtime', False) or
+            self.ir.metadata.extra.get('use_shared_runtime', False)
+        )
 
         # Scan IR to detect features
         self._detect_features()

@@ -107,6 +107,10 @@ class IRTransformer:
         # Merge AST metadata with config meta (AST takes precedence)
         merged_meta = {**self.meta, **ast_meta}
 
+        # Pass through extra metadata fields (like use_shared_runtime)
+        known_meta_keys = {'title', 'version', 'initial_scene', 'canvas_width', 'canvas_height'}
+        extra_meta = {k: v for k, v in merged_meta.items() if k not in known_meta_keys}
+
         ir_program = IR_Program(
             metadata=IR_Metadata(
                 canvas_width=self.canvas_width,
@@ -114,6 +118,7 @@ class IRTransformer:
                 title=merged_meta.get('title'),
                 version=merged_meta.get('version'),
                 initial_scene=merged_meta.get('initial_scene'),
+                extra=extra_meta,
             )
         )
 
