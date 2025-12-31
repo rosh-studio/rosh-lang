@@ -661,6 +661,26 @@ class PhaserEmitter(BaseEmitter):
         self.write("}")
         self.write_blank()
 
+        # Add getHelpText method for adaptive help display
+        self._emit_help_text_method()
+
+    def _emit_help_text_method(self):
+        """Emit getHelpText() method that returns controls help based on platform."""
+        self.write("getHelpText() {")
+        self.indent()
+        self.write("if (this.isMobile) {")
+        self.indent()
+        self.write("return 'Joystick to move, A to shoot';")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("return 'Arrow keys to move, Space to shoot';")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
     def _emit_collision_helper(self):
         """Emit simple AABB collision check method."""
         self.write("checkCollision(a, b) {")
