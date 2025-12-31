@@ -2272,6 +2272,11 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("RoshRuntime.init(roshAdapter);")
         self.write_blank()
 
+        # Alias for animation loop physics update (var hoists to global scope)
+        self.write("// Alias for physics update in animation loop")
+        self.write("var adapter = roshAdapter;")
+        self.write_blank()
+
     def _emit_repl_console(self):
         """Emit in-game REPL console."""
         # Use shared runtime if enabled
