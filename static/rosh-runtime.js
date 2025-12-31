@@ -98,6 +98,16 @@ const RoshRuntime = (function() {
       #rosh-voice:hover { opacity: 0.8; }
       #rosh-voice.listening { opacity: 1; animation: rosh-pulse 1s infinite; }
       @keyframes rosh-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.2); } }
+      /* Mobile console FAB - visible on touch devices */
+      #rosh-console-fab { position: fixed; bottom: 20px; right: 20px; width: 48px; height: 48px;
+        background: rgba(0,0,0,0.7); border: 2px solid #0f0; border-radius: 50%;
+        color: #0f0; font-family: monospace; font-size: 18px; font-weight: bold;
+        cursor: pointer; z-index: 9999; display: none; align-items: center; justify-content: center;
+        box-shadow: 0 2px 10px rgba(0,255,0,0.3); transition: all 0.2s; }
+      #rosh-console-fab:hover { background: rgba(0,50,0,0.9); transform: scale(1.1); }
+      #rosh-console-fab.console-open { bottom: 260px; }
+      @media (pointer: coarse) { #rosh-console-fab { display: flex; } }
+      @media (max-width: 768px) { #rosh-console-fab { display: flex; } }
     `;
     document.head.appendChild(style);
 
@@ -118,6 +128,14 @@ const RoshRuntime = (function() {
       </div>
     `;
     document.body.appendChild(consoleDiv);
+
+    // Mobile FAB button
+    const fab = document.createElement('button');
+    fab.id = 'rosh-console-fab';
+    fab.innerHTML = '&gt;_';
+    fab.title = 'Open Console';
+    fab.addEventListener('click', toggleConsole);
+    document.body.appendChild(fab);
 
     outputEl = document.getElementById('rosh-output');
     inputEl = document.getElementById('rosh-input');
@@ -180,6 +198,10 @@ const RoshRuntime = (function() {
     consoleVisible = !consoleVisible;
     el.classList.toggle('visible', consoleVisible);
     if (consoleVisible && inputEl) inputEl.focus();
+
+    // Move FAB up when console is open
+    const fab = document.getElementById('rosh-console-fab');
+    if (fab) fab.classList.toggle('console-open', consoleVisible);
 
     // Sync with global consoleVisible (for emitter's WASD handler)
     if (typeof window !== 'undefined') {
