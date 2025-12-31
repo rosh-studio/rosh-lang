@@ -706,10 +706,14 @@ class ThreeJSEmitter(BaseEmitter):
 
     def _emit_arcade_animation_loop(self):
         """Emit animation loop for arcade mode."""
+        self.write("let _roshLastFrame = performance.now();")
         self.write_comment("Animation Loop")
         self.write("function animate() {")
         self.indent()
         self.write("requestAnimationFrame(animate);")
+        self.write("const now = performance.now();")
+        self.write("const delta = (now - _roshLastFrame) / 1000;")
+        self.write("_roshLastFrame = now;")
         self.write_blank()
 
         # While-key handlers
@@ -732,6 +736,10 @@ class ThreeJSEmitter(BaseEmitter):
                 if code:
                     self.write(code)
 
+        self.write_blank()
+        # Physics update (gravity, click-to-move)
+        self.write_comment("Physics update (gravity, click-to-move)")
+        self.write("if (adapter && adapter.update) adapter.update(delta);")
         self.write_blank()
         self.write("render2D();")
         self.write("controls.update();")
@@ -2076,6 +2084,11 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("if (camera.position.y < 1) { camera.position.y = 1; }")
         self.dedent()
         self.write("}")
+        self.write_blank()
+
+        # Physics update (gravity, click-to-move)
+        self.write_comment("Physics update (gravity, click-to-move)")
+        self.write("if (adapter && adapter.update) adapter.update(delta);")
         self.write_blank()
 
         self.write("controls.update();")

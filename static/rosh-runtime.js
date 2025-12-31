@@ -585,6 +585,87 @@ const RoshRuntime = (function() {
           log('https://rosh.io', 'dim');
           break;
 
+        // ====================================================================
+        // PHYSICS COMMANDS (ThreeJS-first)
+        // ====================================================================
+
+        case 'gravity':
+          if (adapter.enableGravity) {
+            const arg = parts[1]?.toLowerCase();
+            if (arg === 'off' || arg === 'false' || arg === '0') {
+              adapter.disableGravity();
+              log('Gravity disabled', 'ok');
+            } else if (arg === 'on' || arg === 'true' || arg === '1' || !arg) {
+              const strength = parts[2] ? parseFloat(parts[2]) : undefined;
+              const result = adapter.enableGravity(strength);
+              log('Gravity enabled (strength: ' + result.gravity + ')', 'ok');
+            } else {
+              // Assume it's a number for strength
+              const strength = parseFloat(arg);
+              if (!isNaN(strength)) {
+                adapter.enableGravity(strength);
+                log('Gravity enabled (strength: ' + strength + ')', 'ok');
+              } else {
+                log('Usage: gravity [on|off|<strength>]', 'dim');
+              }
+            }
+          } else {
+            log('Gravity not supported by this adapter', 'err');
+          }
+          break;
+
+        case 'ground':
+          if (adapter.setGroundLevel) {
+            const level = parts[1] ? parseFloat(parts[1]) : 0;
+            adapter.setGroundLevel(level);
+            log('Ground level set to: ' + level, 'ok');
+          }
+          break;
+
+        case 'clickmove':
+        case 'click-move':
+        case 'clicktomove':
+          if (adapter.enableClickToMove) {
+            const arg = parts[1]?.toLowerCase();
+            if (arg === 'off' || arg === 'false' || arg === '0') {
+              adapter.disableClickToMove();
+              log('Click-to-move disabled', 'ok');
+            } else {
+              // arg could be 'on' or a player name
+              const playerName = (arg === 'on' || arg === 'true' || arg === '1') ? parts[2] : arg;
+              const result = adapter.enableClickToMove(playerName);
+              if (playerName) {
+                log('Click-to-move enabled for: ' + playerName, 'ok');
+              } else {
+                log('Click-to-move enabled (no player set - use "player <name>")', 'ok');
+              }
+            }
+          } else {
+            log('Click-to-move not supported by this adapter', 'err');
+          }
+          break;
+
+        case 'player':
+          if (adapter.setPlayer) {
+            const name = parts[1];
+            if (name) {
+              adapter.setPlayer(name);
+              log('Player set to: ' + name, 'ok');
+            } else {
+              log('Usage: player <object-name>', 'dim');
+            }
+          }
+          break;
+
+        case 'speed':
+        case 'movespeed':
+          if (adapter.setMoveSpeed) {
+            const speed = parts[1] ? parseFloat(parts[1]) : 5;
+            adapter.setMoveSpeed(speed);
+            log('Move speed set to: ' + speed, 'ok');
+          }
+          break;
+
         default:
           // Try adapter's custom command handler
           if (adapter.handleCustomCommand) {
@@ -624,6 +705,12 @@ const RoshRuntime = (function() {
       log(':repeat           - Repeat last command', 'ok');
       log('save/load [slot]  - Save/load game', 'ok');
       log('clear             - Clear console', 'ok');
+      log('--- Physics (ThreeJS) ---', 'cyan');
+      log('gravity [on|off]  - Toggle gravity', 'ok');
+      log('ground <level>    - Set ground Y level', 'ok');
+      log('clickmove [name]  - Enable click-to-move', 'ok');
+      log('player <name>     - Set player object', 'ok');
+      log('speed <value>     - Set move speed', 'ok');
       log('', '');
       log('Type "help <command>" for details', 'dim');
     } else {

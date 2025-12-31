@@ -25,6 +25,24 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
   // Known object presets (can be extended by emitter)
   const KNOWN_OBJECTS = options.knownObjects || {};
 
+  // ==========================================================================
+  // PHYSICS STATE (ThreeJS-first features)
+  // ==========================================================================
+
+  let gravityEnabled = false;
+  let gravityStrength = 9.8;  // Units per second squared
+  let groundLevel = 0;        // Y position of ground
+  const objectVelocities = new Map();  // Track vertical velocity per object
+
+  // Click-to-move state
+  let clickToMoveEnabled = false;
+  let playerObjectName = null;  // Name of object to move on click
+  let moveSpeed = 5;            // Units per second
+  let moveTarget = null;        // Current target position {x, z}
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  let groundPlane = null;       // Invisible ground for raycasting
+
   // Color mappings
   const COLOR_MAP = {
     red: 0xff0000, green: 0x00ff00, blue: 0x0000ff,
@@ -579,8 +597,178 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         console.error('Failed to load game:', e);
         return false;
       }
+    },
+
+    // ========================================================================
+    // GRAVITY SYSTEM (ThreeJS-first)
+    // ========================================================================
+
+    enableGravity: function(strength) {
+      gravityEnabled = true;
+      if (strength !== undefined) gravityStrength = strength;
+      return { success: true, gravity: gravityStrength };
+    },
+
+    disableGravity: function() {
+      gravityEnabled = false;
+      objectVelocities.clear();
+      return { success: true };
+    },
+
+    isGravityEnabled: function() {
+      return gravityEnabled;
+    },
+
+    setGroundLevel: function(level) {
+      groundLevel = level;
+      return { success: true, ground: groundLevel };
+    },
+
+    // Set gravity on specific object (userData.gravity = true/false)
+    setObjectGravity: function(name, enabled) {
+      const obj = findObject(name);
+      if (!obj) return { success: false, error: 'Object not found: ' + name };
+      obj.userData.gravity = enabled;
+      if (!enabled) objectVelocities.delete(name);
+      return { success: true };
+    },
+
+    // ========================================================================
+    // CLICK-TO-MOVE SYSTEM (ThreeJS-first)
+    // ========================================================================
+
+    enableClickToMove: function(playerName) {
+      clickToMoveEnabled = true;
+      playerObjectName = playerName || null;
+
+      // Create invisible ground plane for raycasting if needed
+      if (!groundPlane) {
+        const groundGeo = new THREE.PlaneGeometry(1000, 1000);
+        const groundMat = new THREE.MeshBasicMaterial({ visible: false });
+        groundPlane = new THREE.Mesh(groundGeo, groundMat);
+        groundPlane.rotation.x = -Math.PI / 2;
+        groundPlane.position.y = groundLevel;
+        groundPlane.name = '_rosh_ground_plane';
+        scene.add(groundPlane);
+      }
+
+      // Add click listener
+      renderer.domElement.addEventListener('click', handleGroundClick);
+
+      return { success: true, player: playerObjectName };
+    },
+
+    disableClickToMove: function() {
+      clickToMoveEnabled = false;
+      moveTarget = null;
+      renderer.domElement.removeEventListener('click', handleGroundClick);
+      return { success: true };
+    },
+
+    isClickToMoveEnabled: function() {
+      return clickToMoveEnabled;
+    },
+
+    setMoveSpeed: function(speed) {
+      moveSpeed = speed;
+      return { success: true, speed: moveSpeed };
+    },
+
+    setPlayer: function(name) {
+      playerObjectName = name;
+      return { success: true, player: playerObjectName };
+    },
+
+    // ========================================================================
+    // PHYSICS UPDATE (call from animation loop)
+    // ========================================================================
+
+    update: function(deltaTime) {
+      if (!deltaTime) deltaTime = 1/60;  // Default 60fps
+
+      // Apply gravity to objects
+      if (gravityEnabled) {
+        for (const [name, obj] of Object.entries(objects)) {
+          // Skip objects without gravity enabled (default: all objects have gravity when system is on)
+          if (obj.userData.gravity === false) continue;
+
+          // Get or initialize velocity
+          let vel = objectVelocities.get(name) || 0;
+
+          // Apply gravity
+          vel -= gravityStrength * deltaTime;
+
+          // Update position
+          obj.position.y += vel * deltaTime;
+
+          // Ground collision
+          const objHeight = obj.geometry ? (obj.geometry.parameters?.height || 1) / 2 : 0.5;
+          const minY = groundLevel + objHeight;
+          if (obj.position.y < minY) {
+            obj.position.y = minY;
+            vel = 0;  // Stop falling
+          }
+
+          objectVelocities.set(name, vel);
+        }
+      }
+
+      // Move player toward target
+      if (clickToMoveEnabled && moveTarget && playerObjectName) {
+        const player = findObject(playerObjectName);
+        if (player) {
+          const dx = moveTarget.x - player.position.x;
+          const dz = moveTarget.z - player.position.z;
+          const dist = Math.sqrt(dx * dx + dz * dz);
+
+          if (dist > 0.1) {
+            // Move toward target
+            const step = moveSpeed * deltaTime;
+            if (step >= dist) {
+              // Reached target
+              player.position.x = moveTarget.x;
+              player.position.z = moveTarget.z;
+              moveTarget = null;
+            } else {
+              // Move proportionally
+              player.position.x += (dx / dist) * step;
+              player.position.z += (dz / dist) * step;
+            }
+          } else {
+            moveTarget = null;
+          }
+        }
+      }
     }
   };
+
+  // ========================================================================
+  // CLICK HANDLER (internal)
+  // ========================================================================
+
+  function handleGroundClick(event) {
+    if (!clickToMoveEnabled) return;
+
+    // Calculate mouse position in normalized device coordinates
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    // Cast ray from camera
+    raycaster.setFromCamera(mouse, camera);
+
+    // Check intersection with ground plane
+    if (groundPlane) {
+      const intersects = raycaster.intersectObject(groundPlane);
+      if (intersects.length > 0) {
+        const point = intersects[0].point;
+        moveTarget = { x: point.x, z: point.z };
+
+        // Optional: visual feedback (create temporary marker)
+        // Could add a small indicator at click point
+      }
+    }
+  }
 
   return adapter;
 }
