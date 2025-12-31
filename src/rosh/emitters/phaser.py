@@ -898,6 +898,17 @@ class PhaserEmitter(BaseEmitter):
         self.write("};")
         self.write_blank()
         self.write("const game = new Phaser.Game(config);")
+        self.write_blank()
+        self.write_comment("Embed player mute support")
+        self.write("window.addEventListener('message', (e) => {")
+        self.indent()
+        self.write("if (e.data && e.data.type === 'rosh-mute') {")
+        self.indent()
+        self.write("game.sound.mute = e.data.muted;")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("});")
 
     def _get_shared_runtime_path(self) -> Path:
         """Get path to shared runtime files."""
