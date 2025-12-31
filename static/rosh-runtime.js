@@ -42,6 +42,32 @@ const RoshRuntime = (function() {
   let bulkCreateCount = 0;
   const BULK_LOG_LIMIT = 10;
 
+  // Project Twin - shared world state
+  let twinSocket = null;
+  let twinUserId = null;
+  let twinWorldId = null;
+  const TWIN_SERVER = 'wss://rosh.cloud/ws/world/';
+
+  // Project Twin - broadcast helpers
+  function twinBroadcastCreate(name, type, x, y, z, color, size) {
+    if (twinSocket && twinSocket.readyState === WebSocket.OPEN) {
+      twinSocket.send(JSON.stringify({
+        type: 'CREATE_OBJECT',
+        object_id: name,
+        data: { type, x, y, z, color, size }
+      }));
+    }
+  }
+
+  function twinBroadcastDelete(name) {
+    if (twinSocket && twinSocket.readyState === WebSocket.OPEN) {
+      twinSocket.send(JSON.stringify({
+        type: 'DELETE_OBJECT',
+        object_id: name
+      }));
+    }
+  }
+
   // DOM elements
   let outputEl = null;
   let inputEl = null;
@@ -287,7 +313,8 @@ const RoshRuntime = (function() {
     'hide', 'show', 'clone', 'look', 'examine', 'inspect', 'x', 'ex',
     'help', 'save', 'load', 'undo', 'redo', 'count', 'move', 'make',
     'clear', 'repeat', ':repeat', ':r', 'go', 'goto', 'scene', 'scenes',
-    'rooms', 'credits', 'camera', 'capabilities'
+    'rooms', 'credits', 'camera', 'capabilities',
+    'connect', 'disconnect', 'twin', 'say'
   ];
 
   function fuzzyCorrectCommand(cmd) {
@@ -747,6 +774,114 @@ const RoshRuntime = (function() {
           }
           break;
 
+        // ====================================================================
+        // PROJECT TWIN - SHARED WORLDS
+        // ====================================================================
+
+        case 'connect':
+        case 'twin':
+          {
+            const worldId = parts[1] || 'default';
+            if (twinSocket && twinSocket.readyState === WebSocket.OPEN) {
+              log('Already connected to world: ' + twinWorldId, 'warn');
+              log('Use "disconnect" first to leave current world', 'dim');
+              break;
+            }
+            log('Connecting to shared world: ' + worldId + '...', 'cyan');
+            try {
+              twinSocket = new WebSocket(TWIN_SERVER + worldId);
+              twinWorldId = worldId;
+              twinSocket.onopen = () => log('WebSocket connected', 'dim');
+              twinSocket.onerror = (e) => {
+                log('Connection failed - server may be offline', 'err');
+                log('You can still work offline. Use "save" to keep your work.', 'dim');
+              };
+              twinSocket.onclose = () => {
+                log('Disconnected from shared world', 'warn');
+                twinSocket = null;
+                twinUserId = null;
+                twinWorldId = null;
+              };
+              twinSocket.onmessage = (event) => {
+                try {
+                  const msg = JSON.parse(event.data);
+                  if (msg.type === 'CONNECTED') {
+                    twinUserId = msg.user_id;
+                    log('Connected to "' + worldId + '" as user ' + msg.user_id, 'ok');
+                    log('Objects you create will be shared with others!', 'cyan');
+                  } else if (msg.type === 'OBJECT_CREATED') {
+                    if (msg.user_id !== twinUserId && adapter.createObject) {
+                      const data = msg.data || {};
+                      adapter.createObject(data.type || 'sphere', {
+                        name: msg.object_id,
+                        x: data.x, y: data.y, z: data.z,
+                        color: data.color,
+                        size: data.size
+                      });
+                      log('[' + msg.user_id + '] created ' + msg.object_id, 'cyan');
+                    }
+                  } else if (msg.type === 'OBJECT_DELETED') {
+                    if (msg.user_id !== twinUserId && adapter.deleteObject) {
+                      adapter.deleteObject(msg.object_id);
+                      log('[' + msg.user_id + '] deleted ' + msg.object_id, 'cyan');
+                    }
+                  } else if (msg.type === 'CHAT') {
+                    log('[' + msg.user_id + ']: ' + msg.message, 'cyan');
+                  } else if (msg.type === 'WORLD_STATE') {
+                    const objects = msg.objects || {};
+                    const count = Object.keys(objects).length;
+                    if (count > 0) {
+                      log('Loading ' + count + ' shared object(s)...', 'dim');
+                      for (const [id, data] of Object.entries(objects)) {
+                        if (adapter.createObject) {
+                          adapter.createObject(data.type || 'sphere', {
+                            name: id,
+                            x: data.x, y: data.y, z: data.z,
+                            color: data.color,
+                            size: data.size
+                          });
+                        }
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.error('Twin message error:', e);
+                }
+              };
+            } catch (e) {
+              log('Failed to connect: ' + e.message, 'err');
+            }
+          }
+          break;
+
+        case 'disconnect':
+          if (twinSocket) {
+            twinSocket.close();
+            log('Disconnected from shared world: ' + twinWorldId, 'ok');
+            twinSocket = null;
+            twinUserId = null;
+            twinWorldId = null;
+          } else {
+            log('Not connected to any shared world', 'dim');
+          }
+          break;
+
+        case 'say':
+          {
+            const message = parts.slice(1).join(' ');
+            if (!twinSocket || twinSocket.readyState !== WebSocket.OPEN) {
+              log('Not connected. Use "connect" first.', 'err');
+              break;
+            }
+            if (!message) {
+              log('Usage: say <message>', 'dim');
+              break;
+            }
+            twinSocket.send(JSON.stringify({ type: 'CHAT', message }));
+            log('[you]: ' + message, 'ok');
+          }
+          break;
+
         default:
           // Try adapter's custom command handler
           if (adapter.handleCustomCommand) {
@@ -786,12 +921,16 @@ const RoshRuntime = (function() {
       log(':repeat           - Repeat last command', 'ok');
       log('save/load [slot]  - Save/load game', 'ok');
       log('clear             - Clear console', 'ok');
-      log('--- Physics (ThreeJS) ---', 'cyan');
+      log('--- Physics (Three.js) ---', 'cyan');
       log('gravity [on|off]  - Toggle gravity', 'ok');
       log('ground <level>    - Set ground Y level', 'ok');
       log('clickmove [name]  - Enable click-to-move', 'ok');
-      log('player <name>     - Set player object', 'ok');
+      log('control <name>    - Control object with keys', 'ok');
       log('speed <value>     - Set move speed', 'ok');
+      log('--- Shared Worlds ---', 'cyan');
+      log('connect [world]   - Join a shared world', 'ok');
+      log('disconnect        - Leave shared world', 'ok');
+      log('say <message>     - Chat with other users', 'ok');
       log('', '');
       log('Type "help <command>" for details', 'dim');
     } else {
@@ -918,6 +1057,15 @@ const RoshRuntime = (function() {
       currentObject = result.object;
       currentObjectName = result.name;
 
+      // Broadcast to shared world if connected
+      const obj = result.object;
+      const x = obj?.position?.x || 0;
+      const y = obj?.position?.y || 0;
+      const z = obj?.position?.z || 0;
+      const color = result.color || null;
+      const size = result.size || 1;
+      twinBroadcastCreate(result.name, typeName, x, y, z, color, size);
+
       pushUndo('create ' + result.name,
         () => adapter.deleteObject(result.name),
         () => adapter.createObject(typeName, result.name, { modifiers })
@@ -958,6 +1106,9 @@ const RoshRuntime = (function() {
       if (adapter.getSelectedObject && adapter.getSelectedObject() === name && adapter.deselect) {
         adapter.deselect();
       }
+
+      // Broadcast to shared world if connected
+      twinBroadcastDelete(name);
 
       if (obj) {
         pushUndo('delete ' + name,
