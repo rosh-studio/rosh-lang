@@ -1230,7 +1230,7 @@ def run_repl(interpreter: Interpreter = None):
 
             # Handle license/copyright command (like Python)
             if line.strip() in ('license', 'copyright', 'help license'):
-                out.print("Copyright (c) 2025 Rosh Studiosa", style="dim")
+                out.print("Copyright (c) 2026 Rosh Studiosa", style="dim")
                 out.print()
                 out.print("\"Rosh\" and the Rosh logo are trademarks of the Rosh Project.", style="yellow")
                 out.print("You may use the Rosh name to refer to this project, but you may not use")
@@ -1244,7 +1244,7 @@ def run_repl(interpreter: Interpreter = None):
             if line.strip() in ('credits', 'help credits'):
                 out.print()
                 out.print(f"Rosh v{__version__}", style="cyan")
-                out.print("Copyright (c) 2025 Roger Dubar")
+                out.print("Copyright (c) 2026 Roger Dubar")
                 out.dim("https://rosh.cloud")
                 out.print()
                 continue

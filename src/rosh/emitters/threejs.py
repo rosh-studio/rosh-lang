@@ -5187,7 +5187,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("else if (parts[0] === 'credits') {")
         self.indent()
         self.write(f"log('Rosh v{__version__}', 'cyan');")
-        self.write("log('Copyright (c) 2025 Roger Dubar');")
+        self.write("log('Copyright (c) 2026 Roger Dubar');")
         self.write("log('https://rosh.cloud', 'dim');")
         self.dedent()
         self.write("}")

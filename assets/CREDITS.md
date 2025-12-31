@@ -1,6 +1,6 @@
 # Rosh Credits
 
-Copyright (c) 2025 Roger Dubar
+Copyright (c) 2026 Roger Dubar
 https://rosh.cloud
 
 ---
