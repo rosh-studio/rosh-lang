@@ -737,9 +737,9 @@ class ThreeJSEmitter(BaseEmitter):
                     self.write(code)
 
         self.write_blank()
-        # Physics update (gravity, click-to-move)
+        # Physics update (gravity, click-to-move) - only if adapter exists
         self.write_comment("Physics update (gravity, click-to-move)")
-        self.write("if (adapter && adapter.update) adapter.update(delta);")
+        self.write("if (typeof adapter !== 'undefined' && adapter && adapter.update) adapter.update(delta);")
         self.write_blank()
         self.write("render2D();")
         self.write("controls.update();")
@@ -2086,9 +2086,9 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("}")
         self.write_blank()
 
-        # Physics update (gravity, click-to-move)
+        # Physics update (gravity, click-to-move) - only if adapter exists
         self.write_comment("Physics update (gravity, click-to-move)")
-        self.write("if (adapter && adapter.update) adapter.update(delta);")
+        self.write("if (typeof adapter !== 'undefined' && adapter && adapter.update) adapter.update(delta);")
         self.write_blank()
 
         self.write("controls.update();")
