@@ -47,6 +47,13 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
   let playerKeyboardEnabled = false;
   const playerKeyState = { left: false, right: false, forward: false, back: false, up: false, down: false };
 
+  // Edit mode - must be enabled for selection/control
+  let editMode = false;
+
+  // Click-to-select state
+  let selectedObject = null;
+  let selectedOriginalEmissive = null;  // Store original emissive to restore on deselect
+
   // Color mappings
   const COLOR_MAP = {
     red: 0xff0000, green: 0x00ff00, blue: 0x0000ff,
@@ -657,16 +664,12 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         scene.add(groundPlane);
       }
 
-      // Add click listener
-      renderer.domElement.addEventListener('click', handleGroundClick);
-
       return { success: true, player: playerObjectName };
     },
 
     disableClickToMove: function() {
       clickToMoveEnabled = false;
       moveTarget = null;
-      renderer.domElement.removeEventListener('click', handleGroundClick);
       return { success: true };
     },
 
@@ -682,6 +685,57 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
     setPlayer: function(name) {
       playerObjectName = name;
       return { success: true, player: playerObjectName };
+    },
+
+    // ========================================================================
+    // SELECTION (click-to-select)
+    // ========================================================================
+
+    getSelectedObject: function() {
+      return selectedObject ? selectedObject.name : null;
+    },
+
+    getSelectedObjectData: function() {
+      if (!selectedObject) return null;
+      return {
+        name: selectedObject.name,
+        type: getTypeName(selectedObject),
+        color: getColorName(selectedObject),
+        position: { x: selectedObject.position.x, y: selectedObject.position.y, z: selectedObject.position.z },
+        fixed: selectedObject.userData.fixed || false
+      };
+    },
+
+    selectByName: function(name) {
+      const obj = findObject(name);
+      if (obj) {
+        return selectObject(obj);
+      }
+      return null;
+    },
+
+    deselect: function() {
+      deselectObject();
+      return { success: true };
+    },
+
+    // ========================================================================
+    // EDIT MODE (enables selection and object control)
+    // ========================================================================
+
+    enableEditMode: function() {
+      editMode = true;
+      return { success: true, editMode: true };
+    },
+
+    disableEditMode: function() {
+      editMode = false;
+      deselectObject();  // Clear selection when leaving edit mode
+      return { success: true, editMode: false };
+    },
+
+    isEditMode: function() {
+      return editMode;
     },
 
     // ========================================================================
@@ -769,8 +823,39 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
   // CLICK HANDLER (internal)
   // ========================================================================
 
-  function handleGroundClick(event) {
-    if (!clickToMoveEnabled) return;
+  function selectObject(obj) {
+    // Deselect previous
+    if (selectedObject && selectedObject !== obj) {
+      deselectObject();
+    }
+
+    if (!obj) return;
+
+    selectedObject = obj;
+
+    // Visual highlight - add emissive glow
+    if (obj.material) {
+      selectedOriginalEmissive = obj.material.emissive ? obj.material.emissive.getHex() : 0;
+      if (obj.material.emissive) {
+        obj.material.emissive.setHex(0x333333);
+      }
+    }
+
+    return obj.name;
+  }
+
+  function deselectObject() {
+    if (selectedObject && selectedObject.material && selectedObject.material.emissive) {
+      selectedObject.material.emissive.setHex(selectedOriginalEmissive || 0);
+    }
+    selectedObject = null;
+    selectedOriginalEmissive = null;
+  }
+
+  function handleClick(event) {
+    // Don't handle clicks when console is open or edit mode is off
+    if (window.consoleVisible) return;
+    if (!editMode) return;
 
     // Calculate mouse position in normalized device coordinates
     const rect = renderer.domElement.getBoundingClientRect();
@@ -780,18 +865,40 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
     // Cast ray from camera
     raycaster.setFromCamera(mouse, camera);
 
-    // Check intersection with ground plane
-    if (groundPlane) {
+    // First, check for object intersection (click-to-select)
+    const clickableObjects = Object.values(objects).filter(o => o.visible);
+    const objectIntersects = raycaster.intersectObjects(clickableObjects, false);
+
+    if (objectIntersects.length > 0) {
+      const hitObject = objectIntersects[0].object;
+      const name = selectObject(hitObject);
+      // Log selection to console if available
+      if (window.roshLog) {
+        window.roshLog('Selected: ' + name, 'ok');
+      }
+      return;  // Don't process ground click if we hit an object
+    }
+
+    // If no object hit, deselect current
+    if (selectedObject) {
+      deselectObject();
+      if (window.roshLog) {
+        window.roshLog('Deselected', 'dim');
+      }
+    }
+
+    // Check intersection with ground plane (click-to-move)
+    if (clickToMoveEnabled && groundPlane) {
       const intersects = raycaster.intersectObject(groundPlane);
       if (intersects.length > 0) {
         const point = intersects[0].point;
         moveTarget = { x: point.x, z: point.z };
-
-        // Optional: visual feedback (create temporary marker)
-        // Could add a small indicator at click point
       }
     }
   }
+
+  // Register click handler immediately
+  renderer.domElement.addEventListener('click', handleClick);
 
   // ========================================================================
   // PLAYER KEYBOARD MOVEMENT (internal)

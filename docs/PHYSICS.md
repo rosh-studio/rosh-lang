@@ -26,22 +26,26 @@ set ball gravity to false   # This object won't fall
 
 ## Click-to-Move
 
-Click on the ground to move a designated "player" object to that position.
+Click on the ground to move a controlled object to that position.
 
 ### Commands
 
 ```
-clickmove on ball    # Enable, set 'ball' as player
+clickmove on ball    # Enable, set 'ball' as controlled object
 clickmove off        # Disable
-player ball          # Change player object
+control ball         # Change controlled object
 speed 10             # Set move speed (units/second)
 ```
 
 ### How It Works
 
-1. Enable click-to-move with a player object
+1. Enable click-to-move with a controlled object
 2. Click anywhere on the ground plane
-3. Player object smoothly moves to that position
+3. Object smoothly moves to that position
+
+## Keyboard Control
+
+See [EDIT-MODE.md](EDIT-MODE.md) for object control with arrow keys.
 
 ## API (Adapter Methods)
 
@@ -53,9 +57,9 @@ adapter.setGroundLevel(y)         // Set ground Y
 adapter.setObjectGravity(name, enabled)  // Per-object
 
 // Click-to-move
-adapter.enableClickToMove(playerName)
+adapter.enableClickToMove(objectName)
 adapter.disableClickToMove()
-adapter.setPlayer(name)
+adapter.setPlayer(name)           // Sets controlled object
 adapter.setMoveSpeed(speed)
 
 // Must call in animation loop:

@@ -174,6 +174,9 @@ const RoshRuntime = (function() {
     outputEl.scrollTop = outputEl.scrollHeight;
   }
 
+  // Expose log for adapter (click-to-select feedback)
+  window.roshLog = log;
+
   function clearOutput() {
     if (outputEl) outputEl.innerHTML = '';
   }
@@ -521,6 +524,52 @@ const RoshRuntime = (function() {
           handleShow(parts.slice(1));
           break;
 
+        case 'select':
+        case 'sel':
+          if (adapter.selectByName) {
+            const name = parts.slice(1).join(' ');
+            if (name) {
+              const result = adapter.selectByName(name);
+              if (result) {
+                log('Selected: ' + result, 'ok');
+              } else {
+                log('Object not found: ' + name, 'err');
+              }
+            } else {
+              log('Usage: select <name> (or just click an object)', 'dim');
+            }
+          }
+          break;
+
+        case 'deselect':
+        case 'desel':
+          if (adapter.deselect) {
+            adapter.deselect();
+            log('Deselected', 'dim');
+          }
+          break;
+
+        case 'edit':
+          if (adapter.enableEditMode && adapter.disableEditMode) {
+            const arg = parts[1]?.toLowerCase();
+            if (arg === 'on' || arg === 'true' || arg === '1') {
+              adapter.enableEditMode();
+              log('Edit mode ON - click to select objects, use "control" to move them', 'ok');
+            } else if (arg === 'off' || arg === 'false' || arg === '0') {
+              adapter.disableEditMode();
+              log('Edit mode OFF - view only', 'ok');
+            } else if (!arg) {
+              const isEdit = adapter.isEditMode ? adapter.isEditMode() : false;
+              log('Edit mode: ' + (isEdit ? 'ON' : 'OFF'), 'dim');
+              log('Usage: edit on | edit off', 'dim');
+            } else {
+              log('Usage: edit on | edit off', 'err');
+            }
+          } else {
+            log('Edit mode not supported by this adapter', 'err');
+          }
+          break;
+
         case 'move':
           handleMove(cmd, parts.slice(1));
           break;
@@ -642,7 +691,7 @@ const RoshRuntime = (function() {
               if (playerName) {
                 log('Click-to-move enabled for: ' + playerName, 'ok');
               } else {
-                log('Click-to-move enabled (no player set - use "player <name>")', 'ok');
+                log('Click-to-move enabled (no object set - use "control <name>")', 'ok');
               }
             }
           } else {
@@ -650,20 +699,26 @@ const RoshRuntime = (function() {
           }
           break;
 
-        case 'player':
+        case 'control':
+        case 'player':  // Alias for backwards compatibility
           if (adapter.setPlayer) {
-            const name = parts[1];
+            let name = parts[1];
+            // Use selected object if no name given
+            if (!name && adapter.getSelectedObject) {
+              name = adapter.getSelectedObject();
+              if (name) log('(using selected: ' + name + ')', 'dim');
+            }
             if (name) {
               adapter.setPlayer(name);
-              // Also enable keyboard control for the player
+              // Also enable keyboard control
               if (adapter.enablePlayerKeyboard) {
                 adapter.enablePlayerKeyboard(name);
-                log('Player set to: ' + name + ' (arrow keys to move)', 'ok');
+                log('Controlling: ' + name + ' (arrows + ./ to move)', 'ok');
               } else {
-                log('Player set to: ' + name, 'ok');
+                log('Controlling: ' + name, 'ok');
               }
             } else {
-              log('Usage: player <object-name>', 'dim');
+              log('Usage: control <name> (or click to select first)', 'dim');
             }
           }
           break;
@@ -874,9 +929,18 @@ const RoshRuntime = (function() {
 
   function handleDelete(args) {
     if (!adapter.deleteObject) return;
-    const name = args.join(' ');
+    let name = args.join(' ');
+
+    // Use selected object if no name given
+    if (!name && adapter.getSelectedObject) {
+      name = adapter.getSelectedObject();
+      if (name) {
+        log('(using selected: ' + name + ')', 'dim');
+      }
+    }
+
     if (!name) {
-      log('Usage: delete <name>', 'err');
+      log('Usage: delete <name> (or click to select first)', 'err');
       return;
     }
 
@@ -889,6 +953,10 @@ const RoshRuntime = (function() {
       if (currentObjectName === name) {
         currentObject = null;
         currentObjectName = null;
+      }
+      // Deselect if we deleted the selected object
+      if (adapter.getSelectedObject && adapter.getSelectedObject() === name && adapter.deselect) {
+        adapter.deselect();
       }
 
       if (obj) {
@@ -929,13 +997,29 @@ const RoshRuntime = (function() {
     if (!adapter.setProperty) return;
 
     // Parse: set <obj> <prop> [to] <value> - "to" is optional
-    const match = cmd.match(/^set\s+(\S+)\s+(\S+)\s+(?:to\s+)?(.+)$/i);
-    if (!match) {
-      log('Usage: set <object> <property> [to] <value>', 'err');
-      return;
+    // Also support: set <prop> [to] <value> (uses selected object)
+    let match = cmd.match(/^set\s+(\S+)\s+(\S+)\s+(?:to\s+)?(.+)$/i);
+    let objName, prop, value;
+
+    if (match) {
+      [, objName, prop, value] = match;
+    } else {
+      // Try parsing without object name: set <prop> [to] <value>
+      const shortMatch = cmd.match(/^set\s+(\S+)\s+(?:to\s+)?(.+)$/i);
+      if (shortMatch && adapter.getSelectedObject) {
+        objName = adapter.getSelectedObject();
+        if (objName) {
+          [, prop, value] = shortMatch;
+          log('(using selected: ' + objName + ')', 'dim');
+        }
+      }
     }
 
-    const [, objName, prop, value] = match;
+    if (!objName || !prop || !value) {
+      log('Usage: set <object> <property> [to] <value>', 'err');
+      log('Or click an object first, then: set <property> [to] <value>', 'dim');
+      return;
+    }
 
     // Get old value for undo
     const oldValue = adapter.getProperty ? adapter.getProperty(objName, prop) : null;
@@ -1110,9 +1194,14 @@ const RoshRuntime = (function() {
   }
 
   function handleLook(args) {
-    const name = args.join(' ') || currentObjectName;
+    let name = args.join(' ') || currentObjectName;
+    // Use selected object if no name given
+    if (!name && adapter.getSelectedObject) {
+      name = adapter.getSelectedObject();
+      if (name) log('(using selected: ' + name + ')', 'dim');
+    }
     if (!name) {
-      log('Usage: look <name> or select an object first', 'err');
+      log('Usage: look <name> (or click to select first)', 'err');
       return;
     }
 
