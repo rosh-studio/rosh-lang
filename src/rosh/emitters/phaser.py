@@ -320,7 +320,12 @@ class PhaserEmitter(BaseEmitter):
             self.write("// Continuous key handlers")
             for key, handler_code in self.continuous_key_events:
                 condition = self._get_key_condition(key)
-                self.write(f"if ({condition}) {{ {handler_code} }}")
+                # Add touchDir support for mobile
+                touch_condition = self._get_touch_condition(key)
+                if touch_condition and self.needs_touch_controls:
+                    self.write(f"if ({condition} || {touch_condition}) {{ {handler_code} }}")
+                else:
+                    self.write(f"if ({condition}) {{ {handler_code} }}")
 
         # Collision detection (simple AABB)
         if self.collision_events:
@@ -639,19 +644,19 @@ class PhaserEmitter(BaseEmitter):
         self.write("});")
         self.write_blank()
 
-        self.write("// Button B - triggers X key action (also R for restart)")
+        self.write("// Button B - triggers Space (fire) and X key actions")
         self.write("buttonB.addEventListener('touchstart', (e) => {")
         self.indent()
         self.write("e.preventDefault();")
         self.write("scene.touchAction.b = true;")
-        self.write("if (scene.keys && scene.keys.X) {")
+        self.write("if (scene.keys && scene.keys.SPACE) {")
         self.indent()
-        self.write("scene.keys.X.isDown = true;")
+        self.write("scene.keys.SPACE.isDown = true;")
         self.dedent()
         self.write("}")
-        self.write("// Emit Phaser keyboard events for keydown handlers")
+        self.write("// Emit Phaser keyboard events - SPACE for fire, X for secondary")
+        self.write("scene.input.keyboard.emit('keydown-SPACE', { key: ' ' });")
         self.write("scene.input.keyboard.emit('keydown-X', { key: 'x' });")
-        self.write("scene.input.keyboard.emit('keydown-R', { key: 'r' });  // Also R for restart")
         self.write("scene.triggerEvent('action_b');")
         self.dedent()
         self.write("}, { passive: false });")
@@ -660,9 +665,9 @@ class PhaserEmitter(BaseEmitter):
         self.write("buttonB.addEventListener('touchend', (e) => {")
         self.indent()
         self.write("scene.touchAction.b = false;")
-        self.write("if (scene.keys && scene.keys.X) {")
+        self.write("if (scene.keys && scene.keys.SPACE) {")
         self.indent()
-        self.write("scene.keys.X.isDown = false;")
+        self.write("scene.keys.SPACE.isDown = false;")
         self.dedent()
         self.write("}")
         self.dedent()
@@ -1852,6 +1857,32 @@ class PhaserEmitter(BaseEmitter):
 
         # Fallback to input keyboard check
         return f"this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.{key}).isDown"
+
+    def _get_touch_condition(self, key: str) -> str:
+        """Get touchDir condition for a key, if applicable.
+
+        Maps common movement keys to touch joystick directions:
+        - LEFT, A, O → touchDir.left
+        - RIGHT, D, P → touchDir.right
+        - UP, W → touchDir.up
+        - DOWN, S → touchDir.down
+        - SPACE → touchAction.a
+        """
+        key = key.upper()
+        touch_mapping = {
+            'LEFT': 'this.touchDir.left',
+            'A': 'this.touchDir.left',
+            'O': 'this.touchDir.left',
+            'RIGHT': 'this.touchDir.right',
+            'D': 'this.touchDir.right',
+            'P': 'this.touchDir.right',
+            'UP': 'this.touchDir.up',
+            'W': 'this.touchDir.up',
+            'DOWN': 'this.touchDir.down',
+            'S': 'this.touchDir.down',
+            'SPACE': 'this.touchAction.a',
+        }
+        return touch_mapping.get(key, None)
 
     def _map_phaser_key(self, key: str) -> str:
         """Map key name to Phaser keydown event name."""
