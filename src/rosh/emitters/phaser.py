@@ -78,6 +78,9 @@ class PhaserEmitter(BaseEmitter):
         # Shared runtime option (new architecture)
         self.use_shared_runtime = self.meta.get('use_shared_runtime', False)
 
+        # Mobile touch controls
+        self.needs_touch_controls = False  # Set True if player objects exist
+
         # Scan IR to detect features
         self._detect_features()
 
@@ -89,6 +92,7 @@ class PhaserEmitter(BaseEmitter):
                 self.player_objects.add(obj.name)
                 self.needs_keyboard = True
                 self.needs_update = True
+                self.needs_touch_controls = True
 
             if 'sprite' in obj.properties:
                 sprite_val = obj.properties['sprite']
@@ -120,10 +124,12 @@ class PhaserEmitter(BaseEmitter):
                 self.needs_update = True
             elif event.trigger.startswith('keydown:') or event.trigger.startswith('keyup:'):
                 self.needs_keyboard = True
+                self.needs_touch_controls = True  # Games with keyboard need touch on mobile
             elif event.trigger.startswith('continuous:'):
                 # Continuous key polling (while_key_left, etc.)
                 self.needs_keyboard = True
                 self.needs_update = True  # Need update loop for polling
+                self.needs_touch_controls = True  # Games with keyboard need touch on mobile
             elif event.trigger.startswith('collision:'):
                 # Collision events need update loop for AABB checks
                 self.needs_update = True
@@ -252,6 +258,15 @@ class PhaserEmitter(BaseEmitter):
             self.write("this.keys = this.input.keyboard.addKeys('A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z,SPACE');")
             self.write_blank()
 
+        # Set up mobile touch controls if needed
+        if self.needs_touch_controls:
+            self.write("// Mobile detection and touch state")
+            self.write("this.isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || ('ontouchstart' in window);")
+            self.write("this.touchDir = { left: false, right: false, up: false, down: false };")
+            self.write("this.touchAction = { a: false, b: false };")
+            self.write("if (this.isMobile) this.setupTouchControls();")
+            self.write_blank()
+
         # Create objects
         for obj in self.ir.objects:
             self._emit_create_object(obj)
@@ -370,6 +385,10 @@ class PhaserEmitter(BaseEmitter):
         if self.player_objects:
             self._emit_player_input_method()
 
+        # setupTouchControls (if needed)
+        if self.needs_touch_controls:
+            self._emit_touch_controls_method()
+
         # checkCollision (if needed)
         if self.collision_events:
             self._emit_collision_helper()
@@ -389,26 +408,255 @@ class PhaserEmitter(BaseEmitter):
         self.write("if (!player || !player.speed) return;")
         self.write("const speed = player.speed;")
         self.write_blank()
-        self.write("if (this.cursors.left.isDown || this.keys.A.isDown) {")
+        # Include touch controls in conditions if needed
+        if self.needs_touch_controls:
+            self.write("if (this.cursors.left.isDown || this.keys.A.isDown || this.touchDir.left) {")
+        else:
+            self.write("if (this.cursors.left.isDown || this.keys.A.isDown) {")
         self.indent()
         self.write("player.x -= speed;")
         self.dedent()
         self.write("}")
-        self.write("if (this.cursors.right.isDown || this.keys.D.isDown) {")
+        if self.needs_touch_controls:
+            self.write("if (this.cursors.right.isDown || this.keys.D.isDown || this.touchDir.right) {")
+        else:
+            self.write("if (this.cursors.right.isDown || this.keys.D.isDown) {")
         self.indent()
         self.write("player.x += speed;")
         self.dedent()
         self.write("}")
-        self.write("if (this.cursors.up.isDown || this.keys.W.isDown) {")
+        if self.needs_touch_controls:
+            self.write("if (this.cursors.up.isDown || this.keys.W.isDown || this.touchDir.up) {")
+        else:
+            self.write("if (this.cursors.up.isDown || this.keys.W.isDown) {")
         self.indent()
         self.write("player.y -= speed;")
         self.dedent()
         self.write("}")
-        self.write("if (this.cursors.down.isDown || this.keys.S.isDown) {")
+        if self.needs_touch_controls:
+            self.write("if (this.cursors.down.isDown || this.keys.S.isDown || this.touchDir.down) {")
+        else:
+            self.write("if (this.cursors.down.isDown || this.keys.S.isDown) {")
         self.indent()
         self.write("player.y += speed;")
         self.dedent()
         self.write("}")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+    def _emit_touch_controls_method(self):
+        """Emit mobile touch controls setup method with 8-way joystick and 2 buttons."""
+        # Get control settings from meta
+        controls = self.meta.get('controls', {})
+        opacity = controls.get('opacity', 0.5)
+        joystick_size = controls.get('joystick_size', 120)
+        button_size = controls.get('button_size', 60)
+
+        self.write("setupTouchControls() {")
+        self.indent()
+        self.write("const scene = this;")
+        self.write_blank()
+
+        # CSS for touch controls
+        self.write("// Inject touch control styles")
+        self.write("const style = document.createElement('style');")
+        self.write(f"""style.textContent = `
+      .touch-controls {{ position: fixed; bottom: 0; left: 0; right: 0; height: 180px; pointer-events: none; z-index: 1000; }}
+      .touch-joystick-base {{
+        position: absolute; bottom: 20px; left: 20px;
+        width: {joystick_size}px; height: {joystick_size}px;
+        background: rgba(255,255,255,0.15); border: 3px solid rgba(255,255,255,0.3);
+        border-radius: 50%; pointer-events: auto; touch-action: none;
+      }}
+      .touch-joystick-thumb {{
+        position: absolute; top: 50%; left: 50%;
+        width: {joystick_size // 2}px; height: {joystick_size // 2}px;
+        background: rgba(255,255,255,0.5); border-radius: 50%;
+        transform: translate(-50%, -50%); pointer-events: none;
+      }}
+      .touch-button {{
+        position: absolute; bottom: 30px;
+        width: {button_size}px; height: {button_size}px;
+        background: rgba(255,255,255,0.2); border: 3px solid rgba(255,255,255,0.4);
+        border-radius: 50%; pointer-events: auto; touch-action: none;
+        display: flex; align-items: center; justify-content: center;
+        font-family: sans-serif; font-size: 20px; font-weight: bold; color: rgba(255,255,255,0.7);
+        user-select: none; -webkit-user-select: none;
+      }}
+      .touch-button:active {{ background: rgba(255,255,255,0.4); }}
+      .touch-button-a {{ right: {button_size + 30}px; }}
+      .touch-button-b {{ right: 20px; }}
+    `;""")
+        self.write("document.head.appendChild(style);")
+        self.write_blank()
+
+        # Create touch controls container
+        self.write("// Create touch controls container")
+        self.write("const container = document.createElement('div');")
+        self.write("container.className = 'touch-controls';")
+        self.write_blank()
+
+        # Create joystick
+        self.write("// Create 8-way joystick")
+        self.write("const joystickBase = document.createElement('div');")
+        self.write("joystickBase.className = 'touch-joystick-base';")
+        self.write("const joystickThumb = document.createElement('div');")
+        self.write("joystickThumb.className = 'touch-joystick-thumb';")
+        self.write("joystickBase.appendChild(joystickThumb);")
+        self.write("container.appendChild(joystickBase);")
+        self.write_blank()
+
+        # Create buttons
+        self.write("// Create action buttons")
+        self.write("const buttonA = document.createElement('div');")
+        self.write("buttonA.className = 'touch-button touch-button-a';")
+        self.write("buttonA.textContent = 'A';")
+        self.write("container.appendChild(buttonA);")
+        self.write_blank()
+        self.write("const buttonB = document.createElement('div');")
+        self.write("buttonB.className = 'touch-button touch-button-b';")
+        self.write("buttonB.textContent = 'B';")
+        self.write("container.appendChild(buttonB);")
+        self.write_blank()
+
+        self.write("document.body.appendChild(container);")
+        self.write_blank()
+
+        # Joystick touch handling
+        self.write("// Joystick touch handling")
+        self.write(f"const baseRadius = {joystick_size // 2};")
+        self.write("let joystickActive = false;")
+        self.write_blank()
+
+        self.write("const updateJoystick = (touchX, touchY) => {")
+        self.indent()
+        self.write("const rect = joystickBase.getBoundingClientRect();")
+        self.write("const centerX = rect.left + rect.width / 2;")
+        self.write("const centerY = rect.top + rect.height / 2;")
+        self.write("let dx = touchX - centerX;")
+        self.write("let dy = touchY - centerY;")
+        self.write("const dist = Math.sqrt(dx*dx + dy*dy);")
+        self.write_blank()
+        self.write("// Clamp to base radius")
+        self.write("if (dist > baseRadius) {")
+        self.indent()
+        self.write("dx = dx / dist * baseRadius;")
+        self.write("dy = dy / dist * baseRadius;")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+        self.write("// Move thumb")
+        self.write("joystickThumb.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;")
+        self.write_blank()
+        self.write("// Calculate 8-way direction (22.5 degree zones)")
+        self.write("const deadzone = baseRadius * 0.2;")
+        self.write("if (dist < deadzone) {")
+        self.indent()
+        self.write("scene.touchDir = { left: false, right: false, up: false, down: false };")
+        self.write("return;")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+        self.write("const angle = Math.atan2(dy, dx) * 180 / Math.PI;")
+        self.write("// 8 directions: E=0, SE=45, S=90, SW=135, W=180/-180, NW=-135, N=-90, NE=-45")
+        self.write("scene.touchDir.right = angle > -67.5 && angle < 67.5;")
+        self.write("scene.touchDir.left = angle > 112.5 || angle < -112.5;")
+        self.write("scene.touchDir.down = angle > 22.5 && angle < 157.5;")
+        self.write("scene.touchDir.up = angle > -157.5 && angle < -22.5;")
+        self.dedent()
+        self.write("};")
+        self.write_blank()
+
+        self.write("const resetJoystick = () => {")
+        self.indent()
+        self.write("joystickThumb.style.transform = 'translate(-50%, -50%)';")
+        self.write("scene.touchDir = { left: false, right: false, up: false, down: false };")
+        self.write("joystickActive = false;")
+        self.dedent()
+        self.write("};")
+        self.write_blank()
+
+        # Touch events for joystick
+        self.write("joystickBase.addEventListener('touchstart', (e) => {")
+        self.indent()
+        self.write("e.preventDefault();")
+        self.write("joystickActive = true;")
+        self.write("const touch = e.touches[0];")
+        self.write("updateJoystick(touch.clientX, touch.clientY);")
+        self.dedent()
+        self.write("}, { passive: false });")
+        self.write_blank()
+
+        self.write("joystickBase.addEventListener('touchmove', (e) => {")
+        self.indent()
+        self.write("e.preventDefault();")
+        self.write("if (!joystickActive) return;")
+        self.write("const touch = e.touches[0];")
+        self.write("updateJoystick(touch.clientX, touch.clientY);")
+        self.dedent()
+        self.write("}, { passive: false });")
+        self.write_blank()
+
+        self.write("joystickBase.addEventListener('touchend', resetJoystick);")
+        self.write("joystickBase.addEventListener('touchcancel', resetJoystick);")
+        self.write_blank()
+
+        # Button touch events
+        self.write("// Button A - triggers Space key action")
+        self.write("buttonA.addEventListener('touchstart', (e) => {")
+        self.indent()
+        self.write("e.preventDefault();")
+        self.write("scene.touchAction.a = true;")
+        self.write("// Simulate Space keydown")
+        self.write("if (scene.keys && scene.keys.SPACE) {")
+        self.indent()
+        self.write("scene.keys.SPACE.isDown = true;")
+        self.dedent()
+        self.write("}")
+        self.write("scene.triggerEvent('action_a');")
+        self.dedent()
+        self.write("}, { passive: false });")
+        self.write_blank()
+
+        self.write("buttonA.addEventListener('touchend', (e) => {")
+        self.indent()
+        self.write("scene.touchAction.a = false;")
+        self.write("if (scene.keys && scene.keys.SPACE) {")
+        self.indent()
+        self.write("scene.keys.SPACE.isDown = false;")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("});")
+        self.write_blank()
+
+        self.write("// Button B - triggers X key action")
+        self.write("buttonB.addEventListener('touchstart', (e) => {")
+        self.indent()
+        self.write("e.preventDefault();")
+        self.write("scene.touchAction.b = true;")
+        self.write("if (scene.keys && scene.keys.X) {")
+        self.indent()
+        self.write("scene.keys.X.isDown = true;")
+        self.dedent()
+        self.write("}")
+        self.write("scene.triggerEvent('action_b');")
+        self.dedent()
+        self.write("}, { passive: false });")
+        self.write_blank()
+
+        self.write("buttonB.addEventListener('touchend', (e) => {")
+        self.indent()
+        self.write("scene.touchAction.b = false;")
+        self.write("if (scene.keys && scene.keys.X) {")
+        self.indent()
+        self.write("scene.keys.X.isDown = false;")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("});")
+
         self.dedent()
         self.write("}")
         self.write_blank()
