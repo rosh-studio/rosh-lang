@@ -15,7 +15,7 @@ Honest assessment of what Rosh can and cannot do as of v0.2.6.
 | **Pygame (Desktop 2D)** | Working | Some features lag behind |
 | **Godot (Desktop 2D/3D)** | Working | Some features lag behind |
 
-### ThreeJS-Only Features
+### Three.js-Only Features
 
 These features are currently **only available in Three.js**:
 
@@ -26,9 +26,9 @@ These features are currently **only available in Three.js**:
 | Object control (arrow keys) | Not implemented |
 | Gravity system | Not implemented |
 | Click-to-move | Not implemented |
-| Shared worlds (Project Twin) | CLI only, not graphical |
-| Voice input | Browser-only |
-| AI prompt | Browser-only |
+| Shared worlds (Project Twin) | Three.js: full graphical sync. CLI: text-only sync. Phaser/Pygame/Godot: not implemented. |
+| Voice input | Browser-only (Three.js, Phaser) |
+| AI prompt | Browser-only (Three.js, Phaser) |
 
 **Recommendation:** For demos and client work, use the Three.js target.
 

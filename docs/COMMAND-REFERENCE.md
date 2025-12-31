@@ -163,7 +163,7 @@ When connected:
 
 ---
 
-## Camera (ThreeJS)
+## Camera (Three.js)
 
 | Command | Description |
 |---------|-------------|

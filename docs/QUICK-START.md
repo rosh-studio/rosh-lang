@@ -4,7 +4,7 @@
 
 ## 1. Open a Demo
 
-Visit [rosh.cloud](https://rosh.cloud) and click on **Virtual Gallery** (or any ThreeJS demo).
+Visit [rosh.cloud](https://rosh.cloud) and click on **Virtual Gallery** (or any Three.js demo).
 
 ## 2. Open the Console
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-ThreeJS-first physics features. These are reference implementations that other emitters can follow.
+Three.js-first physics features. These are reference implementations that other emitters can follow.
 
 ## Gravity
 
@@ -19,10 +19,13 @@ ground 0             # Set ground Y level (default: 0)
 
 ### Per-Object Control
 
-Objects can opt out of gravity:
+Objects can opt out of gravity using the `fixed` property:
 ```
-set ball gravity to false   # This object won't fall
+set ball fixed to true      # This object won't fall
+set ball fixed to false     # This object will fall (default for console-created)
 ```
+
+Scene objects are `fixed: true` by default. Console-created objects are `fixed: false`.
 
 ## Click-to-Move
 
@@ -70,7 +73,7 @@ adapter.update(deltaTime)
 
 | Emitter | Gravity | Click-to-Move |
 |---------|---------|---------------|
-| ThreeJS | ✅ | ✅ |
+| Three.js | ✅ | ✅ |
 | Phaser | ❌ | ❌ |
 | Pygame | ❌ | ❌ |
 | Godot | ❌ | ❌ |

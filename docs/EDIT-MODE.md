@@ -4,7 +4,7 @@
 
 Edit mode enables interactive object selection and control. When OFF (default), the scene is view-only. When ON, users can click to select objects and control them.
 
-**ThreeJS-first feature.** Other emitters do not yet implement this.
+**Three.js-first feature.** Other emitters do not yet implement this.
 
 ## Commands
 
@@ -78,7 +78,7 @@ adapter.deselect()            // Clear selection
 
 | Emitter | Edit Mode | Selection | Control |
 |---------|-----------|-----------|---------|
-| ThreeJS | ✅ | ✅ | ✅ |
+| Three.js | ✅ | ✅ | ✅ |
 | Phaser | ❌ | ❌ | ❌ |
 | Pygame | ❌ | ❌ | ❌ |
 | Godot | ❌ | ❌ | ❌ |
