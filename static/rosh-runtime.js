@@ -650,9 +650,30 @@ const RoshRuntime = (function() {
             const name = parts[1];
             if (name) {
               adapter.setPlayer(name);
-              log('Player set to: ' + name, 'ok');
+              // Also enable keyboard control for the player
+              if (adapter.enablePlayerKeyboard) {
+                adapter.enablePlayerKeyboard(name);
+                log('Player set to: ' + name + ' (arrow keys to move)', 'ok');
+              } else {
+                log('Player set to: ' + name, 'ok');
+              }
             } else {
               log('Usage: player <object-name>', 'dim');
+            }
+          }
+          break;
+
+        case 'keys':
+        case 'keyboard':
+          if (adapter.enablePlayerKeyboard) {
+            const arg = parts[1]?.toLowerCase();
+            if (arg === 'off' || arg === 'false' || arg === '0') {
+              adapter.disablePlayerKeyboard();
+              log('Keyboard control disabled', 'ok');
+            } else {
+              const playerName = (arg === 'on' || arg === 'true' || arg === '1') ? parts[2] : arg;
+              adapter.enablePlayerKeyboard(playerName);
+              log('Keyboard control enabled (arrow keys)', 'ok');
             }
           }
           break;

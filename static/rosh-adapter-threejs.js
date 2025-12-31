@@ -43,6 +43,10 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
   const mouse = new THREE.Vector2();
   let groundPlane = null;       // Invisible ground for raycasting
 
+  // Player keyboard movement state
+  let playerKeyboardEnabled = false;
+  const playerKeyState = { left: false, right: false, forward: false, back: false };
+
   // Color mappings
   const COLOR_MAP = {
     red: 0xff0000, green: 0x00ff00, blue: 0x0000ff,
@@ -689,7 +693,8 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       // Apply gravity to objects
       if (gravityEnabled) {
         for (const [name, obj] of Object.entries(objects)) {
-          // Skip objects without gravity enabled (default: all objects have gravity when system is on)
+          // Skip fixed objects or objects with gravity disabled
+          if (obj.userData.fixed === true) continue;
           if (obj.userData.gravity === false) continue;
 
           // Get or initialize velocity
@@ -739,6 +744,18 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
           }
         }
       }
+
+      // Arrow key movement for player (when keyboard enabled)
+      if (playerKeyboardEnabled && playerObjectName) {
+        const player = findObject(playerObjectName);
+        if (player) {
+          const step = moveSpeed * deltaTime;
+          if (playerKeyState.left) player.position.x -= step;
+          if (playerKeyState.right) player.position.x += step;
+          if (playerKeyState.forward) player.position.z -= step;
+          if (playerKeyState.back) player.position.z += step;
+        }
+      }
     }
   };
 
@@ -769,6 +786,47 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       }
     }
   }
+
+  // ========================================================================
+  // PLAYER KEYBOARD MOVEMENT (internal)
+  // ========================================================================
+
+  function setupPlayerKeyboard() {
+    window.addEventListener('keydown', (e) => {
+      // Don't capture keys when console is open
+      if (typeof consoleVisible !== 'undefined' && consoleVisible) return;
+
+      switch (e.key) {
+        case 'ArrowLeft': playerKeyState.left = true; break;
+        case 'ArrowRight': playerKeyState.right = true; break;
+        case 'ArrowUp': playerKeyState.forward = true; break;
+        case 'ArrowDown': playerKeyState.back = true; break;
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      switch (e.key) {
+        case 'ArrowLeft': playerKeyState.left = false; break;
+        case 'ArrowRight': playerKeyState.right = false; break;
+        case 'ArrowUp': playerKeyState.forward = false; break;
+        case 'ArrowDown': playerKeyState.back = false; break;
+      }
+    });
+  }
+
+  // Add enablePlayerKeyboard method to adapter
+  adapter.enablePlayerKeyboard = function(playerName) {
+    playerKeyboardEnabled = true;
+    if (playerName) playerObjectName = playerName;
+    setupPlayerKeyboard();
+    return { success: true, player: playerObjectName };
+  };
+
+  adapter.disablePlayerKeyboard = function() {
+    playerKeyboardEnabled = false;
+    playerKeyState.left = playerKeyState.right = playerKeyState.forward = playerKeyState.back = false;
+    return { success: true };
+  };
 
   return adapter;
 }
