@@ -1,4 +1,4 @@
-Copyright (c) 2026 Roger Dubar. All Rights Reserved.
+Copyright (c) 2025-2026 Roger Dubar, trading as Rosh Studio. All Rights Reserved.
 
 ===============================================================================
 PRIVATE DEVELOPMENT - NO LICENSE GRANTED
@@ -11,16 +11,48 @@ We intend to open-source core components under a permissive license
 (likely MIT) once the language stabilises.
 
 For inquiries about early access, collaboration, or licensing,
-contact: rdubar@gmail.com
+contact: info@rosh.cloud
 
 ===============================================================================
 TRADEMARK NOTICE
 ===============================================================================
 
-"Rosh" and the Rosh logo (if any) are trademarks of the Rosh Project.
+"Rosh" and the Rosh logo (if any) are trademarks of Rosh Studio.
 You may use the Rosh name and logo to refer to this project,
 but you may not use them in a way that suggests endorsement or affiliation
 without permission.
 
 This trademark policy is similar to that used by Python, Rust, and other
 open-source projects that protect their brand while keeping the code free.
+
+===============================================================================
+CONSULTANCY SERVICES
+===============================================================================
+
+"Rosh Materials" means any materials, code, documentation, or outputs
+owned by or created by Rosh Studio.
+
+Where Rosh Studio provides consultancy services, on payment in full of
+all sums due, the client is granted a perpetual, royalty-free,
+non-exclusive licence to use, modify, and distribute any Rosh Materials
+provided during the engagement, for any purpose.
+
+Any materials, code, content, or works created by you using Rosh or
+Rosh Materials belong solely to you, subject only to third-party rights
+and applicable law.
+
+===============================================================================
+DISCLAIMER
+===============================================================================
+
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+This disclaimer applies to all Rosh software, documentation, and related
+materials, whether accessed during private development, early access,
+consultancy engagements, or any future open-source release.
