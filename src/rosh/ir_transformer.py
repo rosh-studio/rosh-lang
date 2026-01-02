@@ -616,7 +616,10 @@ class IRTransformer:
             })
 
         elif isinstance(stmt, DeleteObject):
-            return IR_Action('destroy', {'target': stmt.name.lower()})
+            return IR_Action('destroy', {
+                'target': stmt.name.lower(),
+                'confirmed': stmt.confirmed
+            })
 
         elif isinstance(stmt, CloneObject):
             return IR_Action('spawn', {
@@ -676,9 +679,11 @@ class IRTransformer:
 
         elif isinstance(stmt, Get):
             return IR_Action('get', {
-                'target': self.transform_expression(stmt.target),
+                'target': self.transform_expression(stmt.target) if stmt.target else None,
                 'index': stmt.instance_index,
-                'all': stmt.get_all
+                'all': stmt.get_all,
+                'filter': self.transform_expression(stmt.where_condition) if stmt.where_condition else None,
+                'include_hidden': stmt.include_hidden
             })
 
         elif isinstance(stmt, GotoScene):

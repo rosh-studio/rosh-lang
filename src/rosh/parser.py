@@ -1016,12 +1016,14 @@ class Parser:
         """Parse: get <target> - pushes value onto stack
 
         Supports:
-        - get player         → gets variable
-        - get player.health  → dot notation
-        - get player health  → space-separated property access
-        - get all ball       → gets all instances of type
-        - get ball 5         → gets instance #5
-        - get 10 balls       → bulk get first 10 of type
+        - get player                              → gets variable
+        - get player.health                       → dot notation
+        - get player health                       → space-separated property access
+        - get all ball                            → gets all instances of type
+        - get ball 5                              → gets instance #5
+        - get 10 balls                            → bulk get first 10 of type
+        - get all where group is enemies          → query with condition
+        - get all including hidden where ...      → include hidden objects
         """
         line = self.current_token().line
         self.expect(TokenType.GET)
@@ -1032,12 +1034,53 @@ class Parser:
 
         # Check for 'get all <type>'
         get_all = False
+        include_hidden = False
+        where_condition = None
+
         if self.current_token().type == TokenType.ALL:
             get_all = True
             self.advance()
 
+            # Check for 'including hidden'
+            if self.current_token().type == TokenType.INCLUDING:
+                self.advance()
+                if self.current_token().type == TokenType.IDENTIFIER and self.current_token().value.lower() == 'hidden':
+                    self.advance()
+                    include_hidden = True
+                else:
+                    self.error("Expected 'hidden' after 'including'")
+
+            # Check for 'where' clause (can come before or after type)
+            if self.current_token().type == TokenType.WHERE:
+                self.advance()
+                where_condition = self.parse_condition()
+                # No target for "get all where ..."
+                return Get(
+                    target=None,
+                    get_all=True,
+                    where_condition=where_condition,
+                    include_hidden=include_hidden,
+                    line=line
+                )
+
         # Parse the target - could be simple identifier or property chain
         target = self.parse_target()
+
+        # After target, check for 'including hidden' and 'where'
+        if get_all:
+            # Check for 'including hidden' after type
+            if self.current_token().type == TokenType.INCLUDING:
+                self.advance()
+                if self.current_token().type == TokenType.IDENTIFIER and self.current_token().value.lower() == 'hidden':
+                    self.advance()
+                    include_hidden = True
+                else:
+                    self.error("Expected 'hidden' after 'including'")
+
+            # Check for 'where' clause after type
+            if self.current_token().type == TokenType.WHERE:
+                self.advance()
+                where_condition = self.parse_condition()
 
         # Check for instance index: get ball 5
         instance_index = None
@@ -1052,7 +1095,14 @@ class Parser:
                 prop_token = self.advance()
                 target = PropertyAccess(object=target, property=prop_token.value, line=prop_token.line)
 
-        return Get(target=target, instance_index=instance_index, get_all=get_all, line=line)
+        return Get(
+            target=target,
+            instance_index=instance_index,
+            get_all=get_all,
+            where_condition=where_condition,
+            include_hidden=include_hidden,
+            line=line
+        )
 
     def parse_dump(self) -> Dump:
         """Parse: dump [target] - outputs entire state or specific object as JSON"""
@@ -1897,18 +1947,41 @@ class Parser:
         return CloneObject(source=source, target=target, line=line)
 
     def parse_delete(self) -> DeleteObject:
-        """Parse: delete <name> OR delete N type (bulk delete)"""
+        """Parse: delete <name> OR delete N type (bulk delete)
+
+        Supports:
+        - delete ball           → delete specific object
+        - delete N type         → bulk delete (deprecated)
+        - destroy               → delete current selection (warns without confirmed)
+        - destroy confirmed     → confirm bulk delete
+        """
         line = self.current_token().line
         self.expect(TokenType.DELETE)
+
+        # Check for 'confirmed' keyword (for bulk delete safety)
+        if self.current_token().type == TokenType.CONFIRMED:
+            self.advance()
+            return DeleteObject(name='selection', confirmed=True, line=line)
 
         # Check for bulk delete: delete N type
         if self.current_token().type == TokenType.NUMBER:
             return self._parse_bulk_operation('delete', line)
 
+        # Check if this is just "destroy" with no target (operates on selection)
+        if self.current_token().type in (TokenType.EOF, TokenType.NEWLINE) or \
+           self.current_token().type not in (TokenType.IDENTIFIER,):
+            return DeleteObject(name='selection', confirmed=False, line=line)
+
         name_token = self.expect(TokenType.IDENTIFIER)
         name = name_token.value
 
-        return DeleteObject(name=name, line=line)
+        # Check for 'confirmed' after name
+        confirmed = False
+        if self.current_token().type == TokenType.CONFIRMED:
+            self.advance()
+            confirmed = True
+
+        return DeleteObject(name=name, confirmed=confirmed, line=line)
 
     def parse_reset(self) -> ResetObject:
         """Parse: reset <name> - Revert object to template defaults"""

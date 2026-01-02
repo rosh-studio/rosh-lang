@@ -5355,7 +5355,119 @@ class ThreeJSEmitter(BaseEmitter):
             func_name = params.get('function', params.get('name', ''))
             return f"{func_name}();"
 
+        elif action_type == 'get':
+            # Query syntax: get all [type] [where condition]
+            return self._emit_get_action(params)
+
+        elif action_type == 'destroy':
+            target = params.get('target', '')
+            confirmed = params.get('confirmed', False)
+            # Bulk destroy on selection
+            if target == 'selection':
+                if confirmed:
+                    return """
+                    if (window._selection && window._selection.length > 0) {
+                        const count = window._selection.length;
+                        window._selection.forEach(obj => { if (obj && obj.parent) obj.parent.remove(obj); });
+                        window._selection = [];
+                        console.log('destroyed ' + count + ' objects');
+                    }""".strip().replace('\n                    ', '\n')
+                else:
+                    return """
+                    if (window._selection && window._selection.length > 0) {
+                        console.warn('warning: destroy affects ' + window._selection.length + ' objects. Use "destroy confirmed" to proceed.');
+                    } else {
+                        console.log('no objects selected');
+                    }""".strip().replace('\n                    ', '\n')
+            return f"if ({target} && {target}.parent) {{ {target}.parent.remove({target}); {target} = null; }}"
+
         return f"// TODO: {action_type}"
+
+    def _emit_get_action(self, params: Dict) -> str:
+        """Emit get action with query filtering.
+
+        Populates window._selection with matching objects.
+        Supports:
+        - get all where <condition>
+        - get all <type> where <condition>
+        - get all including hidden where <condition>
+        """
+        target = params.get('target')  # Type filter (e.g., 'enemy')
+        get_all = params.get('all', False)
+        filter_expr = params.get('filter')  # IR_Expression for where condition
+        include_hidden = params.get('include_hidden', False)
+
+        # Build the filter function
+        lines = ["window._selection = Object.values(window._objects || {})"]
+
+        # Filter by type if specified
+        if target:
+            target_name = self.emit_expression(target) if hasattr(target, 'type') else f"'{target}'"
+            # Handle string literal
+            if isinstance(target_name, str) and target_name.startswith("'"):
+                type_name = target_name.strip("'")
+            else:
+                type_name = target_name
+            lines[0] += f".filter(obj => obj.userData && obj.userData._type === '{type_name}')"
+
+        # Filter hidden objects
+        if not include_hidden:
+            lines[0] += ".filter(obj => !(obj.userData && obj.userData._hidden))"
+
+        # Apply where condition
+        if filter_expr:
+            condition_code = self._emit_filter_condition(filter_expr)
+            lines[0] += f".filter(obj => {condition_code})"
+
+        lines.append("console.log('selected ' + window._selection.length + ' objects');")
+
+        return "; ".join(lines)
+
+    def _emit_filter_condition(self, expr) -> str:
+        """Emit a filter condition for use in .filter(obj => ...)"""
+        if expr.type == 'comparison':
+            left = self._emit_filter_expression(expr.left)
+            right = self._emit_filter_expression(expr.right)
+            op = expr.operator
+            return f"({left} {op} {right})"
+        elif expr.type == 'binary_op':
+            left = self._emit_filter_condition(expr.left)
+            right = self._emit_filter_condition(expr.right)
+            op = expr.operator
+            if op == 'and':
+                op = '&&'
+            elif op == 'or':
+                op = '||'
+            return f"({left} {op} {right})"
+        elif expr.type == 'unary_op':
+            right = self._emit_filter_condition(expr.right)
+            if expr.operator == 'not':
+                return f"(!{right})"
+            return f"({expr.operator}{right})"
+        else:
+            return self._emit_filter_expression(expr)
+
+    def _emit_filter_expression(self, expr) -> str:
+        """Emit expression for filter context (obj.userData.prop instead of global)"""
+        if hasattr(expr, 'type'):
+            if expr.type == 'property_access':
+                # In filter context, use obj.userData.property
+                prop = expr.right
+                return f"(obj.userData && obj.userData.{prop})"
+            elif expr.type == 'literal':
+                if hasattr(expr, 'value') and hasattr(expr.value, 'value'):
+                    val = expr.value.value
+                    if isinstance(val, str):
+                        return f"'{val}'"
+                    return str(val)
+                return self.emit_expression(expr)
+        # Identifier in filter context - treat as userData property
+        if hasattr(expr, 'value') and hasattr(expr.value, 'value'):
+            val = expr.value.value
+            if isinstance(val, str):
+                return f"(obj.userData && obj.userData.{val})"
+            return str(val)
+        return self.emit_expression(expr)
 
     def _emit_set_property(self, params: Dict) -> str:
         """Emit set_property action."""

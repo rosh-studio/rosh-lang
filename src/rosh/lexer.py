@@ -128,6 +128,11 @@ class TokenType(Enum):
     AND = auto()
     OR = auto()
 
+    # Query syntax (Phase 3 - Project Arcade)
+    WHERE = auto()      # get all where <condition>
+    CONFIRMED = auto()  # destroy confirmed (bulk safety)
+    INCLUDING = auto()  # get all including hidden
+
     # Math operators (expression-based)
     PLUS = auto()
     MINUS = auto()
@@ -411,6 +416,7 @@ class Lexer:
             'call': TokenType.CALL,
             'clone': TokenType.CLONE,
             'delete': TokenType.DELETE,
+            'destroy': TokenType.DELETE,  # Alias for delete
             'reset': TokenType.RESET,
             'hide': TokenType.HIDE,
             'show': TokenType.SHOW,
@@ -462,6 +468,9 @@ class Lexer:
             'above': TokenType.ABOVE,
             'and': TokenType.AND,
             'or': TokenType.OR,
+            'where': TokenType.WHERE,
+            'confirmed': TokenType.CONFIRMED,
+            'including': TokenType.INCLUDING,
             'plus': TokenType.PLUS,
             'minus': TokenType.MINUS,
             'times': TokenType.TIMES,

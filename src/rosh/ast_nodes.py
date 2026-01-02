@@ -230,13 +230,17 @@ class Input(ASTNode):
 class Get(ASTNode):
     """get <target> - pushes value onto stack
     Supports:
-      - get ball         → gets first/single instance
-      - get ball 5       → gets instance #5
-      - get all ball     → gets all instances
+      - get ball                              → gets first/single instance
+      - get ball 5                            → gets instance #5
+      - get all ball                          → gets all instances
+      - get all where group is enemies        → gets all matching condition
+      - get all including hidden where ...    → includes hidden objects
     """
-    target: ASTNode  # Identifier or PropertyAccess
+    target: ASTNode  # Identifier or PropertyAccess (None for get all where...)
     instance_index: Optional[int] = None  # For: get ball 5
     get_all: bool = False  # For: get all ball
+    where_condition: Optional[ASTNode] = None  # For: get all where <condition>
+    include_hidden: bool = False  # For: get all including hidden
     line: int = 0
 
 
@@ -492,8 +496,14 @@ class CloneObject(ASTNode):
 
 @dataclass
 class DeleteObject(ASTNode):
-    """delete <name> - Remove an object"""
-    name: str  # Name of object to delete
+    """delete <name> - Remove an object
+
+    For bulk operations (after get all where...):
+      - destroy           → warns and fails (safety)
+      - destroy confirmed → proceeds with deletion
+    """
+    name: str  # Name of object to delete (or 'selection' for bulk)
+    confirmed: bool = False  # For bulk delete safety
     line: int = 0
 
 

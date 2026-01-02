@@ -603,3 +603,78 @@ class TestSettingsLoading:
         assert npc.level == 2
         assert 'scene' not in npc.properties
         assert 'level' not in npc.properties
+
+
+class TestQuerySyntax:
+    """Tests for query syntax (Phase 3 - Project Arcade)."""
+
+    def test_get_all_where_basic(self):
+        """get all where condition should create IR action with filter."""
+        program = parse('get all where x is above 100')
+        ir = transform_ast_to_ir(program)
+
+        assert len(ir.init_actions) == 1
+        action = ir.init_actions[0]
+        assert action.type == 'get'
+        assert action.params['all'] == True
+        assert action.params['filter'] is not None
+        assert action.params['filter'].type == 'comparison'
+        assert action.params['filter'].operator == '>'
+
+    def test_get_all_where_compound(self):
+        """get all where with AND/OR conditions."""
+        program = parse('get all where x is above 100 and y is below 50')
+        ir = transform_ast_to_ir(program)
+
+        action = ir.init_actions[0]
+        assert action.params['filter'].type == 'binary_op'
+        assert action.params['filter'].operator == 'and'
+
+    def test_get_all_type_where(self):
+        """get all <type> where condition."""
+        program = parse('get all enemies where speed is above 5')
+        ir = transform_ast_to_ir(program)
+
+        action = ir.init_actions[0]
+        assert action.params['all'] == True
+        assert action.params['target'] is not None
+        assert action.params['filter'] is not None
+
+    def test_get_all_including_hidden(self):
+        """get all including hidden should set include_hidden flag."""
+        program = parse('get all including hidden where x is above 0')
+        ir = transform_ast_to_ir(program)
+
+        action = ir.init_actions[0]
+        assert action.params['include_hidden'] == True
+        assert action.params['filter'] is not None
+
+    def test_destroy_confirmed(self):
+        """destroy confirmed should set confirmed flag."""
+        program = parse('destroy confirmed')
+        ir = transform_ast_to_ir(program)
+
+        action = ir.init_actions[0]
+        assert action.type == 'destroy'
+        assert action.params['target'] == 'selection'
+        assert action.params['confirmed'] == True
+
+    def test_destroy_without_confirmed(self):
+        """destroy without confirmed should have confirmed=False."""
+        program = parse('destroy')
+        ir = transform_ast_to_ir(program)
+
+        action = ir.init_actions[0]
+        assert action.type == 'destroy'
+        assert action.params['target'] == 'selection'
+        assert action.params['confirmed'] == False
+
+    def test_delete_specific_object(self):
+        """delete <name> should target specific object."""
+        program = parse('delete enemy')
+        ir = transform_ast_to_ir(program)
+
+        action = ir.init_actions[0]
+        assert action.type == 'destroy'
+        assert action.params['target'] == 'enemy'
+        assert action.params['confirmed'] == False
