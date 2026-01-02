@@ -1445,11 +1445,24 @@ class PhaserEmitter(BaseEmitter):
     def _emit_create_object(self, obj: IR_Object):
         """Emit code to create an object.
 
-        Hidden objects (name starts with '_') are skipped - they exist in IR
-        for templates, config, meta, etc. but are not rendered in the game.
+        Hidden objects (name starts with '_') are created as data-only objects
+        (not rendered) for templates, config, state, etc.
         """
-        # Skip hidden objects - they exist in world state but are not rendered
+        name = obj.name
+
+        # Hidden objects: create data-only object (not rendered)
         if obj.hidden:
+            self.write(f"// Hidden data object: {name}")
+            self.write(f"this.{name} = {{ }};")
+            # Set properties
+            for prop_name, prop_value in obj.properties.items():
+                val = self.get_value(prop_value)
+                if isinstance(val, bool):
+                    self.write(f"this.{name}.{prop_name} = {'true' if val else 'false'};")
+                elif isinstance(val, str):
+                    self.write(f"this.{name}.{prop_name} = '{val}';")
+                else:
+                    self.write(f"this.{name}.{prop_name} = {val};")
             return
 
         x = self._get_prop_value(obj, 'x', 0.5)

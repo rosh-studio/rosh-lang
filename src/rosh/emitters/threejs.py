@@ -1034,14 +1034,28 @@ class ThreeJSEmitter(BaseEmitter):
     def _emit_object(self, obj: IR_Object):
         """Emit a single Three.js object.
 
-        Hidden objects (name starts with '_') are skipped - they exist in IR
-        for templates, config, meta, etc. but are not rendered in the game.
+        Hidden objects (name starts with '_') are created as data-only objects
+        (not added to scene) for templates, config, state, etc.
         """
-        # Skip hidden objects - they exist in world state but are not rendered
-        if obj.hidden:
-            return
-
         name = obj.name
+
+        # Hidden objects: create data-only object (not rendered)
+        if obj.hidden:
+            self.write_comment(f"Hidden data object: {name}")
+            self.write(f"const {name} = {{ userData: {{}} }};")
+            # Set properties
+            for prop_name, prop_value in obj.properties.items():
+                val = self.get_value(prop_value)
+                if isinstance(val, bool):
+                    self.write(f"{name}.userData.{prop_name} = {'true' if val else 'false'};")
+                elif isinstance(val, str):
+                    self.write(f"{name}.userData.{prop_name} = '{val}';")
+                else:
+                    self.write(f"{name}.userData.{prop_name} = {val};")
+            # Register in _objects for queries
+            self.write(f"window._objects['{name}'] = {name};")
+            self.write_blank()
+            return
 
         # Get position (normalized 0-1 in IR, convert to 3D world coords)
         x = self._get_prop_value(obj, 'x', 0.5)
