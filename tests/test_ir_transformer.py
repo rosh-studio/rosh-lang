@@ -5,13 +5,13 @@ Tests that AST nodes are correctly transformed to IR representation.
 """
 
 import pytest
-from rosh.parser import Parser
-from rosh.lexer import Lexer
-from rosh.ir import (
+from src.rosh.parser import Parser
+from src.rosh.lexer import Lexer
+from src.rosh.ir import (
     IR_Program, IR_Object, IR_Event, IR_Action, IR_Function,
     IR_Value, IR_Expression, IR_Conditional, IR_Loop
 )
-from rosh.ir_transformer import IRTransformer, transform_ast_to_ir
+from src.rosh.ir_transformer import IRTransformer, transform_ast_to_ir
 
 
 def parse(source: str):

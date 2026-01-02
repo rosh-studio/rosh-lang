@@ -2236,7 +2236,8 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             ir = transform_ast_to_ir(
                 program,
                 canvas_width=meta.get('canvas', {}).get('width', 800),
-                canvas_height=meta.get('canvas', {}).get('height', 600)
+                canvas_height=meta.get('canvas', {}).get('height', 600),
+                project_root=project_dir
             )
             emitter = PhaserEmitter(ir, meta=meta)
             js_code = emitter.emit()
@@ -2269,7 +2270,8 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             ir = transform_ast_to_ir(
                 program,
                 canvas_width=meta.get('canvas', {}).get('width', 800),
-                canvas_height=meta.get('canvas', {}).get('height', 600)
+                canvas_height=meta.get('canvas', {}).get('height', 600),
+                project_root=project_dir
             )
             emitter = PygameEmitter(ir, meta=meta)
             py_code = emitter.emit()
@@ -2296,7 +2298,8 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
                 program,
                 canvas_width=meta.get('canvas', {}).get('width', 800),
                 canvas_height=meta.get('canvas', {}).get('height', 600),
-                meta=meta
+                meta=meta,
+                project_root=project_dir
             )
             emitter = ThreeJSEmitter(ir, meta=meta)
             js_code = emitter.emit()
@@ -2321,7 +2324,8 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             ir = transform_ast_to_ir(
                 program,
                 canvas_width=meta.get('canvas', {}).get('width', 800),
-                canvas_height=meta.get('canvas', {}).get('height', 600)
+                canvas_height=meta.get('canvas', {}).get('height', 600),
+                project_root=project_dir
             )
             emitter = GodotEmitter(ir, meta=meta)
             gd_code = emitter.emit()

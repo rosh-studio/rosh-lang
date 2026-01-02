@@ -34,29 +34,31 @@ create object tagline
     set visible to false
 end
 
-# Game state (using implicit meta object)
-set meta.phase to 1
-set meta.logo_done to false
-set meta.tagline_done to false
+# Game state (hidden object - underscore prefix means not rendered)
+create _state
+    set phase to 1
+    set logo_done to false
+    set tagline_done to false
+end
 
 # Animation loop - runs every frame
 when update then
     # Phase 1: Zoom the logo
-    if meta.phase is equal to 1 then
+    if _state.phase is equal to 1 then
         if logo.font_size is below 128 then
             set logo.font_size to logo.font_size plus 3
         else
-            set meta.phase to 2
+            set _state.phase to 2
             set tagline.visible to true
         end
     end
 
     # Phase 2: Fade in tagline
-    if meta.phase is equal to 2 then
+    if _state.phase is equal to 2 then
         if tagline.font_size is below 28 then
             set tagline.font_size to tagline.font_size plus 1
         else
-            set meta.phase to 3
+            set _state.phase to 3
         end
     end
 end

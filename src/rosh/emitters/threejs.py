@@ -174,7 +174,7 @@ class ThreeJSEmitter(BaseEmitter):
         self._scan_actions_for_sounds(self.ir.init_actions)
 
     def _build_capability_policy(self) -> Dict[str, Any]:
-        """Build capability policy from project meta."""
+        """Build capability policy from project config."""
         policy = self.meta.get('engine_capabilities', {}) or {}
         allow_tags = policy.get('allow', ['safe'])
         deny_tags = policy.get('deny', [])
@@ -346,6 +346,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write_comment("3D Scene Setup")
         self.write("const scene = new THREE.Scene();")
         self.write("const gameObjects = {};  // Registry for console-created objects")
+        self.write("window._objects = {};  // Global object registry for query syntax")
+        self.write("window._selection = [];  // Current selection for bulk operations")
         self.write("scene.background = new THREE.Color(0x1a1a2e);")
         self.write_blank()
 
@@ -408,7 +410,6 @@ class ThreeJSEmitter(BaseEmitter):
         # Game state object registry
         self.write_comment("Game Objects Registry")
         self.write("const ROSH_OBJECTS = {};")
-        self.write("const meta = { userData: {} };")
         self.write_blank()
 
         # Emit 2D game objects as data
@@ -791,17 +792,19 @@ class ThreeJSEmitter(BaseEmitter):
         self.write_comment("Scene Setup")
         self.write("const scene = new THREE.Scene();")
         self.write("const gameObjects = {};  // Registry for console-created objects")
+        self.write("window._objects = {};  // Global object registry for query syntax")
+        self.write("window._selection = [];  // Current selection for bulk operations")
         self.write("scene.background = new THREE.Color(0x1a1a2e);")
         self.write_blank()
 
-        # Implicit meta object for game state (v0.2.7+)
-        self.write_comment("Meta object for game state")
-        self.write("const meta = { userData: {}, modelScale: 2, useModels: true, floor: true, floorColor: null, confirm: true };")
-        self.write("// meta.modelScale: global multiplier for all 3D model sizes (default 2)")
-        self.write("// meta.useModels: if false, use primitive shapes instead of GLB models")
-        self.write("// meta.floor: show/hide the ground grid (default true)")
-        self.write("// meta.floorColor: solid floor color (null = grid only, hex = solid floor)")
-        self.write("// meta.confirm: require confirmation for bulk ops >= 10 (default true)")
+        # Runtime configuration for REPL settings
+        self.write_comment("Runtime config for REPL settings")
+        self.write("const _config = { modelScale: 2, useModels: true, floor: true, floorColor: null, confirm: true };")
+        self.write("// _config.modelScale: global multiplier for all 3D model sizes (default 2)")
+        self.write("// _config.useModels: if false, use primitive shapes instead of GLB models")
+        self.write("// _config.floor: show/hide the ground grid (default true)")
+        self.write("// _config.floorColor: solid floor color (null = grid only, hex = solid floor)")
+        self.write("// _config.confirm: require confirmation for bulk ops >= 10 (default true)")
         self.write_blank()
 
         # Camera
@@ -849,6 +852,44 @@ class ThreeJSEmitter(BaseEmitter):
         # GLTFLoader for 3D models
         self.write_comment("GLTFLoader for 3D models")
         self.write("const gltfLoader = new THREE.GLTFLoader();")
+        self.write_blank()
+
+        # Edit mode raycaster for object selection
+        self.write_comment("Edit mode raycaster")
+        self.write("const raycaster = new THREE.Raycaster();")
+        self.write("const mouse = new THREE.Vector2();")
+        self.write_blank()
+
+        # Click handler for edit mode selection
+        self.write_comment("Edit mode click selection")
+        self.write("renderer.domElement.addEventListener('click', (e) => {")
+        self.indent()
+        self.write("if (!editMode || window.consoleVisible) return;")
+        self.write("mouse.x = (e.clientX / window.innerWidth) * 2 - 1;")
+        self.write("mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;")
+        self.write("raycaster.setFromCamera(mouse, camera);")
+        self.write("const selectables = Object.values(gameObjects).filter(o => o && o.visible !== false);")
+        self.write("const intersects = raycaster.intersectObjects(selectables, true);")
+        self.write("if (intersects.length > 0) {")
+        self.indent()
+        self.write("let obj = intersects[0].object;")
+        self.write("while (obj.parent && !obj.userData._rosh_uuid) obj = obj.parent;")
+        self.write("if (obj.userData._rosh_uuid) {")
+        self.indent()
+        self.write("selectedObject = obj;")
+        self.write("const name = Object.keys(gameObjects).find(k => gameObjects[k] === obj) || 'unknown';")
+        self.write("console.log('Selected: ' + name);")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("selectedObject = null;")
+        self.write("console.log('Selection cleared');")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("});")
         self.write_blank()
 
         # WASD camera movement + Arrow keys for player objects
@@ -920,7 +961,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("gridHelper.name = '_grid';")
         self.write("gridHelper.position.y = -1;")
         self.write("scene.add(gridHelper);")
-        self.write("// Solid floor plane (initially hidden, shown when meta.floorColor is set)")
+        self.write("// Solid floor plane (initially hidden, shown when _config.floorColor is set)")
         self.write("const floorGeom = new THREE.PlaneGeometry(100, 100);")
         self.write("const floorMat = new THREE.MeshStandardMaterial({ color: 0x333333, side: THREE.DoubleSide });")
         self.write("const floorMesh = new THREE.Mesh(floorGeom, floorMat);")
@@ -938,15 +979,18 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("let pendingScene = null;")  # For fuzzy scene match confirmation
         self.write("let pendingAction = null;")  # For other confirmations
 
-        # Scene/level state
-        if self.uses_scenes:
-            initial_scene = self.ir.metadata.initial_scene
-            initial_level = self.ir.metadata.initial_level
-            if initial_scene:
-                self.write(f"let currentScene = '{initial_scene}';")
-            else:
-                self.write("let currentScene = null;")
-            self.write(f"let currentLevel = {initial_level};")
+        # Scene/level state (always declare for REPL compatibility)
+        initial_scene = self.ir.metadata.initial_scene if self.uses_scenes else None
+        initial_level = self.ir.metadata.initial_level if self.uses_scenes else 1
+        if initial_scene:
+            self.write(f"let currentScene = '{initial_scene}';")
+        else:
+            self.write("let currentScene = null;")
+        self.write(f"let currentLevel = {initial_level};")
+
+        # Edit mode state
+        self.write("let editMode = false;")
+        self.write("let selectedObject = null;")
 
         self.write_blank()
 
@@ -1145,6 +1189,15 @@ class ThreeJSEmitter(BaseEmitter):
         if obj.level is not None:
             self.write(f"{name}.userData._level = {obj.level};")
 
+        # Store object type for query filtering (use object name as type if not specified)
+        if 'type' not in obj.properties:
+            self.write(f"{name}.userData._type = '{name}';")
+
+        # Register in global _objects for query support (Phase 3)
+        self.write(f"window._objects['{name}'] = {name};")
+        # Also register in gameObjects for REPL list command
+        self.write(f"gameObjects['{name}'] = {name};")
+
         # UUID for REPL
         self.write(f"{name}.userData._rosh_uuid = crypto.randomUUID();")
 
@@ -1165,7 +1218,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.color_index += 1
 
     def _emit_init_actions(self):
-        """Emit initialization actions (top-level set statements like set meta.phase to 1)."""
+        """Emit initialization actions (top-level set statements like set _config.phase to 1)."""
         if not self.ir.init_actions:
             return
 
@@ -2019,10 +2072,25 @@ class ThreeJSEmitter(BaseEmitter):
                 self.write(f"{func_name}();")
             self.write_blank()
 
+        # Edit mode: move selected object with arrow keys
+        self.write_comment("Edit mode: move selected object")
+        self.write("if (editMode && selectedObject && !window.consoleVisible && !consoleVisible) {")
+        self.indent()
+        self.write("const editSpeed = 0.2;")
+        self.write("if (arrowState.left) selectedObject.position.x -= editSpeed;")
+        self.write("if (arrowState.right) selectedObject.position.x += editSpeed;")
+        self.write("if (arrowState.up) selectedObject.position.z -= editSpeed;")
+        self.write("if (arrowState.down) selectedObject.position.z += editSpeed;")
+        self.write("if (arrowState.rise) selectedObject.position.y += editSpeed;")
+        self.write("if (arrowState.fall) selectedObject.position.y -= editSpeed;")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
         # Player object movement with arrow keys
         if self.player_objects:
-            self.write_comment("Player movement (arrows=XZ, Space/Shift=Y)")
-            self.write("if (!window.consoleVisible && !consoleVisible) {")
+            self.write_comment("Player movement (arrows=XZ, ./=Y) - only when not in edit mode")
+            self.write("if (!editMode && !window.consoleVisible && !consoleVisible) {")
             self.indent()
             for player in self.player_objects:
                 self.write(f"const {player}Speed = {player}.userData.speed || 0.2;")
@@ -2175,7 +2243,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.indent()
         self.write("const typeName = obj.userData._type;")
         self.write("const preset = KNOWN_OBJECTS[typeName];")
-        self.write("if (preset && preset.model && meta.useModels) {")
+        self.write("if (preset && preset.model && _config.useModels) {")
         self.indent()
         self.write("const pos = obj.position.clone();")
         self.write("const size = obj.userData.size || 1;")
@@ -2195,7 +2263,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const modelSize = box.getSize(new THREE.Vector3());")
         self.write("const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z);")
         self.write("const normalizeScale = 1 / maxDim;")
-        self.write("const gs = meta.modelScale || 2;")
+        self.write("const gs = _config.modelScale || 2;")
         self.write("model.scale.set(normalizeScale * size * gs, normalizeScale * size * gs, normalizeScale * size * gs);")
         self.write("// Center the model based on its bounding box (fixes models with offset origins)")
         self.write("const scaledBox = new THREE.Box3().setFromObject(model);")
@@ -2724,7 +2792,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const KNOWN_PROPERTIES = ['x', 'y', 'z', 'color', 'text', 'font', 'font_size', 'scale', 'visible', 'pulse', 'width', 'height', 'rotation', 'opacity', 'active'];")
         self.write("const KNOWN_COLORS = ['red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'white', 'black', 'orange', 'purple', 'pink', 'gray'];")
         self.write("const KNOWN_FONTS = ['Inter', 'Arial', 'Helvetica', 'Times', 'Georgia', 'Courier', 'Verdana', 'Roboto'];")
-        self.write("const KNOWN_COMMANDS = ['set', 'get', 'list', 'create', 'delete', 'remove', 'reset', 'hide', 'show', 'clone', 'look', 'examine', 'inspect', 'x', 'ex', 'help', 'prompt', 'save', 'load', 'capabilities', 'camera', 'undo', 'redo', 'count', 'move', 'make', 'credits', 'clear', 'redraw', 'repeat', ':repeat', ':r', 'go', 'goto', 'scene', 'scenes', 'rooms', 'galleries', 'connect', 'disconnect', 'twin', 'sync'];")
+        self.write("const KNOWN_COMMANDS = ['set', 'get', 'list', 'create', 'delete', 'remove', 'reset', 'hide', 'show', 'clone', 'look', 'examine', 'inspect', 'x', 'ex', 'help', 'prompt', 'save', 'load', 'capabilities', 'camera', 'undo', 'redo', 'count', 'move', 'make', 'credits', 'clear', 'redraw', 'repeat', ':repeat', ':r', 'go', 'goto', 'scene', 'scenes', 'rooms', 'galleries', 'connect', 'disconnect', 'twin', 'sync', 'edit'];")
         # Emit SCENE_LIST for scene navigation
         if self.uses_scenes and self.scene_objects:
             scenes = list(self.scene_objects.keys())
@@ -2757,8 +2825,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("}")
         self.write_blank()
         self.write("// For set/get commands, try to correct object and property names")
-        self.write("// Skip fuzzy matching for keywords: all, meta (they have special handlers)")
-        self.write("const skipFuzzy = ['all', 'meta'];")
+        self.write("// Skip fuzzy matching for keywords: all, config (they have special handlers)")
+        self.write("const skipFuzzy = ['all', 'config'];")
         self.write("if ((parts[0] === 'set' || parts[0] === 'get' || parts[0] === 'look' || parts[0] === 'examine' || parts[0] === 'x' || parts[0] === 'ex' || parts[0] === 'delete' || parts[0] === 'remove' || parts[0] === 'reset' || parts[0] === 'hide' || parts[0] === 'show' || parts[0] === 'clone') && parts.length > 1 && !skipFuzzy.includes(parts[1])) {")
         self.indent()
         self.write("const objNames = getObjectNames();")
@@ -3025,7 +3093,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("}")
         self.write_blank()
         # Track last substantive user command for :repeat
-        self.write("// Track last substantive command for :repeat (skip undo/redo/help/meta)")
+        self.write("// Track last substantive command for :repeat (skip undo/redo/help/config)")
         self.write("const nonSubstantive = /^(undo|redo|help|:repeat|\\?|history)/i;")
         self.write("if (isUserCommand && !nonSubstantive.test(cmd.trim())) lastUserCommand = originalCmd;")
         self.write_blank()
@@ -3101,8 +3169,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("let typeName = singularize(words[words.length - 1]);")
         self.write("const modifiers = words.slice(0, -1).map(w => w.toLowerCase());")
         self.write("const createCmd = 'create ' + (modifiers.length ? modifiers.join(' ') + ' ' : '') + typeName;")
-        # Confirmation for >= 10 (if meta.confirm is true and no auto-confirm)
-        self.write("if (count >= 10 && meta.confirm && !autoConfirm) {")
+        # Confirmation for >= 10 (if _config.confirm is true and no auto-confirm)
+        self.write("if (count >= 10 && _config.confirm && !autoConfirm) {")
         self.indent()
         self.write("pendingOp = {")
         self.indent()
@@ -3315,8 +3383,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.indent()
         self.write("log('redraw - Recreate all typed objects', 'cyan');")
         self.write("log('Usage:', 'dim');")
-        self.write("log('  redraw         - Recreate objects with current meta settings');")
-        self.write("log('  (useful after changing meta.modelScale or meta.useModels)');")
+        self.write("log('  redraw         - Recreate objects with current config settings');")
+        self.write("log('  (useful after changing config scale or config models)');")
         self.dedent()
         self.write("}")
         self.write("else if (parts[0] === 'help' && parts[1] === 'reset') {")
@@ -3364,7 +3432,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("log('  get <object>           - Select object');")
         self.write("log('  get <object> <prop>    - Get property value');")
         self.write("log('  get all <type>         - Select all of type');")
-        self.write("log('  get meta scale         - Get model scale setting');")
+        self.write("log('  get config scale       - Get model scale setting');")
         self.dedent()
         self.write("}")
         self.write("else if (parts[0] === 'help' && parts[1] === 'set') {")
@@ -3374,11 +3442,11 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("log('  set <object> <prop> to <value>');")
         self.write("log('  set ball color to red');")
         self.write("log('  set all ball color to blue');")
-        self.write("log('  set meta scale to 3     - Set model scale');")
-        self.write("log('  set meta models off     - Disable 3D models');")
-        self.write("log('  set meta floor off      - Hide floor/grid');")
-        self.write("log('  set meta floor to green - Solid color floor');")
-        self.write("log('  set meta confirm off    - Disable bulk op confirmation');")
+        self.write("log('  set config scale to 3   - Set model scale');")
+        self.write("log('  set config models off   - Disable 3D models');")
+        self.write("log('  set config floor off    - Hide floor/grid');")
+        self.write("log('  set config floor green  - Solid color floor');")
+        self.write("log('  set config confirm off  - Disable bulk op confirmation');")
         self.dedent()
         self.write("}")
         self.write("else if (parts[0] === 'help' && parts[1]) {")
@@ -3759,8 +3827,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("// Create new object - check KNOWN_OBJECTS for presets")
         self.write("const preset = KNOWN_OBJECTS[name];")
         self.write("if (preset) { shape = preset.shape; color = userColor !== null ? userColor : preset.color; } else { color = userColor !== null ? userColor : 0x00ff00; }")
-        self.write("// Check if preset has a 3D model to load (and meta.useModels is true)")
-        self.write("if (preset && preset.model && meta.useModels) {")
+        self.write("// Check if preset has a 3D model to load (and _config.useModels is true)")
+        self.write("if (preset && preset.model && _config.useModels) {")
         self.indent()
         self.write("log('Loading 3D model for ' + name + '...', 'dim');")
         self.write("gltfLoader.load(preset.model, (gltf) => {")
@@ -3775,9 +3843,9 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const modelSize = box.getSize(new THREE.Vector3());")
         self.write("const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z);")
         self.write("const normalizeScale = maxDim > 0 ? 1 / maxDim : 1;")
-        self.write("// Apply normalize + preset scale + global meta.modelScale")
+        self.write("// Apply normalize + preset scale + global _config.modelScale")
         self.write("const sx = preset.scaleX || 1, sy = preset.scaleY || 1, sz = preset.scaleZ || 1;")
-        self.write("const gs = meta.modelScale || 2;")
+        self.write("const gs = _config.modelScale || 2;")
         self.write("model.scale.set(normalizeScale * sx * size * gs, normalizeScale * sy * size * gs, normalizeScale * sz * size * gs);")
         self.write("model.position.set((Math.random()-0.5)*10, size, (Math.random()-0.5)*10);")
         self.write("model.userData._twin = true;")
@@ -3994,8 +4062,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("log('Deleted ' + actualCount + ' ' + typeName + '(s)', 'ok');")
         self.dedent()
         self.write("};")
-        # Confirmation for >= 10 (if meta.confirm is true and no auto-confirm)
-        self.write("if (actualCount >= 10 && meta.confirm && !autoConfirm) {")
+        # Confirmation for >= 10 (if _config.confirm is true and no auto-confirm)
+        self.write("if (actualCount >= 10 && _config.confirm && !autoConfirm) {")
         self.indent()
         self.write("pendingOp = {")
         self.indent()
@@ -4038,8 +4106,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("log('Deleted all ' + actualCount + ' ' + typeName + '(s)', 'ok');")
         self.dedent()
         self.write("};")
-        # Confirmation for >= 10 (if meta.confirm is true and no auto-confirm)
-        self.write("if (actualCount >= 10 && meta.confirm && !autoConfirm) {")
+        # Confirmation for >= 10 (if _config.confirm is true and no auto-confirm)
+        self.write("if (actualCount >= 10 && _config.confirm && !autoConfirm) {")
         self.indent()
         self.write("pendingOp = {")
         self.indent()
@@ -4363,8 +4431,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("else log('Unknown modifier: ' + modifier, 'err');")
         self.dedent()
         self.write("}")
-        # Confirmation for >= 10 (if meta.confirm is true and no auto-confirm)
-        self.write("if (targets.length >= 10 && meta.confirm && !autoConfirm) {")
+        # Confirmation for >= 10 (if _config.confirm is true and no auto-confirm)
+        self.write("if (targets.length >= 10 && _config.confirm && !autoConfirm) {")
         self.indent()
         self.write("pendingOp = { type: 'make', execute: applyModifier };")
         self.write("log('⚠ Modify ' + targets.length + ' ' + typeName + '(s)?', 'warn');")
@@ -4440,8 +4508,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("else log('Unknown modifier: ' + modifier, 'err');")
         self.dedent()
         self.write("}")
-        # Confirmation for >= 10 (if meta.confirm is true and no auto-confirm)
-        self.write("if (targets.length >= 10 && meta.confirm && !autoConfirm) {")
+        # Confirmation for >= 10 (if _config.confirm is true and no auto-confirm)
+        self.write("if (targets.length >= 10 && _config.confirm && !autoConfirm) {")
         self.indent()
         self.write("pendingOp = { type: 'make', execute: applyModifier };")
         self.write("log('⚠ Modify ' + targets.length + ' ' + typeName + '(s)?', 'warn');")
@@ -4573,8 +4641,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.indent()
         self.write("// Smart default: create if doesn't exist (just create, don't clone)")
         self.write("const preset = KNOWN_OBJECTS[parts[1]] || { shape: 'box', color: 0x00ff00 };")
-        self.write("// Check if preset has a 3D model to load (and meta.useModels is true)")
-        self.write("if (preset.model && meta.useModels) {")
+        self.write("// Check if preset has a 3D model to load (and _config.useModels is true)")
+        self.write("if (preset.model && _config.useModels) {")
         self.indent()
         self.write("log('Loading 3D model for ' + parts[1] + '...', 'dim');")
         self.write("gltfLoader.load(preset.model, (gltf) => {")
@@ -4588,9 +4656,9 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const modelSize = box.getSize(new THREE.Vector3());")
         self.write("const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z);")
         self.write("const normalizeScale = maxDim > 0 ? 1 / maxDim : 1;")
-        self.write("// Apply normalize + preset scale + global meta.modelScale")
+        self.write("// Apply normalize + preset scale + global _config.modelScale")
         self.write("const sx = preset.scaleX || 1, sy = preset.scaleY || 1, sz = preset.scaleZ || 1;")
-        self.write("const gs = meta.modelScale || 2;")
+        self.write("const gs = _config.modelScale || 2;")
         self.write("model.scale.set(normalizeScale * sx * gs, normalizeScale * sy * gs, normalizeScale * sz * gs);")
         self.write("model.position.set((Math.random()-0.5)*10, 1, (Math.random()-0.5)*10);")
         self.write("scene.add(model);")
@@ -4648,30 +4716,30 @@ class ThreeJSEmitter(BaseEmitter):
         self.dedent()
         self.write("}")
 
-        # Get meta - show all meta settings
-        self.write("else if (parts[0] === 'get' && parts[1] === 'meta' && !parts[2]) {")
+        # Get config - show all config settings
+        self.write("else if (parts[0] === 'get' && parts[1] === 'config' && !parts[2]) {")
         self.indent()
-        self.write("log('meta settings:', 'cyan');")
-        self.write("log('  modelScale = ' + meta.modelScale);")
-        self.write("log('  useModels = ' + meta.useModels);")
-        self.write("log('  floor = ' + meta.floor);")
-        self.write("log('  floorColor = ' + (meta.floorColor !== null ? '#' + meta.floorColor.toString(16).padStart(6, '0') : 'none'));")
-        self.write("log('  confirm = ' + meta.confirm);")
+        self.write("log('config settings:', 'cyan');")
+        self.write("log('  modelScale = ' + _config.modelScale);")
+        self.write("log('  useModels = ' + _config.useModels);")
+        self.write("log('  floor = ' + _config.floor);")
+        self.write("log('  floorColor = ' + (_config.floorColor !== null ? '#' + _config.floorColor.toString(16).padStart(6, '0') : 'none'));")
+        self.write("log('  confirm = ' + _config.confirm);")
         self.dedent()
         self.write("}")
 
-        # Get meta scale - show current model scale
-        self.write("else if (parts[0] === 'get' && parts[1] === 'meta' && parts[2] === 'scale') {")
+        # Get config scale - show current model scale
+        self.write("else if (parts[0] === 'get' && parts[1] === 'config' && parts[2] === 'scale') {")
         self.indent()
-        self.write("log('meta.modelScale = ' + meta.modelScale, 'cyan');")
+        self.write("log('_config.modelScale = ' + _config.modelScale, 'cyan');")
         self.dedent()
         self.write("}")
 
-        # Get meta floor - show floor settings
-        self.write("else if (parts[0] === 'get' && parts[1] === 'meta' && parts[2] === 'floor') {")
+        # Get config floor - show floor settings
+        self.write("else if (parts[0] === 'get' && parts[1] === 'config' && parts[2] === 'floor') {")
         self.indent()
-        self.write("log('meta.floor = ' + meta.floor, 'cyan');")
-        self.write("log('meta.floorColor = ' + (meta.floorColor !== null ? '#' + meta.floorColor.toString(16).padStart(6, '0') : 'none'), 'cyan');")
+        self.write("log('_config.floor = ' + _config.floor, 'cyan');")
+        self.write("log('_config.floorColor = ' + (_config.floorColor !== null ? '#' + _config.floorColor.toString(16).padStart(6, '0') : 'none'), 'cyan');")
         self.dedent()
         self.write("}")
 
@@ -4783,106 +4851,106 @@ class ThreeJSEmitter(BaseEmitter):
         self.dedent()
         self.write("}")
 
-        # Set meta scale - global model scale multiplier
-        self.write("else if (parts[0] === 'set' && parts[1] === 'meta' && parts[2] === 'scale') {")
+        # Set config scale - global model scale multiplier
+        self.write("else if (parts[0] === 'set' && parts[1] === 'config' && parts[2] === 'scale') {")
         self.indent()
         self.write("const filtered = parts.filter(x => x !== 'to');")
         self.write("const val = parseFloat(filtered[3]);")
         self.write("if (!isNaN(val) && val > 0) {")
         self.indent()
-        self.write("const prev = meta.modelScale;")
-        self.write("meta.modelScale = val;")
-        self.write("pushUndo('set meta scale', () => { meta.modelScale = prev; }, () => { meta.modelScale = val; });")
+        self.write("const prev = _config.modelScale;")
+        self.write("_config.modelScale = val;")
+        self.write("pushUndo('set config scale', () => { _config.modelScale = prev; }, () => { _config.modelScale = val; });")
         self.write("log('Model scale set to ' + val + ' (affects new models)', 'ok');")
         self.dedent()
-        self.write("} else log('Usage: set meta scale to <number>', 'err');")
+        self.write("} else log('Usage: set config scale to <number>', 'err');")
         self.dedent()
         self.write("}")
 
-        # Set meta models on/off - toggle 3D models vs primitives
-        self.write("else if (parts[0] === 'set' && parts[1] === 'meta' && parts[2] === 'models') {")
+        # Set config models on/off - toggle 3D models vs primitives
+        self.write("else if (parts[0] === 'set' && parts[1] === 'config' && parts[2] === 'models') {")
         self.indent()
         self.write("const filtered = parts.filter(x => x !== 'to');")
         self.write("const val = filtered[3];")
         self.write("if (val === 'on' || val === 'true' || val === '1') {")
         self.indent()
-        self.write("meta.useModels = true;")
+        self.write("_config.useModels = true;")
         self.write("log('3D models enabled (affects new objects)', 'ok');")
         self.dedent()
         self.write("} else if (val === 'off' || val === 'false' || val === '0') {")
         self.indent()
-        self.write("meta.useModels = false;")
+        self.write("_config.useModels = false;")
         self.write("log('3D models disabled - using primitive shapes (affects new objects)', 'ok');")
         self.dedent()
-        self.write("} else log('Usage: set meta models to on/off', 'err');")
+        self.write("} else log('Usage: set config models to on/off', 'err');")
         self.dedent()
         self.write("}")
 
-        # Set meta floor on/off - toggle grid visibility
-        self.write("else if (parts[0] === 'set' && parts[1] === 'meta' && parts[2] === 'floor') {")
+        # Set config floor on/off - toggle grid visibility
+        self.write("else if (parts[0] === 'set' && parts[1] === 'config' && parts[2] === 'floor') {")
         self.indent()
         self.write("const filtered = parts.filter(x => x !== 'to');")
         self.write("const val = filtered[3];")
         self.write("const grid = scene.getObjectByName('_grid');")
         self.write("const floor = scene.getObjectByName('_floor');")
         # Save previous state for undo
-        self.write("const prevFloor = meta.floor;")
-        self.write("const prevFloorColor = meta.floorColor;")
+        self.write("const prevFloor = _config.floor;")
+        self.write("const prevFloorColor = _config.floorColor;")
         self.write("const prevGridVis = grid ? grid.visible : false;")
         self.write("const prevFloorVis = floor ? floor.visible : false;")
         self.write("const prevFloorHex = floor && floor.material ? floor.material.color.getHex() : 0x333333;")
         self.write("if (val === 'on' || val === 'true' || val === '1') {")
         self.indent()
-        self.write("meta.floor = true;")
+        self.write("_config.floor = true;")
         self.write("if (grid) grid.visible = true;")
-        self.write("pushUndo('set meta floor on', () => { meta.floor = prevFloor; if (grid) grid.visible = prevGridVis; if (floor) floor.visible = prevFloorVis; }, () => { meta.floor = true; if (grid) grid.visible = true; });")
+        self.write("pushUndo('set config floor on', () => { _config.floor = prevFloor; if (grid) grid.visible = prevGridVis; if (floor) floor.visible = prevFloorVis; }, () => { _config.floor = true; if (grid) grid.visible = true; });")
         self.write("log('Floor grid visible', 'ok');")
         self.dedent()
         self.write("} else if (val === 'off' || val === 'false' || val === '0') {")
         self.indent()
-        self.write("meta.floor = false;")
+        self.write("_config.floor = false;")
         self.write("if (grid) grid.visible = false;")
         self.write("if (floor) floor.visible = false;")
-        self.write("pushUndo('set meta floor off', () => { meta.floor = prevFloor; if (grid) grid.visible = prevGridVis; if (floor) floor.visible = prevFloorVis; }, () => { meta.floor = false; if (grid) grid.visible = false; if (floor) floor.visible = false; });")
+        self.write("pushUndo('set config floor off', () => { _config.floor = prevFloor; if (grid) grid.visible = prevGridVis; if (floor) floor.visible = prevFloorVis; }, () => { _config.floor = false; if (grid) grid.visible = false; if (floor) floor.visible = false; });")
         self.write("log('Floor hidden', 'ok');")
         self.dedent()
         self.write("} else {")
         self.indent()
-        self.write("// Treat as color: set meta floor to red/blue/#ff0000")
+        self.write("// Treat as color: set config floor to red/blue/#ff0000")
         self.write("const knownColors = {red:0xff0000, green:0x00ff00, blue:0x0000ff, yellow:0xffff00, cyan:0x00ffff, magenta:0xff00ff, white:0xffffff, black:0x111111, orange:0xff8800, purple:0x8800ff, pink:0xff88ff, gray:0x888888, brown:0x8b4513};")
         self.write("let color = knownColors[val];")
         self.write("if (!color && val && val.startsWith('#')) color = parseInt(val.slice(1), 16);")
         self.write("if (color !== undefined) {")
         self.indent()
-        self.write("meta.floorColor = color;")
-        self.write("meta.floor = true;")
+        self.write("_config.floorColor = color;")
+        self.write("_config.floor = true;")
         self.write("if (grid) grid.visible = false;")  # Hide grid when using solid floor
         self.write("if (floor) { floor.material.color.setHex(color); floor.visible = true; }")
-        self.write("pushUndo('set meta floor ' + val, () => { meta.floor = prevFloor; meta.floorColor = prevFloorColor; if (grid) grid.visible = prevGridVis; if (floor) { floor.material.color.setHex(prevFloorHex); floor.visible = prevFloorVis; } }, () => { meta.floor = true; meta.floorColor = color; if (grid) grid.visible = false; if (floor) { floor.material.color.setHex(color); floor.visible = true; } });")
+        self.write("pushUndo('set config floor ' + val, () => { _config.floor = prevFloor; _config.floorColor = prevFloorColor; if (grid) grid.visible = prevGridVis; if (floor) { floor.material.color.setHex(prevFloorHex); floor.visible = prevFloorVis; } }, () => { _config.floor = true; _config.floorColor = color; if (grid) grid.visible = false; if (floor) { floor.material.color.setHex(color); floor.visible = true; } });")
         self.write("log('Floor color: #' + color.toString(16).padStart(6, '0'), 'ok');")
         self.dedent()
-        self.write("} else log('Usage: set meta floor to on/off/<color>', 'err');")
+        self.write("} else log('Usage: set config floor to on/off/<color>', 'err');")
         self.dedent()
         self.write("}")
         self.dedent()
         self.write("}")
 
-        # Set meta confirm on/off - toggle confirmation for bulk ops
-        self.write("else if (parts[0] === 'set' && parts[1] === 'meta' && parts[2] === 'confirm') {")
+        # Set config confirm on/off - toggle confirmation for bulk ops
+        self.write("else if (parts[0] === 'set' && parts[1] === 'config' && parts[2] === 'confirm') {")
         self.indent()
         self.write("const filtered = parts.filter(x => x !== 'to');")
         self.write("const val = filtered[3];")
         self.write("if (val === 'on' || val === 'true' || val === '1') {")
         self.indent()
-        self.write("meta.confirm = true;")
+        self.write("_config.confirm = true;")
         self.write("log('Confirmation enabled for bulk operations (>= 10)', 'ok');")
         self.dedent()
         self.write("} else if (val === 'off' || val === 'false' || val === '0') {")
         self.indent()
-        self.write("meta.confirm = false;")
+        self.write("_config.confirm = false;")
         self.write("log('Confirmation disabled - bulk ops execute immediately', 'ok');")
         self.dedent()
-        self.write("} else log('Usage: set meta confirm to on/off', 'err');")
+        self.write("} else log('Usage: set config confirm to on/off', 'err');")
         self.dedent()
         self.write("}")
 
@@ -5054,7 +5122,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.dedent()
         self.write("}")
 
-        # Redraw - recreate all typed objects with current meta settings
+        # Redraw - recreate all typed objects with current config settings
         self.write("else if (parts[0] === 'redraw') {")
         self.indent()
         self.write("// Collect all objects with _type (user-created known objects)")
@@ -5077,11 +5145,11 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("if (old) scene.remove(old);")
         self.dedent()
         self.write("});")
-        self.write("// Recreate with current meta settings")
+        self.write("// Recreate with current config settings")
         self.write("toRedraw.forEach(item => {")
         self.indent()
         self.write("const preset = KNOWN_OBJECTS[item.type] || { shape: 'box', color: 0x00ff00 };")
-        self.write("if (preset.model && meta.useModels) {")
+        self.write("if (preset.model && _config.useModels) {")
         self.indent()
         self.write("gltfLoader.load(preset.model, (gltf) => {")
         self.indent()
@@ -5094,7 +5162,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z);")
         self.write("const normalizeScale = maxDim > 0 ? 1 / maxDim : 1;")
         self.write("const sx = preset.scaleX || 1, sy = preset.scaleY || 1, sz = preset.scaleZ || 1;")
-        self.write("const gs = meta.modelScale || 2;")
+        self.write("const gs = _config.modelScale || 2;")
         self.write("model.scale.set(normalizeScale * sx * gs, normalizeScale * sy * gs, normalizeScale * sz * gs);")
         self.write("model.position.copy(item.pos);")
         self.write("scene.add(model);")
@@ -5204,6 +5272,30 @@ class ThreeJSEmitter(BaseEmitter):
         self.write(f"log('Rosh v{__version__}', 'cyan');")
         self.write("log('Copyright (c) 2026 Roger Dubar');")
         self.write("log('https://rosh.cloud', 'dim');")
+        self.dedent()
+        self.write("}")
+
+        # Edit mode - enables selection and object control
+        self.write("else if (parts[0] === 'edit') {")
+        self.indent()
+        self.write("const arg = parts[1] ? parts[1].toLowerCase() : '';")
+        self.write("if (arg === 'on') {")
+        self.indent()
+        self.write("editMode = true;")
+        self.write("log('Edit mode ON - click to select objects, arrow keys to move', 'ok');")
+        self.dedent()
+        self.write("} else if (arg === 'off') {")
+        self.indent()
+        self.write("editMode = false;")
+        self.write("selectedObject = null;")
+        self.write("log('Edit mode OFF - view only', 'ok');")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("log('Edit mode: ' + (editMode ? 'ON' : 'OFF'), 'dim');")
+        self.write("log('Usage: edit on | edit off', 'dim');")
+        self.dedent()
+        self.write("}")
         self.dedent()
         self.write("}")
 

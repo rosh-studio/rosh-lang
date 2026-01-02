@@ -247,11 +247,6 @@ class PhaserEmitter(BaseEmitter):
         self.write("create() {")
         self.indent()
 
-        # Initialize implicit meta object (v0.2.7+)
-        # meta holds game state and never renders
-        self.write("this.meta = {};")
-        self.write_blank()
-
         # Set up keyboard if needed
         if self.needs_keyboard:
             self.write("this.cursors = this.input.keyboard.createCursorKeys();")

@@ -1,0 +1,43 @@
+{
+    "_meta": {
+        "title": "Phase Test Demo",
+        "version": "1.0"
+    },
+    "_config": {
+        "speed": 5,
+        "difficulty": "normal"
+    },
+    "player": {
+        "x": 400,
+        "y": 500,
+        "color": "green",
+        "group": "heroes"
+    },
+    "enemy1": {
+        "x": 200,
+        "y": 100,
+        "color": "red",
+        "group": "enemies",
+        "speed": 2
+    },
+    "enemy2": {
+        "x": 400,
+        "y": 100,
+        "color": "red",
+        "group": "enemies",
+        "speed": 3
+    },
+    "enemy3": {
+        "x": 600,
+        "y": 100,
+        "color": "red",
+        "group": "enemies",
+        "speed": 4
+    },
+    "coin": {
+        "x": 300,
+        "y": 300,
+        "color": "yellow",
+        "group": "items"
+    }
+}

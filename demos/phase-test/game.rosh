@@ -1,0 +1,29 @@
+# Phase Test Demo
+# Tests Phase 1 (hidden objects), Phase 2 (settings loading), Phase 3 (query syntax)
+
+# Phase 2: Load settings from JSON
+# This creates objects: _meta (hidden), _config (hidden), player, enemy1, enemy2, enemy3, coin
+load "settings.json"
+
+# Phase 1: Hidden objects test
+# Create additional hidden template (note: just "create _template" with body, not "create _template powerup")
+create _template
+    set color to "purple"
+    set effect to "speed_boost"
+end
+
+# Regular visible object
+create goal
+    set x to 400
+    set y to 50
+    set color to "blue"
+    set shape to "sphere"
+end
+
+# Console will show:
+# - player, enemy1, enemy2, enemy3, coin, goal should be visible
+# - _meta, _config, _template should NOT be visible (hidden)
+
+# Phase 3: Query syntax will be tested via console:
+# > get all where group is enemies
+# Should select enemy1, enemy2, enemy3

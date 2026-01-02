@@ -110,26 +110,7 @@ class Interpreter:
         # See: rosh-console.toml v0.2.5, BACKLOG.md "Console Features Parity"
         self.current_object = None
         self.current_object_name = None
-
-        # Implicit meta object (v0.2.7+) - always exists, holds game state
-        self._init_meta_object()
         self._undo_enabled = True
-
-    def _init_meta_object(self):
-        """Initialize the implicit meta object
-
-        The meta object:
-        - Always exists
-        - Never renders (has no visual properties)
-        - Holds game state (meta.level, meta.score, etc.)
-        - Supports nested properties (meta.game.title, meta.config.difficulty)
-        - Is included in save/load
-        - Cannot be created or deleted by user code
-        """
-        meta = RoshObject(name='meta')
-        meta._is_meta = True  # Mark as special meta object
-        self.global_env.define('meta', meta)
-        self.register_instance(meta, type_name='meta', explicit_name='meta')
 
     def start_undo_group(self):
         """Start a new undo group. All subsequent push_undo calls share this group."""
@@ -854,10 +835,6 @@ class Interpreter:
 
     def eval_create_object(self, node: CreateObject) -> None:
         """Execute: create object <name> [from parent1, parent2] ... end"""
-        # Block reserved object names
-        if node.name == 'meta':
-            raise RoshRuntimeError("Cannot create object 'meta': meta is a reserved implicit object")
-
         # Look up parent objects from environment
         parent_objects = []
         if node.parents:
@@ -3276,10 +3253,6 @@ Focus on the specific syntax or concept they need to correct."""
 
     def eval_delete_object(self, node: DeleteObject) -> None:
         """Execute: delete <name> - Remove an object from environment"""
-        # Block deletion of reserved objects
-        if node.name == 'meta':
-            raise RoshRuntimeError("Cannot delete 'meta': meta is a reserved implicit object")
-
         # Check if the object exists
         if not self.current_env.exists(node.name):
             raise RoshRuntimeError(f"Cannot delete: '{node.name}' does not exist")

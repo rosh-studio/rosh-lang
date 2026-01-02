@@ -300,6 +300,9 @@ class Parser:
         elif token.type == TokenType.REPEAT:
             return self.parse_repeat()
         elif token.type in (TokenType.END, TokenType.DEDENT, TokenType.EOF):
+            # Skip unexpected END/DEDENT tokens to prevent infinite loop
+            if token.type in (TokenType.END, TokenType.DEDENT):
+                self.advance()
             return None
         else:
             self.error(f"Unexpected token: {token.type.name}")
@@ -492,11 +495,25 @@ class Parser:
 
             else:
                 # Implied object creation: "create banana" = "create object banana"
-                # This is the shorthand for creating an empty object.
-                # For body statements, use the full syntax: create banana ... end
+                # Check if there's a body (newline followed by statements until end)
+                body = []
+                self.skip_newlines()
+
+                # Parse body if we have statements before END
+                while self.current_token().type not in (TokenType.END, TokenType.EOF):
+                    stmt = self.parse_statement()
+                    if stmt:
+                        body.append(stmt)
+                    self.skip_newlines()
+
+                # Consume END if present (object with body)
+                if self.current_token().type == TokenType.END:
+                    self.advance()
+                    self.skip_newlines()
+
                 # Objects with names starting with '_' are hidden by default
                 hidden = name.startswith('_')
-                return CreateObject(name=name, body=[], parents=None, hidden=hidden, line=line)
+                return CreateObject(name=name, body=body, parents=None, hidden=hidden, line=line)
 
         else:
             self.error(f"Expected object, type, or identifier after 'create', got {type_token.type.name}")
