@@ -263,6 +263,32 @@ class Load(ASTNode):
 
 
 @dataclass
+class LoadSettings(ASTNode):
+    """load "settings.json" - Load settings file at build time
+
+    Build-time loading of JSON settings files. Creates objects from JSON
+    structure. Path must be relative to project root (no .. escapes).
+
+    JSON structure maps to objects:
+    {
+        "_config": { "title": "Game" },
+        "player": { "x": 400, "y": 300 }
+    }
+
+    Becomes equivalent to:
+        create _config
+            set title to "Game"
+        end
+        create player
+            set x to 400
+            set y to 300
+        end
+    """
+    filepath: str  # Relative path to JSON file
+    line: int = 0
+
+
+@dataclass
 class Prompt(ASTNode):
     """prompt [exec] <message> [using <vars>] into <target>"""
     message: ASTNode  # expression for prompt text

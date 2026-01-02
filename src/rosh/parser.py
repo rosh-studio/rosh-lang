@@ -1111,14 +1111,15 @@ class Parser:
         return Save(filepath=filepath_expr, format=format_type, line=line)
 
     def parse_load(self):
-        """Parse: load [game [slot]] | load [filepath]
+        """Parse: load [game [slot]] | load "settings.json" | load [filepath]
 
         load                       - Load from default file (interpreter)
         load game                  - Load from default slot (transpiler)
         load game "adventure1"     - Load from named slot (transpiler)
-        load "state.json"          - Load from file (interpreter)
+        load "settings.json"       - Load settings at build time (if .json file)
+        load "state.json"          - Load from file (interpreter, non-.json)
         """
-        from .ast_nodes import LoadGame
+        from .ast_nodes import LoadGame, LoadSettings
         line = self.current_token().line
         self.expect(TokenType.LOAD)
 
@@ -1132,6 +1133,18 @@ class Parser:
                 slot = self.current_token().value
                 self.advance()
             return LoadGame(slot=slot, line=line)
+
+        # Check for JSON settings file (build-time loading)
+        if self.current_token().type == TokenType.STRING:
+            filepath = self.current_token().value
+            if filepath.endswith('.json'):
+                # Validate path security - no directory escapes
+                if '..' in filepath:
+                    self.error(f"Path cannot contain '..': {filepath}")
+                if filepath.startswith('/'):
+                    self.error(f"Path must be relative, not absolute: {filepath}")
+                self.advance()
+                return LoadSettings(filepath=filepath, line=line)
 
         # Original file-based load - filepath is now optional
         filepath_expr = None

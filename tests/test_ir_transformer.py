@@ -449,3 +449,157 @@ class TestHiddenObjects:
         assert len(visible_objects) == 2
         assert set(o.name for o in hidden_objects) == {'_meta', '_template'}
         assert set(o.name for o in visible_objects) == {'player', 'enemy'}
+
+
+class TestSettingsLoading:
+    """Tests for settings loading (Phase 2 - Project Arcade)."""
+
+    def test_load_json_creates_objects(self, tmp_path):
+        """Loading JSON file should create objects."""
+        import json
+
+        # Create test JSON file
+        settings = {
+            "player": {"x": 400, "y": 300, "color": "green"},
+            "enemy": {"x": 200, "y": 100}
+        }
+        json_file = tmp_path / "settings.json"
+        json_file.write_text(json.dumps(settings))
+
+        # Parse with load statement
+        program = parse(f'load "settings.json"')
+        ir = transform_ast_to_ir(program, project_root=str(tmp_path))
+
+        assert len(ir.objects) == 2
+        player = next(o for o in ir.objects if o.name == 'player')
+        enemy = next(o for o in ir.objects if o.name == 'enemy')
+
+        assert player.properties['x'].value == 0.5  # 400/800 normalized
+        assert player.properties['y'].value == 0.5  # 300/600 normalized
+        assert enemy.hidden == False
+
+    def test_hidden_objects_from_json(self, tmp_path):
+        """Objects with underscore prefix in JSON should be hidden."""
+        import json
+
+        settings = {
+            "_meta": {"title": "Test Game"},
+            "_config": {"speed": 5},
+            "player": {"x": 400}
+        }
+        json_file = tmp_path / "settings.json"
+        json_file.write_text(json.dumps(settings))
+
+        program = parse('load "settings.json"')
+        ir = transform_ast_to_ir(program, project_root=str(tmp_path))
+
+        assert len(ir.objects) == 3
+        meta = next(o for o in ir.objects if o.name == '_meta')
+        config = next(o for o in ir.objects if o.name == '_config')
+        player = next(o for o in ir.objects if o.name == 'player')
+
+        assert meta.hidden == True
+        assert config.hidden == True
+        assert player.hidden == False
+
+    def test_color_conversion_from_json(self, tmp_path):
+        """Color strings in JSON should be converted to hex."""
+        import json
+
+        settings = {
+            "ball": {"color": "red"},
+            "goal": {"color": "blue"}
+        }
+        json_file = tmp_path / "settings.json"
+        json_file.write_text(json.dumps(settings))
+
+        program = parse('load "settings.json"')
+        ir = transform_ast_to_ir(program, project_root=str(tmp_path))
+
+        ball = next(o for o in ir.objects if o.name == 'ball')
+        goal = next(o for o in ir.objects if o.name == 'goal')
+
+        assert ball.properties['color'].type == 'color'
+        assert ball.properties['color'].value == 0xff0000  # red
+        assert goal.properties['color'].value == 0x0000ff  # blue
+
+    def test_property_types_from_json(self, tmp_path):
+        """JSON property types should be correctly converted."""
+        import json
+
+        settings = {
+            "config": {
+                "name": "Test",
+                "lives": 3,
+                "speed": 5.5,
+                "enabled": True,
+                "items": ["sword", "shield"]
+            }
+        }
+        json_file = tmp_path / "settings.json"
+        json_file.write_text(json.dumps(settings))
+
+        program = parse('load "settings.json"')
+        ir = transform_ast_to_ir(program, project_root=str(tmp_path))
+
+        config = ir.objects[0]
+        assert config.properties['name'].type == 'string'
+        assert config.properties['name'].value == 'Test'
+        assert config.properties['lives'].type == 'number'
+        assert config.properties['lives'].value == 3
+        assert config.properties['speed'].type == 'number'
+        assert config.properties['speed'].value == 5.5
+        assert config.properties['enabled'].type == 'boolean'
+        assert config.properties['enabled'].value == True
+        assert config.properties['items'].type == 'list'
+
+    def test_file_not_found_error(self, tmp_path):
+        """Loading nonexistent file should raise FileNotFoundError."""
+        program = parse('load "nonexistent.json"')
+
+        with pytest.raises(FileNotFoundError):
+            transform_ast_to_ir(program, project_root=str(tmp_path))
+
+    def test_combined_load_and_create(self, tmp_path):
+        """Load and create statements can be combined."""
+        import json
+
+        settings = {
+            "_config": {"speed": 5}
+        }
+        json_file = tmp_path / "settings.json"
+        json_file.write_text(json.dumps(settings))
+
+        program = parse('''
+            load "settings.json"
+            create player
+                set x to 400
+            end
+        ''')
+        ir = transform_ast_to_ir(program, project_root=str(tmp_path))
+
+        assert len(ir.objects) == 2
+        config = next(o for o in ir.objects if o.name == '_config')
+        player = next(o for o in ir.objects if o.name == 'player')
+
+        assert config.hidden == True
+        assert player.hidden == False
+
+    def test_scene_extraction_from_json(self, tmp_path):
+        """Scene and level properties should be extracted from JSON."""
+        import json
+
+        settings = {
+            "npc": {"x": 100, "scene": "town", "level": 2}
+        }
+        json_file = tmp_path / "settings.json"
+        json_file.write_text(json.dumps(settings))
+
+        program = parse('load "settings.json"')
+        ir = transform_ast_to_ir(program, project_root=str(tmp_path))
+
+        npc = ir.objects[0]
+        assert npc.scene == "town"
+        assert npc.level == 2
+        assert 'scene' not in npc.properties
+        assert 'level' not in npc.properties

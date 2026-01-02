@@ -15,13 +15,15 @@ See: rosh-dev/proposals/ROSH-IR-SPECIFICATION.md
 
 from typing import List, Dict, Any, Optional
 import uuid
+import json
+import os
 
 from .ast_nodes import (
     Program, ASTNode, CreateObject, CreateValue, SetProperty, PropertyAccess,
     Identifier, Literal, BinaryOp, UnaryOp, Comparison, LogicalOp, Contains,
     IfStatement, WhileLoop, ForLoop, WhenStatement, TriggerEvent,
     FunctionDef, FunctionCall, Return, Break, Continue,
-    Print, PlaySound, PlayMusic, StopMusic, Save, Load,
+    Print, PlaySound, PlayMusic, StopMusic, Save, Load, LoadSettings,
     CloneObject, DeleteObject, Increment, Decrement, Random, Length,
     ListLiteral, ListIndex, Append, Remove, Get, GotoScene, SaveGame, LoadGame,
     Metadata
@@ -42,17 +44,19 @@ class IRTransformer:
     """
 
     def __init__(self, canvas_width: int = 800, canvas_height: int = 600,
-                 meta: Dict[str, Any] = None):
+                 meta: Dict[str, Any] = None, project_root: str = None):
         """Initialize transformer with canvas dimensions.
 
         Args:
             canvas_width: Logical canvas width (for coordinate normalization)
             canvas_height: Logical canvas height
             meta: Optional metadata dict from _meta/*.toml
+            project_root: Project root directory for resolving load paths
         """
         self.canvas_width = canvas_width
         self.canvas_height = canvas_height
         self.meta = meta or {}
+        self.project_root = project_root or os.getcwd()
 
         # Track objects by name for lookups
         self.objects: Dict[str, IR_Object] = {}
@@ -122,12 +126,18 @@ class IRTransformer:
             )
         )
 
-        # First pass: collect all objects
+        # First pass: collect all objects (including from loaded settings)
         for stmt in program.statements:
             if isinstance(stmt, CreateObject):
                 ir_obj = self.transform_create_object(stmt)
                 ir_program.objects.append(ir_obj)
                 self.objects[ir_obj.name] = ir_obj
+            elif isinstance(stmt, LoadSettings):
+                # Load JSON settings file and create objects from it
+                loaded_objects = self.load_settings_file(stmt.filepath)
+                for ir_obj in loaded_objects:
+                    ir_program.objects.append(ir_obj)
+                    self.objects[ir_obj.name] = ir_obj
 
         # Second pass: collect events and functions
         for stmt in program.statements:
@@ -155,6 +165,129 @@ class IRTransformer:
                     ir_program.init_actions.append(action)
 
         return ir_program
+
+    # =========================================================================
+    # Settings Loading (Phase 2 - Project Arcade)
+    # =========================================================================
+
+    def load_settings_file(self, filepath: str) -> List[IR_Object]:
+        """Load a JSON settings file and create IR_Objects from it.
+
+        Args:
+            filepath: Relative path to JSON file (from project root)
+
+        Returns:
+            List of IR_Object created from JSON structure
+
+        JSON structure maps to objects:
+            {
+                "_meta": {"title": "Game Name"},  # Hidden (underscore prefix)
+                "player": {"x": 400, "color": "green"},  # Visible object
+                "_config": {"speed": 5}  # Hidden config object
+            }
+        """
+        full_path = os.path.join(self.project_root, filepath)
+
+        if not os.path.exists(full_path):
+            raise FileNotFoundError(f"Settings file not found: {filepath}")
+
+        with open(full_path, 'r') as f:
+            data = json.load(f)
+
+        return self.json_to_objects(data)
+
+    def json_to_objects(self, data: dict) -> List[IR_Object]:
+        """Convert JSON dictionary to list of IR_Objects.
+
+        Each top-level key becomes an object name.
+        Objects with names starting with '_' are hidden.
+
+        Args:
+            data: Parsed JSON dictionary
+
+        Returns:
+            List of IR_Object
+        """
+        objects = []
+
+        for obj_name, obj_data in data.items():
+            if not isinstance(obj_data, dict):
+                # Skip non-dict values (could be simple metadata)
+                continue
+
+            # Underscore prefix = hidden object
+            is_hidden = obj_name.startswith('_')
+
+            # Convert properties from JSON values to IR_Values
+            properties: Dict[str, IR_Value] = {}
+            for prop_name, prop_value in obj_data.items():
+                properties[prop_name.lower()] = self.json_value_to_ir(prop_value, prop_name.lower())
+
+            # Default position if not specified
+            if 'x' not in properties:
+                properties['x'] = IR_Value('percentage', 0.5)
+            if 'y' not in properties:
+                properties['y'] = IR_Value('percentage', 0.5)
+
+            # Extract scene/level if present
+            scene = None
+            level = None
+            if 'scene' in properties:
+                scene = properties.pop('scene').value
+                if 'level' in properties:
+                    level_val = properties.pop('level').value
+                    level = int(level_val) if level_val is not None else None
+
+            # Create IR_Object
+            ir_obj = IR_Object(
+                uuid=str(uuid.uuid4()),
+                name=obj_name.lower(),
+                type="shape",  # Default type for settings-loaded objects
+                parent_type=None,
+                properties=properties,
+                saveable=True,
+                hidden=is_hidden,
+                scene=scene,
+                level=level
+            )
+            objects.append(ir_obj)
+
+        return objects
+
+    def json_value_to_ir(self, value: Any, prop_name: str = None) -> IR_Value:
+        """Convert a JSON value to IR_Value.
+
+        Args:
+            value: JSON value (str, int, float, bool, list, etc.)
+            prop_name: Property name for context (affects normalization)
+
+        Returns:
+            IR_Value
+        """
+        if isinstance(value, bool):
+            return IR_Value('boolean', value)
+        elif isinstance(value, int) or isinstance(value, float):
+            # Check if it's a coordinate property
+            if prop_name in self.coordinate_props:
+                # Normalize pixel values
+                if prop_name in ('x', 'width'):
+                    normalized = value / self.canvas_width
+                else:  # y, height
+                    normalized = value / self.canvas_height
+                return IR_Value('percentage', normalized)
+            return IR_Value('number', value)
+        elif isinstance(value, str):
+            # Check for color property
+            if prop_name == 'color':
+                return IR_Value('color', color_to_hex(value))
+            return IR_Value('string', value)
+        elif isinstance(value, list):
+            elements = [self.json_value_to_ir(e).value for e in value]
+            return IR_Value('list', elements)
+        elif value is None:
+            return IR_Value('null', None)
+        else:
+            return IR_Value('string', str(value))
 
     # =========================================================================
     # Object Transformation
@@ -734,7 +867,8 @@ class IRTransformer:
 def transform_ast_to_ir(program: Program,
                         canvas_width: int = 800,
                         canvas_height: int = 600,
-                        meta: Dict[str, Any] = None) -> IR_Program:
+                        meta: Dict[str, Any] = None,
+                        project_root: str = None) -> IR_Program:
     """Convenience function to transform AST to IR.
 
     Args:
@@ -742,9 +876,10 @@ def transform_ast_to_ir(program: Program,
         canvas_width: Canvas width for normalization
         canvas_height: Canvas height for normalization
         meta: Optional metadata from _meta/*.toml
+        project_root: Project root directory for resolving load paths
 
     Returns:
         IR_Program
     """
-    transformer = IRTransformer(canvas_width, canvas_height, meta)
+    transformer = IRTransformer(canvas_width, canvas_height, meta, project_root)
     return transformer.transform(program)
