@@ -81,11 +81,24 @@ class PhaserEmitter(BaseEmitter):
         # Mobile touch controls
         self.needs_touch_controls = False  # Set True if player objects exist
 
+        # Orientation/aspect handling (dynamic, landscape, portrait)
+        self.aspect_mode = None  # Set from _meta aspect
+
         # Scan IR to detect features
         self._detect_features()
 
     def _detect_features(self):
         """Scan IR to detect what features are needed."""
+        # Check for aspect/orientation setting in metadata
+        aspect = self.ir.metadata.extra.get('aspect', None)
+        if aspect in ('landscape', 'portrait', 'dynamic'):
+            self.aspect_mode = aspect
+
+        # Auto-enable dynamic scaling for arcade mode (games should "just work")
+        mode = self.ir.metadata.extra.get('mode', None)
+        if mode == 'arcade' and self.aspect_mode is None:
+            self.aspect_mode = 'dynamic'
+
         # Check objects for player type, sprites, HUD, and scene/level
         for obj in self.ir.objects:
             if obj.parent_type == 'player':
@@ -888,6 +901,18 @@ class PhaserEmitter(BaseEmitter):
         self.write(f"width: {width},")
         self.write(f"height: {height},")
         self.write(f"backgroundColor: '{bg_color}',")
+
+        # Add responsive scaling when aspect mode is set
+        if self.aspect_mode:
+            self.write("scale: {")
+            self.indent()
+            self.write("mode: Phaser.Scale.FIT,")
+            self.write("autoCenter: Phaser.Scale.CENTER_BOTH,")
+            self.write(f"width: {width},")
+            self.write(f"height: {height}")
+            self.dedent()
+            self.write("},")
+
         self.write("scene: GameScene")
         self.dedent()
         self.write("};")
@@ -904,6 +929,97 @@ class PhaserEmitter(BaseEmitter):
         self.write("}")
         self.dedent()
         self.write("});")
+
+        # Emit orientation handling if aspect mode is set
+        if self.aspect_mode:
+            self._emit_orientation_handling()
+
+    def _emit_orientation_handling(self):
+        """Emit orientation detection and rotate prompt handling."""
+        self.write_blank()
+        self.write_comment("=" * 60)
+        self.write_comment(f"Orientation Handling (aspect: {self.aspect_mode})")
+        self.write_comment("=" * 60)
+        self.write_blank()
+
+        width = self.ir.metadata.canvas_width
+        height = self.ir.metadata.canvas_height
+
+        # Determine expected orientation based on canvas dimensions or explicit setting
+        if self.aspect_mode == 'landscape':
+            expected = 'landscape'
+        elif self.aspect_mode == 'portrait':
+            expected = 'portrait'
+        else:  # dynamic
+            # Infer from canvas dimensions
+            expected = 'landscape' if width > height else 'portrait'
+
+        self.write("(function() {")
+        self.indent()
+        self.write(f"const expectedOrientation = '{expected}';")
+        self.write("const rotatePrompt = document.getElementById('rotate-prompt');")
+        self.write("const gameContainer = document.getElementById('game-container');")
+        self.write_blank()
+
+        # Check if on mobile
+        self.write("const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || ('ontouchstart' in window);")
+        self.write("if (!isMobile) return; // Only handle orientation on mobile")
+        self.write_blank()
+
+        # Function to check orientation
+        self.write("function checkOrientation() {")
+        self.indent()
+        self.write("const isLandscape = window.innerWidth > window.innerHeight;")
+        self.write("const currentOrientation = isLandscape ? 'landscape' : 'portrait';")
+        self.write_blank()
+        self.write("if (currentOrientation !== expectedOrientation) {")
+        self.indent()
+        self.write("// Wrong orientation - show rotate prompt")
+        self.write("rotatePrompt.classList.add('visible');")
+        self.write("if (gameContainer) gameContainer.style.display = 'none';")
+        self.write("// Update prompt text")
+        self.write("const text = rotatePrompt.querySelector('.rotate-text');")
+        self.write("if (text) {")
+        self.indent()
+        self.write("if (expectedOrientation === 'landscape') {")
+        self.indent()
+        self.write("text.textContent = 'Please rotate your device to landscape mode';")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("text.textContent = 'Please rotate your device to portrait mode';")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("// Correct orientation - hide prompt")
+        self.write("rotatePrompt.classList.remove('visible');")
+        self.write("if (gameContainer) gameContainer.style.display = '';")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+        # Initial check and event listeners
+        self.write("// Check on load")
+        self.write("checkOrientation();")
+        self.write_blank()
+        self.write("// Check on resize/orientation change")
+        self.write("window.addEventListener('resize', checkOrientation);")
+        self.write("window.addEventListener('orientationchange', () => {")
+        self.indent()
+        self.write("// Small delay to let the browser settle")
+        self.write("setTimeout(checkOrientation, 100);")
+        self.dedent()
+        self.write("});")
+
+        self.dedent()
+        self.write("})();")
+        self.write_blank()
 
     def _get_shared_runtime_path(self) -> Path:
         """Get path to shared runtime files."""

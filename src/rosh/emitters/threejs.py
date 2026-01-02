@@ -98,9 +98,11 @@ class ThreeJSEmitter(BaseEmitter):
 
         # Shared runtime option (new architecture)
         # Check both external meta (TOML) and IR metadata (inline meta block)
+        # Use shared runtime by default (new architecture as of v0.2.7)
+        # Can be disabled with use_shared_runtime: false in meta
         self.use_shared_runtime = (
-            self.meta.get('use_shared_runtime', False) or
-            self.ir.metadata.extra.get('use_shared_runtime', False)
+            self.meta.get('use_shared_runtime', True) and
+            self.ir.metadata.extra.get('use_shared_runtime', True)
         )
 
         # Scan IR to detect features

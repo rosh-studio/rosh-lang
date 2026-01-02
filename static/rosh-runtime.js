@@ -331,7 +331,7 @@ const RoshRuntime = (function() {
 
   // Known commands for fuzzy matching
   const KNOWN_COMMANDS = [
-    'set', 'get', 'list', 'create', 'delete', 'remove', 'reset',
+    'set', 'get', 'list', 'create', 'delete', 'destroy', 'remove', 'reset',
     'hide', 'show', 'clone', 'look', 'examine', 'inspect', 'x', 'ex',
     'help', 'save', 'load', 'undo', 'redo', 'count', 'move', 'make',
     'clear', 'repeat', ':repeat', ':r', 'go', 'goto', 'scene', 'scenes',
@@ -549,6 +549,7 @@ const RoshRuntime = (function() {
 
         case 'delete':
         case 'remove':
+        case 'destroy':
           handleDelete(parts.slice(1));
           break;
 
@@ -970,7 +971,8 @@ const RoshRuntime = (function() {
     const typeName = args[0] ? singularize(args[0]) : null;
 
     // Filter by visibility (only show objects in current scene)
-    let filtered = objects.filter(o => o.visible !== false);
+    // Also hide objects starting with _ (hidden/internal objects)
+    let filtered = objects.filter(o => o.visible !== false && !o.name.startsWith('_'));
 
     // Filter by type if specified
     if (typeName) {
@@ -1101,16 +1103,44 @@ const RoshRuntime = (function() {
     if (!adapter.deleteObject) return;
     let name = args.join(' ');
 
-    // Use selected object if no name given
-    if (!name && adapter.getSelectedObject) {
-      name = adapter.getSelectedObject();
-      if (name) {
-        log('(using selected: ' + name + ')', 'dim');
+    // Handle selection-based deletion: destroy / destroy confirmed
+    if (!name || name.toLowerCase() === 'confirmed') {
+      const isConfirmed = name.toLowerCase() === 'confirmed';
+
+      // If we have a multi-selection from query, operate on that
+      if (currentSelection && currentSelection.length > 0) {
+        const count = currentSelection.length;
+        if (!isConfirmed) {
+          log('⚠ destroy affects ' + count + ' object(s). Use "destroy confirmed" to proceed.', 'warn');
+          return;
+        }
+
+        // Confirmed: delete all selected objects
+        let deleted = 0;
+        for (const item of currentSelection) {
+          const objName = item.name;
+          const result = adapter.deleteObject(objName);
+          if (result.success) {
+            deleted++;
+            twinBroadcastDelete(objName);
+          }
+        }
+        currentSelection = [];
+        log('destroyed ' + deleted + ' object(s)', 'ok');
+        return;
+      }
+
+      // No selection - try using single selected object
+      if (adapter.getSelectedObject) {
+        name = adapter.getSelectedObject();
+        if (name) {
+          log('(using selected: ' + name + ')', 'dim');
+        }
       }
     }
 
-    if (!name) {
-      log('Usage: delete <name> (or click to select first)', 'err');
+    if (!name || name.toLowerCase() === 'confirmed') {
+      log('Usage: delete <name>, or use "get all where..." then "destroy confirmed"', 'err');
       return;
     }
 
@@ -1261,6 +1291,123 @@ const RoshRuntime = (function() {
 
   function handleGetAll(args) {
     if (!adapter.getObjectsByType) return;
+
+    // Check for 'where' clause: get all [type] where <condition>
+    const whereIndex = args.findIndex(a => a.toLowerCase() === 'where');
+
+    if (whereIndex !== -1) {
+      // Parse: get all [type] where <property> <op> <value>
+      const typePart = args.slice(0, whereIndex);
+      const conditionPart = args.slice(whereIndex + 1);
+
+      // Get candidates - either by type or all objects
+      let candidates;
+      if (typePart.length > 0) {
+        const typeName = singularize(typePart.join(' '));
+        candidates = adapter.getObjectsByType(typeName);
+      } else {
+        // Get all objects
+        candidates = adapter.getAllObjects ? adapter.getAllObjects() : [];
+      }
+
+      // Parse condition: <property> <op> <value>
+      // Supported: x is above 5, group is enemies, y is below 0
+      if (conditionPart.length < 3) {
+        log('Usage: get all where <property> is <op> <value>', 'err');
+        return;
+      }
+
+      const propName = conditionPart[0];
+      const opParts = conditionPart.slice(1);
+
+      // Parse operator and value
+      let op, valueStr;
+      if (opParts[0] === 'is' && opParts.length >= 2) {
+        if (opParts[1] === 'above' || opParts[1] === 'greater' || opParts[1] === 'over') {
+          op = '>';
+          valueStr = opParts.slice(2).join(' ');
+        } else if (opParts[1] === 'below' || opParts[1] === 'less' || opParts[1] === 'under') {
+          op = '<';
+          valueStr = opParts.slice(2).join(' ');
+        } else {
+          // "is <value>" means equals
+          op = '==';
+          valueStr = opParts.slice(1).join(' ');
+        }
+      } else {
+        op = '==';
+        valueStr = opParts.join(' ');
+      }
+
+      // Parse value (number or string)
+      let value = parseFloat(valueStr);
+      if (isNaN(value)) {
+        value = valueStr.replace(/^["']|["']$/g, ''); // Remove quotes
+      }
+
+      // Filter candidates
+      const matching = candidates.filter(obj => {
+        const objData = obj.object || obj;
+        let propValue;
+
+        // Check userData first (for properties set via console)
+        if (objData.userData && objData.userData[propName] !== undefined) {
+          propValue = objData.userData[propName];
+        }
+        // Special handling for color - check userData.color first, then material
+        else if (propName === 'color') {
+          if (objData.userData && objData.userData.color) {
+            propValue = objData.userData.color;
+          } else if (objData.material && objData.material.color) {
+            // Convert hex to color name for comparison
+            const hex = '#' + objData.material.color.getHexString();
+            propValue = hex;
+            // Also check if it matches common color names
+            const colorMap = {
+              '#ffffff': 'white', '#000000': 'black', '#ff0000': 'red',
+              '#00ff00': 'green', '#0000ff': 'blue', '#ffff00': 'yellow',
+              '#ff00ff': 'magenta', '#00ffff': 'cyan', '#ffa500': 'orange',
+              '#800080': 'purple', '#ffc0cb': 'pink', '#808080': 'gray'
+            };
+            if (colorMap[hex.toLowerCase()]) {
+              propValue = colorMap[hex.toLowerCase()];
+            }
+          }
+        }
+        // Then check position/scale/rotation
+        else if (propName === 'x' && objData.position) propValue = objData.position.x;
+        else if (propName === 'y' && objData.position) propValue = objData.position.y;
+        else if (propName === 'z' && objData.position) propValue = objData.position.z;
+        else if (propName === 'scale' && objData.scale) propValue = objData.scale.x; // Use x for uniform
+        else if (objData[propName] !== undefined) propValue = objData[propName];
+        else return false;
+
+        // Apply comparison
+        if (op === '>') return propValue > value;
+        if (op === '<') return propValue < value;
+        if (op === '>=') return propValue >= value;
+        if (op === '<=') return propValue <= value;
+        if (op === '==') return propValue == value;
+        if (op === '!=') return propValue != value;
+        return false;
+      });
+
+      currentSelection = matching;
+      if (matching.length === 0) {
+        log('No matches found', 'err');
+      } else {
+        log('selected ' + matching.length + ' object(s):', 'ok');
+        for (const o of matching.slice(0, 5)) {
+          log('  ' + o.name, 'dim');
+        }
+        if (matching.length > 5) {
+          log('  ... and ' + (matching.length - 5) + ' more', 'dim');
+        }
+      }
+      return;
+    }
+
+    // Original behavior: get all <type>
     const typeName = singularize(args.join(' '));
     const objects = adapter.getObjectsByType(typeName);
 

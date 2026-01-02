@@ -206,6 +206,17 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       return results;
     },
 
+    // Get all objects (for query syntax: get all where ...)
+    getAllObjects: function() {
+      const results = [];
+      scene.traverse(o => {
+        if ((o.isMesh || o.isSprite || o.isGroup) && o.name && !o.name.startsWith('_')) {
+          results.push({ name: o.name, object: o, type: getTypeName(o) });
+        }
+      });
+      return results;
+    },
+
     // Deep search: find by color, size, type
     deepSearch: function(args) {
       const results = [];

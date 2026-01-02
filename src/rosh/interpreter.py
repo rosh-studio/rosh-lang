@@ -112,6 +112,9 @@ class Interpreter:
         self.current_object_name = None
         self._undo_enabled = True
 
+        # Query selection (v0.2.7+) - for bulk operations after get all where
+        self._selection = []  # List of selected objects from query
+
     def start_undo_group(self):
         """Start a new undo group. All subsequent push_undo calls share this group."""
         self._undo_group += 1
@@ -1669,11 +1672,18 @@ class Interpreter:
         """Execute: get <target> - pushes value onto stack
 
         Supports:
-        - get ball        → gets ball variable (or first instance if many)
-        - get ball 5      → gets instance #5
-        - get all ball    → gets all instances as list
+        - get ball                           → gets ball variable (or first instance if many)
+        - get ball 5                         → gets instance #5
+        - get all ball                       → gets all instances as list
+        - get all where <condition>          → query all objects matching condition
+        - get all <type> where <condition>   → query type instances matching condition
+        - get all including hidden where ... → include hidden objects in query
         """
         target = node.target
+
+        # Handle query syntax: get all [type] [including hidden] where <condition>
+        if node.where_condition is not None:
+            return self._eval_query(node)
 
         if isinstance(target, Identifier):
             # Check if this is an instance reference
@@ -1733,6 +1743,141 @@ class Interpreter:
             self.data_stack.append(value)
         else:
             raise RoshRuntimeError(f"Cannot get value from: {type(target).__name__}")
+
+    def _eval_query(self, node: Get) -> None:
+        """Execute query: get all [type] [including hidden] where <condition>
+
+        Populates self._selection with matching objects.
+        """
+        include_hidden = node.include_hidden
+        target = node.target
+        condition = node.where_condition
+
+        # Collect all candidate objects
+        candidates = []
+
+        if target is not None and isinstance(target, Identifier):
+            # Filter by type: get all <type> where ...
+            type_name = target.name.lower()
+            instances = self.instances.get(type_name, [])
+            candidates = list(instances)
+        else:
+            # All objects: get all where ...
+            # Collect all objects from global environment
+            for name, binding in self.global_env.bindings.items():
+                obj = binding['value']
+                if isinstance(obj, RoshObject):
+                    candidates.append(obj)
+
+        # Filter hidden objects (names starting with _)
+        if not include_hidden:
+            candidates = [obj for obj in candidates if not obj.name.startswith('_')]
+
+        # Apply where condition
+        matching = []
+        for obj in candidates:
+            if self._eval_condition_for_object(condition, obj):
+                matching.append(obj)
+
+        # Store selection and provide feedback
+        self._selection = matching
+        self.color_out.info(f"selected {len(matching)} object(s)")
+
+        # Also push to stack for immediate use
+        for obj in matching:
+            self.data_stack.append(obj)
+
+    def _eval_condition_for_object(self, condition, obj: 'RoshObject') -> bool:
+        """Evaluate a condition expression against an object.
+
+        Handles property access relative to the object being tested.
+        """
+        if isinstance(condition, Comparison):
+            left_val = self._eval_expr_for_object(condition.left, obj)
+            # Right side: treat identifiers as values (string literals) not property lookups
+            right_val = self._eval_expr_for_object(condition.right, obj, as_value=True)
+            op = condition.operator.lower() if isinstance(condition.operator, str) else condition.operator
+
+            # Handle comparison operators (both symbolic and natural language)
+            if op in ('==', 'is', 'equals'):
+                return left_val == right_val
+            elif op in ('!=', 'isnt', 'is not'):
+                return left_val != right_val
+            elif op in ('<', 'below', 'less', 'under'):
+                return left_val < right_val
+            elif op in ('<=', 'at most'):
+                return left_val <= right_val
+            elif op in ('>', 'above', 'greater', 'over'):
+                return left_val > right_val
+            elif op in ('>=', 'at least'):
+                return left_val >= right_val
+            else:
+                return False
+
+        elif isinstance(condition, BinaryOp):
+            left_result = self._eval_condition_for_object(condition.left, obj)
+            right_result = self._eval_condition_for_object(condition.right, obj)
+            op = condition.operator.lower()
+
+            if op == 'and':
+                return left_result and right_result
+            elif op == 'or':
+                return left_result or right_result
+            else:
+                return False
+
+        elif isinstance(condition, UnaryOp):
+            operand_result = self._eval_condition_for_object(condition.operand, obj)
+            if condition.operator.lower() == 'not':
+                return not operand_result
+            return operand_result
+
+        # Fall back to evaluating as boolean
+        return bool(self._eval_expr_for_object(condition, obj))
+
+    def _eval_expr_for_object(self, expr, obj: 'RoshObject', as_value: bool = False):
+        """Evaluate an expression in the context of a specific object.
+
+        Simple identifiers are treated as properties of the object,
+        unless as_value=True in which case they're treated as string literals.
+        """
+        if isinstance(expr, Identifier):
+            prop_name = expr.name.lower()
+
+            # If as_value=True, treat identifier as string literal (for RHS of comparisons)
+            if as_value:
+                # First check if it's a property, if not treat as literal string
+                if obj.has(prop_name):
+                    return obj.get(prop_name)
+                else:
+                    return expr.name  # Return as string literal
+
+            # Treat as property of the object being tested
+            # Check built-in attributes first
+            if prop_name == 'name':
+                return obj.name
+            elif prop_name == 'id':
+                return obj.id
+            # Then check object properties via RoshObject.get()
+            elif obj.has(prop_name):
+                return obj.get(prop_name)
+            else:
+                return None
+
+        elif isinstance(expr, Literal):
+            return expr.value
+
+        elif isinstance(expr, PropertyAccess):
+            # For property access like ball.x, evaluate the object part first
+            if isinstance(expr.object, Identifier):
+                # If it's the same type as our object, use our object
+                return self._eval_expr_for_object(Identifier(name=expr.property, line=expr.line), obj)
+            # Otherwise evaluate normally
+            return self.eval_expression(expr)
+
+        else:
+            # Fall back to normal evaluation
+            return self.eval_expression(expr)
 
     def eval_dump(self, node: Dump) -> None:
         """Execute: dump [target] - outputs state or specific object as JSON"""
@@ -3252,7 +3397,41 @@ Focus on the specific syntax or concept they need to correct."""
             self.color_out.success(f"Cloned '{node.source}' as '{node.target}'")
 
     def eval_delete_object(self, node: DeleteObject) -> None:
-        """Execute: delete <name> - Remove an object from environment"""
+        """Execute: delete <name> - Remove an object from environment
+
+        Supports bulk deletion after query:
+        - destroy           → warns and fails (safety)
+        - destroy confirmed → proceeds with deletion
+        """
+        # Handle selection-based deletion (after get all where...)
+        if node.name == 'selection':
+            if not self._selection:
+                self.color_out.info("no objects selected")
+                return
+
+            count = len(self._selection)
+            if not node.confirmed:
+                # Safety: warn and fail
+                self.color_out.warning(f"destroy affects {count} object(s). Use 'destroy confirmed' to proceed.")
+                return
+
+            # Confirmed: proceed with deletion
+            deleted_count = 0
+            for obj in self._selection:
+                obj_name = obj.name
+                if self.current_env.exists(obj_name):
+                    # Remove from environment
+                    env = self._find_env_for_binding(obj_name) or self.current_env
+                    if obj_name in env.bindings:
+                        self._detach_object_instance(obj)
+                        del env.bindings[obj_name]
+                        deleted_count += 1
+
+            self._selection = []
+            self.color_out.success(f"destroyed {deleted_count} object(s)")
+            return
+
+        # Single object deletion
         # Check if the object exists
         if not self.current_env.exists(node.name):
             raise RoshRuntimeError(f"Cannot delete: '{node.name}' does not exist")

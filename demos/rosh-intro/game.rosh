@@ -15,6 +15,9 @@
 #
 # =============================================================================
 
+# Enable arcade mode (auto-scales to fit screen)
+set _meta mode to "arcade"
+
 # Main logo - starts small, zooms to large
 create object logo
     set text to "rosh"

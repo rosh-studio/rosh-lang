@@ -26,11 +26,52 @@
             color: #888;
             font-size: 12px;
         }
+        /* Rotate prompt for wrong orientation */
+        #rotate-prompt {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #1a1a1a;
+            z-index: 9999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 24px;
+            text-align: center;
+            padding: 20px;
+        }
+        #rotate-prompt.visible {
+            display: flex;
+        }
+        #rotate-prompt .rotate-icon {
+            font-size: 72px;
+            margin-bottom: 20px;
+            animation: rotate-hint 2s ease-in-out infinite;
+        }
+        #rotate-prompt .rotate-text {
+            max-width: 300px;
+            line-height: 1.4;
+        }
+        @keyframes rotate-hint {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(-15deg); }
+            75% { transform: rotate(15deg); }
+        }
     </style>
 </head>
 <body>
     <div class="info">🤖 Rosh → Phaser</div>
     <div id="game-container"></div>
+
+    <!-- Rotate prompt (shown when device is in wrong orientation) -->
+    <div id="rotate-prompt">
+        <div class="rotate-icon">📱</div>
+        <div class="rotate-text">Please rotate your device</div>
+    </div>
 
     <!-- Phaser 3 CDN -->
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>

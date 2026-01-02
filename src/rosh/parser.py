@@ -1830,6 +1830,10 @@ class Parser:
                 right = self.parse_expression()
                 return Comparison(left=left, operator='above', right=right, line=left.line)
 
+            # Plain 'is <value>' means equality (for query syntax: color is white)
+            right = self.parse_expression()
+            return Comparison(left=left, operator='==', right=right, line=left.line)
+
         # Handle 'contains'
         if self.current_token().type == TokenType.CONTAINS:
             from .ast_nodes import Contains
