@@ -84,6 +84,10 @@ class PhaserEmitter(BaseEmitter):
         # Orientation/aspect handling (dynamic, landscape, portrait)
         self.aspect_mode = None  # Set from _meta aspect
 
+        # Smart button detection (Phase 3)
+        self.uses_primary_action = False   # SPACE key
+        self.uses_secondary_action = False  # SHIFT/X key
+
         # Scan IR to detect features
         self._detect_features()
 
@@ -138,11 +142,23 @@ class PhaserEmitter(BaseEmitter):
             elif event.trigger.startswith('keydown:') or event.trigger.startswith('keyup:'):
                 self.needs_keyboard = True
                 self.needs_touch_controls = True  # Games with keyboard need touch on mobile
+                # Detect action keys for smart button detection
+                key = event.trigger.split(':')[1].upper()
+                if key == 'SPACE':
+                    self.uses_primary_action = True
+                elif key in ('SHIFT', 'X'):
+                    self.uses_secondary_action = True
             elif event.trigger.startswith('continuous:'):
                 # Continuous key polling (while_key_left, etc.)
                 self.needs_keyboard = True
                 self.needs_update = True  # Need update loop for polling
                 self.needs_touch_controls = True  # Games with keyboard need touch on mobile
+                # Detect action keys for smart button detection
+                key = event.trigger.split(':')[1].upper()
+                if key == 'SPACE':
+                    self.uses_primary_action = True
+                elif key in ('SHIFT', 'X'):
+                    self.uses_secondary_action = True
             elif event.trigger.startswith('collision:'):
                 # Collision events need update loop for AABB checks
                 self.needs_update = True
@@ -467,12 +483,17 @@ class PhaserEmitter(BaseEmitter):
         self.write_blank()
 
     def _emit_touch_controls_method(self):
-        """Emit mobile touch controls setup method with 8-way joystick and 2 buttons."""
+        """Emit mobile touch controls setup method with 8-way joystick and smart button detection."""
         # Get control settings from meta
         controls = self.meta.get('controls', {})
         opacity = controls.get('opacity', 0.5)
         joystick_size = controls.get('joystick_size', 120)
         button_size = controls.get('button_size', 60)
+
+        # Smart button detection: only show B button if secondary action is used
+        show_button_b = self.uses_secondary_action
+        # Position A button: if only 1 button, put it at right edge; if 2, offset for B
+        button_a_right = 20 if not show_button_b else button_size + 30
 
         self.write("setupTouchControls() {")
         self.indent()
@@ -506,7 +527,7 @@ class PhaserEmitter(BaseEmitter):
         user-select: none; -webkit-user-select: none;
       }}
       .touch-button:active {{ background: rgba(255,255,255,0.4); }}
-      .touch-button-a {{ right: {button_size + 30}px; }}
+      .touch-button-a {{ right: {button_a_right}px; }}
       .touch-button-b {{ right: 20px; }}
     `;""")
         self.write("document.head.appendChild(style);")
@@ -528,18 +549,19 @@ class PhaserEmitter(BaseEmitter):
         self.write("container.appendChild(joystickBase);")
         self.write_blank()
 
-        # Create buttons
-        self.write("// Create action buttons")
+        # Create buttons (smart detection: only show B if secondary action used)
+        self.write("// Create action button(s)")
         self.write("const buttonA = document.createElement('div');")
         self.write("buttonA.className = 'touch-button touch-button-a';")
         self.write("buttonA.textContent = 'A';")
         self.write("container.appendChild(buttonA);")
         self.write_blank()
-        self.write("const buttonB = document.createElement('div');")
-        self.write("buttonB.className = 'touch-button touch-button-b';")
-        self.write("buttonB.textContent = 'B';")
-        self.write("container.appendChild(buttonB);")
-        self.write_blank()
+        if show_button_b:
+            self.write("const buttonB = document.createElement('div');")
+            self.write("buttonB.className = 'touch-button touch-button-b';")
+            self.write("buttonB.textContent = 'B';")
+            self.write("container.appendChild(buttonB);")
+            self.write_blank()
 
         self.write("document.body.appendChild(container);")
         self.write_blank()
@@ -654,34 +676,26 @@ class PhaserEmitter(BaseEmitter):
         self.write("});")
         self.write_blank()
 
-        self.write("// Button B - triggers Space (fire) and X key actions")
-        self.write("buttonB.addEventListener('touchstart', (e) => {")
-        self.indent()
-        self.write("e.preventDefault();")
-        self.write("scene.touchAction.b = true;")
-        self.write("if (scene.keys && scene.keys.SPACE) {")
-        self.indent()
-        self.write("scene.keys.SPACE.isDown = true;")
-        self.dedent()
-        self.write("}")
-        self.write("// Emit Phaser keyboard events - SPACE for fire, X for secondary")
-        self.write("scene.input.keyboard.emit('keydown-SPACE', { key: ' ' });")
-        self.write("scene.input.keyboard.emit('keydown-X', { key: 'x' });")
-        self.write("scene.triggerEvent('action_b');")
-        self.dedent()
-        self.write("}, { passive: false });")
-        self.write_blank()
+        # Button B event handlers (only if secondary action is used)
+        if show_button_b:
+            self.write("// Button B - triggers X key actions (secondary)")
+            self.write("buttonB.addEventListener('touchstart', (e) => {")
+            self.indent()
+            self.write("e.preventDefault();")
+            self.write("scene.touchAction.b = true;")
+            self.write("// Emit Phaser keyboard events - X/SHIFT for secondary action")
+            self.write("scene.input.keyboard.emit('keydown-X', { key: 'x' });")
+            self.write("scene.input.keyboard.emit('keydown-SHIFT', { key: 'Shift' });")
+            self.write("scene.triggerEvent('action_b');")
+            self.dedent()
+            self.write("}, { passive: false });")
+            self.write_blank()
 
-        self.write("buttonB.addEventListener('touchend', (e) => {")
-        self.indent()
-        self.write("scene.touchAction.b = false;")
-        self.write("if (scene.keys && scene.keys.SPACE) {")
-        self.indent()
-        self.write("scene.keys.SPACE.isDown = false;")
-        self.dedent()
-        self.write("}")
-        self.dedent()
-        self.write("});")
+            self.write("buttonB.addEventListener('touchend', (e) => {")
+            self.indent()
+            self.write("scene.touchAction.b = false;")
+            self.dedent()
+            self.write("});")
 
         self.dedent()
         self.write("}")
