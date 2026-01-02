@@ -269,7 +269,9 @@ class PhaserEmitter(BaseEmitter):
         # Set up mobile touch controls if needed
         if self.needs_touch_controls:
             self.write("// Mobile detection and touch state")
-            self.write("this.isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || ('ontouchstart' in window);")
+            self.write("const urlParams = new URLSearchParams(window.location.search);")
+            self.write("const forceTouch = urlParams.get('touch') === '1';")
+            self.write("this.isMobile = forceTouch || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || ('ontouchstart' in window);")
             self.write("this.touchDir = { left: false, right: false, up: false, down: false };")
             self.write("this.touchAction = { a: false, b: false };")
             self.write("if (this.isMobile) this.setupTouchControls();")
