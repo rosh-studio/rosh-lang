@@ -79,12 +79,12 @@ Simple animation verbs:
 
 ---
 
-### ISSUE-006: Save meta object state
+### ISSUE-006: Save hidden object state
 **Status:** 📋 Planned
 **Target:** All
 **Effort:** Low
 
-Currently save/load only captures scene objects, not `meta.phase`, `meta.score` etc.
+Currently save/load only captures scene objects, not hidden objects like `_state.phase`, `_state.score` etc. Hidden objects (names starting with `_`) should be included in save/load.
 
 ---
 

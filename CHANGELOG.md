@@ -8,6 +8,49 @@
 
 ## [Unreleased]
 
+### Breaking Changes
+- **Implicit `meta` object removed** - No longer auto-created at startup
+  - Use explicit hidden objects with underscore prefix instead:
+    ```rosh
+    # Old (no longer works):
+    set meta.phase to 1
+
+    # New:
+    create _state
+        set phase to 1
+    end
+    ```
+  - Access via `_state.phase` (Phaser) or `_state.userData.phase` (Three.js)
+
+- **REPL settings renamed from `meta` to `config`**
+  - `set meta scale to 3` → `set config scale to 3`
+  - `set meta floor off` → `set config floor off`
+  - `set meta models off` → `set config models off`
+  - `get meta` → `get config`
+
+### Added
+- **Hidden Objects** - Names starting with `_` are data-only (not rendered)
+  - Created as JavaScript objects but not added to scene
+  - Useful for game state, config, templates
+  - Example: `create _config`, `create _state`, `create _template`
+
+- **Edit Mode** (Three.js)
+  - `edit on` - Enable selection and movement
+  - `edit off` - Disable (view only)
+  - Click to select objects, arrow keys to move
+  - `.` and `/` keys for Y-axis movement
+
+- **Parser Fixes**
+  - Fixed infinite loop on unexpected END tokens
+  - Fixed body parsing for shorthand `create <name>` syntax
+
+- **Settings Loading**
+  - `load "settings.json"` now correctly resolves relative to project
+
+### Changed
+- REPL `list` command now shows IR-emitted objects (not just REPL-created)
+- Fresh REPL shows "No objects defined" instead of implicit meta
+
 ### Next Steps
 - Record 60-second demo video ("Actual footage. Not faked.")
 - Outreach to contacts (Gregor Hofer, Soluis, etc.)

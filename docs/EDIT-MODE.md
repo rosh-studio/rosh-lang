@@ -45,8 +45,8 @@ player ball          # Alias for backwards compatibility
 | Arrow Down | Move backward (+Z) |
 | Arrow Left | Move left (-X) |
 | Arrow Right | Move right (+X) |
-| `/` | Move up (+Y) |
-| `.` | Move down (-Y) |
+| `.` | Move up (+Y) |
+| `/` | Move down (-Y) |
 
 ## Commands Using Selection
 
@@ -113,4 +113,4 @@ edit off             # Lock scene from changes
 
 ---
 
-*Last updated: 2025-12-31*
+*Last updated: 2026-01-02*
