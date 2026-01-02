@@ -384,7 +384,9 @@ class Parser:
             self.expect(TokenType.END)
             self.skip_newlines()
 
-            return CreateObject(name=name, body=body, parents=parents, line=line)
+            # Objects with names starting with '_' are hidden by default
+            hidden = name.startswith('_')
+            return CreateObject(name=name, body=body, parents=parents, hidden=hidden, line=line)
 
         # Handle legacy typed syntax: create number/string <name> to <value>
         elif type_token.type in (TokenType.NUMBER_TYPE, TokenType.STRING_TYPE):
@@ -492,7 +494,9 @@ class Parser:
                 # Implied object creation: "create banana" = "create object banana"
                 # This is the shorthand for creating an empty object.
                 # For body statements, use the full syntax: create banana ... end
-                return CreateObject(name=name, body=[], parents=None, line=line)
+                # Objects with names starting with '_' are hidden by default
+                hidden = name.startswith('_')
+                return CreateObject(name=name, body=[], parents=None, hidden=hidden, line=line)
 
         else:
             self.error(f"Expected object, type, or identifier after 'create', got {type_token.type.name}")

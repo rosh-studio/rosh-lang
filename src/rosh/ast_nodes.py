@@ -86,10 +86,16 @@ class Identifier(ASTNode):
 
 @dataclass
 class CreateObject(ASTNode):
-    """create object <name> [from <parent1>, <parent2>...] ... end"""
+    """create object <name> [from <parent1>, <parent2>...] ... end
+
+    Objects with names starting with '_' are hidden by default (not rendered).
+    Hidden objects exist in world state and can be queried/cloned, but emitters
+    skip rendering them. Use for templates, config, meta objects, etc.
+    """
     name: str
     body: List[ASTNode]
     parents: Optional[List[str]] = None  # List of parent object names
+    hidden: bool = False  # True if name starts with '_' (set by parser)
     line: int = 0
 
 

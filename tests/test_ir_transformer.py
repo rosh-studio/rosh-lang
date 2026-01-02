@@ -381,3 +381,71 @@ class TestCaseNormalization:
         """)
         ir = transform_ast_to_ir(program)
         assert ir.events[0].trigger == 'update'
+
+
+class TestHiddenObjects:
+    """Tests for hidden objects (underscore convention)."""
+
+    def test_underscore_prefix_sets_hidden_flag(self):
+        """Objects starting with '_' should have hidden=True."""
+        program = parse("""
+            create object _meta
+                set title to "Test"
+            end
+        """)
+        ir = transform_ast_to_ir(program)
+        assert len(ir.objects) == 1
+        obj = ir.objects[0]
+        assert obj.name == "_meta"
+        assert obj.hidden == True
+
+    def test_regular_object_not_hidden(self):
+        """Regular objects should have hidden=False."""
+        program = parse("""
+            create object ball
+                set x to 100
+            end
+        """)
+        ir = transform_ast_to_ir(program)
+        obj = ir.objects[0]
+        assert obj.name == "ball"
+        assert obj.hidden == False
+
+    def test_hidden_template(self):
+        """Template objects with underscore should be hidden."""
+        program = parse("""
+            create object _template
+                set speed to 5
+            end
+        """)
+        ir = transform_ast_to_ir(program)
+        obj = ir.objects[0]
+        assert obj.hidden == True
+        assert obj.properties['speed'].value == 5
+
+    def test_hidden_config(self):
+        """Config objects with underscore should be hidden."""
+        program = parse("create _config")
+        ir = transform_ast_to_ir(program)
+        obj = ir.objects[0]
+        assert obj.name == "_config"
+        assert obj.hidden == True
+
+    def test_mixed_hidden_and_visible(self):
+        """Mix of hidden and visible objects."""
+        program = parse("""
+            create _meta end
+            create player end
+            create _template end
+            create enemy end
+        """)
+        ir = transform_ast_to_ir(program)
+        assert len(ir.objects) == 4
+
+        hidden_objects = [o for o in ir.objects if o.hidden]
+        visible_objects = [o for o in ir.objects if not o.hidden]
+
+        assert len(hidden_objects) == 2
+        assert len(visible_objects) == 2
+        assert set(o.name for o in hidden_objects) == {'_meta', '_template'}
+        assert set(o.name for o in visible_objects) == {'player', 'enemy'}

@@ -30,7 +30,7 @@ Design Principles:
 # IR Version - Emitters must implement this version
 # See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
 # =============================================================================
-IR_VERSION = "0.2.0"
+IR_VERSION = "0.2.1"  # Added hidden flag for underscore convention
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
@@ -173,6 +173,12 @@ class IR_Object:
         - level: Numbered progression within scene (None = all levels)
         - Objects without scene/level are always visible (HUD, etc.)
 
+    Hidden Objects (Underscore Convention):
+        - Objects with names starting with '_' are hidden by default
+        - Hidden objects exist in world state but are not rendered
+        - Use for templates (_template), config (_config), meta (_meta), etc.
+        - Clones from hidden templates are visible (hidden is not inherited)
+
     The UUID is stable across save/load and enables:
         - `get` command works by name OR UUID
         - Object identity preserved across targets/sessions
@@ -185,6 +191,7 @@ class IR_Object:
     scene: Optional[str] = None  # Named scene (None = always visible)
     level: Optional[int] = None  # Level number (None = all levels)
     saveable: bool = True  # Whether object is saved (False for particles, etc.)
+    hidden: bool = False  # Hidden objects (name starts with '_') are not rendered
     engine_capabilities: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod

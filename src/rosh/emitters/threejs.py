@@ -515,12 +515,19 @@ class ThreeJSEmitter(BaseEmitter):
         return val
 
     def _emit_arcade_objects(self):
-        """Emit 2D game objects as JavaScript data."""
+        """Emit 2D game objects as JavaScript data.
+
+        Hidden objects (name starts with '_') are skipped - they exist in IR
+        for templates, config, meta, etc. but are not rendered in the game.
+        """
         self.write_comment("Game Objects")
         width = self.ir.metadata.canvas_width
         height = self.ir.metadata.canvas_height
 
         for obj in self.ir.objects:
+            # Skip hidden objects - they exist in world state but are not rendered
+            if obj.hidden:
+                continue
             name = obj.name
 
             # Get properties using get_property and convert to simple values
@@ -981,7 +988,15 @@ class ThreeJSEmitter(BaseEmitter):
         self.write_blank()
 
     def _emit_object(self, obj: IR_Object):
-        """Emit a single Three.js object."""
+        """Emit a single Three.js object.
+
+        Hidden objects (name starts with '_') are skipped - they exist in IR
+        for templates, config, meta, etc. but are not rendered in the game.
+        """
+        # Skip hidden objects - they exist in world state but are not rendered
+        if obj.hidden:
+            return
+
         name = obj.name
 
         # Get position (normalized 0-1 in IR, convert to 3D world coords)

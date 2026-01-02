@@ -294,7 +294,10 @@ script = ExtResource("1")
             self.write_blank()
 
         self.write_comment("Object data (position, size, color, visibility)")
+        # Skip hidden objects - they exist in world state but are not rendered
         for obj in self.ir.objects:
+            if obj.hidden:
+                continue
             x = self._get_prop_value(obj, 'x', 0.5)
             y = self._get_prop_value(obj, 'y', 0.5)
             px = int(self.to_target_x(x))
@@ -325,6 +328,8 @@ script = ExtResource("1")
 
         self.write_comment("Object properties")
         for obj in self.ir.objects:
+            if obj.hidden:
+                continue
             skip_props = {'x', 'y', 'width', 'height', 'color', 'sprite', 'text', 'font_size', 'visible'}
             for prop_name, prop_value in obj.properties.items():
                 if prop_name not in skip_props:
@@ -405,11 +410,18 @@ script = ExtResource("1")
         self.write_blank()
 
     def _emit_draw(self):
-        """Emit _draw function to render objects."""
+        """Emit _draw function to render objects.
+
+        Hidden objects (name starts with '_') are skipped - they exist in IR
+        for templates, config, meta, etc. but are not rendered in the game.
+        """
         self.write("func _draw():")
         self.indent()
         self.write_comment("Draw all objects")
         for obj in self.ir.objects:
+            # Skip hidden objects
+            if obj.hidden:
+                continue
             self.write(f"if {obj.name}_visible:")
             self.indent()
             if obj.name in self.text_objects:
@@ -1433,7 +1445,15 @@ script = ExtResource("1")
         self.write_blank()
 
     def _emit_create_object_3d(self, obj: IR_Object):
-        """Create a 3D object (box mesh or text label)."""
+        """Create a 3D object (box mesh or text label).
+
+        Hidden objects (name starts with '_') are skipped - they exist in IR
+        for templates, config, meta, etc. but are not rendered in the game.
+        """
+        # Skip hidden objects - they exist in world state but are not rendered
+        if obj.hidden:
+            return
+
         x = self._get_prop_value(obj, 'x', 0.5)
         y = self._get_prop_value(obj, 'y', 0.5)
         z = self._get_prop_value(obj, 'z', 0.0)

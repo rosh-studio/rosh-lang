@@ -295,7 +295,15 @@ class PygameEmitter(BaseEmitter):
         self.write_blank()
 
     def _emit_create_object(self, obj: IR_Object):
-        """Emit code to create an object."""
+        """Emit code to create an object.
+
+        Hidden objects (name starts with '_') are skipped - they exist in IR
+        for templates, config, meta, etc. but are not rendered in the game.
+        """
+        # Skip hidden objects - they exist in world state but are not rendered
+        if obj.hidden:
+            return
+
         x = self._get_prop_value(obj, 'x', 0.5)
         y = self._get_prop_value(obj, 'y', 0.5)
         px = self.to_target_x(x)

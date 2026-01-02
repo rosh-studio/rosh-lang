@@ -214,6 +214,7 @@ class IRTransformer:
             parent_type=parent_type,
             properties=properties,
             saveable=saveable,
+            hidden=node.hidden,  # Propagate hidden flag from AST
             scene=scene,
             level=level
         )
