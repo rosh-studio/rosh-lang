@@ -845,6 +845,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
     if (!obj) return;
 
     selectedObject = obj;
+    window.selectedObject = obj;  // Sync with global for animate loop
 
     // Visual highlight - add emissive glow
     if (obj.material) {
@@ -862,6 +863,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       selectedObject.material.emissive.setHex(selectedOriginalEmissive || 0);
     }
     selectedObject = null;
+    window.selectedObject = null;  // Sync with global for animate loop
     selectedOriginalEmissive = null;
   }
 
