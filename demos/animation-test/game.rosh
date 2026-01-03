@@ -1,0 +1,13 @@
+# Animation Test Demo
+# Tests sprite sheet animation support
+
+create object explosion
+    set sprite to "explosion-sheet.png"
+    set x to 50%
+    set y to 50%
+    set sprite_columns to 3
+    set sprite_rows to 3
+end
+
+# Basic scene - explosion sprite should appear
+# Note: Animation playback requires manual testing or event triggers

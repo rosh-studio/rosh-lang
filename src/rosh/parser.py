@@ -1678,14 +1678,16 @@ class Parser:
         )
 
     def parse_play(self):
-        """Parse: play sound "filename" OR play music "filename" OR stop music
+        """Parse: play sound "filename" OR play music "filename" OR play <animation> [on <target>] [once]
 
         Examples:
             play sound "shoot.wav"
             play music "background.mp3"
-            stop music
+            play idle                    # play animation on current context
+            play walk on hero            # play animation on specific object
+            play jump on hero once       # play once, don't loop
         """
-        from .ast_nodes import PlaySound, PlayMusic, StopMusic
+        from .ast_nodes import PlaySound, PlayMusic, PlayAnimation
         line = self.current_token().line
         self.expect(TokenType.PLAY)
 
@@ -1701,8 +1703,29 @@ class Parser:
             filename_token = self.expect(TokenType.STRING)
             return PlayMusic(filename=filename_token.value, line=line)
 
+        elif next_token.type == TokenType.IDENTIFIER:
+            # play <animation> [on <target>] [once]
+            animation_name = next_token.value
+            self.advance()  # consume animation name
+
+            target = None
+            loop = True
+
+            # Check for 'on <target>'
+            if self.current_token().type == TokenType.ON:
+                self.advance()  # consume 'on'
+                target_token = self.expect(TokenType.IDENTIFIER)
+                target = target_token.value
+
+            # Check for 'once'
+            if self.current_token().type == TokenType.IDENTIFIER and self.current_token().value.lower() == 'once':
+                self.advance()  # consume 'once'
+                loop = False
+
+            return PlayAnimation(animation=animation_name, target=target, loop=loop, line=line)
+
         else:
-            self.error(f"Expected 'sound' or 'music' after 'play', got {next_token.type.name}")
+            self.error(f"Expected 'sound', 'music', or animation name after 'play', got {next_token.type.name}")
 
     def parse_meta(self):
         """Parse: meta [.scope] ... end
@@ -1918,8 +1941,8 @@ class Parser:
         return Continue(line=line)
 
     def parse_stop(self):
-        """Parse: stop OR stop music"""
-        from .ast_nodes import Stop, StopMusic
+        """Parse: stop OR stop music OR stop animation [on <target>]"""
+        from .ast_nodes import Stop, StopMusic, StopAnimation
         line = self.current_token().line
         self.expect(TokenType.STOP)
 
@@ -1927,6 +1950,17 @@ class Parser:
         if self.current_token().type == TokenType.MUSIC:
             self.advance()  # consume 'music'
             return StopMusic(line=line)
+
+        # Check if this is "stop animation [on <target>]"
+        if self.current_token().type == TokenType.IDENTIFIER and self.current_token().value.lower() == 'animation':
+            self.advance()  # consume 'animation'
+            target = None
+            # Check for 'on <target>'
+            if self.current_token().type == TokenType.ON:
+                self.advance()  # consume 'on'
+                target_token = self.expect(TokenType.IDENTIFIER)
+                target = target_token.value
+            return StopAnimation(target=target, line=line)
 
         # Otherwise it's just "stop" (program termination)
         return Stop(line=line)

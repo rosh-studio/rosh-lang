@@ -16,8 +16,15 @@ See: rosh-dev/proposals/ROSH-IR-SPECIFICATION.md
 
 import re
 from pathlib import Path
-from typing import Dict, Any, Set
+from typing import Dict, Any, Set, Optional
 from .base import BaseEmitter
+
+# Optional PIL import for spritesheet frame dimension calculation
+try:
+    from PIL import Image
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
 from .. import __version__
 from ..ir import (
     IR_Program, IR_Object, IR_Event, IR_Action, IR_Function,
@@ -54,10 +61,12 @@ class PhaserEmitter(BaseEmitter):
         0xff00ff, 0x00ffff, 0xff8800, 0x8800ff,
     ]
 
-    def __init__(self, ir: IR_Program, meta: Dict[str, Any] = None):
+    def __init__(self, ir: IR_Program, meta: Dict[str, Any] = None, asset_dir: Optional[Path] = None):
         super().__init__(ir, meta)
         self.color_index = 0
+        self.asset_dir = asset_dir  # Directory containing assets for frame dimension calculation
         self.sprite_assets: Set[str] = set()
+        self.spritesheet_info: Dict[str, Dict] = {}  # asset -> {cols, rows, obj_name, animations, frame_width, frame_height}
         self.sound_assets: Set[str] = set()
         self.music_file: str = None
         self.needs_keyboard = False
@@ -114,7 +123,30 @@ class PhaserEmitter(BaseEmitter):
             if 'sprite' in obj.properties:
                 sprite_val = obj.properties['sprite']
                 if sprite_val.type == 'string':
-                    self.sprite_assets.add(sprite_val.value)
+                    sprite_path = sprite_val.value
+                    self.sprite_assets.add(sprite_path)
+                    # Check if this is a spritesheet (has grid defined)
+                    if obj.grid_cols and obj.grid_rows:
+                        info = {
+                            'cols': obj.grid_cols,
+                            'rows': obj.grid_rows,
+                            'obj_name': obj.name,
+                            'animations': obj.animations,
+                            'frame_rate': obj.frame_rate,
+                            'frame_width': None,
+                            'frame_height': None
+                        }
+                        # Try to compute frame dimensions from actual image
+                        if HAS_PIL and self.asset_dir:
+                            img_path = self.asset_dir / sprite_path
+                            if img_path.exists():
+                                try:
+                                    with Image.open(img_path) as img:
+                                        info['frame_width'] = img.width // obj.grid_cols
+                                        info['frame_height'] = img.height // obj.grid_rows
+                                except Exception:
+                                    pass  # Fall back to runtime calculation
+                        self.spritesheet_info[sprite_path] = info
 
             # HUD objects have 'target' property
             if 'target' in obj.properties:
@@ -257,7 +289,22 @@ class PhaserEmitter(BaseEmitter):
 
         for sprite in self.sprite_assets:
             key = self._asset_key(sprite)
-            self.write(f"this.load.image('{key}', 'assets/{sprite}');")
+            if sprite in self.spritesheet_info:
+                info = self.spritesheet_info[sprite]
+                if info['frame_width'] and info['frame_height']:
+                    # Load as spritesheet with known frame dimensions
+                    self.write(f"// Spritesheet: {info['cols']}x{info['rows']} grid, {info['frame_width']}x{info['frame_height']} frames")
+                    self.write(f"this.load.spritesheet('{key}', 'assets/{sprite}', {{")
+                    self.indent()
+                    self.write(f"frameWidth: {info['frame_width']},")
+                    self.write(f"frameHeight: {info['frame_height']}")
+                    self.dedent()
+                    self.write("});")
+                else:
+                    # Fall back to regular image (no frame dimensions available)
+                    self.write(f"this.load.image('{key}', 'assets/{sprite}');")
+            else:
+                self.write(f"this.load.image('{key}', 'assets/{sprite}');")
 
         for sound in self.sound_assets:
             key = self._asset_key(sound)
@@ -269,6 +316,43 @@ class PhaserEmitter(BaseEmitter):
 
         self.dedent()
         self.write("}")
+        self.write_blank()
+
+    def _emit_animation_definitions(self):
+        """Emit animation definitions for sprite sheets."""
+        self.write("// Define sprite animations")
+        for sprite_path, info in self.spritesheet_info.items():
+            key = self._asset_key(sprite_path)
+            obj_name = info['obj_name']
+            frame_rate = info['frame_rate'] or 10
+            total_frames = info['cols'] * info['rows']
+
+            if info['animations']:
+                # Use defined animations
+                for anim_name, (start, end) in info['animations'].items():
+                    anim_key = f"{obj_name}::{anim_name}"
+                    self.write(f"this.anims.create({{")
+                    self.indent()
+                    self.write(f"key: '{anim_key}',")
+                    self.write(f"frames: this.anims.generateFrameNumbers('{key}', {{ start: {start}, end: {end} }}),")
+                    self.write(f"frameRate: {frame_rate},")
+                    self.write(f"repeat: -1  // Loop by default")
+                    self.dedent()
+                    self.write("});")
+            else:
+                # Auto-create default animation using all frames
+                anim_key = f"{obj_name}::default"
+                self.write(f"// Auto-generated default animation (all {total_frames} frames)")
+                self.write(f"this.anims.create({{")
+                self.indent()
+                self.write(f"key: '{anim_key}',")
+                self.write(f"frames: this.anims.generateFrameNumbers('{key}', {{ start: 0, end: {total_frames - 1} }}),")
+                self.write(f"frameRate: {frame_rate},")
+                self.write(f"repeat: -1")
+                self.dedent()
+                self.write("});")
+                # Store for auto-play
+                info['_default_anim'] = anim_key
         self.write_blank()
 
     def _emit_create(self):
@@ -292,6 +376,10 @@ class PhaserEmitter(BaseEmitter):
             self.write("this.touchAction = { a: false, b: false };")
             self.write("if (this.isMobile) this.setupTouchControls();")
             self.write_blank()
+
+        # Create sprite animations
+        if self.spritesheet_info:
+            self._emit_animation_definitions()
 
         # Create objects
         for obj in self.ir.objects:
@@ -1657,6 +1745,19 @@ class PhaserEmitter(BaseEmitter):
                 pw = self.to_target_width(w)
                 ph = self.to_target_height(h)
                 self.write(f"this.{obj.name}.setDisplaySize({pw}, {ph});")
+            # Apply flip if set
+            if obj.flip_x:
+                self.write(f"this.{obj.name}.setFlipX(true);")
+            if obj.flip_y:
+                self.write(f"this.{obj.name}.setFlipY(true);")
+            # Play initial animation if set
+            if obj.current_animation and obj.animations:
+                anim_key = f"{obj.name}::{obj.current_animation}"
+                self.write(f"this.{obj.name}.play('{anim_key}');")
+            elif obj.grid_cols and obj.grid_rows and not obj.animations:
+                # Auto-play default animation for spritesheets without explicit animations
+                anim_key = f"{obj.name}::default"
+                self.write(f"this.{obj.name}.play('{anim_key}');")
         else:
             # Rectangle object
             w = self._get_prop_value(obj, 'width', 0.05)
@@ -1812,6 +1913,28 @@ class PhaserEmitter(BaseEmitter):
             return f"if (!this.bgMusic || !this.bgMusic.isPlaying) {{ this.bgMusic = this.sound.add('{key}', {{ loop: true }}); this.bgMusic.play(); }}"
         elif action_type == 'stop_music':
             return "if (this.bgMusic) { this.bgMusic.stop(); }"
+        elif action_type == 'play_animation':
+            anim_name = params.get('animation', '')
+            target = params.get('target')
+            loop = params.get('loop', True)
+            if target:
+                # Play animation on specific object
+                anim_key = f"{target}::{anim_name}"
+                obj_ref = f"this.objects['{target}']"
+                if loop:
+                    return f"if ({obj_ref}) {{ {obj_ref}.play('{anim_key}'); }}"
+                else:
+                    return f"if ({obj_ref}) {{ {obj_ref}.play({{ key: '{anim_key}', repeat: 0 }}); }}"
+            else:
+                # Target not specified - would need context
+                return f"// play_animation requires target: play {anim_name} on <object>"
+        elif action_type == 'stop_animation':
+            target = params.get('target')
+            if target:
+                obj_ref = f"this.objects['{target}']"
+                return f"if ({obj_ref} && {obj_ref}.anims) {{ {obj_ref}.anims.stop(); }}"
+            else:
+                return "// stop_animation requires target: stop animation on <object>"
         elif action_type == 'trigger':
             event_name = params.get('event', '')
             return f"this.triggerEvent('{event_name}');"

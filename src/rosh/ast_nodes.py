@@ -443,6 +443,49 @@ class StopMusic(ASTNode):
 
 
 @dataclass
+class PlayAnimation(ASTNode):
+    """play <animation> [on <target>] [once] - Play sprite animation"""
+    animation: str
+    target: Optional[str] = None  # None = current context object
+    loop: bool = True  # False if 'once' specified
+    line: int = 0
+
+
+@dataclass
+class StopAnimation(ASTNode):
+    """stop animation [on <target>] - Stop current animation"""
+    target: Optional[str] = None  # None = current context object
+    line: int = 0
+
+
+@dataclass
+class SetGrid(ASTNode):
+    """set grid to <cols> <rows> - Define sprite sheet grid"""
+    target: str
+    cols: int
+    rows: int
+    line: int = 0
+
+
+@dataclass
+class SetAnimations(ASTNode):
+    """set animations to <name1> <name2> ... - Define animation names with auto-division"""
+    target: str
+    names: List[str]
+    line: int = 0
+
+
+@dataclass
+class SetAnimationFrames(ASTNode):
+    """set animation <name> to <start> <end> - Override animation frame range"""
+    target: str
+    animation: str
+    start: int
+    end: int
+    line: int = 0
+
+
+@dataclass
 class FunctionDef(ASTNode):
     """define function <name> <params> ... end"""
     name: str

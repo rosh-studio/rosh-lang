@@ -30,10 +30,10 @@ Design Principles:
 # IR Version - Emitters must implement this version
 # See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
 # =============================================================================
-IR_VERSION = "0.2.1"  # Added hidden flag for underscore convention
+IR_VERSION = "0.2.2"  # Added sprite sheet animation support
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import uuid
 
 
@@ -115,6 +115,8 @@ class IR_Action:
         - "break": (no params)
         - "continue": (no params)
         - "goto": scene (optional), level (optional) - scene/level navigation
+        - "play_animation": target, name, loop (optional) - play sprite animation
+        - "stop_animation": target - stop current animation
     """
     type: str
     params: Dict[str, Any] = field(default_factory=dict)
@@ -192,6 +194,16 @@ class IR_Object:
     level: Optional[int] = None  # Level number (None = all levels)
     saveable: bool = True  # Whether object is saved (False for particles, etc.)
     hidden: bool = False  # Hidden objects (name starts with '_') are not rendered
+    # Sprite sheet animation support (v0.2.2)
+    grid_cols: Optional[int] = None  # Columns in sprite sheet
+    grid_rows: Optional[int] = None  # Rows in sprite sheet
+    frame: int = 0  # Current frame index
+    frame_rate: float = 10.0  # Frames per second
+    animations: Dict[str, Tuple[int, int]] = field(default_factory=dict)  # name -> (start, end)
+    current_animation: Optional[str] = None
+    animation_loop: bool = True
+    flip_x: bool = False  # Mirror sprite horizontally
+    flip_y: bool = False  # Mirror sprite vertically
     engine_capabilities: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -405,7 +417,17 @@ def serialize_ir_program(program: IR_Program) -> dict:
                 "properties": {
                     k: {"type": v.type, "value": v.value}
                     for k, v in obj.properties.items()
-                }
+                },
+                # Sprite animation fields (only if set)
+                **({"grid_cols": obj.grid_cols} if obj.grid_cols else {}),
+                **({"grid_rows": obj.grid_rows} if obj.grid_rows else {}),
+                **({"frame": obj.frame} if obj.frame else {}),
+                **({"frame_rate": obj.frame_rate} if obj.frame_rate != 10.0 else {}),
+                **({"animations": obj.animations} if obj.animations else {}),
+                **({"current_animation": obj.current_animation} if obj.current_animation else {}),
+                **({"animation_loop": obj.animation_loop} if not obj.animation_loop else {}),
+                **({"flip_x": obj.flip_x} if obj.flip_x else {}),
+                **({"flip_y": obj.flip_y} if obj.flip_y else {}),
             }
             for obj in program.objects
             if obj.saveable  # Only save objects with saveable=True
@@ -424,6 +446,13 @@ def deserialize_ir_objects(data: dict) -> List[IR_Object]:
             k: IR_Value(v["type"], v["value"])
             for k, v in obj_data.get("properties", {}).items()
         }
+        # Convert animations back to tuples if present
+        animations = {}
+        for name, frames in obj_data.get("animations", {}).items():
+            if isinstance(frames, list) and len(frames) == 2:
+                animations[name] = tuple(frames)
+            else:
+                animations[name] = frames
         objects.append(IR_Object(
             uuid=obj_data["uuid"],
             name=obj_data["name"],
@@ -432,5 +461,15 @@ def deserialize_ir_objects(data: dict) -> List[IR_Object]:
             properties=properties,
             scene=obj_data.get("scene"),
             level=obj_data.get("level"),
+            # Sprite animation fields
+            grid_cols=obj_data.get("grid_cols"),
+            grid_rows=obj_data.get("grid_rows"),
+            frame=obj_data.get("frame", 0),
+            frame_rate=obj_data.get("frame_rate", 10.0),
+            animations=animations,
+            current_animation=obj_data.get("current_animation"),
+            animation_loop=obj_data.get("animation_loop", True),
+            flip_x=obj_data.get("flip_x", False),
+            flip_y=obj_data.get("flip_y", False),
         ))
     return objects

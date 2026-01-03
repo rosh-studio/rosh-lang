@@ -2239,7 +2239,9 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
                 canvas_height=meta.get('canvas', {}).get('height', 600),
                 project_root=project_dir
             )
-            emitter = PhaserEmitter(ir, meta=meta)
+            # Pass asset directory for spritesheet frame dimension calculation
+            asset_dir = Path(project_dir) / 'assets' if project_dir else None
+            emitter = PhaserEmitter(ir, meta=meta, asset_dir=asset_dir)
             js_code = emitter.emit()
 
             # TODO: Add REPL support to IR emitter

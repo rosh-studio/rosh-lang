@@ -26,7 +26,7 @@ from .ast_nodes import (
     Print, PlaySound, PlayMusic, StopMusic, Save, Load, LoadSettings,
     CloneObject, DeleteObject, Increment, Decrement, Random, Length,
     ListLiteral, ListIndex, Append, Remove, Get, GotoScene, SaveGame, LoadGame,
-    Metadata
+    Metadata, PlayAnimation, StopAnimation, SetGrid, SetAnimations, SetAnimationFrames
 )
 from .ir import (
     IR_Program, IR_Object, IR_Event, IR_Action, IR_Function,
@@ -340,6 +340,23 @@ class IRTransformer:
             saveable_val = properties.pop('saveable').value
             saveable = bool(saveable_val) if saveable_val is not None else True
 
+        # Extract sprite animation properties
+        grid_cols = None
+        grid_rows = None
+        frame_rate = 10.0
+        flip_x = False
+        flip_y = False
+        if 'sprite_columns' in properties:
+            grid_cols = int(properties.pop('sprite_columns').value)
+        if 'sprite_rows' in properties:
+            grid_rows = int(properties.pop('sprite_rows').value)
+        if 'frame_rate' in properties:
+            frame_rate = float(properties.pop('frame_rate').value)
+        if 'flip_x' in properties:
+            flip_x = bool(properties.pop('flip_x').value)
+        if 'flip_y' in properties:
+            flip_y = bool(properties.pop('flip_y').value)
+
         return IR_Object(
             uuid=str(uuid.uuid4()),
             name=node.name.lower(),
@@ -349,7 +366,12 @@ class IRTransformer:
             saveable=saveable,
             hidden=node.hidden,  # Propagate hidden flag from AST
             scene=scene,
-            level=level
+            level=level,
+            grid_cols=grid_cols,
+            grid_rows=grid_rows,
+            frame_rate=frame_rate,
+            flip_x=flip_x,
+            flip_y=flip_y
         )
 
     def extract_property(self, stmt: SetProperty) -> tuple:
@@ -604,6 +626,50 @@ class IRTransformer:
 
         elif isinstance(stmt, StopMusic):
             return IR_Action('stop_music', {})
+
+        elif isinstance(stmt, PlayAnimation):
+            return IR_Action('play_animation', {
+                'animation': stmt.animation.lower(),
+                'target': stmt.target.lower() if stmt.target else None,
+                'loop': stmt.loop
+            })
+
+        elif isinstance(stmt, StopAnimation):
+            return IR_Action('stop_animation', {
+                'target': stmt.target.lower() if stmt.target else None
+            })
+
+        elif isinstance(stmt, SetGrid):
+            # Set grid on target object
+            target_obj = self.program.get_object_by_name(stmt.target)
+            if target_obj:
+                target_obj.grid_cols = stmt.cols
+                target_obj.grid_rows = stmt.rows
+            return None  # No runtime action, just modifies IR
+
+        elif isinstance(stmt, SetAnimations):
+            # Define animations with auto-division
+            target_obj = self.program.get_object_by_name(stmt.target)
+            if target_obj and target_obj.grid_cols and target_obj.grid_rows:
+                total_frames = target_obj.grid_cols * target_obj.grid_rows
+                num_anims = len(stmt.names)
+                if num_anims > 0:
+                    frames_per_anim = total_frames // num_anims
+                    remainder = total_frames % num_anims
+                    frame = 0
+                    for i, name in enumerate(stmt.names):
+                        # Last animation gets remainder
+                        count = frames_per_anim + (remainder if i == num_anims - 1 else 0)
+                        target_obj.animations[name.lower()] = (frame, frame + count - 1)
+                        frame += count
+            return None  # No runtime action
+
+        elif isinstance(stmt, SetAnimationFrames):
+            # Override specific animation frame range
+            target_obj = self.program.get_object_by_name(stmt.target)
+            if target_obj:
+                target_obj.animations[stmt.animation.lower()] = (stmt.start, stmt.end)
+            return None  # No runtime action
 
         elif isinstance(stmt, Save):
             return IR_Action('save', {

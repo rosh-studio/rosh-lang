@@ -19,6 +19,7 @@ dependencies = [
     "tomli-w>=1.0.0",
     "websockets>=15.0.1",
     "websocket-client>=1.6.0",
+    "pillow>=12.1.0",
 ]
 
 [project.optional-dependencies]
