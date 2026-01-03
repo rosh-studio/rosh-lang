@@ -643,6 +643,9 @@ when update then
                         if bullet2.y is above enemy1.y minus 20 then
                             if bullet2.y is below enemy1.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy1.x
+                                set state.explosion_y to enemy1.y
+                                call show_explosion
                                 set enemy1.y to -50
                                 set bullet2.active to 0
                                 set bullet2.visible to false
@@ -659,6 +662,9 @@ when update then
                         if bullet2.y is above enemy2.y minus 20 then
                             if bullet2.y is below enemy2.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy2.x
+                                set state.explosion_y to enemy2.y
+                                call show_explosion
                                 set enemy2.y to -50
                                 set bullet2.active to 0
                                 set bullet2.visible to false
@@ -675,6 +681,9 @@ when update then
                         if bullet2.y is above enemy3.y minus 20 then
                             if bullet2.y is below enemy3.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy3.x
+                                set state.explosion_y to enemy3.y
+                                call show_explosion
                                 set enemy3.y to -50
                                 set bullet2.active to 0
                                 set bullet2.visible to false
@@ -691,6 +700,9 @@ when update then
                         if bullet2.y is above enemy4.y minus 20 then
                             if bullet2.y is below enemy4.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy4.x
+                                set state.explosion_y to enemy4.y
+                                call show_explosion
                                 set enemy4.y to -50
                                 set bullet2.active to 0
                                 set bullet2.visible to false
@@ -711,6 +723,9 @@ when update then
                         if bullet3.y is above enemy1.y minus 20 then
                             if bullet3.y is below enemy1.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy1.x
+                                set state.explosion_y to enemy1.y
+                                call show_explosion
                                 set enemy1.y to -50
                                 set bullet3.active to 0
                                 set bullet3.visible to false
@@ -727,6 +742,9 @@ when update then
                         if bullet3.y is above enemy2.y minus 20 then
                             if bullet3.y is below enemy2.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy2.x
+                                set state.explosion_y to enemy2.y
+                                call show_explosion
                                 set enemy2.y to -50
                                 set bullet3.active to 0
                                 set bullet3.visible to false
@@ -743,6 +761,9 @@ when update then
                         if bullet3.y is above enemy3.y minus 20 then
                             if bullet3.y is below enemy3.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy3.x
+                                set state.explosion_y to enemy3.y
+                                call show_explosion
                                 set enemy3.y to -50
                                 set bullet3.active to 0
                                 set bullet3.visible to false
@@ -759,6 +780,9 @@ when update then
                         if bullet3.y is above enemy4.y minus 20 then
                             if bullet3.y is below enemy4.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy4.x
+                                set state.explosion_y to enemy4.y
+                                call show_explosion
                                 set enemy4.y to -50
                                 set bullet3.active to 0
                                 set bullet3.visible to false
@@ -779,6 +803,9 @@ when update then
                         if bullet4.y is above enemy1.y minus 20 then
                             if bullet4.y is below enemy1.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy1.x
+                                set state.explosion_y to enemy1.y
+                                call show_explosion
                                 set enemy1.y to -50
                                 set bullet4.active to 0
                                 set bullet4.visible to false
@@ -795,6 +822,9 @@ when update then
                         if bullet4.y is above enemy2.y minus 20 then
                             if bullet4.y is below enemy2.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy2.x
+                                set state.explosion_y to enemy2.y
+                                call show_explosion
                                 set enemy2.y to -50
                                 set bullet4.active to 0
                                 set bullet4.visible to false
@@ -811,6 +841,9 @@ when update then
                         if bullet4.y is above enemy3.y minus 20 then
                             if bullet4.y is below enemy3.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy3.x
+                                set state.explosion_y to enemy3.y
+                                call show_explosion
                                 set enemy3.y to -50
                                 set bullet4.active to 0
                                 set bullet4.visible to false
@@ -827,6 +860,9 @@ when update then
                         if bullet4.y is above enemy4.y minus 20 then
                             if bullet4.y is below enemy4.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy4.x
+                                set state.explosion_y to enemy4.y
+                                call show_explosion
                                 set enemy4.y to -50
                                 set bullet4.active to 0
                                 set bullet4.visible to false
@@ -847,6 +883,9 @@ when update then
                         if bullet5.y is above enemy1.y minus 20 then
                             if bullet5.y is below enemy1.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy1.x
+                                set state.explosion_y to enemy1.y
+                                call show_explosion
                                 set enemy1.y to -50
                                 set bullet5.active to 0
                                 set bullet5.visible to false
@@ -863,6 +902,9 @@ when update then
                         if bullet5.y is above enemy2.y minus 20 then
                             if bullet5.y is below enemy2.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy2.x
+                                set state.explosion_y to enemy2.y
+                                call show_explosion
                                 set enemy2.y to -50
                                 set bullet5.active to 0
                                 set bullet5.visible to false
@@ -879,6 +921,9 @@ when update then
                         if bullet5.y is above enemy3.y minus 20 then
                             if bullet5.y is below enemy3.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy3.x
+                                set state.explosion_y to enemy3.y
+                                call show_explosion
                                 set enemy3.y to -50
                                 set bullet5.active to 0
                                 set bullet5.visible to false
@@ -895,6 +940,9 @@ when update then
                         if bullet5.y is above enemy4.y minus 20 then
                             if bullet5.y is below enemy4.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy4.x
+                                set state.explosion_y to enemy4.y
+                                call show_explosion
                                 set enemy4.y to -50
                                 set bullet5.active to 0
                                 set bullet5.visible to false

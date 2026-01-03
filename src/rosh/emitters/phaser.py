@@ -127,26 +127,30 @@ class PhaserEmitter(BaseEmitter):
                     self.sprite_assets.add(sprite_path)
                     # Check if this is a spritesheet (has grid defined)
                     if obj.grid_cols and obj.grid_rows:
-                        info = {
-                            'cols': obj.grid_cols,
-                            'rows': obj.grid_rows,
-                            'obj_name': obj.name,
-                            'animations': obj.animations,
-                            'frame_rate': obj.frame_rate,
-                            'frame_width': None,
-                            'frame_height': None
-                        }
-                        # Try to compute frame dimensions from actual image
-                        if HAS_PIL and self.asset_dir:
-                            img_path = self.asset_dir / sprite_path
-                            if img_path.exists():
-                                try:
-                                    with Image.open(img_path) as img:
-                                        info['frame_width'] = img.width // obj.grid_cols
-                                        info['frame_height'] = img.height // obj.grid_rows
-                                except Exception:
-                                    pass  # Fall back to runtime calculation
-                        self.spritesheet_info[sprite_path] = info
+                        if sprite_path in self.spritesheet_info:
+                            # Append to existing list of objects using this spritesheet
+                            self.spritesheet_info[sprite_path]['obj_names'].append(obj.name)
+                        else:
+                            info = {
+                                'cols': obj.grid_cols,
+                                'rows': obj.grid_rows,
+                                'obj_names': [obj.name],  # List of all objects using this sheet
+                                'animations': obj.animations,
+                                'frame_rate': obj.frame_rate,
+                                'frame_width': None,
+                                'frame_height': None
+                            }
+                            # Try to compute frame dimensions from actual image
+                            if HAS_PIL and self.asset_dir:
+                                img_path = self.asset_dir / sprite_path
+                                if img_path.exists():
+                                    try:
+                                        with Image.open(img_path) as img:
+                                            info['frame_width'] = img.width // obj.grid_cols
+                                            info['frame_height'] = img.height // obj.grid_rows
+                                    except Exception:
+                                        pass  # Fall back to runtime calculation
+                            self.spritesheet_info[sprite_path] = info
 
             # HUD objects have 'target' property
             if 'target' in obj.properties:
@@ -323,36 +327,36 @@ class PhaserEmitter(BaseEmitter):
         self.write("// Define sprite animations")
         for sprite_path, info in self.spritesheet_info.items():
             key = self._asset_key(sprite_path)
-            obj_name = info['obj_name']
+            obj_names = info['obj_names']
             frame_rate = info['frame_rate'] or 10
             total_frames = info['cols'] * info['rows']
 
-            if info['animations']:
-                # Use defined animations
-                for anim_name, (start, end) in info['animations'].items():
-                    anim_key = f"{obj_name}::{anim_name}"
+            # Create animations for ALL objects using this spritesheet
+            for obj_name in obj_names:
+                if info['animations']:
+                    # Use defined animations
+                    for anim_name, (start, end) in info['animations'].items():
+                        anim_key = f"{obj_name}::{anim_name}"
+                        self.write(f"this.anims.create({{")
+                        self.indent()
+                        self.write(f"key: '{anim_key}',")
+                        self.write(f"frames: this.anims.generateFrameNumbers('{key}', {{ start: {start}, end: {end} }}),")
+                        self.write(f"frameRate: {frame_rate},")
+                        self.write(f"repeat: -1  // Loop by default")
+                        self.dedent()
+                        self.write("});")
+                else:
+                    # Auto-create default animation using all frames
+                    anim_key = f"{obj_name}::default"
+                    self.write(f"// Auto-generated default animation (all {total_frames} frames)")
                     self.write(f"this.anims.create({{")
                     self.indent()
                     self.write(f"key: '{anim_key}',")
-                    self.write(f"frames: this.anims.generateFrameNumbers('{key}', {{ start: {start}, end: {end} }}),")
+                    self.write(f"frames: this.anims.generateFrameNumbers('{key}', {{ start: 0, end: {total_frames - 1} }}),")
                     self.write(f"frameRate: {frame_rate},")
-                    self.write(f"repeat: -1  // Loop by default")
+                    self.write(f"repeat: -1")
                     self.dedent()
                     self.write("});")
-            else:
-                # Auto-create default animation using all frames
-                anim_key = f"{obj_name}::default"
-                self.write(f"// Auto-generated default animation (all {total_frames} frames)")
-                self.write(f"this.anims.create({{")
-                self.indent()
-                self.write(f"key: '{anim_key}',")
-                self.write(f"frames: this.anims.generateFrameNumbers('{key}', {{ start: 0, end: {total_frames - 1} }}),")
-                self.write(f"frameRate: {frame_rate},")
-                self.write(f"repeat: -1")
-                self.dedent()
-                self.write("});")
-                # Store for auto-play
-                info['_default_anim'] = anim_key
         self.write_blank()
 
     def _emit_create(self):
