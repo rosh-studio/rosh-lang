@@ -1530,8 +1530,47 @@ const RoshRuntime = (function() {
       return;
     }
 
-    const details = adapter.getObjectDetails(name);
-    if (!details) {
+    let details = adapter.getObjectDetails(name);
+
+    // If not found, try fuzzy matching
+    if (!details && adapter.getAllObjects) {
+      const allObjects = adapter.getAllObjects();
+      const lowerName = name.toLowerCase();
+
+      // Try substring match first
+      for (const obj of allObjects) {
+        const objName = obj.name || (obj.userData && obj.userData._name) || '';
+        if (objName.toLowerCase().includes(lowerName) || lowerName.includes(objName.toLowerCase())) {
+          log('[resolved: "' + name + '" -> "' + objName + '"]', 'dim');
+          name = objName;
+          details = adapter.getObjectDetails(name);
+          break;
+        }
+      }
+
+      // If still not found, suggest alternatives
+      if (!details) {
+        const suggestions = allObjects
+          .map(obj => obj.name || (obj.userData && obj.userData._name) || '')
+          .filter(n => n && !n.startsWith('_'))
+          .filter(n => n.toLowerCase().includes(lowerName) || lowerName.includes(n.substring(0, Math.min(n.length, lowerName.length))))
+          .slice(0, 5);
+
+        log('Object not found: ' + name, 'err');
+        if (suggestions.length > 0) {
+          log('Did you mean: ' + suggestions.join(', ') + '?', 'cyan');
+        } else {
+          const available = allObjects
+            .map(obj => obj.name || (obj.userData && obj.userData._name) || '')
+            .filter(n => n && !n.startsWith('_'))
+            .slice(0, 10);
+          if (available.length > 0) {
+            log('Available: ' + available.join(', ') + (allObjects.length > 10 ? '...' : ''), 'dim');
+          }
+        }
+        return;
+      }
+    } else if (!details) {
       log('Object not found: ' + name, 'err');
       return;
     }
