@@ -1754,7 +1754,12 @@ class PhaserEmitter(BaseEmitter):
             if obj.current_animation and obj.animations:
                 anim_key = f"{obj.name}::{obj.current_animation}"
                 self.write(f"this.{obj.name}.play('{anim_key}');")
-            elif obj.grid_cols and obj.grid_rows and not obj.animations:
+            elif obj.animations:
+                # Auto-play first named animation
+                first_anim = list(obj.animations.keys())[0]
+                anim_key = f"{obj.name}::{first_anim}"
+                self.write(f"this.{obj.name}.play('{anim_key}');")
+            elif obj.grid_cols and obj.grid_rows:
                 # Auto-play default animation for spritesheets without explicit animations
                 anim_key = f"{obj.name}::default"
                 self.write(f"this.{obj.name}.play('{anim_key}');")

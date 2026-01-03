@@ -357,7 +357,7 @@ class IRTransformer:
         if 'flip_y' in properties:
             flip_y = bool(properties.pop('flip_y').value)
 
-        return IR_Object(
+        ir_obj = IR_Object(
             uuid=str(uuid.uuid4()),
             name=node.name.lower(),
             type=obj_type,
@@ -373,6 +373,28 @@ class IRTransformer:
             flip_x=flip_x,
             flip_y=flip_y
         )
+
+        # Process animation definitions inside create block
+        for stmt in node.body:
+            if isinstance(stmt, SetAnimations):
+                # Define animations with auto-division of frames
+                if ir_obj.grid_cols and ir_obj.grid_rows:
+                    total_frames = ir_obj.grid_cols * ir_obj.grid_rows
+                    num_anims = len(stmt.names)
+                    if num_anims > 0:
+                        frames_per_anim = total_frames // num_anims
+                        remainder = total_frames % num_anims
+                        frame = 0
+                        for i, name in enumerate(stmt.names):
+                            # Last animation gets remainder
+                            count = frames_per_anim + (remainder if i == num_anims - 1 else 0)
+                            ir_obj.animations[name.lower()] = (frame, frame + count - 1)
+                            frame += count
+            elif isinstance(stmt, SetAnimationFrames):
+                # Override specific animation frame range
+                ir_obj.animations[stmt.animation.lower()] = (stmt.start, stmt.end)
+
+        return ir_obj
 
     def extract_property(self, stmt: SetProperty) -> tuple:
         """Extract property name and IR_Value from SetProperty."""
