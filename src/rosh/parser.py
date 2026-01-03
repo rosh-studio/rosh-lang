@@ -690,6 +690,15 @@ class Parser:
             value = self.parse_expression()
             return SetAll(type_name=type_name, property_name=prop_name, value=value, line=line)
 
+        # Check for animation syntax:
+        # set animations to idle walk jump (on current context)
+        # set player animations to idle walk jump (on specific object)
+        # set animation walk to 0 3 (override single animation)
+        # set player animation walk to 0 3 (override on specific object)
+        anim_result = self._try_parse_animation_set(line)
+        if anim_result:
+            return anim_result
+
         # Check for type annotation: set x: number to 42 OR set x as number to 42
         # Also handle META token as a valid target (set meta ... )
         if self.current_token().type in (TokenType.IDENTIFIER, TokenType.META):
@@ -779,6 +788,109 @@ class Parser:
         value = self.parse_expression()
 
         return SetProperty(target=target, value=value, line=line)
+
+    def _try_parse_animation_set(self, line: int):
+        """Try to parse animation-specific set syntax.
+
+        Patterns:
+            set animations to idle walk jump        -> SetAnimations(target=None, names=[...])
+            set player animations to idle walk jump -> SetAnimations(target='player', names=[...])
+            set animation walk to 0 3               -> SetAnimationFrames(target=None, anim='walk', start=0, end=3)
+            set player animation walk to 0 3       -> SetAnimationFrames(target='player', anim='walk', start=0, end=3)
+
+        Returns None if pattern doesn't match (caller should try other parsing).
+        """
+        from .ast_nodes import SetAnimations, SetAnimationFrames
+
+        saved_pos = self.pos
+
+        # Check first token
+        if self.current_token().type != TokenType.IDENTIFIER:
+            return None
+
+        first_token = self.current_token()
+        first_name = first_token.value.lower()
+
+        # Pattern 1: set animations to ...
+        if first_name == 'animations':
+            self.advance()  # consume 'animations'
+            if self.current_token().type == TokenType.TO:
+                self.advance()  # consume 'to'
+                # Collect animation names (identifiers)
+                names = []
+                while self.current_token().type == TokenType.IDENTIFIER:
+                    names.append(self.current_token().value)
+                    self.advance()
+                if names:
+                    return SetAnimations(target=None, names=names, line=line)
+            # Doesn't match, restore position
+            self.pos = saved_pos
+            return None
+
+        # Pattern 2: set animation <name> to <start> <end>
+        if first_name == 'animation':
+            self.advance()  # consume 'animation'
+            if self.current_token().type == TokenType.IDENTIFIER:
+                anim_name = self.current_token().value
+                self.advance()  # consume animation name
+                if self.current_token().type == TokenType.TO:
+                    self.advance()  # consume 'to'
+                    if self.current_token().type == TokenType.NUMBER:
+                        start = int(self.current_token().value)
+                        self.advance()
+                        if self.current_token().type == TokenType.NUMBER:
+                            end = int(self.current_token().value)
+                            self.advance()
+                            return SetAnimationFrames(target=None, animation=anim_name, start=start, end=end, line=line)
+            # Doesn't match, restore position
+            self.pos = saved_pos
+            return None
+
+        # Check for pattern with target: set <object> animations/animation ...
+        second_token = self.peek_token()
+        if second_token.type == TokenType.IDENTIFIER:
+            second_name = second_token.value.lower()
+
+            # Pattern 3: set player animations to ...
+            if second_name == 'animations':
+                target = first_token.value
+                self.advance()  # consume target
+                self.advance()  # consume 'animations'
+                if self.current_token().type == TokenType.TO:
+                    self.advance()  # consume 'to'
+                    names = []
+                    while self.current_token().type == TokenType.IDENTIFIER:
+                        names.append(self.current_token().value)
+                        self.advance()
+                    if names:
+                        return SetAnimations(target=target, names=names, line=line)
+                # Doesn't match, restore position
+                self.pos = saved_pos
+                return None
+
+            # Pattern 4: set player animation <name> to <start> <end>
+            if second_name == 'animation':
+                target = first_token.value
+                self.advance()  # consume target
+                self.advance()  # consume 'animation'
+                if self.current_token().type == TokenType.IDENTIFIER:
+                    anim_name = self.current_token().value
+                    self.advance()  # consume animation name
+                    if self.current_token().type == TokenType.TO:
+                        self.advance()  # consume 'to'
+                        if self.current_token().type == TokenType.NUMBER:
+                            start = int(self.current_token().value)
+                            self.advance()
+                            if self.current_token().type == TokenType.NUMBER:
+                                end = int(self.current_token().value)
+                                self.advance()
+                                return SetAnimationFrames(target=target, animation=anim_name, start=start, end=end, line=line)
+                # Doesn't match, restore position
+                self.pos = saved_pos
+                return None
+
+        # No animation pattern matched
+        return None
 
     def parse_append(self):
         """Parse: append <item> to <list>"""
