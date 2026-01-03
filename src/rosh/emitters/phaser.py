@@ -1927,9 +1927,9 @@ class PhaserEmitter(BaseEmitter):
             target = params.get('target')
             loop = params.get('loop', True)
             if target:
-                # Play animation on specific object
+                # Play animation on specific object (objects stored as this.objName)
                 anim_key = f"{target}::{anim_name}"
-                obj_ref = f"this.objects['{target}']"
+                obj_ref = f"this.{target}"
                 if loop:
                     return f"if ({obj_ref}) {{ {obj_ref}.play('{anim_key}'); }}"
                 else:
@@ -1940,7 +1940,7 @@ class PhaserEmitter(BaseEmitter):
         elif action_type == 'stop_animation':
             target = params.get('target')
             if target:
-                obj_ref = f"this.objects['{target}']"
+                obj_ref = f"this.{target}"
                 return f"if ({obj_ref} && {obj_ref}.anims) {{ {obj_ref}.anims.stop(); }}"
             else:
                 return "// stop_animation requires target: stop animation on <object>"

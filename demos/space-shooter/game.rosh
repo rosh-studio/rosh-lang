@@ -322,24 +322,28 @@ define function show_explosion
         set explosion1.y to state.explosion_y
         set explosion1.visible to true
         set explosion1.timer to 27
+        play explode on explosion1
         set state.next_explosion to 2
     else if state.next_explosion is equal to 2 then
         set explosion2.x to state.explosion_x
         set explosion2.y to state.explosion_y
         set explosion2.visible to true
         set explosion2.timer to 27
+        play explode on explosion2
         set state.next_explosion to 3
     else if state.next_explosion is equal to 3 then
         set explosion3.x to state.explosion_x
         set explosion3.y to state.explosion_y
         set explosion3.visible to true
         set explosion3.timer to 27
+        play explode on explosion3
         set state.next_explosion to 4
     else if state.next_explosion is equal to 4 then
         set explosion4.x to state.explosion_x
         set explosion4.y to state.explosion_y
         set explosion4.visible to true
         set explosion4.timer to 27
+        play explode on explosion4
         set state.next_explosion to 1
     end
 end
