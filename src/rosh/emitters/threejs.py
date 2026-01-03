@@ -2106,7 +2106,7 @@ class ThreeJSEmitter(BaseEmitter):
 
         # Edit mode: move selected object with arrow keys
         self.write_comment("Edit mode: move selected object")
-        self.write("if (editMode && selectedObject && !window.consoleVisible && !consoleVisible) {")
+        self.write("if (window.editMode && selectedObject && !window.consoleVisible && !consoleVisible) {")
         self.indent()
         self.write("const editSpeed = 0.2;")
         self.write("if (arrowState.left) selectedObject.position.x -= editSpeed;")
