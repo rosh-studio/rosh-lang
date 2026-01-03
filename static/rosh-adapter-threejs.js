@@ -736,11 +736,13 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
 
     enableEditMode: function() {
       editMode = true;
+      window.editMode = true;  // Sync with global for animate loop
       return { success: true, editMode: true };
     },
 
     disableEditMode: function() {
       editMode = false;
+      window.editMode = false;  // Sync with global for animate loop
       deselectObject();  // Clear selection when leaving edit mode
       return { success: true, editMode: false };
     },
