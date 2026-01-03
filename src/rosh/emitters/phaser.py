@@ -1916,7 +1916,7 @@ class PhaserEmitter(BaseEmitter):
             return "console.log();"
         elif action_type == 'play_sound':
             key = self._asset_key(params.get('asset', ''))
-            return f"this.sound.play('{key}');"
+            return f"if (this.cache.audio.exists('{key}')) {{ this.sound.play('{key}'); }} else {{ console.warn('Sound not found: {key}'); }}"
         elif action_type == 'play_music':
             key = self._asset_key(params.get('asset', ''))
             return f"if (!this.bgMusic || !this.bgMusic.isPlaying) {{ this.bgMusic = this.sound.add('{key}', {{ loop: true }}); this.bgMusic.play(); }}"
