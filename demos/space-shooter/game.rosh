@@ -1,15 +1,8 @@
 # Space Shooter - Classic Arcade Game
-# Horizontal movement, multiple bullets, multiple enemies, 3 lives
+# Refactored with loops and helper functions
 
-# Render as 2D arcade screen in Three.js
 set _meta mode to "arcade"
 set _meta aspect to "landscape"
-
-# === GAME CONFIGURATION ===
-# Canvas: 800x600
-# Player: bottom center, moves left/right
-# Bullets: fire upward, multiple allowed
-# Enemies: spawn at top, move down
 
 # === TITLE SCREEN ===
 create object title
@@ -48,8 +41,8 @@ create object player
     set speed to 8
 end
 
-# === BULLETS (pool of 5) ===
-create object bullet1
+# === OBJECT POOLS ===
+create 5 objects as bullets
     set x to 0
     set y to 0
     set width to 9
@@ -60,52 +53,7 @@ create object bullet1
     set active to 0
 end
 
-create object bullet2
-    set x to 0
-    set y to 0
-    set width to 9
-    set height to 33
-    set sprite to "laserGreen.png"
-    set color to "green"
-    set visible to false
-    set active to 0
-end
-
-create object bullet3
-    set x to 0
-    set y to 0
-    set width to 9
-    set height to 33
-    set sprite to "laserGreen.png"
-    set color to "green"
-    set visible to false
-    set active to 0
-end
-
-create object bullet4
-    set x to 0
-    set y to 0
-    set width to 9
-    set height to 33
-    set sprite to "laserGreen.png"
-    set color to "green"
-    set visible to false
-    set active to 0
-end
-
-create object bullet5
-    set x to 0
-    set y to 0
-    set width to 9
-    set height to 33
-    set sprite to "laserGreen.png"
-    set color to "green"
-    set visible to false
-    set active to 0
-end
-
-# === EXPLOSIONS (pool of 4 - for visual effect) ===
-create object explosion1
+create 4 objects as explosions
     set x to 0
     set y to 0
     set width to 64
@@ -119,87 +67,8 @@ create object explosion1
     set timer to 0
 end
 
-create object explosion2
-    set x to 0
-    set y to 0
-    set width to 64
-    set height to 64
-    set sprite to "explosion-sheet.png"
-    set sprite_columns to 3
-    set sprite_rows to 3
-    set animations to explode
-    set frame_rate to 20
-    set visible to false
-    set timer to 0
-end
-
-create object explosion3
-    set x to 0
-    set y to 0
-    set width to 64
-    set height to 64
-    set sprite to "explosion-sheet.png"
-    set sprite_columns to 3
-    set sprite_rows to 3
-    set animations to explode
-    set frame_rate to 20
-    set visible to false
-    set timer to 0
-end
-
-create object explosion4
-    set x to 0
-    set y to 0
-    set width to 64
-    set height to 64
-    set sprite to "explosion-sheet.png"
-    set sprite_columns to 3
-    set sprite_rows to 3
-    set animations to explode
-    set frame_rate to 20
-    set visible to false
-    set timer to 0
-end
-
-# === ENEMIES (pool of 4) ===
-create object enemy1
+create 4 objects as enemies
     set x to 100
-    set y to -50
-    set width to 40
-    set height to 40
-    set sprite to "enemyShip.png"
-    set color to "red"
-    set visible to false
-    set active to 0
-    set speed to 2
-end
-
-create object enemy2
-    set x to 300
-    set y to -50
-    set width to 40
-    set height to 40
-    set sprite to "enemyShip.png"
-    set color to "red"
-    set visible to false
-    set active to 0
-    set speed to 2
-end
-
-create object enemy3
-    set x to 500
-    set y to -50
-    set width to 40
-    set height to 40
-    set sprite to "enemyShip.png"
-    set color to "red"
-    set visible to false
-    set active to 0
-    set speed to 2
-end
-
-create object enemy4
-    set x to 700
     set y to -50
     set width to 40
     set height to 40
@@ -266,9 +135,7 @@ create object state
     set level to 0
     set score to 0
     set lives to 3
-    set spawn_timer to 0
-    set next_bullet to 1
-    set next_explosion to 1
+    set next_explosion to 0
     set explosion_x to 0
     set explosion_y to 0
 end
@@ -284,7 +151,6 @@ define function start_game
     set state.level to 1
     set state.score to 0
     set state.lives to 3
-    set state.spawn_timer to 0
     set player.x to 400
     set score_text.text to "Score: 0"
     set lives_text.text to "Lives: 3"
@@ -292,110 +158,48 @@ define function start_game
 end
 
 define function spawn_enemy_wave
-    # Activate all enemies at different x positions
-    set enemy1.x to 100
-    set enemy1.y to -50
-    set enemy1.active to 1
-    set enemy1.visible to true
-
-    set enemy2.x to 300
-    set enemy2.y to -100
-    set enemy2.active to 1
-    set enemy2.visible to true
-
-    set enemy3.x to 500
-    set enemy3.y to -150
-    set enemy3.active to 1
-    set enemy3.visible to true
-
-    set enemy4.x to 700
-    set enemy4.y to -200
-    set enemy4.active to 1
-    set enemy4.visible to true
+    spawn enemies[0] at 100, -50
+    spawn enemies[1] at 300, -100
+    spawn enemies[2] at 500, -150
+    spawn enemies[3] at 700, -200
 end
 
 define function show_explosion
-    # Show explosion at state.explosion_x, state.explosion_y
-    # Uses round-robin through explosion pool
-    if state.next_explosion is equal to 1 then
-        set explosion1.x to state.explosion_x
-        set explosion1.y to state.explosion_y
-        set explosion1.visible to true
-        set explosion1.timer to 27
-        play explode on explosion1
+    if state.next_explosion is equal to 0 then
+        set explosions[0].x to state.explosion_x
+        set explosions[0].y to state.explosion_y
+        set explosions[0].visible to true
+        set explosions[0].timer to 27
+        play explode on explosions[0]
+        set state.next_explosion to 1
+    else if state.next_explosion is equal to 1 then
+        set explosions[1].x to state.explosion_x
+        set explosions[1].y to state.explosion_y
+        set explosions[1].visible to true
+        set explosions[1].timer to 27
+        play explode on explosions[1]
         set state.next_explosion to 2
     else if state.next_explosion is equal to 2 then
-        set explosion2.x to state.explosion_x
-        set explosion2.y to state.explosion_y
-        set explosion2.visible to true
-        set explosion2.timer to 27
-        play explode on explosion2
+        set explosions[2].x to state.explosion_x
+        set explosions[2].y to state.explosion_y
+        set explosions[2].visible to true
+        set explosions[2].timer to 27
+        play explode on explosions[2]
         set state.next_explosion to 3
     else if state.next_explosion is equal to 3 then
-        set explosion3.x to state.explosion_x
-        set explosion3.y to state.explosion_y
-        set explosion3.visible to true
-        set explosion3.timer to 27
-        play explode on explosion3
-        set state.next_explosion to 4
-    else if state.next_explosion is equal to 4 then
-        set explosion4.x to state.explosion_x
-        set explosion4.y to state.explosion_y
-        set explosion4.visible to true
-        set explosion4.timer to 27
-        play explode on explosion4
-        set state.next_explosion to 1
+        set explosions[3].x to state.explosion_x
+        set explosions[3].y to state.explosion_y
+        set explosions[3].visible to true
+        set explosions[3].timer to 27
+        play explode on explosions[3]
+        set state.next_explosion to 0
     end
 end
 
 define function fire_bullet
-    # Find next available bullet and fire it
     play sound "laser1.ogg"
-    if state.next_bullet is equal to 1 then
-        if bullet1.active is equal to 0 then
-            set bullet1.x to player.x
-            set bullet1.y to player.y minus 30
-            set bullet1.active to 1
-            set bullet1.visible to true
-        end
-        set state.next_bullet to 2
-    end
-    if state.next_bullet is equal to 2 then
-        if bullet2.active is equal to 0 then
-            set bullet2.x to player.x
-            set bullet2.y to player.y minus 30
-            set bullet2.active to 1
-            set bullet2.visible to true
-        end
-        set state.next_bullet to 3
-    end
-    if state.next_bullet is equal to 3 then
-        if bullet3.active is equal to 0 then
-            set bullet3.x to player.x
-            set bullet3.y to player.y minus 30
-            set bullet3.active to 1
-            set bullet3.visible to true
-        end
-        set state.next_bullet to 4
-    end
-    if state.next_bullet is equal to 4 then
-        if bullet4.active is equal to 0 then
-            set bullet4.x to player.x
-            set bullet4.y to player.y minus 30
-            set bullet4.active to 1
-            set bullet4.visible to true
-        end
-        set state.next_bullet to 5
-    end
-    if state.next_bullet is equal to 5 then
-        if bullet5.active is equal to 0 then
-            set bullet5.x to player.x
-            set bullet5.y to player.y minus 30
-            set bullet5.active to 1
-            set bullet5.visible to true
-        end
-        set state.next_bullet to 1
-    end
+    get next from bullets where active is 0
+    spawn at player.x, player.y minus 30
 end
 
 define function update_score
@@ -414,17 +218,13 @@ define function game_over
     set player.visible to false
     set score_text.visible to false
     set lives_text.visible to false
-    # Hide all bullets
-    set bullet1.visible to false
-    set bullet2.visible to false
-    set bullet3.visible to false
-    set bullet4.visible to false
-    set bullet5.visible to false
-    # Hide all enemies
-    set enemy1.visible to false
-    set enemy2.visible to false
-    set enemy3.visible to false
-    set enemy4.visible to false
+    # Deactivate all bullets and enemies
+    for bullet in bullets then
+        deactivate bullet
+    end
+    for enemy in enemies then
+        deactivate enemy
+    end
     # Show game over screen
     set game_over_text.visible to true
     set final_score_text.text to "Final Score: {state.score}"
@@ -436,17 +236,13 @@ define function restart_game
     set game_over_text.visible to false
     set final_score_text.visible to false
     set restart_text.visible to false
-    # Reset bullets
-    set bullet1.active to 0
-    set bullet2.active to 0
-    set bullet3.active to 0
-    set bullet4.active to 0
-    set bullet5.active to 0
-    # Reset enemies
-    set enemy1.active to 0
-    set enemy2.active to 0
-    set enemy3.active to 0
-    set enemy4.active to 0
+    # Deactivate bullets and enemies for clean restart
+    for bullet in bullets then
+        deactivate bullet
+    end
+    for enemy in enemies then
+        deactivate enemy
+    end
     call start_game
 end
 
@@ -460,11 +256,10 @@ when space_pressed then
     end
 end
 
-# Smooth continuous movement (O and P keys in arcade mode)
 when while_key_o then
     if state.level is above 0 then
         if player.x is above 30 then
-            set player.x to player.x minus 5
+            move player left by 5
         end
     end
 end
@@ -472,7 +267,7 @@ end
 when while_key_p then
     if state.level is above 0 then
         if player.x is below 770 then
-            set player.x to player.x plus 5
+            move player right by 5
         end
     end
 end
@@ -485,562 +280,62 @@ when key_r then
     end
 end
 
-# === GAME LOOP UPDATE (runs every frame) ===
+# === GAME LOOP ===
 when update then
     if state.level is above 0 then
         # Move bullets upward
-        if bullet1.active is equal to 1 then
-            set bullet1.y to bullet1.y minus 10
-            if bullet1.y is below 0 then
-                set bullet1.active to 0
-                set bullet1.visible to false
-            end
-        end
-        if bullet2.active is equal to 1 then
-            set bullet2.y to bullet2.y minus 10
-            if bullet2.y is below 0 then
-                set bullet2.active to 0
-                set bullet2.visible to false
-            end
-        end
-        if bullet3.active is equal to 1 then
-            set bullet3.y to bullet3.y minus 10
-            if bullet3.y is below 0 then
-                set bullet3.active to 0
-                set bullet3.visible to false
-            end
-        end
-        if bullet4.active is equal to 1 then
-            set bullet4.y to bullet4.y minus 10
-            if bullet4.y is below 0 then
-                set bullet4.active to 0
-                set bullet4.visible to false
-            end
-        end
-        if bullet5.active is equal to 1 then
-            set bullet5.y to bullet5.y minus 10
-            if bullet5.y is below 0 then
-                set bullet5.active to 0
-                set bullet5.visible to false
+        for bullet in bullets then
+            if bullet.active is equal to 1 then
+                move bullet up by 10
+                if bullet is offscreen then
+                    deactivate bullet
+                end
             end
         end
 
         # Move enemies downward
-        if enemy1.active is equal to 1 then
-            set enemy1.y to enemy1.y plus 2
-            if enemy1.y is above 650 then
-                # Enemy reached bottom - respawn at top
-                set enemy1.y to -50
-            end
-        end
-        if enemy2.active is equal to 1 then
-            set enemy2.y to enemy2.y plus 2
-            if enemy2.y is above 650 then
-                set enemy2.y to -50
-            end
-        end
-        if enemy3.active is equal to 1 then
-            set enemy3.y to enemy3.y plus 2
-            if enemy3.y is above 650 then
-                set enemy3.y to -50
-            end
-        end
-        if enemy4.active is equal to 1 then
-            set enemy4.y to enemy4.y plus 2
-            if enemy4.y is above 650 then
-                set enemy4.y to -50
-            end
-        end
-
-        # =================================================================
-        # COLLISION DETECTION: All bullets vs all enemies
-        # =================================================================
-
-        # --- Bullet 1 vs all enemies ---
-        if bullet1.active is equal to 1 then
-            if enemy1.active is equal to 1 then
-                if bullet1.x is above enemy1.x minus 20 then
-                    if bullet1.x is below enemy1.x plus 20 then
-                        if bullet1.y is above enemy1.y minus 20 then
-                            if bullet1.y is below enemy1.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy1.x
-                                set state.explosion_y to enemy1.y
-                                call show_explosion
-                                set enemy1.y to -50
-                                set bullet1.active to 0
-                                set bullet1.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-            if enemy2.active is equal to 1 then
-                if bullet1.x is above enemy2.x minus 20 then
-                    if bullet1.x is below enemy2.x plus 20 then
-                        if bullet1.y is above enemy2.y minus 20 then
-                            if bullet1.y is below enemy2.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy2.x
-                                set state.explosion_y to enemy2.y
-                                call show_explosion
-                                set enemy2.y to -50
-                                set bullet1.active to 0
-                                set bullet1.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-            if enemy3.active is equal to 1 then
-                if bullet1.x is above enemy3.x minus 20 then
-                    if bullet1.x is below enemy3.x plus 20 then
-                        if bullet1.y is above enemy3.y minus 20 then
-                            if bullet1.y is below enemy3.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy3.x
-                                set state.explosion_y to enemy3.y
-                                call show_explosion
-                                set enemy3.y to -50
-                                set bullet1.active to 0
-                                set bullet1.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-            if enemy4.active is equal to 1 then
-                if bullet1.x is above enemy4.x minus 20 then
-                    if bullet1.x is below enemy4.x plus 20 then
-                        if bullet1.y is above enemy4.y minus 20 then
-                            if bullet1.y is below enemy4.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy4.x
-                                set state.explosion_y to enemy4.y
-                                call show_explosion
-                                set enemy4.y to -50
-                                set bullet1.active to 0
-                                set bullet1.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
+        for enemy in enemies then
+            if enemy.active is equal to 1 then
+                move enemy down by 2
+                if enemy.y is above 650 then
+                    set enemy.y to -50
                 end
             end
         end
 
-        # --- Bullet 2 vs all enemies ---
-        if bullet2.active is equal to 1 then
-            if enemy1.active is equal to 1 then
-                if bullet2.x is above enemy1.x minus 20 then
-                    if bullet2.x is below enemy1.x plus 20 then
-                        if bullet2.y is above enemy1.y minus 20 then
-                            if bullet2.y is below enemy1.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy1.x
-                                set state.explosion_y to enemy1.y
-                                call show_explosion
-                                set enemy1.y to -50
-                                set bullet2.active to 0
-                                set bullet2.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-            if enemy2.active is equal to 1 then
-                if bullet2.x is above enemy2.x minus 20 then
-                    if bullet2.x is below enemy2.x plus 20 then
-                        if bullet2.y is above enemy2.y minus 20 then
-                            if bullet2.y is below enemy2.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy2.x
-                                set state.explosion_y to enemy2.y
-                                call show_explosion
-                                set enemy2.y to -50
-                                set bullet2.active to 0
-                                set bullet2.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-            if enemy3.active is equal to 1 then
-                if bullet2.x is above enemy3.x minus 20 then
-                    if bullet2.x is below enemy3.x plus 20 then
-                        if bullet2.y is above enemy3.y minus 20 then
-                            if bullet2.y is below enemy3.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy3.x
-                                set state.explosion_y to enemy3.y
-                                call show_explosion
-                                set enemy3.y to -50
-                                set bullet2.active to 0
-                                set bullet2.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-            if enemy4.active is equal to 1 then
-                if bullet2.x is above enemy4.x minus 20 then
-                    if bullet2.x is below enemy4.x plus 20 then
-                        if bullet2.y is above enemy4.y minus 20 then
-                            if bullet2.y is below enemy4.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy4.x
-                                set state.explosion_y to enemy4.y
-                                call show_explosion
-                                set enemy4.y to -50
-                                set bullet2.active to 0
-                                set bullet2.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
+        # Collision: bullets vs enemies (using collides operator)
+        for bullet in bullets then
+            for enemy in enemies then
+                if bullet collides with enemy then
+                    play sound "lose1.ogg"
+                    set state.explosion_x to enemy.x
+                    set state.explosion_y to enemy.y
+                    call show_explosion
+                    set enemy.y to -50
+                    deactivate bullet
+                    set state.score to state.score plus 10
+                    call update_score
                 end
             end
         end
 
-        # --- Bullet 3 vs all enemies ---
-        if bullet3.active is equal to 1 then
-            if enemy1.active is equal to 1 then
-                if bullet3.x is above enemy1.x minus 20 then
-                    if bullet3.x is below enemy1.x plus 20 then
-                        if bullet3.y is above enemy1.y minus 20 then
-                            if bullet3.y is below enemy1.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy1.x
-                                set state.explosion_y to enemy1.y
-                                call show_explosion
-                                set enemy1.y to -50
-                                set bullet3.active to 0
-                                set bullet3.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-            if enemy2.active is equal to 1 then
-                if bullet3.x is above enemy2.x minus 20 then
-                    if bullet3.x is below enemy2.x plus 20 then
-                        if bullet3.y is above enemy2.y minus 20 then
-                            if bullet3.y is below enemy2.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy2.x
-                                set state.explosion_y to enemy2.y
-                                call show_explosion
-                                set enemy2.y to -50
-                                set bullet3.active to 0
-                                set bullet3.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-            if enemy3.active is equal to 1 then
-                if bullet3.x is above enemy3.x minus 20 then
-                    if bullet3.x is below enemy3.x plus 20 then
-                        if bullet3.y is above enemy3.y minus 20 then
-                            if bullet3.y is below enemy3.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy3.x
-                                set state.explosion_y to enemy3.y
-                                call show_explosion
-                                set enemy3.y to -50
-                                set bullet3.active to 0
-                                set bullet3.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-            if enemy4.active is equal to 1 then
-                if bullet3.x is above enemy4.x minus 20 then
-                    if bullet3.x is below enemy4.x plus 20 then
-                        if bullet3.y is above enemy4.y minus 20 then
-                            if bullet3.y is below enemy4.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy4.x
-                                set state.explosion_y to enemy4.y
-                                call show_explosion
-                                set enemy4.y to -50
-                                set bullet3.active to 0
-                                set bullet3.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
+        # Collision: enemies vs player (using collides operator)
+        for enemy in enemies then
+            if enemy collides with player then
+                play sound "lose3.ogg"
+                set enemy.y to -50
+                set state.lives to state.lives minus 1
+                call update_lives
             end
         end
 
-        # --- Bullet 4 vs all enemies ---
-        if bullet4.active is equal to 1 then
-            if enemy1.active is equal to 1 then
-                if bullet4.x is above enemy1.x minus 20 then
-                    if bullet4.x is below enemy1.x plus 20 then
-                        if bullet4.y is above enemy1.y minus 20 then
-                            if bullet4.y is below enemy1.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy1.x
-                                set state.explosion_y to enemy1.y
-                                call show_explosion
-                                set enemy1.y to -50
-                                set bullet4.active to 0
-                                set bullet4.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
+        # Explosion timers
+        for explosion in explosions then
+            if explosion.timer is above 0 then
+                set explosion.timer to explosion.timer minus 1
+                if explosion.timer is equal to 0 then
+                    set explosion.visible to false
                 end
-            end
-            if enemy2.active is equal to 1 then
-                if bullet4.x is above enemy2.x minus 20 then
-                    if bullet4.x is below enemy2.x plus 20 then
-                        if bullet4.y is above enemy2.y minus 20 then
-                            if bullet4.y is below enemy2.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy2.x
-                                set state.explosion_y to enemy2.y
-                                call show_explosion
-                                set enemy2.y to -50
-                                set bullet4.active to 0
-                                set bullet4.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-            if enemy3.active is equal to 1 then
-                if bullet4.x is above enemy3.x minus 20 then
-                    if bullet4.x is below enemy3.x plus 20 then
-                        if bullet4.y is above enemy3.y minus 20 then
-                            if bullet4.y is below enemy3.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy3.x
-                                set state.explosion_y to enemy3.y
-                                call show_explosion
-                                set enemy3.y to -50
-                                set bullet4.active to 0
-                                set bullet4.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-            if enemy4.active is equal to 1 then
-                if bullet4.x is above enemy4.x minus 20 then
-                    if bullet4.x is below enemy4.x plus 20 then
-                        if bullet4.y is above enemy4.y minus 20 then
-                            if bullet4.y is below enemy4.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy4.x
-                                set state.explosion_y to enemy4.y
-                                call show_explosion
-                                set enemy4.y to -50
-                                set bullet4.active to 0
-                                set bullet4.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-        end
-
-        # --- Bullet 5 vs all enemies ---
-        if bullet5.active is equal to 1 then
-            if enemy1.active is equal to 1 then
-                if bullet5.x is above enemy1.x minus 20 then
-                    if bullet5.x is below enemy1.x plus 20 then
-                        if bullet5.y is above enemy1.y minus 20 then
-                            if bullet5.y is below enemy1.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy1.x
-                                set state.explosion_y to enemy1.y
-                                call show_explosion
-                                set enemy1.y to -50
-                                set bullet5.active to 0
-                                set bullet5.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-            if enemy2.active is equal to 1 then
-                if bullet5.x is above enemy2.x minus 20 then
-                    if bullet5.x is below enemy2.x plus 20 then
-                        if bullet5.y is above enemy2.y minus 20 then
-                            if bullet5.y is below enemy2.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy2.x
-                                set state.explosion_y to enemy2.y
-                                call show_explosion
-                                set enemy2.y to -50
-                                set bullet5.active to 0
-                                set bullet5.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-            if enemy3.active is equal to 1 then
-                if bullet5.x is above enemy3.x minus 20 then
-                    if bullet5.x is below enemy3.x plus 20 then
-                        if bullet5.y is above enemy3.y minus 20 then
-                            if bullet5.y is below enemy3.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy3.x
-                                set state.explosion_y to enemy3.y
-                                call show_explosion
-                                set enemy3.y to -50
-                                set bullet5.active to 0
-                                set bullet5.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-            if enemy4.active is equal to 1 then
-                if bullet5.x is above enemy4.x minus 20 then
-                    if bullet5.x is below enemy4.x plus 20 then
-                        if bullet5.y is above enemy4.y minus 20 then
-                            if bullet5.y is below enemy4.y plus 20 then
-                                play sound "lose1.ogg"
-                                set state.explosion_x to enemy4.x
-                                set state.explosion_y to enemy4.y
-                                call show_explosion
-                                set enemy4.y to -50
-                                set bullet5.active to 0
-                                set bullet5.visible to false
-                                set state.score to state.score plus 10
-                                call update_score
-                            end
-                        end
-                    end
-                end
-            end
-        end
-
-        # =================================================================
-        # COLLISION: Enemies vs Player
-        # =================================================================
-        if enemy1.active is equal to 1 then
-            if enemy1.y is above player.y minus 25 then
-                if enemy1.y is below player.y plus 25 then
-                    if enemy1.x is above player.x minus 30 then
-                        if enemy1.x is below player.x plus 30 then
-                            play sound "lose3.ogg"
-                            set enemy1.y to -50
-                            set state.lives to state.lives minus 1
-                            call update_lives
-                        end
-                    end
-                end
-            end
-        end
-        if enemy2.active is equal to 1 then
-            if enemy2.y is above player.y minus 25 then
-                if enemy2.y is below player.y plus 25 then
-                    if enemy2.x is above player.x minus 30 then
-                        if enemy2.x is below player.x plus 30 then
-                            play sound "lose3.ogg"
-                            set enemy2.y to -50
-                            set state.lives to state.lives minus 1
-                            call update_lives
-                        end
-                    end
-                end
-            end
-        end
-        if enemy3.active is equal to 1 then
-            if enemy3.y is above player.y minus 25 then
-                if enemy3.y is below player.y plus 25 then
-                    if enemy3.x is above player.x minus 30 then
-                        if enemy3.x is below player.x plus 30 then
-                            play sound "lose3.ogg"
-                            set enemy3.y to -50
-                            set state.lives to state.lives minus 1
-                            call update_lives
-                        end
-                    end
-                end
-            end
-        end
-        if enemy4.active is equal to 1 then
-            if enemy4.y is above player.y minus 25 then
-                if enemy4.y is below player.y plus 25 then
-                    if enemy4.x is above player.x minus 30 then
-                        if enemy4.x is below player.x plus 30 then
-                            play sound "lose3.ogg"
-                            set enemy4.y to -50
-                            set state.lives to state.lives minus 1
-                            call update_lives
-                        end
-                    end
-                end
-            end
-        end
-
-        # =================================================================
-        # EXPLOSION TIMER - hide explosions after animation completes
-        # =================================================================
-        if explosion1.timer is above 0 then
-            set explosion1.timer to explosion1.timer minus 1
-            if explosion1.timer is equal to 0 then
-                set explosion1.visible to false
-            end
-        end
-        if explosion2.timer is above 0 then
-            set explosion2.timer to explosion2.timer minus 1
-            if explosion2.timer is equal to 0 then
-                set explosion2.visible to false
-            end
-        end
-        if explosion3.timer is above 0 then
-            set explosion3.timer to explosion3.timer minus 1
-            if explosion3.timer is equal to 0 then
-                set explosion3.visible to false
-            end
-        end
-        if explosion4.timer is above 0 then
-            set explosion4.timer to explosion4.timer minus 1
-            if explosion4.timer is equal to 0 then
-                set explosion4.visible to false
             end
         end
     end

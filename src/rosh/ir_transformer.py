@@ -24,7 +24,8 @@ from .ast_nodes import (
     IfStatement, WhileLoop, ForLoop, WhenStatement, TriggerEvent,
     FunctionDef, FunctionCall, Return, Break, Continue,
     Print, PlaySound, PlayMusic, StopMusic, Save, Load, LoadSettings,
-    CloneObject, DeleteObject, Increment, Decrement, Random, Length,
+    CloneObject, DeleteObject, ActivateObject, DeactivateObject, SpawnAt, MoveDirection,
+    Increment, Decrement, Random, Length,
     ListLiteral, ListIndex, Append, Remove, Get, GotoScene, SaveGame, LoadGame,
     Metadata, PlayAnimation, StopAnimation, SetGrid, SetAnimations, SetAnimationFrames
 )
@@ -542,9 +543,10 @@ class IRTransformer:
             )
 
         elif isinstance(node, Identifier):
+            # Use 'identifier' type for variable references (loop vars, etc.)
             return IR_Expression(
                 type='literal',
-                value=IR_Value('string', node.name.lower())
+                value=IR_Value('identifier', node.name.lower())
             )
 
         elif isinstance(node, PropertyAccess):
@@ -562,6 +564,8 @@ class IRTransformer:
                 'above': '>',
                 'at_most': '<=',
                 'at_least': '>=',
+                'collides': 'collides',  # Arcade collision check (bbox overlap)
+                'offscreen': 'offscreen',  # Arcade bounds check
             }
             return IR_Expression(
                 type='comparison',
@@ -688,15 +692,23 @@ class IRTransformer:
             return IR_Action('stop_music', {})
 
         elif isinstance(stmt, PlayAnimation):
+            # Target can be an expression (e.g., arr[0]) or None
+            target = None
+            if stmt.target:
+                target = self.transform_expression(stmt.target)
             return IR_Action('play_animation', {
                 'animation': stmt.animation.lower(),
-                'target': stmt.target.lower() if stmt.target else None,
+                'target': target,
                 'loop': stmt.loop
             })
 
         elif isinstance(stmt, StopAnimation):
+            # Target can be an expression (e.g., arr[0]) or None
+            target = None
+            if stmt.target:
+                target = self.transform_expression(stmt.target)
             return IR_Action('stop_animation', {
-                'target': stmt.target.lower() if stmt.target else None
+                'target': target
             })
 
         elif isinstance(stmt, SetGrid):
@@ -745,6 +757,30 @@ class IRTransformer:
             return IR_Action('destroy', {
                 'target': stmt.name.lower(),
                 'confirmed': stmt.confirmed
+            })
+
+        elif isinstance(stmt, ActivateObject):
+            return IR_Action('activate', {
+                'target': self.transform_expression(stmt.target)
+            })
+
+        elif isinstance(stmt, DeactivateObject):
+            return IR_Action('deactivate', {
+                'target': self.transform_expression(stmt.target)
+            })
+
+        elif isinstance(stmt, SpawnAt):
+            return IR_Action('spawn_at', {
+                'target': self.transform_expression(stmt.target) if stmt.target else None,
+                'x': self.transform_expression(stmt.x),
+                'y': self.transform_expression(stmt.y)
+            })
+
+        elif isinstance(stmt, MoveDirection):
+            return IR_Action('move_direction', {
+                'target': self.transform_expression(stmt.target),
+                'direction': stmt.direction,
+                'amount': self.transform_expression(stmt.amount)
             })
 
         elif isinstance(stmt, CloneObject):
@@ -808,6 +844,7 @@ class IRTransformer:
                 'target': self.transform_expression(stmt.target) if stmt.target else None,
                 'index': stmt.instance_index,
                 'all': stmt.get_all,
+                'next': stmt.get_next,
                 'filter': self.transform_expression(stmt.where_condition) if stmt.where_condition else None,
                 'include_hidden': stmt.include_hidden
             })

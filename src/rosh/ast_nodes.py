@@ -243,10 +243,13 @@ class Get(ASTNode):
       - get all ball                          → gets all instances
       - get all where group is enemies        → gets all matching condition
       - get all including hidden where ...    → includes hidden objects
+      - get next from bullets                 → round-robin pool allocation
+      - get next from bullets where active is 0 → first matching from pool
     """
     target: ASTNode  # Identifier or PropertyAccess (None for get all where...)
     instance_index: Optional[int] = None  # For: get ball 5
     get_all: bool = False  # For: get all ball
+    get_next: bool = False  # For: get next from <pool>
     where_condition: Optional[ASTNode] = None  # For: get all where <condition>
     include_hidden: bool = False  # For: get all including hidden
     line: int = 0
@@ -454,7 +457,7 @@ class StopMusic(ASTNode):
 class PlayAnimation(ASTNode):
     """play <animation> [on <target>] [once] - Play sprite animation"""
     animation: str
-    target: Optional[str] = None  # None = current context object
+    target: Optional["ASTNode"] = None  # None = current context object, can be expr like arr[0]
     loop: bool = True  # False if 'once' specified
     line: int = 0
 
@@ -462,7 +465,7 @@ class PlayAnimation(ASTNode):
 @dataclass
 class StopAnimation(ASTNode):
     """stop animation [on <target>] - Stop current animation"""
-    target: Optional[str] = None  # None = current context object
+    target: Optional["ASTNode"] = None  # None = current context object, can be expr like arr[0]
     line: int = 0
 
 
@@ -580,6 +583,29 @@ class ShowObject(ASTNode):
 
 
 @dataclass
+class ActivateObject(ASTNode):
+    """activate <target> - Set active=1, visible=true (arcade shorthand)"""
+    target: "ASTNode"  # Target expression (can be identifier, array access, loop var)
+    line: int = 0
+
+
+@dataclass
+class DeactivateObject(ASTNode):
+    """deactivate <target> - Set active=0, visible=false (arcade shorthand)"""
+    target: "ASTNode"  # Target expression (can be identifier, array access, loop var)
+    line: int = 0
+
+
+@dataclass
+class SpawnAt(ASTNode):
+    """spawn <target> at <x>, <y> - Set position and activate (arcade shorthand)"""
+    target: "ASTNode"  # Target expression (can be identifier, array access, loop var)
+    x: "ASTNode"       # X position expression
+    y: "ASTNode"       # Y position expression
+    line: int = 0
+
+
+@dataclass
 class CountObjects(ASTNode):
     """count [type] - Count objects, optionally by type"""
     object_type: Optional[str] = None  # None = count all
@@ -593,6 +619,15 @@ class MoveObject(ASTNode):
     x: any  # Can be number or expression
     y: any  # Can be number or expression
     z: any = None  # Optional z coordinate
+    line: int = 0
+
+
+@dataclass
+class MoveDirection(ASTNode):
+    """move <target> <direction> by <amount> - Move in a direction (arcade shorthand)"""
+    target: "ASTNode"  # Target expression (can be identifier, array access, loop var)
+    direction: str     # 'up', 'down', 'left', 'right'
+    amount: "ASTNode"  # Amount to move by
     line: int = 0
 
 

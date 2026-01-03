@@ -73,8 +73,10 @@ class PhaserEmitter(BaseEmitter):
         self.needs_update = False
         self.player_objects: Set[str] = set()
         self.collision_events: list = []  # [(obj_a, obj_b, handler_code), ...]
+        self.uses_collides = False  # True if 'collides with' operator used
         self.hud_objects: list = []  # [(hud_name, target_name), ...]
         self.continuous_key_events: list = []  # [(key, handler_code), ...]
+        self.loop_iterators: Set[str] = set()  # Track current loop variable names
 
         # Scene/Level support (Roshonic "Dimensions, Not Modes")
         self.uses_scenes = False  # True if any object has scene/level
@@ -530,6 +532,10 @@ class PhaserEmitter(BaseEmitter):
         if self.collision_events:
             self._emit_collision_helper()
 
+        # _collides helper (if 'collides with' operator used)
+        if self.uses_collides:
+            self._emit_collides_helper()
+
         # updateSceneVisibility (if using scenes/levels)
         if self.uses_scenes:
             self._emit_scene_visibility_helper()
@@ -873,6 +879,30 @@ class PhaserEmitter(BaseEmitter):
         self.write("const ah = a.height || 30;")
         self.write("const bw = b.width || 40;")
         self.write("const bh = b.height || 30;")
+        self.write("return a.x - aw/2 < b.x + bw/2 &&")
+        self.write("       a.x + aw/2 > b.x - bw/2 &&")
+        self.write("       a.y - ah/2 < b.y + bh/2 &&")
+        self.write("       a.y + ah/2 > b.y - bh/2;")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
+    def _emit_collides_helper(self):
+        """Emit 'collides with' operator helper for arcade collision checks."""
+        self.write("_collides(a, b) {")
+        self.indent()
+        self.write("// Arcade 'collides with' operator: bbox overlap + visibility/active check")
+        self.write("if (!a || !b) return false;")
+        self.write("// Both must be visible (default filter)")
+        self.write("if (a.visible === false || b.visible === false) return false;")
+        self.write("// Both must be active if they have an active property")
+        self.write("if (a.active !== undefined && a.active === 0) return false;")
+        self.write("if (b.active !== undefined && b.active === 0) return false;")
+        self.write("// AABB overlap check")
+        self.write("const aw = a.width || 40;")
+        self.write("const ah = a.height || 40;")
+        self.write("const bw = b.width || 40;")
+        self.write("const bh = b.height || 40;")
         self.write("return a.x - aw/2 < b.x + bw/2 &&")
         self.write("       a.x + aw/2 > b.x - bw/2 &&")
         self.write("       a.y - ah/2 < b.y + bh/2 &&")
@@ -1750,6 +1780,8 @@ class PhaserEmitter(BaseEmitter):
             sprite = obj.properties['sprite'].value
             key = self._asset_key(sprite)
             self.write(f"this.{obj.name} = this.add.sprite({px}, {py}, '{key}');")
+            # Set name for dynamic animation key lookup
+            self.write(f"this.{obj.name}.name = '{obj.name}';")
             # Apply scaling if width/height specified
             if 'width' in obj.properties or 'height' in obj.properties:
                 w = self._get_prop_value(obj, 'width', 0.05)
@@ -1902,6 +1934,36 @@ class PhaserEmitter(BaseEmitter):
     # Action Emission
     # =========================================================================
 
+    def emit_loop(self, loop: IR_Loop) -> str:
+        """Override to add this. prefix for iterables in for_each loops."""
+        lines = []
+
+        if loop.type == 'while':
+            lines.append(f"while ({self.emit_expression(loop.condition)}) {{")
+        elif loop.type == 'for':
+            start = self.emit_expression(loop.start)
+            end = self.emit_expression(loop.end)
+            step = self.emit_expression(loop.step) if loop.step else "1"
+            lines.append(f"for (let {loop.iterator} = {start}; {loop.iterator} <= {end}; {loop.iterator} += {step}) {{")
+        elif loop.type == 'for_each':
+            iterable = self.emit_expression(loop.iterable)
+            # Add this. prefix if iterable is a simple identifier (array pool name)
+            if iterable.isidentifier():
+                iterable = f"this.{iterable}"
+            lines.append(f"for (const {loop.iterator} of {iterable}) {{")
+
+        # Track loop iterator so property_access doesn't add this. prefix
+        self.loop_iterators.add(loop.iterator)
+        try:
+            for action in loop.body:
+                if action:
+                    lines.append(f"    {self.emit_action(action)}")
+        finally:
+            self.loop_iterators.discard(loop.iterator)
+
+        lines.append("}")
+        return "\n".join(lines)
+
     def emit_action(self, action) -> str:
         """Generate code for an action."""
         if isinstance(action, IR_Conditional):
@@ -1935,20 +1997,33 @@ class PhaserEmitter(BaseEmitter):
             target = params.get('target')
             loop = params.get('loop', True)
             if target:
-                # Play animation on specific object (objects stored as this.objName)
-                anim_key = f"{target}::{anim_name}"
-                obj_ref = f"this.{target}"
-                if loop:
-                    return f"if ({obj_ref}) {{ {obj_ref}.play('{anim_key}'); }}"
+                # Target is now an IR_Expression (e.g., for arr[0] syntax)
+                if isinstance(target, IR_Expression):
+                    obj_ref = self.emit_expression(target)
+                    # For dynamic targets, construct animation key at runtime
+                    # The animation key format is {objectName}::{animName}
+                    if loop:
+                        return f"if ({obj_ref}) {{ {obj_ref}.play({obj_ref}.name + '::{anim_name}'); }}"
+                    else:
+                        return f"if ({obj_ref}) {{ {obj_ref}.play({{ key: {obj_ref}.name + '::{anim_name}', repeat: 0 }}); }}"
                 else:
-                    return f"if ({obj_ref}) {{ {obj_ref}.play({{ key: '{anim_key}', repeat: 0 }}); }}"
+                    # Legacy string target (shouldn't happen after IR update)
+                    anim_key = f"{target}::{anim_name}"
+                    obj_ref = f"this.{target}"
+                    if loop:
+                        return f"if ({obj_ref}) {{ {obj_ref}.play('{anim_key}'); }}"
+                    else:
+                        return f"if ({obj_ref}) {{ {obj_ref}.play({{ key: '{anim_key}', repeat: 0 }}); }}"
             else:
                 # Target not specified - would need context
                 return f"// play_animation requires target: play {anim_name} on <object>"
         elif action_type == 'stop_animation':
             target = params.get('target')
             if target:
-                obj_ref = f"this.{target}"
+                if isinstance(target, IR_Expression):
+                    obj_ref = self.emit_expression(target)
+                else:
+                    obj_ref = f"this.{target}"
                 return f"if ({obj_ref} && {obj_ref}.anims) {{ {obj_ref}.anims.stop(); }}"
             else:
                 return "// stop_animation requires target: stop animation on <object>"
@@ -1979,6 +2054,43 @@ class PhaserEmitter(BaseEmitter):
                         console.log('no objects selected');
                     }""".strip().replace('\n                    ', '\n')
             return f"if (this.{target}) {{ this.{target}.destroy(); this.{target} = null; }}"
+        elif action_type == 'activate':
+            target = params.get('target')
+            target_str = self.emit_expression(target) if target else 'null'
+            return f"if ({target_str}) {{ {target_str}.active = 1; {target_str}.visible = true; }}"
+        elif action_type == 'deactivate':
+            target = params.get('target')
+            target_str = self.emit_expression(target) if target else 'null'
+            return f"if ({target_str}) {{ {target_str}.active = 0; {target_str}.visible = false; }}"
+        elif action_type == 'spawn_at':
+            target = params.get('target')
+            x = params.get('x')
+            y = params.get('y')
+            x_str = self.emit_expression(x) if x else '0'
+            y_str = self.emit_expression(y) if y else '0'
+            if target:
+                target_str = self.emit_expression(target)
+                return f"if ({target_str}) {{ {target_str}.x = {x_str}; {target_str}.y = {y_str}; {target_str}.active = 1; {target_str}.visible = true; }}"
+            else:
+                # No target specified - use _current from previous 'get next'
+                return f"if (this._current) {{ this._current.x = {x_str}; this._current.y = {y_str}; this._current.active = 1; this._current.visible = true; }}"
+        elif action_type == 'move_direction':
+            target = params.get('target')
+            direction = params.get('direction', 'up')
+            amount = params.get('amount')
+            target_str = self.emit_expression(target) if target else 'null'
+            amount_str = self.emit_expression(amount) if amount else '0'
+            # Map direction to x/y adjustment
+            if direction == 'up':
+                return f"if ({target_str}) {{ {target_str}.y -= {amount_str}; }}"
+            elif direction == 'down':
+                return f"if ({target_str}) {{ {target_str}.y += {amount_str}; }}"
+            elif direction == 'left':
+                return f"if ({target_str}) {{ {target_str}.x -= {amount_str}; }}"
+            elif direction == 'right':
+                return f"if ({target_str}) {{ {target_str}.x += {amount_str}; }}"
+            else:
+                return f"// Unknown direction: {direction}"
         elif action_type == 'return':
             value = params.get('value')
             if value:
@@ -2025,13 +2137,58 @@ class PhaserEmitter(BaseEmitter):
         - get all where <condition>
         - get all <type> where <condition>
         - get all including hidden where <condition>
+        - get next from <pool> [where <condition>] - pool allocation
         """
-        target = params.get('target')  # Type filter (e.g., 'enemy')
+        target = params.get('target')  # Type filter (e.g., 'enemy') or pool name
         get_all = params.get('all', False)
+        get_next = params.get('next', False)
         filter_expr = params.get('filter')  # IR_Expression for where condition
         include_hidden = params.get('include_hidden', False)
 
-        # Build the filter function
+        # Handle 'get next from <pool>' - pool allocation
+        if get_next and target:
+            pool_name = self.emit_expression(target) if hasattr(target, 'type') else target
+            # Strip quotes if it's a string literal
+            if isinstance(pool_name, str) and pool_name.startswith("'"):
+                pool_name = pool_name.strip("'")
+
+            if filter_expr:
+                # Find first matching element in pool
+                condition_code = self._emit_filter_condition(filter_expr)
+                return f"""
+                    (function() {{
+                        const pool = this.{pool_name} || [];
+                        const found = pool.find(obj => {condition_code});
+                        if (found) {{
+                            this._selection = [found];
+                            this._current = found;
+                            console.log('got next from {pool_name}: ' + (found.name || 'object'));
+                        }} else {{
+                            this._selection = [];
+                            this._current = null;
+                            console.log('no available object in {pool_name}');
+                        }}
+                    }}).call(this)""".strip().replace('\n                    ', '\n')
+            else:
+                # Round-robin allocation (no filter)
+                return f"""
+                    (function() {{
+                        const pool = this.{pool_name} || [];
+                        if (pool.length === 0) {{
+                            this._selection = [];
+                            this._current = null;
+                            console.log('pool {pool_name} is empty');
+                            return;
+                        }}
+                        this._poolIndex_{pool_name} = (this._poolIndex_{pool_name} || 0) % pool.length;
+                        const obj = pool[this._poolIndex_{pool_name}];
+                        this._poolIndex_{pool_name}++;
+                        this._selection = [obj];
+                        this._current = obj;
+                        console.log('got next from {pool_name}: index ' + (this._poolIndex_{pool_name} - 1));
+                    }}).call(this)""".strip().replace('\n                    ', '\n')
+
+        # Build the filter function for 'get all' queries
         lines = ["this._selection = Object.values(this._objects || {})"]
 
         # Filter by type if specified
@@ -2090,18 +2247,29 @@ class PhaserEmitter(BaseEmitter):
                 prop = expr.right
                 return f"obj.{prop}"
             elif expr.type == 'literal':
-                if hasattr(expr, 'value') and hasattr(expr.value, 'value'):
+                if hasattr(expr, 'value') and hasattr(expr.value, 'type'):
+                    # Check the IR_Value type to determine handling
+                    ir_type = expr.value.type
                     val = expr.value.value
-                    if isinstance(val, str):
+                    if ir_type == 'identifier':
+                        # Identifier in filter context = object property
+                        return f"obj.{val}"
+                    elif ir_type == 'string':
                         return f"'{val}'"
-                    return str(val)
+                    elif ir_type == 'number':
+                        return str(val)
+                    elif ir_type == 'boolean':
+                        return 'true' if val else 'false'
+                    else:
+                        return str(val)
                 return self.emit_expression(expr)
-        # Identifier in filter context - treat as obj property
-        if hasattr(expr, 'value') and hasattr(expr.value, 'value'):
+        # Fallback: try to detect identifier pattern
+        if hasattr(expr, 'value') and hasattr(expr.value, 'type'):
+            if expr.value.type == 'identifier':
+                return f"obj.{expr.value.value}"
             val = expr.value.value
             if isinstance(val, str):
-                # Could be a property name
-                return f"obj.{val}"
+                return f"'{val}'"
             return str(val)
         return self.emit_expression(expr)
 
@@ -2126,13 +2294,17 @@ class PhaserEmitter(BaseEmitter):
         # Special handling for Phaser text properties
         if prop == 'font_size':
             if target:
-                # Store value first, then call Phaser method with stored value
-                return f"this.{target}.font_size = {val_str}; if (this.{target}.setFontSize) this.{target}.setFontSize(this.{target}.font_size);"
+                prefix = "" if target in self.loop_iterators else "this."
+                return f"{prefix}{target}.font_size = {val_str}; if ({prefix}{target}.setFontSize) {prefix}{target}.setFontSize({prefix}{target}.font_size);"
             else:
                 return f"this.font_size = {val_str}; if (this.setFontSize) this.setFontSize(this.font_size);"
 
         if target:
-            return f"this.{target}.{prop} = {val_str};"
+            # Don't add this. prefix for loop iterators (they're local variables)
+            if target in self.loop_iterators:
+                return f"{target}.{prop} = {val_str};"
+            else:
+                return f"this.{target}.{prop} = {val_str};"
         else:
             return f"this.{prop} = {val_str};"
 
@@ -2168,11 +2340,30 @@ class PhaserEmitter(BaseEmitter):
             return self._format_value(expr.value)
 
         elif expr.type == 'property_access':
-            return f"this.{expr.left}.{expr.right}"
+            # Left could be a string (object name) or an IR_Expression (e.g., list_index)
+            if isinstance(expr.left, str):
+                # Don't add this. prefix for loop iterators (they're local variables)
+                if expr.left in self.loop_iterators:
+                    left_str = expr.left
+                else:
+                    left_str = f"this.{expr.left}"
+            elif isinstance(expr.left, IR_Expression):
+                left_str = self.emit_expression(expr.left)
+            else:
+                left_str = str(expr.left)
+            return f"{left_str}.{expr.right}"
 
         elif expr.type == 'comparison':
             left = self.emit_expression(expr.left)
             right = self.emit_expression(expr.right)
+            # Handle 'collides' operator specially
+            if expr.operator == 'collides':
+                self.uses_collides = True
+                return f"this._collides({left}, {right})"
+            # Handle 'offscreen' operator (arcade bounds check)
+            if expr.operator == 'offscreen':
+                # Check if object is outside game bounds (default 800x600)
+                return f"({left}.x < 0 || {left}.x > 800 || {left}.y < 0 || {left}.y > 600)"
             return f"{left} {expr.operator} {right}"
 
         elif expr.type == 'binary_op':
@@ -2230,7 +2421,10 @@ class PhaserEmitter(BaseEmitter):
 
     def _format_value(self, value: IR_Value, context: str = None) -> str:
         """Format IR_Value for JavaScript."""
-        if value.type == 'string':
+        if value.type == 'identifier':
+            # Variable reference (loop vars, etc.) - output as bare identifier
+            return str(value.value)
+        elif value.type == 'string':
             # Convert Rosh string interpolation {var} to JS template literal ${this.var}
             text = str(value.value)
             text = text.replace('`', '\\`')

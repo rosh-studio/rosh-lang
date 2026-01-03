@@ -797,7 +797,10 @@ class TestSpriteAnimations:
         action = ir.init_actions[0]
         assert action.type == 'play_animation'
         assert action.params['animation'] == 'walk'
-        assert action.params['target'] == 'player'
+        # Target is now an IR_Expression
+        target = action.params['target']
+        assert target.type == 'literal'
+        assert target.value.value == 'player'
         assert action.params['loop'] == True
 
     def test_stop_animation_action(self):
@@ -807,7 +810,10 @@ class TestSpriteAnimations:
 
         action = ir.init_actions[0]
         assert action.type == 'stop_animation'
-        assert action.params['target'] == 'player'
+        # Target is now an IR_Expression
+        target = action.params['target']
+        assert target.type == 'literal'
+        assert target.value.value == 'player'
 
 
 class TestArrayPools:

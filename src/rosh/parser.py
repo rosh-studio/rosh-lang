@@ -281,6 +281,12 @@ class Parser:
             return self.parse_hide()
         elif token.type == TokenType.SHOW:
             return self.parse_show()
+        elif token.type == TokenType.ACTIVATE:
+            return self.parse_activate()
+        elif token.type == TokenType.DEACTIVATE:
+            return self.parse_deactivate()
+        elif token.type == TokenType.SPAWN:
+            return self.parse_spawn()
         elif token.type == TokenType.COUNT:
             return self.parse_count()
         elif token.type == TokenType.MOVE:
@@ -1203,6 +1209,31 @@ class Parser:
         if self.current_token().type == TokenType.NUMBER:
             return self._parse_bulk_operation('get', line)
 
+        # Check for 'get next from <pool>' - pool allocation
+        if self.current_token().type == TokenType.NEXT:
+            self.advance()  # consume 'next'
+            self.expect(TokenType.FROM)  # require 'from'
+
+            # Parse pool name (must be identifier)
+            if self.current_token().type != TokenType.IDENTIFIER:
+                self.error("Expected pool name after 'get next from'")
+            pool_name = self.current_token().value
+            self.advance()
+            target = Identifier(name=pool_name, line=line)
+
+            # Check for optional 'where' clause
+            where_condition = None
+            if self.current_token().type == TokenType.WHERE:
+                self.advance()
+                where_condition = self.parse_condition()
+
+            return Get(
+                target=target,
+                get_next=True,
+                where_condition=where_condition,
+                line=line
+            )
+
         # Check for 'get all <type>'
         get_all = False
         include_hidden = False
@@ -1868,8 +1899,8 @@ class Parser:
             # Check for 'on <target>'
             if self.current_token().type == TokenType.ON:
                 self.advance()  # consume 'on'
-                target_token = self.expect(TokenType.IDENTIFIER)
-                target = target_token.value
+                # Parse target as expression to support arr[0] syntax
+                target = self.parse_target()
 
             # Check for 'once'
             if self.current_token().type == TokenType.IDENTIFIER and self.current_token().value.lower() == 'once':
@@ -2007,6 +2038,12 @@ class Parser:
                 right = self.parse_expression()
                 return Comparison(left=left, operator='above', right=right, line=left.line)
 
+            # Check for 'is offscreen' (arcade bounds check)
+            if self.current_token().type == TokenType.OFFSCREEN:
+                self.advance()
+                # No right operand - use a dummy literal
+                return Comparison(left=left, operator='offscreen', right=Literal(value=True, type_name='boolean', line=left.line), line=left.line)
+
             # Plain 'is <value>' means equality (for query syntax: color is white)
             right = self.parse_expression()
             return Comparison(left=left, operator='==', right=right, line=left.line)
@@ -2018,6 +2055,14 @@ class Parser:
             self.advance()  # consume 'contains'
             item = self.parse_expression()
             return Contains(container=left, item=item, line=line)
+
+        # Handle 'collides with' (arcade collision check)
+        if self.current_token().type == TokenType.COLLIDES:
+            line = self.current_token().line
+            self.advance()  # consume 'collides'
+            self.expect(TokenType.WITH)
+            right = self.parse_expression()
+            return Comparison(left=left, operator='collides', right=right, line=line)
 
         return left
 
@@ -2112,8 +2157,8 @@ class Parser:
             # Check for 'on <target>'
             if self.current_token().type == TokenType.ON:
                 self.advance()  # consume 'on'
-                target_token = self.expect(TokenType.IDENTIFIER)
-                target = target_token.value
+                # Parse target as expression to support arr[0] syntax
+                target = self.parse_target()
             return StopAnimation(target=target, line=line)
 
         # Otherwise it's just "stop" (program termination)
@@ -2236,6 +2281,46 @@ class Parser:
 
         return ShowObject(name=name, line=line)
 
+    def parse_activate(self) -> ActivateObject:
+        """Parse: activate <target> - Set active=1, visible=true (arcade shorthand)"""
+        line = self.current_token().line
+        self.expect(TokenType.ACTIVATE)
+
+        target = self.parse_target()
+        return ActivateObject(target=target, line=line)
+
+    def parse_deactivate(self) -> DeactivateObject:
+        """Parse: deactivate <target> - Set active=0, visible=false (arcade shorthand)"""
+        line = self.current_token().line
+        self.expect(TokenType.DEACTIVATE)
+
+        target = self.parse_target()
+        return DeactivateObject(target=target, line=line)
+
+    def parse_spawn(self) -> SpawnAt:
+        """Parse: spawn [<target>] at <x>, <y> - Set position and activate (arcade shorthand)
+
+        Supports:
+        - spawn bullet at 100, 200     → explicit target
+        - spawn at player.x, player.y  → uses _current from previous 'get next'
+        """
+        line = self.current_token().line
+        self.expect(TokenType.SPAWN)
+
+        # Check if 'at' comes immediately (no target specified)
+        if self.current_token().type == TokenType.AT:
+            target = None  # Will use _current selection
+        else:
+            target = self.parse_target()
+
+        self.expect(TokenType.AT)
+
+        x = self.parse_expression()
+        self.expect(TokenType.COMMA)
+        y = self.parse_expression()
+
+        return SpawnAt(target=target, x=x, y=y, line=line)
+
     def parse_count(self) -> CountObjects:
         """Parse: count [type] - Count objects, optionally by type"""
         line = self.current_token().line
@@ -2248,8 +2333,16 @@ class Parser:
 
         return CountObjects(object_type=object_type, line=line)
 
-    def parse_move(self) -> MoveObject:
-        """Parse: move <name> to x,y[,z] or move <name> x y [z]
+    def parse_move(self):
+        """Parse: move <name> to x,y[,z] or move <target> <direction> by <amount>
+
+        Directional syntax (arcade shorthand):
+        - move bullet up by 10
+        - move player left by 5
+
+        Coordinate syntax (original):
+        - move ball to 100, 200
+        - move ball 100 200
 
         TODO (BACKLOG - Console Features Parity):
         - Support named positions: 'move ball to center', 'move ball to origin', 'move ball to ground'
@@ -2259,8 +2352,24 @@ class Parser:
         line = self.current_token().line
         self.expect(TokenType.MOVE)
 
-        name_token = self.expect(TokenType.IDENTIFIER)
-        name = name_token.value
+        # Parse target (can be identifier, array access, or loop variable)
+        target = self.parse_target()
+
+        # Check for directional syntax: move <target> <direction> by <amount>
+        directions = {'up', 'down', 'left', 'right'}
+        if (self.current_token().type == TokenType.IDENTIFIER and
+            self.current_token().value.lower() in directions):
+            direction = self.current_token().value.lower()
+            self.advance()
+            self.expect(TokenType.BY)
+            amount = self.parse_expression()
+            return MoveDirection(target=target, direction=direction, amount=amount, line=line)
+
+        # Coordinate syntax: extract name from target for backwards compatibility
+        if isinstance(target, Identifier):
+            name = target.name
+        else:
+            self.error("move to coordinates requires a simple object name")
 
         # Skip optional 'to'
         if self.current_token().type == TokenType.TO:

@@ -124,6 +124,14 @@ class TokenType(Enum):
     NOT = auto()
     BELOW = auto()
     ABOVE = auto()
+    COLLIDES = auto()  # A collides with B (arcade collision check)
+
+    # Arcade object lifecycle
+    ACTIVATE = auto()    # activate <object> - sets active=1, visible=true
+    DEACTIVATE = auto()  # deactivate <object> - sets active=0, visible=false
+    SPAWN = auto()       # spawn <object> at <x>, <y> - position and activate
+    OFFSCREEN = auto()   # if object is offscreen then (bounds check)
+    NEXT = auto()        # get next from <pool> - pool allocation
 
     # Logical operators
     AND = auto()
@@ -468,6 +476,12 @@ class Lexer:
             'not': TokenType.NOT,
             'below': TokenType.BELOW,
             'above': TokenType.ABOVE,
+            'collides': TokenType.COLLIDES,
+            'activate': TokenType.ACTIVATE,
+            'deactivate': TokenType.DEACTIVATE,
+            'spawn': TokenType.SPAWN,
+            'offscreen': TokenType.OFFSCREEN,
+            'next': TokenType.NEXT,
             'and': TokenType.AND,
             'or': TokenType.OR,
             'where': TokenType.WHERE,
