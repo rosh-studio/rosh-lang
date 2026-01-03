@@ -808,3 +808,77 @@ class TestSpriteAnimations:
         action = ir.init_actions[0]
         assert action.type == 'stop_animation'
         assert action.params['target'] == 'player'
+
+
+class TestArrayPools:
+    """Tests for array pool creation syntax."""
+
+    def test_array_pool_creates_objects(self):
+        """create N objects as name should create N objects."""
+        program = parse('''
+create 3 objects as balls
+    set color to "red"
+end
+''')
+        ir = transform_ast_to_ir(program)
+
+        assert len(ir.objects) == 3
+        assert ir.objects[0].name == 'balls_0'
+        assert ir.objects[1].name == 'balls_1'
+        assert ir.objects[2].name == 'balls_2'
+
+    def test_array_pool_registers_pool(self):
+        """create N objects as name should register array pool."""
+        program = parse('''
+create 4 objects as explosions
+    set visible to false
+end
+''')
+        ir = transform_ast_to_ir(program)
+
+        assert 'explosions' in ir.array_pools
+        assert ir.array_pools['explosions'] == ['explosions_0', 'explosions_1', 'explosions_2', 'explosions_3']
+
+    def test_array_pool_inherits_properties(self):
+        """Objects in array pool should all have the same properties."""
+        program = parse('''
+create 2 objects as items
+    set x to 100
+    set y to 200
+    set color to "blue"
+end
+''')
+        ir = transform_ast_to_ir(program)
+
+        for obj in ir.objects:
+            assert 'x' in obj.properties
+            assert 'y' in obj.properties
+
+    def test_array_pool_not_hidden(self):
+        """Objects in array pool should not be hidden."""
+        program = parse('''
+create 3 objects as enemies
+    set color to "red"
+end
+''')
+        ir = transform_ast_to_ir(program)
+
+        for obj in ir.objects:
+            assert obj.hidden == False
+
+    def test_array_access_in_set_property(self):
+        """set arr[0].x should create set_property with list_index target."""
+        program = parse('''
+create 2 objects as balls
+    set x to 0
+end
+set balls[0].x to 100
+''')
+        ir = transform_ast_to_ir(program)
+
+        # Find the set_property action
+        action = ir.init_actions[0]
+        assert action.type == 'set_property'
+        # Target should be an IR_Expression for list_index
+        target = action.params['target']
+        assert target.type == 'list_index'

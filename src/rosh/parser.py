@@ -315,12 +315,54 @@ class Parser:
         - 'create banana' → implied 'create object banana'
         - 'create 100 balls' → bulk create
         - 'create 50 green balls' → bulk create with modifiers
+        - 'create 4 objects as explosions ... end' → array pool
         """
         line = self.current_token().line
         self.expect(TokenType.CREATE)
 
-        # Check for bulk create: create N [modifiers] type
+        # Check for bulk create or array pool: create N ...
         if self.current_token().type == TokenType.NUMBER:
+            # Peek ahead to check for array pool syntax: create N objects as arrayname
+            saved_pos = self.pos
+            count = int(self.current_token().value)
+            self.advance()
+
+            # Check for array pool syntax: create N objects as arrayname ... end
+            is_objects = (self.current_token().type == TokenType.OBJECT or
+                          (self.current_token().type == TokenType.IDENTIFIER and
+                           self.current_token().value.lower() == 'objects'))
+
+            if is_objects:
+                self.advance()  # skip 'object' or 'objects'
+
+                if self.current_token().type == TokenType.AS:
+                    self.advance()  # skip 'as'
+                    array_name = self.expect_identifier_for("array name").value
+                    self.skip_newlines()
+
+                    # Parse body like regular CreateObject
+                    body = []
+                    while self.current_token().type not in (TokenType.END, TokenType.EOF):
+                        stmt = self.parse_statement()
+                        if stmt:
+                            body.append(stmt)
+                        self.skip_newlines()
+
+                    self.expect(TokenType.END)
+                    self.skip_newlines()
+
+                    # Return CreateObject with count and array_name set
+                    return CreateObject(
+                        name=f"_{array_name}_template",  # internal template name
+                        body=body,
+                        count=count,
+                        array_name=array_name,
+                        hidden=True,  # template is hidden
+                        line=line
+                    )
+
+            # Not array pool syntax - restore position and use bulk operation
+            self.pos = saved_pos
             return self._parse_bulk_operation('create', line)
 
         # Skip 'a' or 'an' for natural language: "create a banana", "create an apple"

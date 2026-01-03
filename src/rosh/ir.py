@@ -30,7 +30,7 @@ Design Principles:
 # IR Version - Emitters must implement this version
 # See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
 # =============================================================================
-IR_VERSION = "0.2.2"  # Added sprite sheet animation support
+IR_VERSION = "0.2.3"  # Added array pool support
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Tuple
@@ -292,6 +292,7 @@ class IR_Program:
     functions: List[IR_Function] = field(default_factory=list)
     init_actions: List[Any] = field(default_factory=list)  # Top-level statements
     metadata: IR_Metadata = field(default_factory=IR_Metadata)
+    array_pools: Dict[str, List[str]] = field(default_factory=dict)  # array_name -> [obj_names]
 
     def get_object_by_name(self, name: str) -> Optional[IR_Object]:
         """Find object by name (case-insensitive)."""

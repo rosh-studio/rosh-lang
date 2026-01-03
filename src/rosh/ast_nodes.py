@@ -88,6 +88,12 @@ class Identifier(ASTNode):
 class CreateObject(ASTNode):
     """create object <name> [from <parent1>, <parent2>...] ... end
 
+    Array pool syntax:
+    create N objects as <array_name>
+        ...
+    end
+    # Creates array_name[0] through array_name[N-1]
+
     Objects with names starting with '_' are hidden by default (not rendered).
     Hidden objects exist in world state and can be queried/cloned, but emitters
     skip rendering them. Use for templates, config, meta objects, etc.
@@ -96,6 +102,8 @@ class CreateObject(ASTNode):
     body: List[ASTNode]
     parents: Optional[List[str]] = None  # List of parent object names
     hidden: bool = False  # True if name starts with '_' (set by parser)
+    count: Optional[int] = None  # For array pools: create N objects as name
+    array_name: Optional[str] = None  # For array pools: the array variable name
     line: int = 0
 
 

@@ -389,6 +389,14 @@ class PhaserEmitter(BaseEmitter):
         for obj in self.ir.objects:
             self._emit_create_object(obj)
 
+        # Initialize array pools
+        if self.ir.array_pools:
+            self.write_blank()
+            self.write("// Array pools")
+            for array_name, obj_names in self.ir.array_pools.items():
+                obj_refs = ', '.join([f"this.{name}" for name in obj_names])
+                self.write(f"this.{array_name} = [{obj_refs}];")
+
         # Register event handlers
         self._emit_event_registrations()
 
@@ -2110,6 +2118,11 @@ class PhaserEmitter(BaseEmitter):
         else:
             val_str = str(value)
 
+        # Handle IR_Expression target (e.g., from array index access)
+        if isinstance(target, IR_Expression):
+            target_str = self.emit_expression(target)
+            return f"{target_str}.{prop} = {val_str};"
+
         # Special handling for Phaser text properties
         if prop == 'font_size':
             if target:
@@ -2193,6 +2206,21 @@ class PhaserEmitter(BaseEmitter):
                 return f"{args[0]}.includes({args[1]})"
             else:
                 return f"this.{func}({', '.join(args)})"
+
+        elif expr.type == 'list_index':
+            # Array index: arr[0] -> this.arr[0]
+            # Handle the case where left is a literal string (variable name)
+            if (expr.left and expr.left.type == 'literal' and
+                isinstance(expr.left.value, IR_Value) and expr.left.value.type == 'string'):
+                # It's a variable name stored as string literal
+                list_expr = f"this.{expr.left.value.value}"
+            else:
+                list_expr = self.emit_expression(expr.left)
+                # If list_expr is a simple identifier, add this. prefix
+                if list_expr.isidentifier():
+                    list_expr = f"this.{list_expr}"
+            index_expr = self.emit_expression(expr.right) if expr.right else '0'
+            return f"{list_expr}[{index_expr}]"
 
         return str(expr)
 

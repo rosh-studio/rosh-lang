@@ -129,9 +129,21 @@ class IRTransformer:
         # First pass: collect all objects (including from loaded settings)
         for stmt in program.statements:
             if isinstance(stmt, CreateObject):
-                ir_obj = self.transform_create_object(stmt)
-                ir_program.objects.append(ir_obj)
-                self.objects[ir_obj.name] = ir_obj
+                # Check for array pool syntax
+                if stmt.count and stmt.array_name:
+                    # Create N objects and register as array pool
+                    pool_objects = []
+                    for i in range(stmt.count):
+                        ir_obj = self.transform_create_object(stmt, index=i)
+                        ir_program.objects.append(ir_obj)
+                        self.objects[ir_obj.name] = ir_obj
+                        pool_objects.append(ir_obj.name)
+                    # Register the array pool
+                    ir_program.array_pools[stmt.array_name.lower()] = pool_objects
+                else:
+                    ir_obj = self.transform_create_object(stmt)
+                    ir_program.objects.append(ir_obj)
+                    self.objects[ir_obj.name] = ir_obj
             elif isinstance(stmt, LoadSettings):
                 # Load JSON settings file and create objects from it
                 loaded_objects = self.load_settings_file(stmt.filepath)
@@ -293,8 +305,20 @@ class IRTransformer:
     # Object Transformation
     # =========================================================================
 
-    def transform_create_object(self, node: CreateObject) -> IR_Object:
-        """Transform CreateObject AST node to IR_Object."""
+    def transform_create_object(self, node: CreateObject, index: int = None) -> IR_Object:
+        """Transform CreateObject AST node to IR_Object.
+
+        Args:
+            node: The CreateObject AST node
+            index: Optional index for array pools (e.g., 0, 1, 2, 3 for a pool of 4)
+        """
+        # Determine object name
+        if index is not None and node.array_name:
+            # Array pool: use array_name + index (e.g., explosions_0)
+            obj_name = f"{node.array_name.lower()}_{index}"
+        else:
+            obj_name = node.name.lower()
+
         # Determine object type and parent
         parent_type = None
         obj_type = "shape"
@@ -357,14 +381,17 @@ class IRTransformer:
         if 'flip_y' in properties:
             flip_y = bool(properties.pop('flip_y').value)
 
+        # For array pools, objects are not hidden even though the template is
+        is_hidden = node.hidden if index is None else False
+
         ir_obj = IR_Object(
             uuid=str(uuid.uuid4()),
-            name=node.name.lower(),
+            name=obj_name,
             type=obj_type,
             parent_type=parent_type,
             properties=properties,
             saveable=saveable,
-            hidden=node.hidden,  # Propagate hidden flag from AST
+            hidden=is_hidden,
             scene=scene,
             level=level,
             grid_cols=grid_cols,
@@ -614,16 +641,27 @@ class IRTransformer:
                 right=[self.transform_expression(arg) for arg in node.arguments]
             )
 
+        elif isinstance(node, ListIndex):
+            # Array index access: arr[0] or arr[i]
+            return IR_Expression(
+                type='list_index',
+                left=self.transform_expression(node.list_expr),
+                right=self.transform_expression(node.index_expr) if node.index_expr else None
+            )
+
         else:
             # Fallback for unsupported expressions
             return IR_Expression(type='literal', value=IR_Value('null', None))
 
     def get_object_name(self, node: ASTNode) -> str:
-        """Extract object name from Identifier or PropertyAccess."""
+        """Extract object name from Identifier, PropertyAccess, or ListIndex."""
         if isinstance(node, Identifier):
             return node.name.lower()
         elif isinstance(node, PropertyAccess):
             return self.get_object_name(node.object)
+        elif isinstance(node, ListIndex):
+            # For list index, return as expression so emitter can handle
+            return self.transform_expression(node)
         return ''
 
     # =========================================================================

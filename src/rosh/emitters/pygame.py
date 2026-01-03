@@ -269,6 +269,14 @@ class PygameEmitter(BaseEmitter):
         for obj in self.ir.objects:
             self._emit_create_object(obj)
 
+        # Initialize array pools
+        if self.ir.array_pools:
+            self.write_blank()
+            self.write_comment("Array pools")
+            for array_name, obj_names in self.ir.array_pools.items():
+                obj_refs = ', '.join([f"self.{name}" for name in obj_names])
+                self.write(f"self.{array_name} = [{obj_refs}]")
+
         # Init actions
         if self.ir.init_actions:
             self.write_blank()
@@ -1142,6 +1150,21 @@ class PygameEmitter(BaseEmitter):
             if op == 'not':
                 op = 'not '
             return f"{op}{right}"
+        elif expr.type == 'list_index':
+            # Array index: arr[0] -> self.arr[0]
+            # Handle the case where left is a literal string (variable name)
+            from rosh.ir import IR_Value
+            if (expr.left and expr.left.type == 'literal' and
+                isinstance(expr.left.value, IR_Value) and expr.left.value.type == 'string'):
+                # It's a variable name stored as string literal
+                list_expr = f"self.{expr.left.value.value}"
+            else:
+                list_expr = self.emit_expression(expr.left)
+                # If list_expr is a simple identifier, add self. prefix
+                if list_expr.isidentifier():
+                    list_expr = f"self.{list_expr}"
+            index_expr = self.emit_expression(expr.right) if expr.right else '0'
+            return f"{list_expr}[{index_expr}]"
 
         return str(expr)
 
