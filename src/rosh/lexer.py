@@ -94,6 +94,7 @@ class TokenType(Enum):
     WHEN = auto()
     TRIGGER = auto()
     WITH = auto()
+    ON = auto()  # play animation on <target>
 
     # Sound/music system
     PLAY = auto()
@@ -457,6 +458,7 @@ class Lexer:
             'when': TokenType.WHEN,
             'trigger': TokenType.TRIGGER,
             'with': TokenType.WITH,
+            'on': TokenType.ON,
             'play': TokenType.PLAY,
             'sound': TokenType.SOUND,
             'music': TokenType.MUSIC,

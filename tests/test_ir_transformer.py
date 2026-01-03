@@ -678,3 +678,133 @@ class TestQuerySyntax:
         assert action.type == 'destroy'
         assert action.params['target'] == 'enemy'
         assert action.params['confirmed'] == False
+
+
+class TestSpriteAnimations:
+    """Tests for sprite sheet animation support."""
+
+    def test_spritesheet_properties(self):
+        """Sprite columns and rows should be extracted to IR."""
+        program = parse("""
+            create object explosion
+                set sprite to "explosion.png"
+                set sprite_columns to 3
+                set sprite_rows to 3
+            end
+        """)
+        ir = transform_ast_to_ir(program)
+
+        assert len(ir.objects) == 1
+        obj = ir.objects[0]
+        assert obj.grid_cols == 3
+        assert obj.grid_rows == 3
+
+    def test_set_animations_auto_divide(self):
+        """set animations to list should auto-divide frames."""
+        program = parse("""
+            create object player
+                set sprite to "player.png"
+                set sprite_columns to 4
+                set sprite_rows to 1
+                set animations to idle walk run jump
+            end
+        """)
+        ir = transform_ast_to_ir(program)
+
+        obj = ir.objects[0]
+        assert obj.animations == {
+            'idle': (0, 0),
+            'walk': (1, 1),
+            'run': (2, 2),
+            'jump': (3, 3)
+        }
+
+    def test_set_animations_with_remainder(self):
+        """Extra frames should go to last animation."""
+        program = parse("""
+            create object explosion
+                set sprite to "explosion.png"
+                set sprite_columns to 3
+                set sprite_rows to 3
+                set animations to start middle finish
+            end
+        """)
+        ir = transform_ast_to_ir(program)
+
+        obj = ir.objects[0]
+        # 9 frames / 3 animations = 3 each
+        assert obj.animations == {
+            'start': (0, 2),
+            'middle': (3, 5),
+            'finish': (6, 8)
+        }
+
+    def test_set_animation_frames_override(self):
+        """set animation X to start end should override frames."""
+        program = parse("""
+            create object player
+                set sprite to "player.png"
+                set sprite_columns to 8
+                set sprite_rows to 1
+                set animations to idle walk
+                set animation idle to 0 3
+                set animation walk to 4 7
+            end
+        """)
+        ir = transform_ast_to_ir(program)
+
+        obj = ir.objects[0]
+        assert obj.animations == {
+            'idle': (0, 3),
+            'walk': (4, 7)
+        }
+
+    def test_frame_rate_property(self):
+        """frame_rate property should be extracted."""
+        program = parse("""
+            create object explosion
+                set sprite to "explosion.png"
+                set sprite_columns to 3
+                set sprite_rows to 3
+                set frame_rate to 15
+            end
+        """)
+        ir = transform_ast_to_ir(program)
+
+        obj = ir.objects[0]
+        assert obj.frame_rate == 15.0
+
+    def test_flip_properties(self):
+        """flip_x and flip_y should be extracted."""
+        program = parse("""
+            create object player
+                set sprite to "player.png"
+                set flip_x to true
+                set flip_y to false
+            end
+        """)
+        ir = transform_ast_to_ir(program)
+
+        obj = ir.objects[0]
+        assert obj.flip_x == True
+        assert obj.flip_y == False
+
+    def test_play_animation_action(self):
+        """play X on target should create play_animation action."""
+        program = parse('play walk on player')
+        ir = transform_ast_to_ir(program)
+
+        action = ir.init_actions[0]
+        assert action.type == 'play_animation'
+        assert action.params['animation'] == 'walk'
+        assert action.params['target'] == 'player'
+        assert action.params['loop'] == True
+
+    def test_stop_animation_action(self):
+        """stop animation on target should create stop_animation action."""
+        program = parse('stop animation on player')
+        ir = transform_ast_to_ir(program)
+
+        action = ir.init_actions[0]
+        assert action.type == 'stop_animation'
+        assert action.params['target'] == 'player'
