@@ -104,6 +104,63 @@ create object bullet5
     set active to 0
 end
 
+# === EXPLOSIONS (pool of 4 - for visual effect) ===
+create object explosion1
+    set x to 0
+    set y to 0
+    set width to 64
+    set height to 64
+    set sprite to "explosion-sheet.png"
+    set sprite_columns to 3
+    set sprite_rows to 3
+    set animations to explode
+    set frame_rate to 20
+    set visible to false
+    set timer to 0
+end
+
+create object explosion2
+    set x to 0
+    set y to 0
+    set width to 64
+    set height to 64
+    set sprite to "explosion-sheet.png"
+    set sprite_columns to 3
+    set sprite_rows to 3
+    set animations to explode
+    set frame_rate to 20
+    set visible to false
+    set timer to 0
+end
+
+create object explosion3
+    set x to 0
+    set y to 0
+    set width to 64
+    set height to 64
+    set sprite to "explosion-sheet.png"
+    set sprite_columns to 3
+    set sprite_rows to 3
+    set animations to explode
+    set frame_rate to 20
+    set visible to false
+    set timer to 0
+end
+
+create object explosion4
+    set x to 0
+    set y to 0
+    set width to 64
+    set height to 64
+    set sprite to "explosion-sheet.png"
+    set sprite_columns to 3
+    set sprite_rows to 3
+    set animations to explode
+    set frame_rate to 20
+    set visible to false
+    set timer to 0
+end
+
 # === ENEMIES (pool of 4) ===
 create object enemy1
     set x to 100
@@ -211,6 +268,9 @@ create object state
     set lives to 3
     set spawn_timer to 0
     set next_bullet to 1
+    set next_explosion to 1
+    set explosion_x to 0
+    set explosion_y to 0
 end
 
 # === FUNCTIONS ===
@@ -252,6 +312,39 @@ define function spawn_enemy_wave
     set enemy4.y to -200
     set enemy4.active to 1
     set enemy4.visible to true
+end
+
+define function show_explosion
+    # Show explosion at state.explosion_x, state.explosion_y
+    # Uses round-robin through explosion pool
+    if state.next_explosion is equal to 1 then
+        set explosion1.x to state.explosion_x
+        set explosion1.y to state.explosion_y
+        set explosion1.visible to true
+        set explosion1.timer to 27
+        set state.next_explosion to 2
+    end
+    if state.next_explosion is equal to 2 then
+        set explosion2.x to state.explosion_x
+        set explosion2.y to state.explosion_y
+        set explosion2.visible to true
+        set explosion2.timer to 27
+        set state.next_explosion to 3
+    end
+    if state.next_explosion is equal to 3 then
+        set explosion3.x to state.explosion_x
+        set explosion3.y to state.explosion_y
+        set explosion3.visible to true
+        set explosion3.timer to 27
+        set state.next_explosion to 4
+    end
+    if state.next_explosion is equal to 4 then
+        set explosion4.x to state.explosion_x
+        set explosion4.y to state.explosion_y
+        set explosion4.visible to true
+        set explosion4.timer to 27
+        set state.next_explosion to 1
+    end
 end
 
 define function fire_bullet
@@ -470,6 +563,9 @@ when update then
                         if bullet1.y is above enemy1.y minus 20 then
                             if bullet1.y is below enemy1.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy1.x
+                                set state.explosion_y to enemy1.y
+                                call show_explosion
                                 set enemy1.y to -50
                                 set bullet1.active to 0
                                 set bullet1.visible to false
@@ -486,6 +582,9 @@ when update then
                         if bullet1.y is above enemy2.y minus 20 then
                             if bullet1.y is below enemy2.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy2.x
+                                set state.explosion_y to enemy2.y
+                                call show_explosion
                                 set enemy2.y to -50
                                 set bullet1.active to 0
                                 set bullet1.visible to false
@@ -502,6 +601,9 @@ when update then
                         if bullet1.y is above enemy3.y minus 20 then
                             if bullet1.y is below enemy3.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy3.x
+                                set state.explosion_y to enemy3.y
+                                call show_explosion
                                 set enemy3.y to -50
                                 set bullet1.active to 0
                                 set bullet1.visible to false
@@ -518,6 +620,9 @@ when update then
                         if bullet1.y is above enemy4.y minus 20 then
                             if bullet1.y is below enemy4.y plus 20 then
                                 play sound "lose1.ogg"
+                                set state.explosion_x to enemy4.x
+                                set state.explosion_y to enemy4.y
+                                call show_explosion
                                 set enemy4.y to -50
                                 set bullet1.active to 0
                                 set bullet1.visible to false
@@ -859,6 +964,34 @@ when update then
                         end
                     end
                 end
+            end
+        end
+
+        # =================================================================
+        # EXPLOSION TIMER - hide explosions after animation completes
+        # =================================================================
+        if explosion1.timer is above 0 then
+            set explosion1.timer to explosion1.timer minus 1
+            if explosion1.timer is equal to 0 then
+                set explosion1.visible to false
+            end
+        end
+        if explosion2.timer is above 0 then
+            set explosion2.timer to explosion2.timer minus 1
+            if explosion2.timer is equal to 0 then
+                set explosion2.visible to false
+            end
+        end
+        if explosion3.timer is above 0 then
+            set explosion3.timer to explosion3.timer minus 1
+            if explosion3.timer is equal to 0 then
+                set explosion3.visible to false
+            end
+        end
+        if explosion4.timer is above 0 then
+            set explosion4.timer to explosion4.timer minus 1
+            if explosion4.timer is equal to 0 then
+                set explosion4.visible to false
             end
         end
     end
