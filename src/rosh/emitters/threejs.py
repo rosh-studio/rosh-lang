@@ -528,10 +528,26 @@ class ThreeJSEmitter(BaseEmitter):
         height = self.ir.metadata.canvas_height
 
         for obj in self.ir.objects:
-            # Skip hidden objects - they exist in world state but are not rendered
-            if obj.hidden:
-                continue
             name = obj.name
+
+            # Hidden objects: create data-only object (not rendered in scene)
+            if obj.hidden:
+                self.write_comment(f"Hidden data object: {name}")
+                self.write(f"const {name} = {{ userData: {{}} }};")
+                # Set properties on userData
+                for prop_name, prop_value in obj.properties.items():
+                    val = prop_value.value
+                    if isinstance(val, str):
+                        self.write(f"{name}.userData.{prop_name} = '{val}';")
+                    elif isinstance(val, bool):
+                        self.write(f"{name}.userData.{prop_name} = {str(val).lower()};")
+                    else:
+                        self.write(f"{name}.userData.{prop_name} = {val};")
+                # Set default x/y on userData for consistency
+                self.write(f"{name}.userData.x = 0.5;")
+                self.write(f"{name}.userData.y = 0.5;")
+                self.write(f"window._objects['{name}'] = {name};")
+                continue
 
             # Get properties using get_property and convert to simple values
             x = self._arcade_get_value(obj.get_property('x', 0), width)
