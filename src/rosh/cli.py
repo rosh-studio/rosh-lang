@@ -1070,14 +1070,156 @@ def run_repl(interpreter: Interpreter = None):
     blank_line_count = 0  # Track consecutive blank lines for triple-newline → go
 
     # === Project Twin: Shared World Connection State ===
-    twin_ws = None  # WebSocket connection
+    twin_sock = None  # TCP socket (preferred for localhost)
+    twin_ws = None  # WebSocket connection (for remote)
     twin_user_id = None
     twin_world_id = None
     twin_world_state = {"objects": {}}
     twin_receiver_thread = None
     twin_stop_event = None
     twin_message_queue = []  # Messages from server to display
-    TWIN_SERVER = "wss://rosh.cloud/ws/world/"
+    twin_use_tcp = False  # True if using TCP, False if WebSocket
+    TWIN_WS_SERVER = "wss://rosh.cloud/ws/world/"
+    TWIN_TCP_HOST = "localhost"
+    TWIN_TCP_PORT = 4000
+
+    def twin_send_tcp(payload: str):
+        """Send a length-prefixed frame over TCP."""
+        nonlocal twin_sock
+        if twin_sock is None:
+            return
+        try:
+            data = payload.encode('utf-8')
+            frame = f"{len(data)}:".encode() + data + b"\n"
+            twin_sock.sendall(frame)
+        except Exception as e:
+            out.dim(f"[twin] TCP send failed: {e}")
+
+    def twin_recv_tcp_frame(sock, timeout=1.0) -> str:
+        """Receive a single length-prefixed frame from TCP socket."""
+        import select
+        sock.setblocking(False)
+        readable, _, _ = select.select([sock], [], [], timeout)
+        if not readable:
+            return None
+        try:
+            # Read length prefix
+            length_bytes = b""
+            while True:
+                byte = sock.recv(1)
+                if not byte:
+                    return None
+                if byte == b":":
+                    break
+                length_bytes += byte
+                if len(length_bytes) > 10:
+                    return None
+            length = int(length_bytes.decode())
+            # Read payload
+            payload = b""
+            while len(payload) < length:
+                chunk = sock.recv(length - len(payload))
+                if not chunk:
+                    return None
+                payload += chunk
+            # Read trailing newline
+            sock.recv(1)
+            return payload.decode('utf-8')
+        except (BlockingIOError, ValueError):
+            return None
+
+    def _parse_tcp_message(msg: str) -> dict:
+        """Parse TCP server message into message queue format."""
+        import json
+        parts = msg.split(None, 1)
+        cmd = parts[0] if parts else ""
+        rest = parts[1] if len(parts) > 1 else ""
+
+        if cmd == "JOINED":
+            # JOINED <user_id>
+            return {"type": "USER_JOINED", "user_id": rest.strip(), "user_count": 0}
+        elif cmd == "LEFT":
+            # LEFT <user_id>
+            return {"type": "USER_LEFT", "user_id": rest.strip(), "user_count": 0}
+        elif cmd == "CREATED":
+            # CREATED <id> <json_data> by <user_id>
+            try:
+                # Parse: CREATED ball {"type":"sphere"...} by abc123
+                match = re.match(r'(\S+)\s+(\{.*\})\s+by\s+(\S+)', rest)
+                if match:
+                    obj_id, json_str, by_user = match.groups()
+                    data = json.loads(json_str)
+                    return {"type": "OBJECT_CREATED", "id": obj_id, "data": data, "by": by_user}
+            except:
+                pass
+        elif cmd == "DELETED":
+            # DELETED <id> by <user_id>
+            try:
+                match = re.match(r'(\S+)\s+by\s+(\S+)', rest)
+                if match:
+                    obj_id, by_user = match.groups()
+                    return {"type": "OBJECT_DELETED", "id": obj_id, "by": by_user}
+            except:
+                pass
+        elif cmd == "MOVED":
+            # MOVED <id> <x> <y> <z> by <user_id>
+            try:
+                match = re.match(r'(\S+)\s+([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)\s+by\s+(\S+)', rest)
+                if match:
+                    obj_id, x, y, z, by_user = match.groups()
+                    return {"type": "OBJECT_MOVED", "id": obj_id, "x": float(x), "y": float(y), "z": float(z), "by": by_user}
+            except:
+                pass
+        elif cmd == "SET":
+            # SET <id> <prop> <value> by <user_id>
+            try:
+                match = re.match(r'(\S+)\s+(\S+)\s+(\S+)\s+by\s+(\S+)', rest)
+                if match:
+                    obj_id, prop, value, by_user = match.groups()
+                    return {"type": "OBJECT_UPDATED", "id": obj_id, "changes": {prop: value}, "by": by_user}
+            except:
+                pass
+        elif cmd == "CHAT":
+            # CHAT <user_id> <message>
+            try:
+                match = re.match(r'(\S+)\s+(.*)', rest)
+                if match:
+                    user_id, message = match.groups()
+                    return {"type": "CHAT", "user_id": user_id, "message": message}
+            except:
+                pass
+        elif cmd == "WHO":
+            # WHO <json> - New JSON format for who response
+            try:
+                data = json.loads(rest)
+                return {
+                    "type": "USERS_LIST",
+                    "world_id": data.get("world", ""),
+                    "count": data.get("count", 0),
+                    "users": [{"id": u["id"], "is_you": u.get("is_you", False), "transport": u.get("transport", "?")} for u in data.get("users", [])]
+                }
+            except:
+                pass
+        elif cmd == "USERS":
+            # USERS <world> <count> - Old format (just count header)
+            try:
+                parts = msg.split()
+                world_id = parts[1] if len(parts) > 1 else ""
+                count = int(parts[2]) if len(parts) > 2 else 0
+                # This is now just the count header, users come in WHO format
+                return None
+            except:
+                pass
+        elif cmd == "RESET":
+            # RESET <world> by <user_id> <count>
+            try:
+                match = re.match(r'(\S+)\s+by\s+(\S+)\s+(\d+)', rest)
+                if match:
+                    world_id, by_user, count = match.groups()
+                    return {"type": "WORLD_RESET", "by": by_user, "deleted_count": int(count)}
+            except:
+                pass
+        return None
 
     def twin_display_messages():
         """Display any pending messages from the twin server"""
@@ -1108,8 +1250,9 @@ def run_repl(interpreter: Interpreter = None):
                 out.print(f"\n=== Users in '{msg['world_id']}' ({msg['count']}) ===", style="cyan")
                 for user in msg['users']:
                     tag = " (you)" if user.get('is_you') else ""
+                    transport = f" [{user.get('transport', '?')}]" if 'transport' in user else ""
                     style = "green" if user.get('is_you') else "dim"
-                    out.print(f"  {user['id']}{tag}", style=style)
+                    out.print(f"  {user['id']}{tag}{transport}", style=style)
             elif msg['type'] == 'OBJECT_UPDATED':
                 if msg['id'] in twin_world_state['objects']:
                     twin_world_state['objects'][msg['id']].update(msg.get('changes', {}))
@@ -1126,11 +1269,10 @@ def run_repl(interpreter: Interpreter = None):
 
     def twin_broadcast_create(obj_name, obj):
         """Broadcast object creation to connected world"""
-        nonlocal twin_ws
-        if twin_ws is None:
+        nonlocal twin_ws, twin_sock, twin_use_tcp
+        if twin_ws is None and twin_sock is None:
             return
         try:
-            import json
             from .values import rosh_to_python
             obj_type = obj.name if hasattr(obj, 'name') and obj.name else 'cube'
             color = rosh_to_python(obj.get('color')) if obj.has('color') else 'green'
@@ -1138,14 +1280,21 @@ def run_repl(interpreter: Interpreter = None):
             y = rosh_to_python(obj.get('y')) if obj.has('y') else 0
             z = rosh_to_python(obj.get('z')) if obj.has('z') else 0
             size = rosh_to_python(obj.get('size')) if obj.has('size') else 1
-            twin_ws.send(json.dumps({
-                "type": "CREATE",
-                "id": obj_name,
-                "object_type": obj_type,
-                "color": color,
-                "x": x, "y": y, "z": z,
-                "size": size
-            }))
+
+            if twin_use_tcp and twin_sock:
+                # TCP: CREATE <id> <type> <color> <x> <y> <z>
+                twin_send_tcp(f"CREATE {obj_name} {obj_type} {color} {x} {y} {z}")
+            elif twin_ws:
+                import json
+                twin_ws.send(json.dumps({
+                    "type": "CREATE",
+                    "id": obj_name,
+                    "object_type": obj_type,
+                    "color": color,
+                    "x": x, "y": y, "z": z,
+                    "size": size
+                }))
+
             # Update local state immediately (don't wait for server echo)
             twin_world_state['objects'][obj_name] = {
                 "type": obj_type,
@@ -1158,15 +1307,18 @@ def run_repl(interpreter: Interpreter = None):
 
     def twin_broadcast_delete(obj_name):
         """Broadcast object deletion to connected world"""
-        nonlocal twin_ws
-        if twin_ws is None:
+        nonlocal twin_ws, twin_sock, twin_use_tcp
+        if twin_ws is None and twin_sock is None:
             return
         try:
-            import json
-            twin_ws.send(json.dumps({
-                "type": "DELETE",
-                "id": obj_name
-            }))
+            if twin_use_tcp and twin_sock:
+                twin_send_tcp(f"DELETE {obj_name}")
+            elif twin_ws:
+                import json
+                twin_ws.send(json.dumps({
+                    "type": "DELETE",
+                    "id": obj_name
+                }))
             # Update local state immediately
             if obj_name in twin_world_state['objects']:
                 del twin_world_state['objects'][obj_name]
@@ -1175,14 +1327,19 @@ def run_repl(interpreter: Interpreter = None):
 
     def twin_broadcast_update(obj_name, **properties):
         """Broadcast property updates to connected world"""
-        nonlocal twin_ws
-        if twin_ws is None:
+        nonlocal twin_ws, twin_sock, twin_use_tcp
+        if twin_ws is None and twin_sock is None:
             return
         try:
-            import json
-            msg = {"type": "UPDATE", "id": obj_name}
-            msg.update(properties)
-            twin_ws.send(json.dumps(msg))
+            if twin_use_tcp and twin_sock:
+                # TCP: SET <id> <prop> <value> for each property
+                for prop, value in properties.items():
+                    twin_send_tcp(f"SET {obj_name} {prop} {value}")
+            elif twin_ws:
+                import json
+                msg = {"type": "UPDATE", "id": obj_name}
+                msg.update(properties)
+                twin_ws.send(json.dumps(msg))
             # Update local state immediately
             if obj_name in twin_world_state['objects']:
                 twin_world_state['objects'][obj_name].update(properties)
@@ -1191,16 +1348,19 @@ def run_repl(interpreter: Interpreter = None):
 
     def twin_broadcast_move(obj_name, x, y, z=0):
         """Broadcast object movement to connected world"""
-        nonlocal twin_ws
-        if twin_ws is None:
+        nonlocal twin_ws, twin_sock, twin_use_tcp
+        if twin_ws is None and twin_sock is None:
             return
         try:
-            import json
-            twin_ws.send(json.dumps({
-                "type": "MOVE",
-                "id": obj_name,
-                "x": x, "y": y, "z": z
-            }))
+            if twin_use_tcp and twin_sock:
+                twin_send_tcp(f"MOVE {obj_name} {x} {y} {z}")
+            elif twin_ws:
+                import json
+                twin_ws.send(json.dumps({
+                    "type": "MOVE",
+                    "id": obj_name,
+                    "x": x, "y": y, "z": z
+                }))
             # Update local state immediately
             if obj_name in twin_world_state['objects']:
                 twin_world_state['objects'][obj_name]['x'] = x
@@ -1244,7 +1404,7 @@ def run_repl(interpreter: Interpreter = None):
 
     def broadcast_object_changes(before_state):
         """Check for new/deleted/changed objects and broadcast them"""
-        if twin_ws is None:
+        if twin_ws is None and twin_sock is None:
             return
         from .values import rosh_to_python
         after_state = snapshot_object_states()
@@ -1370,75 +1530,230 @@ def run_repl(interpreter: Interpreter = None):
             if line.strip().startswith('connect'):
                 parts = line.strip().split()
                 world = parts[1] if len(parts) > 1 else 'default'
-                if twin_ws is not None:
+                if twin_ws is not None or twin_sock is not None:
                     out.warning(f"Already connected to '{twin_world_id}'. Use 'disconnect' first.")
                     continue
-                try:
-                    import websocket
-                    import json
-                    import threading
 
-                    uri = f"{TWIN_SERVER}{world}"
-                    out.dim(f"Connecting to {uri}...")
+                import json
+                import threading
+                import socket
 
-                    # Create WebSocket connection (synchronous)
-                    twin_ws = websocket.create_connection(uri)
-                    twin_world_id = world
+                # Try TCP first for localhost connections
+                target_parts = world.split('@')
+                host = target_parts[1] if len(target_parts) > 1 else "localhost"
+                world_name = target_parts[0] if len(target_parts) > 1 else world
 
-                    # Receive initial CONNECTED message
-                    initial = json.loads(twin_ws.recv())
-                    if initial['type'] == 'CONNECTED':
-                        twin_user_id = initial['user_id']
-                        twin_world_state.update(initial['state'])
-                        out.success(f"Connected to world '{world}' as {twin_user_id}")
-                        out.dim(f"Users online: {initial['user_count']}")
-                        if initial['state']['objects']:
-                            out.print(f"Objects in world: {len(initial['state']['objects'])}", style="cyan")
-                            for oid, odata in initial['state']['objects'].items():
-                                out.print(f"  {oid}: {odata['type']} ({odata.get('color', '?')})", style="dim")
-                        out.print()
-                        out.dim("Objects you create will sync to the shared world.")
-                        out.dim("Use 'disconnect' to leave, 'twin' to see world state.")
+                # Use TCP for localhost, WebSocket for remote
+                if host in ("localhost", "127.0.0.1"):
+                    try:
+                        out.dim(f"Connecting to TCP {TWIN_TCP_HOST}:{TWIN_TCP_PORT}...")
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.connect((TWIN_TCP_HOST, TWIN_TCP_PORT))
+                        sock.settimeout(5.0)
 
-                    # Start background receiver thread
-                    twin_stop_event = threading.Event()
+                        # Receive WELCOME message first
+                        welcome = twin_recv_tcp_frame(sock, timeout=5.0)
+                        if welcome and welcome.startswith("WELCOME"):
+                            out.dim(f"Server: {welcome}")
 
-                    def receiver_loop():
-                        nonlocal twin_ws, twin_user_id, twin_world_id
-                        while not twin_stop_event.is_set():
-                            try:
-                                twin_ws.settimeout(0.5)
-                                msg_str = twin_ws.recv()
-                                msg = json.loads(msg_str)
-                                twin_message_queue.append(msg)
-                            except websocket.WebSocketTimeoutException:
-                                continue
-                            except Exception:
-                                break
+                        # Send JOIN command
+                        join_msg = f"JOIN {world_name}"
+                        data = join_msg.encode('utf-8')
+                        frame = f"{len(data)}:".encode() + data + b"\n"
+                        sock.sendall(frame)
 
-                    twin_receiver_thread = threading.Thread(target=receiver_loop, daemon=True)
-                    twin_receiver_thread.start()
+                        # Receive response
+                        response = twin_recv_tcp_frame(sock, timeout=5.0)
+                        if response:
+                            if response.startswith("OK Joined") or response.startswith("OK "):
+                                # Parse: OK Joined '<world>' as <user_id>
+                                # Or: OK <user_id>
+                                if " as " in response:
+                                    twin_user_id = response.split(" as ")[-1].strip()
+                                else:
+                                    twin_user_id = response[3:].strip()
+                                twin_sock = sock
+                                twin_world_id = world_name
+                                twin_use_tcp = True
+                                out.success(f"Connected to world '{world_name}' as {twin_user_id} [TCP]")
 
-                except ImportError:
-                    out.error("websocket-client package required. Install with: uv add websocket-client")
-                except Exception as e:
-                    out.error(f"Connection failed: {e}")
-                    twin_ws = None
-                    twin_world_id = None
+                                # Server sends USERS and STATE automatically after JOIN
+                                # Consume USERS message
+                                users_response = twin_recv_tcp_frame(twin_sock, timeout=2.0)
+                                if users_response and users_response.startswith("USERS "):
+                                    try:
+                                        user_count = int(users_response[6:].strip())
+                                        out.dim(f"Users online: {user_count}")
+                                    except:
+                                        pass
+
+                                # Consume STATE message
+                                state_response = twin_recv_tcp_frame(twin_sock, timeout=2.0)
+                                if state_response and state_response.startswith("STATE "):
+                                    try:
+                                        state_data = json.loads(state_response[6:])
+                                        twin_world_state['objects'] = state_data
+                                        if state_data:
+                                            out.print(f"Objects in world: {len(state_data)}", style="cyan")
+                                            for oid, odata in state_data.items():
+                                                out.print(f"  {oid}: {odata.get('type', '?')} ({odata.get('color', '?')})", style="dim")
+                                    except json.JSONDecodeError:
+                                        pass
+
+                                out.print()
+                                out.dim("Objects you create will sync to the shared world.")
+                                out.dim("Use 'disconnect' to leave, 'twin' to see world state.")
+
+                                # Start background TCP receiver thread
+                                twin_stop_event = threading.Event()
+
+                                def tcp_receiver_loop():
+                                    nonlocal twin_sock, twin_user_id, twin_world_id
+                                    while not twin_stop_event.is_set() and twin_sock:
+                                        try:
+                                            msg = twin_recv_tcp_frame(twin_sock, timeout=0.5)
+                                            if msg:
+                                                # Parse TCP messages and convert to queue format
+                                                parsed = _parse_tcp_message(msg)
+                                                if parsed:
+                                                    twin_message_queue.append(parsed)
+                                        except Exception:
+                                            break
+
+                                twin_receiver_thread = threading.Thread(target=tcp_receiver_loop, daemon=True)
+                                twin_receiver_thread.start()
+                            elif response.startswith("ERROR "):
+                                out.error(f"Connection failed: {response[6:]}")
+                                sock.close()
+                            else:
+                                out.error(f"Unexpected response: {response}")
+                                sock.close()
+                        else:
+                            out.error("No response from server")
+                            sock.close()
+                    except Exception as e:
+                        out.error(f"TCP connection failed: {e}")
+                        out.dim("Falling back to WebSocket...")
+                        # Fall through to WebSocket
+                        try:
+                            import websocket
+                            uri = f"{TWIN_WS_SERVER}{world_name}"
+                            out.dim(f"Connecting to {uri}...")
+                            twin_ws = websocket.create_connection(uri)
+                            twin_world_id = world_name
+                            twin_use_tcp = False
+
+                            initial = json.loads(twin_ws.recv())
+                            if initial['type'] == 'CONNECTED':
+                                twin_user_id = initial['user_id']
+                                twin_world_state.update(initial['state'])
+                                out.success(f"Connected to world '{world_name}' as {twin_user_id} [WebSocket]")
+                                out.dim(f"Users online: {initial['user_count']}")
+                                if initial['state']['objects']:
+                                    out.print(f"Objects in world: {len(initial['state']['objects'])}", style="cyan")
+                                    for oid, odata in initial['state']['objects'].items():
+                                        out.print(f"  {oid}: {odata['type']} ({odata.get('color', '?')})", style="dim")
+                                out.print()
+                                out.dim("Objects you create will sync to the shared world.")
+                                out.dim("Use 'disconnect' to leave, 'twin' to see world state.")
+
+                            twin_stop_event = threading.Event()
+
+                            def ws_receiver_loop():
+                                nonlocal twin_ws, twin_user_id, twin_world_id
+                                while not twin_stop_event.is_set():
+                                    try:
+                                        twin_ws.settimeout(0.5)
+                                        msg_str = twin_ws.recv()
+                                        msg = json.loads(msg_str)
+                                        twin_message_queue.append(msg)
+                                    except websocket.WebSocketTimeoutException:
+                                        continue
+                                    except Exception:
+                                        break
+
+                            twin_receiver_thread = threading.Thread(target=ws_receiver_loop, daemon=True)
+                            twin_receiver_thread.start()
+                        except ImportError:
+                            out.error("websocket-client package required. Install with: uv add websocket-client")
+                        except Exception as e2:
+                            out.error(f"WebSocket connection also failed: {e2}")
+                            twin_ws = None
+                            twin_world_id = None
+                else:
+                    # Remote host - use WebSocket
+                    try:
+                        import websocket
+                        uri = f"{TWIN_WS_SERVER}{world_name}"
+                        out.dim(f"Connecting to {uri}...")
+                        twin_ws = websocket.create_connection(uri)
+                        twin_world_id = world_name
+                        twin_use_tcp = False
+
+                        initial = json.loads(twin_ws.recv())
+                        if initial['type'] == 'CONNECTED':
+                            twin_user_id = initial['user_id']
+                            twin_world_state.update(initial['state'])
+                            out.success(f"Connected to world '{world_name}' as {twin_user_id} [WebSocket]")
+                            out.dim(f"Users online: {initial['user_count']}")
+                            if initial['state']['objects']:
+                                out.print(f"Objects in world: {len(initial['state']['objects'])}", style="cyan")
+                                for oid, odata in initial['state']['objects'].items():
+                                    out.print(f"  {oid}: {odata['type']} ({odata.get('color', '?')})", style="dim")
+                            out.print()
+                            out.dim("Objects you create will sync to the shared world.")
+                            out.dim("Use 'disconnect' to leave, 'twin' to see world state.")
+
+                        twin_stop_event = threading.Event()
+
+                        def ws_receiver_loop():
+                            nonlocal twin_ws, twin_user_id, twin_world_id
+                            while not twin_stop_event.is_set():
+                                try:
+                                    twin_ws.settimeout(0.5)
+                                    msg_str = twin_ws.recv()
+                                    msg = json.loads(msg_str)
+                                    twin_message_queue.append(msg)
+                                except websocket.WebSocketTimeoutException:
+                                    continue
+                                except Exception:
+                                    break
+
+                        twin_receiver_thread = threading.Thread(target=ws_receiver_loop, daemon=True)
+                        twin_receiver_thread.start()
+                    except ImportError:
+                        out.error("websocket-client package required. Install with: uv add websocket-client")
+                    except Exception as e:
+                        out.error(f"Connection failed: {e}")
+                        twin_ws = None
+                        twin_world_id = None
                 continue
 
             if line.strip() == 'disconnect':
-                if twin_ws is None:
+                if twin_ws is None and twin_sock is None:
                     out.dim("Not connected to any world.")
                 else:
                     try:
                         if twin_stop_event:
                             twin_stop_event.set()
-                        twin_ws.close()
+                        if twin_sock:
+                            # Send QUIT command
+                            try:
+                                quit_msg = "QUIT"
+                                data = quit_msg.encode('utf-8')
+                                frame = f"{len(data)}:".encode() + data + b"\n"
+                                twin_sock.sendall(frame)
+                            except:
+                                pass
+                            twin_sock.close()
+                        if twin_ws:
+                            twin_ws.close()
                     except:
                         pass
                     out.success(f"Disconnected from world '{twin_world_id}'")
                     twin_ws = None
+                    twin_sock = None
+                    twin_use_tcp = False
                     twin_user_id = None
                     twin_world_id = None
                     twin_world_state.clear()
@@ -1446,43 +1761,61 @@ def run_repl(interpreter: Interpreter = None):
                 continue
 
             if line.strip() == 'twin':
-                if twin_ws is None:
+                if twin_ws is None and twin_sock is None:
                     out.dim("Not connected. Use 'connect <world>' to join a shared world.")
                 else:
-                    out.print(f"Connected to: {twin_world_id}", style="cyan")
+                    conn_type = "TCP" if twin_use_tcp else "WebSocket"
+                    out.print(f"Connected to: {twin_world_id} [{conn_type}]", style="cyan")
                     out.print(f"Your ID: {twin_user_id}", style="dim")
                     if twin_world_state['objects']:
                         out.print(f"Objects ({len(twin_world_state['objects'])}):", style="cyan")
                         for oid, odata in twin_world_state['objects'].items():
-                            out.print(f"  {oid}: {odata['type']} ({odata.get('color', '?')})", style="dim")
+                            out.print(f"  {oid}: {odata.get('type', '?')} ({odata.get('color', '?')})", style="dim")
                     else:
                         out.dim("No objects in world")
                 continue
 
             if line.strip().startswith('say '):
-                if twin_ws is None:
+                if twin_ws is None and twin_sock is None:
                     out.dim("Not connected. Use 'connect <world>' first.")
                 else:
-                    import json
                     message = line.strip()[4:]
-                    twin_ws.send(json.dumps({"type": "CHAT", "message": message}))
+                    if twin_use_tcp and twin_sock:
+                        twin_send_tcp(f"SAY {message}")
+                    elif twin_ws:
+                        import json
+                        twin_ws.send(json.dumps({"type": "CHAT", "message": message}))
                 continue
 
             if line.strip() == 'reset world':
-                if twin_ws is None:
+                if twin_ws is None and twin_sock is None:
                     out.dim("Not connected. Use 'connect <world>' first.")
                 else:
-                    import json
-                    twin_ws.send(json.dumps({"type": "RESET"}))
+                    if twin_use_tcp and twin_sock:
+                        twin_send_tcp("RESET")
+                    elif twin_ws:
+                        import json
+                        twin_ws.send(json.dumps({"type": "RESET"}))
                     out.success(f"Reset sent to world '{twin_world_id}'")
                 continue
 
             if line.strip() in ('users', 'who'):
-                if twin_ws is None:
+                if twin_ws is None and twin_sock is None:
                     out.dim("Not connected. Use 'connect <world>' first.")
                 else:
-                    import json
-                    twin_ws.send(json.dumps({"type": "USERS"}))
+                    if twin_use_tcp and twin_sock:
+                        twin_send_tcp("WHO")
+                        # Wait briefly then display any queued messages (receiver thread handles response)
+                        import time
+                        time.sleep(0.3)
+                        twin_display_messages()
+                    elif twin_ws:
+                        import json
+                        twin_ws.send(json.dumps({"type": "USERS"}))
+                        # For WebSocket, also wait and display
+                        import time
+                        time.sleep(0.3)
+                        twin_display_messages()
                 continue
 
             # Display any pending twin messages before processing commands
