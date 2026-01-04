@@ -1144,13 +1144,13 @@ def run_repl(interpreter: Interpreter = None):
             # LEFT <user_id>
             return {"type": "USER_LEFT", "user_id": rest.strip(), "user_count": 0}
         elif cmd == "CREATED":
-            # CREATED <id> <json_data> by <user_id>
+            # CREATED <id> <type> <color> <x> <y> <z> by <user_id>
             try:
-                # Parse: CREATED ball {"type":"sphere"...} by abc123
-                match = re.match(r'(\S+)\s+(\{.*\})\s+by\s+(\S+)', rest)
+                # Parse: CREATED ball sphere red 0.0 0.0 0.0 by abc123
+                match = re.match(r'(\S+)\s+(\S+)\s+(\S+)\s+([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)\s+by\s+(\S+)', rest)
                 if match:
-                    obj_id, json_str, by_user = match.groups()
-                    data = json.loads(json_str)
+                    obj_id, obj_type, color, x, y, z, by_user = match.groups()
+                    data = {"type": obj_type, "color": color, "x": float(x), "y": float(y), "z": float(z)}
                     return {"type": "OBJECT_CREATED", "id": obj_id, "data": data, "by": by_user}
             except:
                 pass
