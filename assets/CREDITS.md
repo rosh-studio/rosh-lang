@@ -79,6 +79,7 @@ Game assets from Kenney (www.kenney.nl)
 |------|--------|--------|---------|
 | `linen_bank.glb` | [Sketchfab](https://skfb.ly/6TBqA) | CheriePotter | CC BY 4.0 |
 | `joanna_baillie_monument.glb` | [Sketchfab](https://skfb.ly/pyWRH) | Andras Sandor | CC BY 4.0 |
+| `spartan_bronze_helmet.glb` | [Sketchfab](https://skfb.ly/6xBxq) | avi | CC BY-SA 4.0 |
 | `castle.glb` | Sketchfab | Various | CC BY 4.0 |
 | `orc_warrior.glb` | Sketchfab | Various | CC BY 4.0 |
 | `apple.glb` | Sketchfab | Various | CC BY 4.0 |
