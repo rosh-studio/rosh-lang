@@ -25,6 +25,10 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
   // Known object presets (can be extended by emitter)
   const KNOWN_OBJECTS = options.knownObjects || {};
 
+  // GLTFLoader for 3D models (passed from emitter)
+  const gltfLoader = options.gltfLoader || (typeof THREE !== 'undefined' && THREE.GLTFLoader ? new THREE.GLTFLoader() : null);
+  const modelScale = options.modelScale || 2;
+
   // ==========================================================================
   // PHYSICS STATE (ThreeJS-first features)
   // ==========================================================================
@@ -271,11 +275,76 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       const objName = (typeof name === 'string' ? name : options.name) || generateName(typeName);
       const modifiers = options.modifiers || [];
 
-      // Determine geometry
-      let geometry, material;
       // Check options.color first (from Project Twin), then modifiers, then default
       const color = options.color || modifiers.find(m => COLOR_MAP[m]) || 'gray';
       const colorHex = COLOR_MAP[color] || 0x888888;
+
+      // Check if this is a known object with a model
+      const preset = KNOWN_OBJECTS[typeName];
+      if (preset && preset.model && gltfLoader) {
+        // Load GLB model asynchronously
+        const position = {
+          x: options.x !== undefined ? options.x : (Math.random() - 0.5) * 4,
+          y: options.y !== undefined ? options.y : 0,
+          z: options.z !== undefined ? options.z : (Math.random() - 0.5) * 4
+        };
+
+        // Create placeholder while model loads
+        const placeholderGeom = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        const placeholderMat = new THREE.MeshStandardMaterial({ color: colorHex, transparent: true, opacity: 0.3 });
+        const placeholder = new THREE.Mesh(placeholderGeom, placeholderMat);
+        placeholder.name = objName;
+        placeholder.userData._type = typeName;
+        placeholder.userData._color = color;
+        placeholder.userData._roshId = objName;
+        placeholder.userData.fixed = false;
+        placeholder.userData._isPlaceholder = true;
+        placeholder.position.set(position.x, position.y + 0.5, position.z);
+        scene.add(placeholder);
+        objects[objName] = placeholder;
+
+        // Load the actual model
+        gltfLoader.load(
+          preset.model,
+          (gltf) => {
+            const model = gltf.scene;
+            model.name = objName;
+            model.userData._type = typeName;
+            model.userData._color = color;
+            model.userData._roshId = objName;
+            model.userData.fixed = false;
+
+            // Scale the model
+            const gs = modelScale * (preset.scaleX || 1);
+            model.scale.set(gs, gs * (preset.scaleY || 1) / (preset.scaleX || 1), gs * (preset.scaleZ || 1) / (preset.scaleX || 1));
+            model.position.set(position.x, position.y, position.z);
+
+            // Remove placeholder, add model
+            scene.remove(placeholder);
+            placeholderGeom.dispose();
+            placeholderMat.dispose();
+
+            scene.add(model);
+            objects[objName] = model;
+
+            if (preset.credit) {
+              console.log(`[Rosh] Model credit: ${preset.credit}`);
+            }
+          },
+          undefined,
+          (error) => {
+            console.warn(`[Rosh] Failed to load model ${preset.model}:`, error);
+            // Keep placeholder as fallback
+            placeholder.userData._isPlaceholder = false;
+            placeholder.material.opacity = 1;
+          }
+        );
+
+        return { success: true, name: objName, object: placeholder, loading: true };
+      }
+
+      // Fallback to primitive geometry
+      let geometry, material;
 
       switch (typeName) {
         case 'sphere':
