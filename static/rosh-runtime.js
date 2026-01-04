@@ -46,7 +46,11 @@ const RoshRuntime = (function() {
   let twinSocket = null;
   let twinUserId = null;
   let twinWorldId = null;
-  const TWIN_SERVER = 'wss://rosh.cloud/ws/world/';
+  // Auto-detect: use localhost WebSocket for local dev, production for deployed
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const TWIN_SERVER = isLocalhost
+    ? `ws://${window.location.host}/ws/world/`
+    : 'wss://rosh.cloud/ws/world/';
 
   // Project Twin - broadcast helpers
   function twinBroadcastCreate(name, objType, x, y, z, color, size) {
@@ -938,10 +942,13 @@ const RoshRuntime = (function() {
 
         case 'users':
         case 'who':
+          console.log('[DEBUG] users/who command hit, twinSocket:', twinSocket, 'readyState:', twinSocket?.readyState);
           if (!twinSocket || twinSocket.readyState !== WebSocket.OPEN) {
             log('Not connected. Use "connect" first.', 'err');
           } else {
+            console.log('[DEBUG] Sending USERS message');
             twinSocket.send(JSON.stringify({ type: 'USERS' }));
+            log('Requesting user list...', 'dim');
           }
           break;
 

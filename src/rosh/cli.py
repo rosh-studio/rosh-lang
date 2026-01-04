@@ -1104,6 +1104,25 @@ def run_repl(interpreter: Interpreter = None):
             elif msg['type'] == 'WORLD_RESET':
                 twin_world_state['objects'] = {}
                 out.warning(f"\n[twin] World reset by {msg['by']} ({msg.get('deleted_count', 0)} objects cleared)")
+            elif msg['type'] == 'USERS_LIST':
+                out.print(f"\n=== Users in '{msg['world_id']}' ({msg['count']}) ===", style="cyan")
+                for user in msg['users']:
+                    tag = " (you)" if user.get('is_you') else ""
+                    style = "green" if user.get('is_you') else "dim"
+                    out.print(f"  {user['id']}{tag}", style=style)
+            elif msg['type'] == 'OBJECT_UPDATED':
+                if msg['id'] in twin_world_state['objects']:
+                    twin_world_state['objects'][msg['id']].update(msg.get('changes', {}))
+                if msg.get('by') != twin_user_id:
+                    out.print(f"\n[twin] ~ {msg['id']} updated by {msg['by']}: {msg.get('changes', {})}", style="cyan")
+            elif msg['type'] == 'OBJECT_MOVED':
+                if msg['id'] in twin_world_state['objects']:
+                    obj = twin_world_state['objects'][msg['id']]
+                    if 'x' in msg: obj['x'] = msg['x']
+                    if 'y' in msg: obj['y'] = msg['y']
+                    if 'z' in msg: obj['z'] = msg['z']
+                if msg.get('by') != twin_user_id:
+                    out.print(f"\n[twin] ~ {msg['id']} moved to ({msg.get('x')}, {msg.get('y')}, {msg.get('z')})", style="cyan")
 
     def twin_broadcast_create(obj_name, obj):
         """Broadcast object creation to connected world"""
@@ -1127,6 +1146,13 @@ def run_repl(interpreter: Interpreter = None):
                 "x": x, "y": y, "z": z,
                 "size": size
             }))
+            # Update local state immediately (don't wait for server echo)
+            twin_world_state['objects'][obj_name] = {
+                "type": obj_type,
+                "color": color,
+                "x": x, "y": y, "z": z,
+                "size": size
+            }
         except Exception as e:
             out.dim(f"[twin] broadcast failed: {e}")
 
@@ -1141,8 +1167,47 @@ def run_repl(interpreter: Interpreter = None):
                 "type": "DELETE",
                 "id": obj_name
             }))
+            # Update local state immediately
+            if obj_name in twin_world_state['objects']:
+                del twin_world_state['objects'][obj_name]
         except Exception as e:
             out.dim(f"[twin] delete broadcast failed: {e}")
+
+    def twin_broadcast_update(obj_name, **properties):
+        """Broadcast property updates to connected world"""
+        nonlocal twin_ws
+        if twin_ws is None:
+            return
+        try:
+            import json
+            msg = {"type": "UPDATE", "id": obj_name}
+            msg.update(properties)
+            twin_ws.send(json.dumps(msg))
+            # Update local state immediately
+            if obj_name in twin_world_state['objects']:
+                twin_world_state['objects'][obj_name].update(properties)
+        except Exception as e:
+            out.dim(f"[twin] update broadcast failed: {e}")
+
+    def twin_broadcast_move(obj_name, x, y, z=0):
+        """Broadcast object movement to connected world"""
+        nonlocal twin_ws
+        if twin_ws is None:
+            return
+        try:
+            import json
+            twin_ws.send(json.dumps({
+                "type": "MOVE",
+                "id": obj_name,
+                "x": x, "y": y, "z": z
+            }))
+            # Update local state immediately
+            if obj_name in twin_world_state['objects']:
+                twin_world_state['objects'][obj_name]['x'] = x
+                twin_world_state['objects'][obj_name]['y'] = y
+                twin_world_state['objects'][obj_name]['z'] = z
+        except Exception as e:
+            out.dim(f"[twin] move broadcast failed: {e}")
 
     def get_object_names():
         """Get set of current object names in interpreter"""
@@ -1158,11 +1223,34 @@ def run_repl(interpreter: Interpreter = None):
                     pass
         return names
 
-    def broadcast_object_changes(before_names):
-        """Check for new/deleted objects and broadcast them"""
+    def snapshot_object_states():
+        """Snapshot all object states for change detection"""
+        from .values import RoshObject, rosh_to_python
+        snapshot = {}
+        if interpreter and hasattr(interpreter, 'current_env'):
+            for name in interpreter.current_env.bindings.keys():
+                try:
+                    obj = interpreter.current_env.get(name)
+                    if isinstance(obj, RoshObject):
+                        # Snapshot key properties
+                        props = {}
+                        for prop in ['x', 'y', 'z', 'color', 'size', 'scale', 'speed', 'visible', 'orbit']:
+                            if obj.has(prop):
+                                props[prop] = rosh_to_python(obj.get(prop))
+                        snapshot[name] = props
+                except:
+                    pass
+        return snapshot
+
+    def broadcast_object_changes(before_state):
+        """Check for new/deleted/changed objects and broadcast them"""
         if twin_ws is None:
             return
-        after_names = get_object_names()
+        from .values import rosh_to_python
+        after_state = snapshot_object_states()
+        before_names = set(before_state.keys())
+        after_names = set(after_state.keys())
+
         # Broadcast new objects
         new_names = after_names - before_names
         for name in new_names:
@@ -1171,10 +1259,39 @@ def run_repl(interpreter: Interpreter = None):
                 twin_broadcast_create(name, obj)
             except:
                 pass
+
         # Broadcast deleted objects
         deleted_names = before_names - after_names
         for name in deleted_names:
             twin_broadcast_delete(name)
+
+        # Broadcast property changes for existing objects
+        for name in before_names & after_names:
+            before_props = before_state.get(name, {})
+            after_props = after_state.get(name, {})
+            changes = {}
+
+            # Check for position changes (use MOVE message)
+            pos_changed = False
+            for prop in ['x', 'y', 'z']:
+                if before_props.get(prop) != after_props.get(prop):
+                    pos_changed = True
+
+            if pos_changed:
+                twin_broadcast_move(
+                    name,
+                    after_props.get('x', 0),
+                    after_props.get('y', 0),
+                    after_props.get('z', 0)
+                )
+
+            # Check for other property changes (use UPDATE message)
+            for prop in ['color', 'size', 'scale', 'speed', 'visible', 'orbit']:
+                if before_props.get(prop) != after_props.get(prop) and prop in after_props:
+                    changes[prop] = after_props[prop]
+
+            if changes:
+                twin_broadcast_update(name, **changes)
 
     # Set up readline for command history and tab completion
     if READLINE_AVAILABLE:
@@ -1360,6 +1477,14 @@ def run_repl(interpreter: Interpreter = None):
                     out.success(f"Reset sent to world '{twin_world_id}'")
                 continue
 
+            if line.strip() in ('users', 'who'):
+                if twin_ws is None:
+                    out.dim("Not connected. Use 'connect <world>' first.")
+                else:
+                    import json
+                    twin_ws.send(json.dumps({"type": "USERS"}))
+                continue
+
             # Display any pending twin messages before processing commands
             twin_display_messages()
 
@@ -1445,7 +1570,7 @@ def run_repl(interpreter: Interpreter = None):
                     buffer = []
                     blank_line_count = 0
                     try:
-                        _before = get_object_names()
+                        _before = snapshot_object_states()
                         interpreter = run_source(source, "<repl>", interpreter)
                         broadcast_object_changes(_before)
                     except RoshError as e:
@@ -1854,7 +1979,7 @@ def run_repl(interpreter: Interpreter = None):
                     source = '\n'.join(buffer)
                     buffer = []
                     try:
-                        _before = get_object_names()
+                        _before = snapshot_object_states()
                         interpreter = run_source(source, "<repl>", interpreter)
                         broadcast_object_changes(_before)
                     except RoshError as e:
@@ -1931,7 +2056,7 @@ def run_repl(interpreter: Interpreter = None):
                     source = '\n'.join(buffer)
                     buffer = []
                     try:
-                        _before = get_object_names()
+                        _before = snapshot_object_states()
                         interpreter = run_source(source, "<repl>", interpreter)
                         broadcast_object_changes(_before)
                     except RoshError as e:
@@ -1955,7 +2080,7 @@ def run_repl(interpreter: Interpreter = None):
                 source = '\n'.join(buffer)
                 buffer = []
                 try:
-                    _before = get_object_names()
+                    _before = snapshot_object_states()
                     interpreter = run_source(source, "<repl>", interpreter)
                     broadcast_object_changes(_before)
                 except RoshError as e:
@@ -1968,7 +2093,7 @@ def run_repl(interpreter: Interpreter = None):
                 source = '\n'.join(buffer)
                 buffer = []
                 try:
-                    _before = get_object_names()
+                    _before = snapshot_object_states()
                     interpreter = run_source(source, "<repl>", interpreter)
                     broadcast_object_changes(_before)
                 except RoshError as e:
