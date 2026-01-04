@@ -268,12 +268,13 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
 
     // Object creation
     createObject: function(typeName, name, options = {}) {
-      const objName = name || generateName(typeName);
+      const objName = (typeof name === 'string' ? name : options.name) || generateName(typeName);
       const modifiers = options.modifiers || [];
 
       // Determine geometry
       let geometry, material;
-      const color = modifiers.find(m => COLOR_MAP[m]) || 'gray';
+      // Check options.color first (from Project Twin), then modifiers, then default
+      const color = options.color || modifiers.find(m => COLOR_MAP[m]) || 'gray';
       const colorHex = COLOR_MAP[color] || 0x888888;
 
       switch (typeName) {
@@ -309,12 +310,16 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       mesh.userData._roshId = objName;
       mesh.userData.fixed = false;  // Console-created objects affected by physics
 
-      // Random position to avoid stacking
-      mesh.position.set(
-        (Math.random() - 0.5) * 4,
-        0.5,
-        (Math.random() - 0.5) * 4
-      );
+      // Use provided position (from Twin) or random to avoid stacking
+      if (options.x !== undefined || options.y !== undefined || options.z !== undefined) {
+        mesh.position.set(options.x || 0, options.y || 0.5, options.z || 0);
+      } else {
+        mesh.position.set(
+          (Math.random() - 0.5) * 4,
+          0.5,
+          (Math.random() - 0.5) * 4
+        );
+      }
 
       scene.add(mesh);
       objects[objName] = mesh;

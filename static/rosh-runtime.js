@@ -73,6 +73,18 @@ const RoshRuntime = (function() {
     }
   }
 
+  function twinBroadcastMove(name, x, y, z) {
+    if (twinSocket && twinSocket.readyState === WebSocket.OPEN) {
+      twinSocket.send(JSON.stringify({
+        type: 'MOVE',
+        id: name,
+        x: x,
+        y: y,
+        z: z
+      }));
+    }
+  }
+
   // DOM elements
   let outputEl = null;
   let inputEl = null;
@@ -341,7 +353,7 @@ const RoshRuntime = (function() {
     'help', 'save', 'load', 'undo', 'redo', 'count', 'move', 'make',
     'clear', 'repeat', ':repeat', ':r', 'go', 'goto', 'scene', 'scenes',
     'rooms', 'credits', 'camera', 'capabilities',
-    'connect', 'disconnect', 'twin', 'say'
+    'connect', 'disconnect', 'twin', 'say', 'users', 'who'
   ];
 
   function fuzzyCorrectCommand(cmd) {
@@ -852,6 +864,10 @@ const RoshRuntime = (function() {
                     if (msg.by !== twinUserId && adapter.deleteObject) {
                       adapter.deleteObject(msg.id);
                       log('[' + msg.by + '] deleted ' + msg.id, 'cyan');
+                    }
+                  } else if (msg.type === 'OBJECT_MOVED') {
+                    if (msg.by !== twinUserId && adapter.moveObject) {
+                      adapter.moveObject(msg.id, { x: msg.x, y: msg.y, z: msg.z });
                     }
                   } else if (msg.type === 'CHAT') {
                     log('[' + msg.by + ']: ' + msg.message, 'cyan');
