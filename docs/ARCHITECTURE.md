@@ -36,6 +36,8 @@ Ports (follow, don't lead):
 3. Document behavior in `docs/`
 4. Ports (Pygame, Godot) can follow when resources allow
 
+**Clarification:** This is a hierarchy, not competing sources. Spec/IR + Python CLI define core behavior; ThreeJS (3D) and Phaser (2D) define graphics behavior. Ports follow and may lag until parity tests catch up.
+
 ### For Existing Code
 
 - ThreeJS and Phaser: First-class, kept in sync via shared runtime
