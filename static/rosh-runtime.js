@@ -49,12 +49,17 @@ const RoshRuntime = (function() {
   const TWIN_SERVER = 'wss://rosh.cloud/ws/world/';
 
   // Project Twin - broadcast helpers
-  function twinBroadcastCreate(name, type, x, y, z, color, size) {
+  function twinBroadcastCreate(name, objType, x, y, z, color, size) {
     if (twinSocket && twinSocket.readyState === WebSocket.OPEN) {
       twinSocket.send(JSON.stringify({
-        type: 'CREATE_OBJECT',
-        object_id: name,
-        data: { type, x, y, z, color, size }
+        type: 'CREATE',
+        id: name,
+        object_type: objType,
+        x: x,
+        y: y,
+        z: z,
+        color: color,
+        size: size
       }));
     }
   }
@@ -62,8 +67,8 @@ const RoshRuntime = (function() {
   function twinBroadcastDelete(name) {
     if (twinSocket && twinSocket.readyState === WebSocket.OPEN) {
       twinSocket.send(JSON.stringify({
-        type: 'DELETE_OBJECT',
-        object_id: name
+        type: 'DELETE',
+        id: name
       }));
     }
   }
