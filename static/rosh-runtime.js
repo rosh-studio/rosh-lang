@@ -838,23 +838,23 @@ const RoshRuntime = (function() {
                     log('Connected to "' + worldId + '" as user ' + msg.user_id, 'ok');
                     log('Objects you create will be shared with others!', 'cyan');
                   } else if (msg.type === 'OBJECT_CREATED') {
-                    if (msg.user_id !== twinUserId && adapter.createObject) {
+                    if (msg.by !== twinUserId && adapter.createObject) {
                       const data = msg.data || {};
                       adapter.createObject(data.type || 'sphere', {
-                        name: msg.object_id,
+                        name: msg.id,
                         x: data.x, y: data.y, z: data.z,
                         color: data.color,
                         size: data.size
                       });
-                      log('[' + msg.user_id + '] created ' + msg.object_id, 'cyan');
+                      log('[' + msg.by + '] created ' + msg.id, 'cyan');
                     }
                   } else if (msg.type === 'OBJECT_DELETED') {
-                    if (msg.user_id !== twinUserId && adapter.deleteObject) {
-                      adapter.deleteObject(msg.object_id);
-                      log('[' + msg.user_id + '] deleted ' + msg.object_id, 'cyan');
+                    if (msg.by !== twinUserId && adapter.deleteObject) {
+                      adapter.deleteObject(msg.id);
+                      log('[' + msg.by + '] deleted ' + msg.id, 'cyan');
                     }
                   } else if (msg.type === 'CHAT') {
-                    log('[' + msg.user_id + ']: ' + msg.message, 'cyan');
+                    log('[' + msg.by + ']: ' + msg.message, 'cyan');
                   } else if (msg.type === 'WORLD_STATE') {
                     const objects = msg.objects || {};
                     const count = Object.keys(objects).length;
