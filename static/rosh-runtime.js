@@ -871,6 +871,16 @@ const RoshRuntime = (function() {
                         }
                       }
                     }
+                  } else if (msg.type === 'USERS_LIST') {
+                    log('=== Users in "' + msg.world_id + '" (' + msg.count + ') ===', 'cyan');
+                    for (const user of msg.users) {
+                      const youTag = user.is_you ? ' (you)' : '';
+                      log('  ' + user.id + youTag, user.is_you ? 'ok' : 'dim');
+                    }
+                  } else if (msg.type === 'USER_JOINED') {
+                    log('[' + msg.user_id + '] joined (' + msg.user_count + ' users)', 'cyan');
+                  } else if (msg.type === 'USER_LEFT') {
+                    log('[' + msg.user_id + '] left (' + msg.user_count + ' users)', 'dim');
                   }
                 } catch (e) {
                   console.error('Twin message error:', e);
@@ -907,6 +917,15 @@ const RoshRuntime = (function() {
             }
             twinSocket.send(JSON.stringify({ type: 'CHAT', message }));
             log('[you]: ' + message, 'ok');
+          }
+          break;
+
+        case 'users':
+        case 'who':
+          if (!twinSocket || twinSocket.readyState !== WebSocket.OPEN) {
+            log('Not connected. Use "connect" first.', 'err');
+          } else {
+            twinSocket.send(JSON.stringify({ type: 'USERS' }));
           }
           break;
 
