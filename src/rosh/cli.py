@@ -1080,8 +1080,10 @@ def run_repl(interpreter: Interpreter = None):
     twin_message_queue = []  # Messages from server to display
     twin_use_tcp = False  # True if using TCP, False if WebSocket
     TWIN_WS_SERVER = "wss://rosh.cloud/ws/world/"
-    TWIN_TCP_HOST = "localhost"
-    TWIN_TCP_PORT = 4000
+    # TCP settings can be overridden via environment
+    # For Railway: ROSH_TCP_HOST=viaduct.proxy.rlwy.net ROSH_TCP_PORT=12345
+    TWIN_TCP_HOST = os.environ.get("ROSH_TCP_HOST", "localhost")
+    TWIN_TCP_PORT = int(os.environ.get("ROSH_TCP_PORT", "4000"))
 
     def twin_send_tcp(payload: str):
         """Send a length-prefixed frame over TCP."""
@@ -1538,13 +1540,25 @@ def run_repl(interpreter: Interpreter = None):
                 import threading
                 import socket
 
-                # Try TCP first for localhost connections
-                target_parts = world.split('@')
-                host = target_parts[1] if len(target_parts) > 1 else "localhost"
-                world_name = target_parts[0] if len(target_parts) > 1 else world
+                # Parse world name and optional mode
+                # Syntax: connect <world>[@tcp|@ws]
+                # Examples: connect testworld, connect testworld@tcp, connect testworld@ws
+                force_tcp = False
+                force_ws = False
+                world_name = world
 
-                # Use TCP for localhost, WebSocket for remote
-                if host in ("localhost", "127.0.0.1"):
+                if '@' in world:
+                    parts_at = world.split('@')
+                    world_name = parts_at[0]
+                    mode = parts_at[1].lower()
+                    if mode == "tcp":
+                        force_tcp = True
+                    elif mode == "ws":
+                        force_ws = True
+
+                # Use TCP for localhost (or if forced), WebSocket for remote (or if forced)
+                use_tcp = (TWIN_TCP_HOST in ("localhost", "127.0.0.1") or force_tcp) and not force_ws
+                if use_tcp:
                     try:
                         out.dim(f"Connecting to TCP {TWIN_TCP_HOST}:{TWIN_TCP_PORT}...")
                         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
