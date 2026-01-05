@@ -371,6 +371,24 @@ class PhaserEmitter(BaseEmitter):
             self.write("this.cursors = this.input.keyboard.createCursorKeys();")
             self.write("this.keys = this.input.keyboard.addKeys('A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z,SPACE');")
             self.write_blank()
+            # Handle postMessage for embedded fullscreen mode
+            self.write("// Handle keyboard events from parent iframe (fullscreen embed)")
+            self.write("window.addEventListener('message', (e) => {")
+            self.indent()
+            self.write("if (e.data.type === 'rosh-keydown' && e.data.code === 'Space') {")
+            self.indent()
+            self.write("this.keys.SPACE.isDown = true;")
+            self.write("this.input.keyboard.emit('keydown-SPACE');")
+            self.dedent()
+            self.write("} else if (e.data.type === 'rosh-keyup' && e.data.code === 'Space') {")
+            self.indent()
+            self.write("this.keys.SPACE.isDown = false;")
+            self.write("this.input.keyboard.emit('keyup-SPACE');")
+            self.dedent()
+            self.write("}")
+            self.dedent()
+            self.write("});")
+            self.write_blank()
 
         # Set up mobile touch controls if needed
         if self.needs_touch_controls:
