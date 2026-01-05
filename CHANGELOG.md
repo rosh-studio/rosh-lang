@@ -64,6 +64,11 @@
   - Fixed loop emission (was generating JavaScript syntax instead of Python)
   - Fixed `IR_Value` import shadowing issue
 
+- **Embed Player Fixes**
+  - Fixed space key exiting fullscreen instead of controlling game
+  - Phaser games now listen for postMessage events from parent iframe
+  - Added `/embed` showcase route to Flask app
+
 - **Settings Loading**
   - `load "settings.json"` now correctly resolves relative to project
 
