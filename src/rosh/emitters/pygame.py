@@ -1111,6 +1111,47 @@ class PygameEmitter(BaseEmitter):
 
         return '\n'.join(lines)
 
+    def emit_loop(self, loop: IR_Loop) -> str:
+        """Emit loop as Python code.
+
+        Returns lines with relative indentation markers:
+        - Lines starting with no indent are at current level
+        - Lines starting with '>' are indented one level deeper
+        """
+        lines = []
+
+        if loop.type == 'while':
+            condition = self.emit_expression(loop.condition)
+            lines.append(f"while {condition}:")
+        elif loop.type == 'for':
+            start = self.emit_expression(loop.start)
+            end = self.emit_expression(loop.end)
+            step = self.emit_expression(loop.step) if loop.step else "1"
+            if step == "1":
+                lines.append(f"for {loop.iterator} in range({start}, {end} + 1):")
+            else:
+                lines.append(f"for {loop.iterator} in range({start}, {end} + 1, {step}):")
+        elif loop.type == 'for_each':
+            iterable = self.emit_expression(loop.iterable)
+            # Add self. prefix if iterable is a simple identifier (array pool name)
+            if iterable.isidentifier():
+                iterable = f"self.{iterable}"
+            lines.append(f"for {loop.iterator} in {iterable}:")
+
+        has_body = False
+        for action in loop.body:
+            if action:
+                code = self.emit_action(action)
+                if code:
+                    for subline in code.split('\n'):
+                        lines.append(f">{subline}")
+                    has_body = True
+
+        if not has_body:
+            lines.append(">pass")
+
+        return '\n'.join(lines)
+
     # =========================================================================
     # Expression Emission
     # =========================================================================
@@ -1153,7 +1194,7 @@ class PygameEmitter(BaseEmitter):
         elif expr.type == 'list_index':
             # Array index: arr[0] -> self.arr[0]
             # Handle the case where left is a literal string (variable name)
-            from rosh.ir import IR_Value
+            # Note: IR_Value is imported at module level
             if (expr.left and expr.left.type == 'literal' and
                 isinstance(expr.left.value, IR_Value) and expr.left.value.type == 'string'):
                 # It's a variable name stored as string literal

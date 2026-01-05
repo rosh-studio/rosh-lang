@@ -8,7 +8,16 @@ WARNING: Rosh is experimental. This implementation may change.
 """
 
 import re
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict
+
+# Voice escape mappings (spoken word → literal character)
+# These are ALWAYS applied (useful for demos, showing intent processing)
+VOICE_ESCAPES: Dict[str, str] = {
+    'dot': '.',
+    'underscore': '_',
+    'equals': '=',
+    'plus': '+',
+}
 
 # Try to load voice spec
 _voice_spec = None
@@ -68,6 +77,64 @@ def normalize_word(word: str) -> Tuple[str, Optional[str]]:
     return word, None
 
 
+def apply_voice_escapes(line: str) -> Tuple[str, List[str]]:
+    """Apply voice escapes BEFORE other normalization.
+
+    Converts spoken escape words to literal syntax characters:
+    - "dot" → . (joins adjacent words: "player dot speed" → "player.speed")
+    - "underscore" → _ (joins adjacent words: "player underscore id" → "player_id")
+    - "equals" → = (with spaces: "x equals 10" → "x = 10")
+
+    Args:
+        line: The input line
+
+    Returns:
+        Tuple of (processed_line, list of escape messages)
+    """
+    messages = []
+    words = line.split()
+    result = []
+
+    i = 0
+    while i < len(words):
+        word_lower = words[i].lower()
+
+        if word_lower in VOICE_ESCAPES:
+            char = VOICE_ESCAPES[word_lower]
+            messages.append(f"[escape: {words[i]}→{char}]")
+
+            if char in '._':
+                # Join with previous and next word (no spaces)
+                if result and i + 1 < len(words):
+                    prev = result.pop()
+                    next_word = words[i + 1]
+                    result.append(f"{prev}{char}{next_word}")
+                    i += 2
+                    continue
+                elif result:
+                    # No next word, just append to previous
+                    prev = result.pop()
+                    result.append(f"{prev}{char}")
+                    i += 1
+                    continue
+                elif i + 1 < len(words):
+                    # No previous word, prepend to next
+                    next_word = words[i + 1]
+                    result.append(f"{char}{next_word}")
+                    i += 2
+                    continue
+            elif char in '=+':
+                # Keep as separate token with spaces (operators)
+                result.append(char)
+                i += 1
+                continue
+
+        result.append(words[i])
+        i += 1
+
+    return ' '.join(result), messages
+
+
 def normalize_line(line: str, quiet: bool = False) -> Tuple[str, List[str]]:
     """Normalize a line of input.
 
@@ -123,7 +190,7 @@ def add_implied_to(line: str) -> Tuple[str, Optional[str]]:
     # Pattern 1: set <object> <property> <value> (3+ tokens after set)
     # e.g., "set box x 100" → "set box x to 100"
     # Must check this BEFORE the short pattern
-    set_long_pattern = r'^(set\s+\w+\s+\w+)\s+(\S.*)$'
+    set_long_pattern = r'^(set\s+[\w.]+\s+[\w.]+)\s+(\S.*)$'
     match = re.match(set_long_pattern, line, re.IGNORECASE)
     if match:
         prefix = match.group(1)
@@ -133,7 +200,8 @@ def add_implied_to(line: str) -> Tuple[str, Optional[str]]:
 
     # Pattern 2: set <property> <value> (2 tokens after set)
     # e.g., "set x 100" → "set x to 100"
-    set_short_pattern = r'^(set\s+\w+)\s+(\S.*)$'
+    # e.g., "set player.speed 10" → "set player.speed to 10"
+    set_short_pattern = r'^(set\s+[\w.]+)\s+(\S.*)$'
     match = re.match(set_short_pattern, line, re.IGNORECASE)
     if match:
         prefix = match.group(1)
@@ -254,34 +322,45 @@ def strip_politeness(line: str) -> str:
     return result
 
 
-def normalize_input(line: str, quiet: bool = False) -> Tuple[str, List[str]]:
-    """Full normalization pipeline for voice input.
+def normalize_input(line: str, quiet: bool = False, is_voice: bool = False) -> Tuple[str, List[str]]:
+    """Full normalization pipeline for input.
 
     Args:
         line: Raw input line
         quiet: If True, suppress correction messages
+        is_voice: If True, apply voice-specific corrections (typos, spellings).
+                  Voice escapes (dot, underscore, equals, plus) are ALWAYS applied.
 
     Returns:
         Tuple of (normalized_line, list of messages)
     """
     messages = []
 
-    # Step 1: Strip politeness
-    line = strip_politeness(line)
+    # Step 0: Apply voice escapes FIRST (ALWAYS - useful for demos)
+    # "player dot speed" → "player.speed"
+    line, escape_messages = apply_voice_escapes(line)
+    if not quiet:
+        messages.extend(escape_messages)
 
-    # Step 2: Strip articles
-    line = strip_articles(line)
+    # Voice-only corrections (typos, spellings, politeness, articles)
+    # Only applied when is_voice=True to avoid unwanted corrections on keyboard input
+    if is_voice:
+        # Step 1: Strip politeness
+        line = strip_politeness(line)
 
-    # Step 3: Normalize words (typos, spellings)
-    line, word_messages = normalize_line(line, quiet)
-    messages.extend(word_messages)
+        # Step 2: Strip articles
+        line = strip_articles(line)
 
-    # Step 4: Add implied 'to'
+        # Step 3: Normalize words (typos, spellings)
+        line, word_messages = normalize_line(line, quiet)
+        messages.extend(word_messages)
+
+    # Step 4: Add implied 'to' (always - helps with both voice and keyboard)
     line, to_msg = add_implied_to(line)
     if to_msg and not quiet:
         messages.append(to_msg)
 
-    # Step 5: Infer properties from values
+    # Step 5: Infer properties from values (always - useful for natural input)
     line, infer_msg = infer_property_from_value(line)
     if infer_msg and not quiet:
         messages.append(infer_msg)
@@ -306,6 +385,11 @@ if __name__ == "__main__":
         "colour blue",
         "raush help",
         "move player 50 100",
+        # Voice escapes
+        "set player dot speed to 10",
+        "player underscore id",
+        "x equals 10",
+        "set player dot stats underscore health to 100",
     ]
 
     print("Rosh Voice Normalizer Test")

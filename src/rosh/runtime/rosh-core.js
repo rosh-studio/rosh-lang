@@ -504,35 +504,68 @@ class RoshCore {
         return word;
     }
 
-    fuzzyCorrect(cmd) {
+    fuzzyCorrect(cmd, isVoice = false) {
         const corrections = [];
 
-        // Common typos for commands (word boundaries)
-        const typos = {
-            'creat': 'create', 'crate': 'create', 'craete': 'create',
-            'delte': 'delete', 'deleet': 'delete', 'remov': 'remove',
-            'lst': 'list', 'lsit': 'list',
-            'hdie': 'hide', 'hsow': 'show', 'shwo': 'show',
-            'udno': 'undo', 'redo': 'redo',
-            'hlep': 'help', 'hep': 'help',
-            'mak': 'make', 'maek': 'make',
-            'st': 'set', 'ste': 'set', 'est': 'set',
-            'mov': 'move', 'moev': 'move', 'mvoe': 'move',
-            'clon': 'clone', 'cloen': 'clone', 'coyp': 'copy',
-        };
-
-        // Fix command typos at start of line
+        // Voice escapes: ALWAYS process (useful for demos)
+        // "dot" → . (joins adjacent words)
+        // "underscore" → _ (joins adjacent words)
+        // "equals" → = (keeps spaces)
+        // "plus" → + (keeps spaces)
+        const voiceEscapes = { 'dot': '.', 'underscore': '_', 'equals': '=', 'plus': '+' };
         const parts = cmd.split(/\s+/);
-        if (parts[0] && typos[parts[0].toLowerCase()]) {
-            const fixed = typos[parts[0].toLowerCase()];
-            corrections.push(parts[0] + '->' + fixed);
-            parts[0] = fixed;
-            cmd = parts.join(' ');
+        const escapedParts = [];
+        for (let i = 0; i < parts.length; i++) {
+            const lower = parts[i].toLowerCase();
+            if (voiceEscapes[lower]) {
+                const char = voiceEscapes[lower];
+                corrections.push(parts[i] + '→' + char);
+                if ((char === '.' || char === '_') && escapedParts.length > 0 && i + 1 < parts.length) {
+                    // Join with previous and next word
+                    const prev = escapedParts.pop();
+                    const next = parts[i + 1];
+                    escapedParts.push(prev + char + next);
+                    i++; // Skip next word
+                } else if (char === '=' || char === '+') {
+                    escapedParts.push(char);
+                } else {
+                    escapedParts.push(char);
+                }
+            } else {
+                escapedParts.push(parts[i]);
+            }
         }
+        cmd = escapedParts.join(' ');
 
-        // British spellings
-        cmd = cmd.replace(/colour/gi, () => { corrections.push('colour->color'); return 'color'; });
-        cmd = cmd.replace(/centre/gi, () => { corrections.push('centre->center'); return 'center'; });
+        // Voice-only corrections (typos, spellings)
+        // Only apply when isVoice=true to avoid unwanted corrections on keyboard input
+        if (isVoice) {
+            const typos = {
+                'creat': 'create', 'crate': 'create', 'craete': 'create',
+                'delte': 'delete', 'deleet': 'delete', 'remov': 'remove',
+                'lst': 'list', 'lsit': 'list',
+                'hdie': 'hide', 'hsow': 'show', 'shwo': 'show',
+                'udno': 'undo', 'redo': 'redo',
+                'hlep': 'help', 'hep': 'help',
+                'mak': 'make', 'maek': 'make',
+                'st': 'set', 'ste': 'set', 'est': 'set',
+                'mov': 'move', 'moev': 'move', 'mvoe': 'move',
+                'clon': 'clone', 'cloen': 'clone', 'coyp': 'copy',
+            };
+
+            // Fix command typos at start of line
+            const cmdParts = cmd.split(/\s+/);
+            if (cmdParts[0] && typos[cmdParts[0].toLowerCase()]) {
+                const fixed = typos[cmdParts[0].toLowerCase()];
+                corrections.push(cmdParts[0] + '→' + fixed);
+                cmdParts[0] = fixed;
+                cmd = cmdParts.join(' ');
+            }
+
+            // British spellings
+            cmd = cmd.replace(/colour/gi, () => { corrections.push('colour→color'); return 'color'; });
+            cmd = cmd.replace(/centre/gi, () => { corrections.push('centre→center'); return 'center'; });
+        }
 
         return { cmd, corrections };
     }

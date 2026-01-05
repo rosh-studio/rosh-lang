@@ -895,9 +895,9 @@ class PhaserEmitter(BaseEmitter):
         self.write("if (!a || !b) return false;")
         self.write("// Both must be visible (default filter)")
         self.write("if (a.visible === false || b.visible === false) return false;")
-        self.write("// Both must be active if they have an active property")
-        self.write("if (a.active !== undefined && a.active === 0) return false;")
-        self.write("if (b.active !== undefined && b.active === 0) return false;")
+        self.write("// Both must be active if they have a _poolActive property")
+        self.write("if (a._poolActive !== undefined && a._poolActive === 0) return false;")
+        self.write("if (b._poolActive !== undefined && b._poolActive === 0) return false;")
         self.write("// AABB overlap check")
         self.write("const aw = a.width || 40;")
         self.write("const ah = a.height || 40;")
@@ -964,7 +964,8 @@ class PhaserEmitter(BaseEmitter):
             # Save custom properties
             for prop_name in obj.properties:
                 if prop_name not in ('x', 'y', 'width', 'height', 'sprite', 'color', 'text', 'saveable'):
-                    self.write(f"{prop_name}: this.{obj.name}.{prop_name},")
+                    safe_prop = self._safe_property_name(prop_name)
+                    self.write(f"{safe_prop}: this.{obj.name}.{safe_prop},")
             self.dedent()
             self.write("};")
             self.dedent()
@@ -1003,7 +1004,8 @@ class PhaserEmitter(BaseEmitter):
             # Restore custom properties
             for prop_name in obj.properties:
                 if prop_name not in ('x', 'y', 'width', 'height', 'sprite', 'color', 'text', 'saveable'):
-                    self.write(f"if (data.{prop_name} !== undefined) this.{obj.name}.{prop_name} = data.{prop_name};")
+                    safe_prop = self._safe_property_name(prop_name)
+                    self.write(f"if (data.{safe_prop} !== undefined) this.{obj.name}.{safe_prop} = data.{safe_prop};")
             self.dedent()
             self.write("}")
 
@@ -1745,13 +1747,14 @@ class PhaserEmitter(BaseEmitter):
             self.write(f"this.{name} = {{ }};")
             # Set properties
             for prop_name, prop_value in obj.properties.items():
+                safe_prop = self._safe_property_name(prop_name)
                 val = self.get_value(prop_value)
                 if isinstance(val, bool):
-                    self.write(f"this.{name}.{prop_name} = {'true' if val else 'false'};")
+                    self.write(f"this.{name}.{safe_prop} = {'true' if val else 'false'};")
                 elif isinstance(val, str):
-                    self.write(f"this.{name}.{prop_name} = '{val}';")
+                    self.write(f"this.{name}.{safe_prop} = '{val}';")
                 else:
-                    self.write(f"this.{name}.{prop_name} = {val};")
+                    self.write(f"this.{name}.{safe_prop} = {val};")
             return
 
         x = self._get_prop_value(obj, 'x', 0.5)
@@ -1826,14 +1829,15 @@ class PhaserEmitter(BaseEmitter):
         skip_props = {'x', 'y', 'width', 'height', 'color', 'sprite', 'text', 'font_size', 'visible', 'target', 'saveable', 'type'}
         for prop_name, prop_value in obj.properties.items():
             if prop_name not in skip_props:
+                safe_prop = self._safe_property_name(prop_name)
                 val = self.get_value(prop_value)
                 if isinstance(val, bool):
                     # JavaScript uses lowercase booleans
-                    self.write(f"this.{obj.name}.{prop_name} = {'true' if val else 'false'};")
+                    self.write(f"this.{obj.name}.{safe_prop} = {'true' if val else 'false'};")
                 elif isinstance(val, str):
-                    self.write(f"this.{obj.name}.{prop_name} = '{val}';")
+                    self.write(f"this.{obj.name}.{safe_prop} = '{val}';")
                 else:
-                    self.write(f"this.{obj.name}.{prop_name} = {val};")
+                    self.write(f"this.{obj.name}.{safe_prop} = {val};")
 
         self.write_blank()
 
@@ -2057,11 +2061,11 @@ class PhaserEmitter(BaseEmitter):
         elif action_type == 'activate':
             target = params.get('target')
             target_str = self.emit_expression(target) if target else 'null'
-            return f"if ({target_str}) {{ {target_str}.active = 1; {target_str}.visible = true; }}"
+            return f"if ({target_str}) {{ {target_str}._poolActive = 1; {target_str}.visible = true; }}"
         elif action_type == 'deactivate':
             target = params.get('target')
             target_str = self.emit_expression(target) if target else 'null'
-            return f"if ({target_str}) {{ {target_str}.active = 0; {target_str}.visible = false; }}"
+            return f"if ({target_str}) {{ {target_str}._poolActive = 0; {target_str}.visible = false; }}"
         elif action_type == 'spawn_at':
             target = params.get('target')
             x = params.get('x')
@@ -2070,10 +2074,10 @@ class PhaserEmitter(BaseEmitter):
             y_str = self.emit_expression(y) if y else '0'
             if target:
                 target_str = self.emit_expression(target)
-                return f"if ({target_str}) {{ {target_str}.x = {x_str}; {target_str}.y = {y_str}; {target_str}.active = 1; {target_str}.visible = true; }}"
+                return f"if ({target_str}) {{ {target_str}.x = {x_str}; {target_str}.y = {y_str}; {target_str}._poolActive = 1; {target_str}.visible = true; }}"
             else:
                 # No target specified - use _current from previous 'get next'
-                return f"if (this._current) {{ this._current.x = {x_str}; this._current.y = {y_str}; this._current.active = 1; this._current.visible = true; }}"
+                return f"if (this._current) {{ this._current.x = {x_str}; this._current.y = {y_str}; this._current._poolActive = 1; this._current.visible = true; }}"
         elif action_type == 'move_direction':
             target = params.get('target')
             direction = params.get('direction', 'up')
@@ -2151,6 +2155,9 @@ class PhaserEmitter(BaseEmitter):
             # Strip quotes if it's a string literal
             if isinstance(pool_name, str) and pool_name.startswith("'"):
                 pool_name = pool_name.strip("'")
+            # Strip this. prefix since we add it in the template
+            if isinstance(pool_name, str) and pool_name.startswith("this."):
+                pool_name = pool_name[5:]
 
             if filter_expr:
                 # Find first matching element in pool
@@ -2238,13 +2245,21 @@ class PhaserEmitter(BaseEmitter):
         else:
             return self._emit_filter_expression(expr)
 
+    def _safe_property_name(self, prop: str) -> str:
+        """Rename properties that conflict with Phaser built-ins."""
+        # 'active' conflicts with Phaser's sprite.active (boolean)
+        # Rosh uses numeric 0/1 for pool availability
+        if prop == 'active':
+            return '_poolActive'
+        return prop
+
     def _emit_filter_expression(self, expr) -> str:
         """Emit expression for filter context (obj.property instead of this.obj.property)"""
         if hasattr(expr, 'type'):
             if expr.type == 'property_access':
                 # In filter context, left is the object type, right is property
                 # We use obj.property since we're iterating
-                prop = expr.right
+                prop = self._safe_property_name(expr.right)
                 return f"obj.{prop}"
             elif expr.type == 'literal':
                 if hasattr(expr, 'value') and hasattr(expr.value, 'type'):
@@ -2253,7 +2268,7 @@ class PhaserEmitter(BaseEmitter):
                     val = expr.value.value
                     if ir_type == 'identifier':
                         # Identifier in filter context = object property
-                        return f"obj.{val}"
+                        return f"obj.{self._safe_property_name(val)}"
                     elif ir_type == 'string':
                         return f"'{val}'"
                     elif ir_type == 'number':
@@ -2289,7 +2304,7 @@ class PhaserEmitter(BaseEmitter):
         # Handle IR_Expression target (e.g., from array index access)
         if isinstance(target, IR_Expression):
             target_str = self.emit_expression(target)
-            return f"{target_str}.{prop} = {val_str};"
+            return f"{target_str}.{self._safe_property_name(prop)} = {val_str};"
 
         # Special handling for Phaser text properties
         if prop == 'font_size':
@@ -2301,12 +2316,13 @@ class PhaserEmitter(BaseEmitter):
 
         if target:
             # Don't add this. prefix for loop iterators (they're local variables)
+            safe_prop = self._safe_property_name(prop)
             if target in self.loop_iterators:
-                return f"{target}.{prop} = {val_str};"
+                return f"{target}.{safe_prop} = {val_str};"
             else:
-                return f"this.{target}.{prop} = {val_str};"
+                return f"this.{target}.{safe_prop} = {val_str};"
         else:
-            return f"this.{prop} = {val_str};"
+            return f"this.{self._safe_property_name(prop)} = {val_str};"
 
     def _emit_conditional_inline(self, cond: IR_Conditional) -> str:
         """Emit conditional as inline code."""
@@ -2351,7 +2367,7 @@ class PhaserEmitter(BaseEmitter):
                 left_str = self.emit_expression(expr.left)
             else:
                 left_str = str(expr.left)
-            return f"{left_str}.{expr.right}"
+            return f"{left_str}.{self._safe_property_name(expr.right)}"
 
         elif expr.type == 'comparison':
             left = self.emit_expression(expr.left)
@@ -2422,8 +2438,11 @@ class PhaserEmitter(BaseEmitter):
     def _format_value(self, value: IR_Value, context: str = None) -> str:
         """Format IR_Value for JavaScript."""
         if value.type == 'identifier':
-            # Variable reference (loop vars, etc.) - output as bare identifier
-            return str(value.value)
+            # Variable reference - add this. prefix unless it's a loop iterator
+            name = str(value.value)
+            if name in self.loop_iterators:
+                return name
+            return f"this.{name}"
         elif value.type == 'string':
             # Convert Rosh string interpolation {var} to JS template literal ${this.var}
             text = str(value.value)

@@ -1579,6 +1579,16 @@ class Interpreter:
         if not isinstance(obj_value, RoshObject):
             raise RoshTypeError(f"Cannot set property of non-object: {type(obj_value).__name__}")
 
+        # Check for ambiguity: does an underscore-joined identifier also exist?
+        # e.g., if setting player.score, check if player_score exists
+        if self.interactive and isinstance(node.object, Identifier):
+            obj_name = node.object.name
+            underscore_name = f"{obj_name}_{node.property}"
+            if self.current_env.exists(underscore_name):
+                self.color_out.warning(
+                    f"[ambiguous: both '{obj_name}.{node.property}' and '{underscore_name}' exist]"
+                )
+
         prev_stack = self._snapshot_property_stack(obj_value, node.property)
         obj_value.set(node.property, value)
         new_stack = self._snapshot_property_stack(obj_value, node.property)

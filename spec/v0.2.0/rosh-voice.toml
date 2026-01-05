@@ -318,6 +318,43 @@ exclamation = "strip"
 quotes = "keep for string values"
 
 # =============================================================================
+# VOICE ESCAPES
+# =============================================================================
+# Spoken words that produce literal syntax characters
+# These are processed BEFORE word corrections
+
+[escapes]
+description = """
+Voice escapes allow users to speak syntax characters.
+Processed before other normalization to preserve intent.
+"""
+
+[escapes.syntax]
+# Spoken word → literal character (joined with adjacent words)
+dot = "."                    # "player dot speed" → "player.speed"
+underscore = "_"             # "player underscore id" → "player_id"
+equals = "="                 # "x equals 10" → "x = 10"
+plus = "+"                   # "x plus 5" → "x + 5"
+
+[escapes.behavior]
+dot_joins = true             # "player dot speed" becomes "player.speed" (no spaces)
+underscore_joins = true      # "player underscore id" becomes "player_id" (no spaces)
+equals_spaces = true         # "x equals 10" becomes "x = 10" (with spaces)
+plus_spaces = true           # "x plus 5" becomes "x + 5" (with spaces)
+
+[escapes.examples]
+examples = [
+    { input = "set player dot speed to 10", canonical = "set player.speed to 10" },
+    { input = "set player underscore id to 42", canonical = "set player_id to 42" },
+    { input = "player dot speed equals 10", canonical = "player.speed = 10" },
+    { input = "create player underscore stats", canonical = "create player_stats" },
+]
+
+[escapes.output]
+format = "[escape: {word}→{char}]"
+example = "[escape: dot→.]"
+
+# =============================================================================
 # OUTPUT BEHAVIOR
 # =============================================================================
 

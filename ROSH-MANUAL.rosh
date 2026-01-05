@@ -852,6 +852,45 @@ print "  p \"Hello!\"     # Expands to: print \"Hello!\""
 print
 
 # ========================================
+# 31. VOICE INPUT AND ESCAPES
+# ========================================
+print "=== 31. Voice Input and Escapes ==="
+
+# Rosh is designed for voice input. The language normalizes
+# speech-to-text output into canonical commands.
+
+print "Voice Escapes (spoken words become syntax):"
+print '  "dot"        -> .    (property access)'
+print '  "underscore" -> _    (literal underscore)'
+print '  "equals"     -> =    (assignment)'
+print
+
+print "Examples:"
+print '  Input:  "set player dot speed to 10"'
+print '  Output: set player.speed to 10'
+print
+print '  Input:  "player underscore id equals 42"'
+print '  Output: player_id = 42'
+print
+
+print "Property Access (two equivalent syntaxes):"
+print "  set player speed to 10     # Natural language (voice-friendly)"
+print "  set player.speed to 10     # Dot notation (code-friendly)"
+print "  Both produce: player.speed = 10"
+print
+
+print "Literal Underscores:"
+print "  player_speed is ONE identifier (not player.speed)"
+print '  Use "underscore" to speak it: player underscore id -> player_id'
+print
+
+print "Voice Corrections (automatic):"
+print '  "creat box"    -> create box      (typo correction)'
+print '  "colour red"   -> color red       (British spelling)'
+print '  "please set x" -> set x           (politeness stripped)'
+print
+
+# ========================================
 # FEATURE SUMMARY
 # ========================================
 print "=== ROSH FEATURE SUMMARY ==="
@@ -868,6 +907,7 @@ print "Stack: get, stack, dup, swap, drop, math ops"
 print "Strings: concatenation, contains, interpolation"
 print "Math: abs, min, max, round, floor, ceil, random"
 print "I/O: print, input"
+print "Voice: escapes (dot, underscore, equals), corrections"
 print
 print "Thanks for exploring Rosh!"
 print "Visit github.com/rdubar/rosh for more information"
