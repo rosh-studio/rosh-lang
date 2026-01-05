@@ -321,11 +321,13 @@ when update then
 
         # Collision: enemies vs player (using collides operator)
         for enemy in enemies then
-            if enemy collides with player then
-                play sound "lose3.ogg"
-                set enemy.y to -50
-                set state.lives to state.lives minus 1
-                call update_lives
+            if state.level is above 0 then
+                if enemy collides with player then
+                    play sound "lose3.ogg"
+                    set enemy.y to -50
+                    set state.lives to state.lives minus 1
+                    call update_lives
+                end
             end
         end
 

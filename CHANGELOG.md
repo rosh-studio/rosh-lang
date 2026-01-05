@@ -29,6 +29,17 @@
   - `get meta` → `get config`
 
 ### Added
+- **Voice Escapes** - Spoken syntax characters (always applied, useful for demos)
+  - `dot` → `.` joins words: "player dot speed" → `player.speed`
+  - `underscore` → `_` joins words: "player underscore id" → `player_id`
+  - `equals` → `=` with spaces: "x equals 10" → `x = 10`
+  - `plus` → `+` with spaces: "x plus 5" → `x + 5`
+  - See ROSH-MANUAL Section 31
+
+- **Voice-Only Autocorrections** - Typo fixes now gated behind `is_voice` flag
+  - Prevents unwanted corrections on keyboard input
+  - Voice escapes still always apply (good for demos)
+
 - **Hidden Objects** - Names starting with `_` are data-only (not rendered)
   - Created as JavaScript objects but not added to scene
   - Useful for game state, config, templates
@@ -43,6 +54,15 @@
 - **Parser Fixes**
   - Fixed infinite loop on unexpected END tokens
   - Fixed body parsing for shorthand `create <name>` syntax
+
+- **Phaser Emitter Fixes**
+  - Fixed `active` property collision with Phaser built-in (now `_poolActive`)
+  - Fixed missing `this.` prefix for identifier references in expressions
+  - Fixed double `this.this.` prefix in pool queries
+
+- **Pygame Emitter Fixes**
+  - Fixed loop emission (was generating JavaScript syntax instead of Python)
+  - Fixed `IR_Value` import shadowing issue
 
 - **Settings Loading**
   - `load "settings.json"` now correctly resolves relative to project
