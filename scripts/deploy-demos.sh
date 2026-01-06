@@ -97,6 +97,14 @@ uv run rosh build demos/virtual-gallery/game.rosh \
     --copy-assets
 cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/virtual-gallery-threejs/"
 
+echo ""
+echo "📦 Building scottish-gallery (Three.js)..."
+uv run rosh build demos/scottish-gallery/gallery.rosh \
+    --target threejs \
+    --output "$ROSH_PORTAL/demos/scottish-gallery-threejs/" \
+    --copy-assets
+cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/scottish-gallery-threejs/"
+
 # =============================================================================
 # PYGAME BUILDS (Desktop - local testing only)
 # =============================================================================
@@ -276,6 +284,8 @@ echo "Three.js (upload these):"
 echo "  $ROSH_PORTAL/demos/rosh-intro-threejs/"
 echo "  $ROSH_PORTAL/demos/space-shooter-threejs/"
 echo "  $ROSH_PORTAL/demos/block-pusher-threejs/"
+echo "  $ROSH_PORTAL/demos/virtual-gallery-threejs/"
+echo "  $ROSH_PORTAL/demos/scottish-gallery-threejs/"
 echo ""
 echo "Pygame (local testing - don't upload):"
 echo "  $ROSH_PORTAL/dist/rosh-intro-pygame/"
