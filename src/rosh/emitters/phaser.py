@@ -1778,9 +1778,10 @@ class PhaserEmitter(BaseEmitter):
         x = self._get_prop_value(obj, 'x', 0.5)
         y = self._get_prop_value(obj, 'y', 0.5)
 
-        # Convert normalized to pixels
-        px = self.to_target_x(x)
-        py = self.to_target_y(y)
+        # Convert to pixels - handle both normalized (0-1) and world coordinates
+        # This matches Three.js behavior for cross-platform compatibility
+        px = self._world_to_screen_x(x)
+        py = self._world_to_screen_y(y)
 
         # Check if this is a HUD object (has 'target' property)
         if 'target' in obj.properties:
@@ -2501,7 +2502,70 @@ class PhaserEmitter(BaseEmitter):
             elif val.type == 'number':
                 # Already normalized by transformer
                 return val.value
+            elif val.type == 'expression':
+                # Handle expressions like -15 (unary minus)
+                return self._eval_const_expr(val.value)
         return default
+
+    def _eval_const_expr(self, expr) -> float:
+        """Evaluate a constant expression (e.g., -15) to a float."""
+        # Handle unary operator: type='unary_op', operator='-', right=operand
+        if hasattr(expr, 'type') and expr.type == 'unary_op':
+            if expr.operator == '-':
+                inner = self._eval_const_expr(expr.right)
+                return -inner
+        # Handle literal: type='literal', value=IR_Value
+        if hasattr(expr, 'type') and expr.type == 'literal':
+            if hasattr(expr, 'value') and hasattr(expr.value, 'value'):
+                return float(expr.value.value)
+        # Handle direct IR_Value
+        if hasattr(expr, 'value') and expr.value is not None:
+            if hasattr(expr.value, 'value'):
+                return float(expr.value.value)
+            return float(expr.value)
+        # Fallback
+        try:
+            return float(expr)
+        except (TypeError, ValueError):
+            return 0.5  # Default
+
+    def _world_to_screen_x(self, x: float) -> float:
+        """Convert coordinate to screen X position.
+
+        Handles both normalized (0-1) and world coordinates for cross-platform compatibility.
+        - Normalized (0-1): Maps directly to canvas width
+        - World coords (outside 0-1): Maps from world range (-20 to 20) to canvas
+        """
+        width = self.ir.metadata.canvas_width
+        if 0 <= x <= 1:
+            # Normalized coordinate
+            return x * width
+        else:
+            # World coordinate - map from world space to screen
+            # World range: -20 to 20 maps to 0 to width
+            world_min, world_max = -20, 20
+            normalized = (x - world_min) / (world_max - world_min)
+            return normalized * width
+
+    def _world_to_screen_y(self, y: float) -> float:
+        """Convert coordinate to screen Y position.
+
+        Handles both normalized (0-1) and world coordinates for cross-platform compatibility.
+        - Normalized (0-1): Maps directly to canvas height
+        - World coords (outside 0-1): Maps from world range with Y inversion
+          (higher world Y = lower screen Y, since 3D Y points up but 2D Y points down)
+        """
+        height = self.ir.metadata.canvas_height
+        if 0 <= y <= 1:
+            # Normalized coordinate
+            return y * height
+        else:
+            # World coordinate - map from world space to screen with inversion
+            # World range: 0 to 15 maps to height to 0 (inverted)
+            world_min, world_max = 0, 15
+            # Clamp and invert: high world Y = low screen Y
+            normalized = 1.0 - ((y - world_min) / (world_max - world_min))
+            return max(0, min(height, normalized * height))
 
     def _get_color(self, obj: IR_Object) -> int:
         """Get color for object, or assign default."""

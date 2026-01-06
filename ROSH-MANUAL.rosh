@@ -776,9 +776,50 @@ print "Only 'level' with 'scene' is treated as a coordinate."
 print
 
 # ========================================
-# 29. ADVANCED FEATURES (Reference)
+# 29. CROSS-PLATFORM COORDINATES
 # ========================================
-print "=== 29. Advanced Features ==="
+print "=== 29. Cross-Platform Coordinates ==="
+
+print "Rosh supports TWO coordinate systems for cross-platform games:"
+print
+
+print "1. NORMALIZED COORDINATES (0-1)"
+print "   Best for: 2D games, UI layouts"
+print "   Range: 0.0 to 1.0"
+print "   Example:"
+print "     create object button"
+print "         set x to 0.5    # Center of screen"
+print "         set y to 0.1    # Near top"
+print "     end"
+print
+
+print "2. WORLD COORDINATES (absolute)"
+print "   Best for: 3D scenes, galleries, spatial layouts"
+print "   Range: Any value outside 0-1 (e.g., -15 to 15)"
+print "   Example:"
+print "     create object statue"
+print "         set x to -10    # Left side of world"
+print "         set y to 2      # Elevated"
+print "         set z to 0      # Center depth"
+print "     end"
+print
+
+print "How it works:"
+print "  - Values in 0-1 range: Treated as normalized (percentage of canvas)"
+print "  - Values outside 0-1: Treated as world coordinates"
+print "  - Each target engine maps world coords appropriately:"
+print "    - Three.js: Direct 3D world units"
+print "    - Phaser: Maps X from -20..20 to screen width"
+print "    - Pygame: Same mapping as Phaser"
+print
+
+print "This enables ONE .rosh file to run on both 2D and 3D engines!"
+print
+
+# ========================================
+# 30. ADVANCED FEATURES (Reference)
+# ========================================
+print "=== 30. Advanced Features (Reference) ==="
 
 print "TOML Support:"
 print "  import \"config.toml\"   # Load as Rosh object"
@@ -796,9 +837,9 @@ print "  save \"state.toon\""
 print
 
 # ========================================
-# 30. REPL COMMANDS
+# 31. REPL COMMANDS
 # ========================================
-print "=== 30. REPL Commands ==="
+print "=== 31. REPL Commands ==="
 
 print "The Rosh REPL (rosh command with no arguments) has special commands:"
 print
@@ -852,9 +893,9 @@ print "  p \"Hello!\"     # Expands to: print \"Hello!\""
 print
 
 # ========================================
-# 31. VOICE INPUT AND ESCAPES
+# 32. VOICE INPUT AND ESCAPES
 # ========================================
-print "=== 31. Voice Input and Escapes ==="
+print "=== 32. Voice Input and Escapes ==="
 
 # Rosh is designed for voice input. The language normalizes
 # speech-to-text output into canonical commands.
