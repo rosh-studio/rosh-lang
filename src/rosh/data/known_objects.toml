@@ -590,6 +590,92 @@ model = "3d_glb/joanna_baillie_monument.glb"
 credit = "Joanna Baillie Monument by Andras Sandor (CC BY 4.0)"
 credit_url = "https://skfb.ly/pyWRH"
 
+# =============================================================================
+# SCOTTISH HERITAGE - National treasures
+# =============================================================================
+
+[lewis_chess_king]
+description = "A king from the Lewis Chessmen, 12th century Norse-Gaelic walrus ivory chess piece found on the Isle of Lewis"
+category = "heritage"
+[lewis_chess_king.2d]
+color = "white"
+shape = "rectangle"
+width = 0.8
+height = 1.4
+[lewis_chess_king.3d]
+shape = "box"
+color = 0xf5f5dc
+scaleY = 1.4
+model = "3d_glb/lewis_chess_king.glb"
+credit = "The British Museum (CC BY-NC-SA)"
+credit_url = "https://sketchfab.com/3d-models/a-king-from-the-lewis-chessmen-504da084a1cd47f3af2aea97280d3fee"
+
+[lewis_chess_queen]
+description = "A queen from the Lewis Chessmen, 12th century walrus ivory chess piece depicting a contemplative queen"
+category = "heritage"
+[lewis_chess_queen.2d]
+color = "white"
+shape = "rectangle"
+width = 0.8
+height = 1.3
+[lewis_chess_queen.3d]
+shape = "box"
+color = 0xf5f5dc
+scaleY = 1.3
+model = "3d_glb/lewis_chess_queen.glb"
+credit = "The British Museum (CC BY-NC-SA)"
+credit_url = "https://sketchfab.com/3d-models/a-queen-from-the-lewis-chessmen-af096aa7ca934f84b6d64c89a8e312d4"
+
+[dolly_the_sheep]
+description = "Dolly the Sheep (1996-2003), the first mammal cloned from an adult cell, created at the Roslin Institute, Scotland"
+category = "heritage"
+[dolly_the_sheep.2d]
+color = "white"
+shape = "ellipse"
+width = 1.2
+height = 0.8
+[dolly_the_sheep.3d]
+shape = "sphere"
+color = 0xf5f5f5
+scaleX = 1.2
+scaleY = 0.8
+scaleZ = 0.8
+model = "3d_glb/dolly_the_sheep.glb"
+credit = "National Museums Scotland"
+credit_url = "https://sketchfab.com/3d-models/dolly-the-sheep-24f946d5b36a40239c222a6e3a5f4414"
+
+[hunterston_brooch]
+description = "The Hunterston Brooch, 7th century Pictish-Irish silver brooch with gold and amber, found in Ayrshire"
+category = "heritage"
+[hunterston_brooch.2d]
+sprite = "sprites/hunterston_brooch.png"
+color = "silver"
+shape = "circle"
+[hunterston_brooch.3d]
+sprite = "sprites/hunterston_brooch.png"
+shape = "cylinder"
+color = 0xc0c0c0
+scaleY = 0.1
+credit = "National Museums Scotland"
+credit_url = "https://www.nms.ac.uk/explore-our-collections/collection-search-results/brooch/142912"
+
+[stirling_torc]
+description = "Iron Age gold torc from the Stirling Hoard, 300-100 BCE, one of the most significant Iron Age finds in Scotland"
+category = "heritage"
+[stirling_torc.2d]
+color = "gold"
+shape = "circle"
+width = 1.2
+height = 1.0
+[stirling_torc.3d]
+shape = "torus"
+color = 0xffd700
+scaleX = 1.2
+scaleY = 0.3
+scaleZ = 1.2
+credit = "National Museums Scotland"
+credit_url = "https://www.nms.ac.uk/explore-our-collections/stories/scottish-history-and-archaeology/the-blair-drummond-hoard/"
+
 [explosion]
 description = "A fiery explosion"
 category = "effect"

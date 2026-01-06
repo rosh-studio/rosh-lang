@@ -48,11 +48,9 @@ const RoshRuntime = (function() {
   let twinSocket = null;
   let twinUserId = null;
   let twinWorldId = null;
-  // Auto-detect: use localhost WebSocket for local dev, production for deployed
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const TWIN_SERVER = isLocalhost
-    ? `ws://${window.location.host}/ws/world/`
-    : 'wss://rosh.cloud/ws/world/';
+  // Always use production WebSocket server for Project Twin
+  // Local Python HTTP servers don't support WebSockets, so always connect to rosh.cloud
+  const TWIN_SERVER = 'wss://rosh.cloud/ws/world/';
 
   // Project Twin - broadcast helpers
   function twinBroadcastCreate(name, objType, x, y, z, color, size) {
