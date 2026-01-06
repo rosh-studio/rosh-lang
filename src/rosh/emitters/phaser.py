@@ -30,6 +30,7 @@ from ..ir import (
     IR_Program, IR_Object, IR_Event, IR_Action, IR_Function,
     IR_Value, IR_Expression, IR_Conditional, IR_Loop
 )
+from ..data import get_known_objects_2d
 
 # =============================================================================
 # STOP - DO NOT MODIFY THIS EMITTER
@@ -122,37 +123,48 @@ class PhaserEmitter(BaseEmitter):
                 self.needs_update = True
                 self.needs_touch_controls = True
 
+            # Check for sprite - either explicit or from known_objects type
+            sprite_path = None
             if 'sprite' in obj.properties:
                 sprite_val = obj.properties['sprite']
                 if sprite_val.type == 'string':
                     sprite_path = sprite_val.value
-                    self.sprite_assets.add(sprite_path)
-                    # Check if this is a spritesheet (has grid defined)
-                    if obj.grid_cols and obj.grid_rows:
-                        if sprite_path in self.spritesheet_info:
-                            # Append to existing list of objects using this spritesheet
-                            self.spritesheet_info[sprite_path]['obj_names'].append(obj.name)
-                        else:
-                            info = {
-                                'cols': obj.grid_cols,
-                                'rows': obj.grid_rows,
-                                'obj_names': [obj.name],  # List of all objects using this sheet
-                                'animations': obj.animations,
-                                'frame_rate': obj.frame_rate,
-                                'frame_width': None,
-                                'frame_height': None
-                            }
-                            # Try to compute frame dimensions from actual image
-                            if HAS_PIL and self.asset_dir:
-                                img_path = self.asset_dir / sprite_path
-                                if img_path.exists():
-                                    try:
-                                        with Image.open(img_path) as img:
-                                            info['frame_width'] = img.width // obj.grid_cols
-                                            info['frame_height'] = img.height // obj.grid_rows
-                                    except Exception:
-                                        pass  # Fall back to runtime calculation
-                            self.spritesheet_info[sprite_path] = info
+            elif 'type' in obj.properties:
+                # Look up sprite from known_objects.toml
+                type_val = obj.properties['type']
+                type_name = type_val.value if hasattr(type_val, 'value') else str(type_val)
+                known_objects = get_known_objects_2d()
+                if type_name in known_objects and 'sprite' in known_objects[type_name]:
+                    sprite_path = known_objects[type_name]['sprite']
+
+            if sprite_path:
+                self.sprite_assets.add(sprite_path)
+                # Check if this is a spritesheet (has grid defined)
+                if obj.grid_cols and obj.grid_rows:
+                    if sprite_path in self.spritesheet_info:
+                        # Append to existing list of objects using this spritesheet
+                        self.spritesheet_info[sprite_path]['obj_names'].append(obj.name)
+                    else:
+                        info = {
+                            'cols': obj.grid_cols,
+                            'rows': obj.grid_rows,
+                            'obj_names': [obj.name],  # List of all objects using this sheet
+                            'animations': obj.animations,
+                            'frame_rate': obj.frame_rate,
+                            'frame_width': None,
+                            'frame_height': None
+                        }
+                        # Try to compute frame dimensions from actual image
+                        if HAS_PIL and self.asset_dir:
+                            img_path = self.asset_dir / sprite_path
+                            if img_path.exists():
+                                try:
+                                    with Image.open(img_path) as img:
+                                        info['frame_width'] = img.width // obj.grid_cols
+                                        info['frame_height'] = img.height // obj.grid_rows
+                                except Exception:
+                                    pass  # Fall back to runtime calculation
+                        self.spritesheet_info[sprite_path] = info
 
             # HUD objects have 'target' property
             if 'target' in obj.properties:
@@ -1417,6 +1429,59 @@ class PhaserEmitter(BaseEmitter):
         self.write("}")
         self.write_blank()
 
+        # Initialize RoshNetwork module
+        self.write("// Initialize RoshNetwork for multiplayer")
+        self.write("if (typeof RoshNetwork !== 'undefined') {")
+        self.indent()
+        self.write("RoshNetwork.init({")
+        self.indent()
+        self.write("log: roshLog,")
+        self.write("adapter: {")
+        self.indent()
+        self.write("createObject: function(type, opts) {")
+        self.indent()
+        self.write("console.log('[Network] createObject:', type, opts);")
+        self.write("const scene = game.scene.getScene('GameScene');")
+        self.write("if (!scene) { console.log('[Network] No scene!'); return; }")
+        self.write("if (!scene.roshObjects) scene.roshObjects = {};")
+        self.write_comment("Transform 3D coords to 2D: Three.js x,z -> Phaser x,y, centered on screen")
+        self.write("let x = 400, y = 300;")
+        self.write("if (opts.x !== undefined) x = 400 + (opts.x * 10);")
+        self.write("if (opts.z !== undefined) y = 300 + (opts.z * 10);")
+        self.write("else if (opts.y !== undefined && Math.abs(opts.y) > 10) y = opts.y;")
+        self.write("const size = (opts.size || 1) * 50;")
+        self.write("const colors = {red: 0xff0000, green: 0x00ff00, blue: 0x0000ff, yellow: 0xffff00, white: 0xffffff, orange: 0xff8800, purple: 0x8800ff, cyan: 0x00ffff};")
+        self.write("const color = (typeof opts.color === 'string') ? (colors[opts.color] || 0x00ff00) : (opts.color || 0x00ff00);")
+        self.write("scene.roshObjects[opts.name] = scene.add.rectangle(x, y, size, size, color);")
+        self.write("console.log('[Network] Created', opts.name, 'at', x, y);")
+        self.dedent()
+        self.write("},")
+        self.write("deleteObject: function(name) {")
+        self.indent()
+        self.write("const scene = game.scene.getScene('GameScene');")
+        self.write("if (scene && scene.roshObjects && scene.roshObjects[name]) {")
+        self.indent()
+        self.write("scene.roshObjects[name].destroy();")
+        self.write("delete scene.roshObjects[name];")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("},")
+        self.write("moveObject: function(name, pos) {")
+        self.indent()
+        self.write("const scene = game.scene.getScene('GameScene');")
+        self.write("const obj = scene && (scene.roshObjects && scene.roshObjects[name] || scene[name]);")
+        self.write("if (obj) { obj.x = pos.x; obj.y = pos.y; }")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("});")
+        self.dedent()
+        self.write("}")
+        self.write_blank()
+
         # Toggle console
         self.write("function toggleRoshConsole() {")
         self.indent()
@@ -1456,6 +1521,12 @@ class PhaserEmitter(BaseEmitter):
         # Process command - implements rosh-console.toml required commands
         self._emit_console_commands()
 
+        # Command history for arrow keys
+        self.write_comment("Command history")
+        self.write("const commandHistory = [];")
+        self.write("let historyIndex = -1;")
+        self.write_blank()
+
         # Keyboard handler
         self.write_comment("Keyboard handling")
         self.write("document.addEventListener('keydown', (e) => {")
@@ -1463,10 +1534,51 @@ class PhaserEmitter(BaseEmitter):
         self.write("if (e.key === '`' || e.key === '~') { e.preventDefault(); toggleRoshConsole(); return; }")
         self.write("if (!roshConsoleVisible) return;")
         self.write("const input = document.getElementById('rosh-console-input');")
-        self.write("if (e.key === 'Enter' && document.activeElement === input) {")
+        self.write("if (document.activeElement !== input) return;")
+        self.write_blank()
+        # Arrow up - previous command
+        self.write("if (e.key === 'ArrowUp') {")
+        self.indent()
+        self.write("e.preventDefault();")
+        self.write("if (commandHistory.length > 0 && historyIndex < commandHistory.length - 1) {")
+        self.indent()
+        self.write("historyIndex++;")
+        self.write("input.value = commandHistory[commandHistory.length - 1 - historyIndex];")
+        self.dedent()
+        self.write("}")
+        self.write("return;")
+        self.dedent()
+        self.write("}")
+        # Arrow down - next command
+        self.write("if (e.key === 'ArrowDown') {")
+        self.indent()
+        self.write("e.preventDefault();")
+        self.write("if (historyIndex > 0) {")
+        self.indent()
+        self.write("historyIndex--;")
+        self.write("input.value = commandHistory[commandHistory.length - 1 - historyIndex];")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("historyIndex = -1;")
+        self.write("input.value = '';")
+        self.dedent()
+        self.write("}")
+        self.write("return;")
+        self.dedent()
+        self.write("}")
+        # Enter - execute command
+        self.write("if (e.key === 'Enter') {")
         self.indent()
         self.write("const cmd = input.value.trim();")
-        self.write("if (cmd) { roshLog('> ' + cmd, 'dim'); processRoshCommand(cmd); }")
+        self.write("if (cmd) {")
+        self.indent()
+        self.write("commandHistory.push(cmd);")
+        self.write("historyIndex = -1;")
+        self.write("roshLog('> ' + cmd, 'dim');")
+        self.write("processRoshCommand(cmd);")
+        self.dedent()
+        self.write("}")
         self.write("input.value = '';")
         self.dedent()
         self.write("}")
@@ -1616,33 +1728,124 @@ class PhaserEmitter(BaseEmitter):
         self.dedent()
         self.write("}")
 
-        # create command - supports "create box" or "create 3 boxes"
+        # create command - supports "create box", "create 3 boxes", "create big green square"
         self.write("else if (command === 'create') {")
         self.indent()
-        self.write("if (parts.length < 2) { roshLog('Usage: create <name> [at <x> <y>]', 'error'); return; }")
+        self.write("if (parts.length < 2) { roshLog('Usage: create [count] [adjectives] <type>', 'error'); return; }")
         self.write_blank()
-        self.write_comment("Handle 'create 3 boxes' syntax")
-        self.write("let count = 1;")
-        self.write("let baseName = parts[1];")
-        self.write("if (/^\\d+$/.test(parts[1]) && parts.length >= 3) {")
+        self.write_comment("Parse: create [count] [big/small] [color] <type>")
+        self.write("const colors = {red: 0xff0000, green: 0x00ff00, blue: 0x0000ff, yellow: 0xffff00, cyan: 0x00ffff, magenta: 0xff00ff, white: 0xffffff, black: 0x000000, orange: 0xff8800, purple: 0x8800ff, pink: 0xff88ff, grey: 0x888888, gray: 0x888888};")
+        self.write("const sizes = {tiny: 20, small: 30, medium: 50, big: 80, large: 80, huge: 120};")
+        self.write("const shapes = ['box', 'square', 'rect', 'rectangle', 'circle', 'ball', 'sphere', 'triangle'];")
+        self.write_blank()
+        self.write("let count = 1, color = 0x00ff00, size = 50, shape = 'rectangle';")
+        self.write("const args = parts.slice(1);")
+        self.write_blank()
+        self.write_comment("Check for leading number (count)")
+        self.write("if (/^\\d+$/.test(args[0])) { count = parseInt(args.shift()); }")
+        self.write_blank()
+        self.write_comment("Last word is the shape/type")
+        self.write("let baseName = args[args.length - 1] || 'box';")
+        self.write_comment("Singularize only known plurals (don't break 'torus', 'bus', etc)")
+        self.write("const plurals = {boxes:'box', squares:'square', rectangles:'rectangle', circles:'circle', balls:'ball', spheres:'sphere', triangles:'triangle', cubes:'cube'};")
+        self.write("if (plurals[baseName]) baseName = plurals[baseName];")
+        self.write("if (shapes.includes(baseName)) { shape = baseName; }")
+        self.write_blank()
+        self.write_comment("Parse adjectives (everything except the last word)")
+        self.write("for (let i = 0; i < args.length - 1; i++) {")
         self.indent()
-        self.write("count = parseInt(parts[1]);")
-        self.write("baseName = parts[2];")
+        self.write("const word = args[i].toLowerCase();")
+        self.write("if (colors[word]) color = colors[word];")
+        self.write("else if (sizes[word]) size = sizes[word];")
         self.dedent()
         self.write("}")
         self.write_blank()
         self.write("for (let i = 0; i < count; i++) {")
         self.indent()
         self.write("let name = baseName;")
-        self.write_comment("Auto-number if name exists in scene or roshObjects")
+        self.write_comment("Auto-number if name exists")
         self.write("if (!roshObjectCounter[baseName]) roshObjectCounter[baseName] = 0;")
         self.write("while (scene[name] || (scene.roshObjects && scene.roshObjects[name])) { roshObjectCounter[baseName]++; name = baseName + '-' + roshObjectCounter[baseName]; }")
         self.write_comment("Offset multiple objects so they don't stack")
         self.write("let x = 400 + (i * 60), y = 300;")
-        self.write_comment("Create in roshObjects namespace (avoids engine collisions)")
+        self.write_comment("Create in roshObjects namespace")
         self.write("if (!scene.roshObjects) scene.roshObjects = {};")
-        self.write("scene.roshObjects[name] = scene.add.rectangle(x, y, 50, 50, 0x00ff00);")
+        self.write("let obj;")
+        self.write("if (shape === 'circle' || shape === 'ball' || shape === 'sphere') {")
+        self.indent()
+        self.write("obj = scene.add.circle(x, y, size/2, color);")
+        self.dedent()
+        self.write("} else if (shape === 'triangle') {")
+        self.indent()
+        self.write("obj = scene.add.triangle(x, y, 0, size, size/2, 0, size, size, color);")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("obj = scene.add.rectangle(x, y, size, size, color);")
+        self.dedent()
+        self.write("}")
+        self.write("scene.roshObjects[name] = obj;")
         self.write("roshLog('Created ' + name + ' at (' + x + ', ' + y + ')');")
+        self.write_comment("Broadcast to network if connected")
+        self.write("if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {")
+        self.indent()
+        self.write_comment("Send baseName as type (e.g. 'orc') so Three.js can load the right model")
+        self.write("RoshNetwork.broadcastCreate(name, {type: baseName, x: x, y: y, color: color, size: size});")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+
+        # delete command - destroy objects (only runtime-created ones)
+        self.write("else if (command === 'delete' || command === 'destroy' || command === 'remove') {")
+        self.indent()
+        self.write("if (parts.length < 2) { roshLog('Usage: delete <object>', 'error'); return; }")
+        self.write("const name = parts[1];")
+        self.write("const obj = scene.roshObjects && scene.roshObjects[name];")
+        self.write("if (!obj) {")
+        self.indent()
+        self.write_comment("Check if it's a static object")
+        self.write("if (scene[name]) { roshLog('Cannot delete static object: ' + name, 'error'); return; }")
+        self.write("roshLog('Object not found: ' + name, 'error'); return;")
+        self.dedent()
+        self.write("}")
+        self.write("obj.destroy();")
+        self.write("delete scene.roshObjects[name];")
+        self.write("roshLog('Deleted ' + name);")
+        self.write_comment("Broadcast to network if connected")
+        self.write("if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {")
+        self.indent()
+        self.write("RoshNetwork.broadcastDelete(name);")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+
+        # move command - move objects to x y position
+        self.write("else if (command === 'move') {")
+        self.indent()
+        self.write_comment("Parse: move <obj> [to] <x> <y>")
+        self.write("if (parts.length < 4) { roshLog('Usage: move <obj> [to] <x> <y>', 'error'); return; }")
+        self.write("const name = parts[1];")
+        self.write("const obj = scene[name] || (scene.roshObjects && scene.roshObjects[name]);")
+        self.write("if (!obj) { roshLog('Object not found: ' + name, 'error'); return; }")
+        self.write_comment("Handle 'move obj to x y' or 'move obj x y'")
+        self.write("let xIdx = 2, yIdx = 3;")
+        self.write("if (parts[2] === 'to') { xIdx = 3; yIdx = 4; }")
+        self.write("const x = parseFloat(parts[xIdx]);")
+        self.write("const y = parseFloat(parts[yIdx]);")
+        self.write("if (isNaN(x) || isNaN(y)) { roshLog('Invalid coordinates', 'error'); return; }")
+        self.write_comment("Save state for undo")
+        self.write("roshRedoStack = [];")
+        self.write("roshSaveState(obj, name, ['x', 'y']);")
+        self.write("obj.x = x; obj.y = y;")
+        self.write("roshLog(name + ' moved to (' + x + ', ' + y + ')');")
+        self.write_comment("Broadcast to network if connected")
+        self.write("if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {")
+        self.indent()
+        self.write("RoshNetwork.broadcastMove(name, {x: x, y: y});")
         self.dedent()
         self.write("}")
         self.dedent()
@@ -1671,12 +1874,51 @@ class PhaserEmitter(BaseEmitter):
         self.dedent()
         self.write("}")
 
+        # connect/twin command (Project Twin)
+        self.write("else if (command === 'connect' || command === 'twin') {")
+        self.indent()
+        self.write("const worldId = parts[1] || 'default';")
+        self.write("if (typeof RoshNetwork !== 'undefined') {")
+        self.indent()
+        self.write("RoshNetwork.connect(worldId);")
+        self.dedent()
+        self.write("} else {")
+        self.indent()
+        self.write("roshLog('Network module not loaded', 'error');")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+
+        # disconnect command
+        self.write("else if (command === 'disconnect') {")
+        self.indent()
+        self.write("if (typeof RoshNetwork !== 'undefined') RoshNetwork.disconnect();")
+        self.dedent()
+        self.write("}")
+
+        # say command
+        self.write("else if (command === 'say') {")
+        self.indent()
+        self.write("const message = parts.slice(1).join(' ');")
+        self.write("if (typeof RoshNetwork !== 'undefined') RoshNetwork.say(message);")
+        self.dedent()
+        self.write("}")
+
+        # users command
+        self.write("else if (command === 'users' || command === 'who') {")
+        self.indent()
+        self.write("if (typeof RoshNetwork !== 'undefined') RoshNetwork.listUsers();")
+        self.dedent()
+        self.write("}")
+
         # help command
         self.write("else if (command === 'help' || command === '?') {")
         self.indent()
         self.write("roshLog('Commands: list, look <obj>, set <obj> <prop> to <value>');")
-        self.write("roshLog('          hide <obj>, show <obj>, create <name>');")
-        self.write("roshLog('          undo [n], redo [n], oops');")
+        self.write("roshLog('          create <type>, delete <obj>, move <obj> to <x> <y>');")
+        self.write("roshLog('          hide <obj>, show <obj>, undo [n], redo [n]');")
+        self.write("roshLog('Network: connect <world>, disconnect, say <msg>, users');")
         self.write("roshLog('Voice: Hold Ctrl+Space to speak');")
         self.dedent()
         self.write("}")
@@ -1788,6 +2030,16 @@ class PhaserEmitter(BaseEmitter):
             self._emit_hud_object(obj, px, py)
             return
 
+        # Check for known object type - look up 2D properties from known_objects.toml
+        known_2d_props = {}
+        if 'type' in obj.properties:
+            type_val = self.get_value(obj.properties['type'])
+            if isinstance(type_val, str):
+                known_objects = get_known_objects_2d()
+                if type_val in known_objects:
+                    known_2d_props = known_objects[type_val]
+                    self.write(f"// Type: {type_val} (from known_objects)")
+
         if 'text' in obj.properties:
             # Text object
             text = obj.properties['text'].value
@@ -1797,19 +2049,36 @@ class PhaserEmitter(BaseEmitter):
             self.write(f"this.{obj.name}.setOrigin(0.5, 0.5);")
             # Store font_size as custom property for animation access
             self.write(f"this.{obj.name}.font_size = {int(font_size)};")
-        elif 'sprite' in obj.properties:
-            # Sprite object
-            sprite = obj.properties['sprite'].value
+        elif 'sprite' in obj.properties or known_2d_props.get('sprite'):
+            # Sprite object - explicit sprite or from known_objects type
+            if 'sprite' in obj.properties:
+                sprite = obj.properties['sprite'].value
+            else:
+                sprite = known_2d_props['sprite']
+                # Register known_objects sprite for preloading
+                self.sprite_assets.add(sprite)
             key = self._asset_key(sprite)
             self.write(f"this.{obj.name} = this.add.sprite({px}, {py}, '{key}');")
             # Set name for dynamic animation key lookup
             self.write(f"this.{obj.name}.name = '{obj.name}';")
-            # Apply scaling if width/height specified
-            if 'width' in obj.properties or 'height' in obj.properties:
-                w = self._get_prop_value(obj, 'width', 0.05)
-                h = self._get_prop_value(obj, 'height', 0.05)
-                pw = self.to_target_width(w)
-                ph = self.to_target_height(h)
+            # Apply scaling - use 'size' property with aspect ratios like shapes
+            aspect_w = known_2d_props.get('width', 1.0)
+            aspect_h = known_2d_props.get('height', 1.0)
+            if 'size' in obj.properties:
+                base_size = self._get_prop_value(obj, 'size', 1.0)
+                w = base_size * aspect_w
+                h = base_size * aspect_h
+                world_range = 40  # -20 to 20
+                pw = (w / world_range) * self.ir.metadata.canvas_width
+                ph = (h / world_range) * self.ir.metadata.canvas_height
+                self.write(f"this.{obj.name}.setDisplaySize({pw}, {ph});")
+            elif 'width' in obj.properties or 'height' in obj.properties:
+                w = self._get_prop_value(obj, 'width', 50)
+                h = self._get_prop_value(obj, 'height', 50)
+                # If width/height > 1, they're pixel values - use directly
+                # If <= 1, they're normalized - convert to pixels
+                pw = w if w > 1 else self.to_target_width(w)
+                ph = h if h > 1 else self.to_target_height(h)
                 self.write(f"this.{obj.name}.setDisplaySize({pw}, {ph});")
             # Apply flip if set
             if obj.flip_x:
@@ -1830,13 +2099,51 @@ class PhaserEmitter(BaseEmitter):
                 anim_key = f"{obj.name}::default"
                 self.write(f"this.{obj.name}.play('{anim_key}');")
         else:
-            # Rectangle object
-            w = self._get_prop_value(obj, 'width', 0.05)
-            h = self._get_prop_value(obj, 'height', 0.05)
-            pw = self.to_target_width(w)
-            ph = self.to_target_height(h)
-            color = self._get_color(obj)
-            self.write(f"this.{obj.name} = this.add.rectangle({px}, {py}, {pw}, {ph}, {self.format_color(color)});")
+            # Rectangle/shape object - use known_objects properties as defaults
+            # known_objects width/height are aspect ratios (relative to size)
+            aspect_w = known_2d_props.get('width', 1.0)
+            aspect_h = known_2d_props.get('height', 1.0)
+
+            # Check if object has 'size' property - use as base size in world units
+            if 'size' in obj.properties:
+                base_size = self._get_prop_value(obj, 'size', 1.0)
+                # Apply aspect ratios to base size, then convert to screen
+                # For 2D, size is in world units (like -20 to 20 range)
+                w = base_size * aspect_w
+                h = base_size * aspect_h
+                # Convert world units to pixels (world range is ~40 units = canvas width)
+                world_range = 40  # -20 to 20
+                pw = (w / world_range) * self.ir.metadata.canvas_width
+                ph = (h / world_range) * self.ir.metadata.canvas_height
+            elif 'width' in obj.properties or 'height' in obj.properties:
+                # Explicit width/height override everything
+                w = self._get_prop_value(obj, 'width', 50)
+                h = self._get_prop_value(obj, 'height', 50)
+                # If width/height > 1, they're pixel values - use directly
+                # If <= 1, they're normalized - convert to pixels
+                pw = w if w > 1 else self.to_target_width(w)
+                ph = h if h > 1 else self.to_target_height(h)
+            else:
+                # No size specified - use small default
+                pw = 40
+                ph = 40
+
+            # Use known_objects color as fallback
+            if 'color' not in obj.properties and 'color' in known_2d_props:
+                color = self._color_name_to_hex(known_2d_props['color'])
+            else:
+                color = self._get_color(obj)
+            # Check shape type from known_objects
+            shape = known_2d_props.get('shape', 'rectangle')
+            if shape == 'circle':
+                # Use average of width/height as radius
+                radius = (pw + ph) / 4  # Diameter to radius
+                self.write(f"this.{obj.name} = this.add.circle({px}, {py}, {radius}, {self.format_color(color)});")
+            elif shape == 'ellipse':
+                self.write(f"this.{obj.name} = this.add.ellipse({px}, {py}, {pw}, {ph}, {self.format_color(color)});")
+            else:
+                # Default: rectangle
+                self.write(f"this.{obj.name} = this.add.rectangle({px}, {py}, {pw}, {ph}, {self.format_color(color)});")
 
         # Apply initial visible property if set to false
         if 'visible' in obj.properties:
@@ -2579,6 +2886,30 @@ class PhaserEmitter(BaseEmitter):
         """Get color as CSS hex string (#rrggbb)."""
         color = self._get_color(obj)
         return f"#{color:06x}"
+
+    def _color_name_to_hex(self, color_name: str) -> int:
+        """Convert a CSS color name to hex integer.
+
+        Used for known_objects.toml 2D colors like "white", "gray", "gold".
+        """
+        color_map = {
+            'white': 0xffffff,
+            'black': 0x000000,
+            'red': 0xff0000,
+            'green': 0x00ff00,
+            'blue': 0x0000ff,
+            'yellow': 0xffff00,
+            'orange': 0xffa500,
+            'purple': 0x800080,
+            'pink': 0xffc0cb,
+            'cyan': 0x00ffff,
+            'gray': 0x808080,
+            'grey': 0x808080,
+            'brown': 0x8b4513,
+            'gold': 0xffd700,
+            'silver': 0xc0c0c0,
+        }
+        return color_map.get(color_name.lower(), 0x00ff00)
 
     def _get_key_condition(self, key: str) -> str:
         """Get Phaser condition for checking if a key is held down.
