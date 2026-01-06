@@ -11,11 +11,15 @@
  * Version: 0.1.0
  */
 
+'use strict';
+
 function createPhaserAdapter(phaserScene, options = {}) {
-  'use strict';
 
   // Object registry: name -> Phaser.GameObjects
   const objects = {};
+
+  // Supported primitive types for this engine (2D shapes)
+  const PRIMITIVE_TYPES = ['rectangle', 'rect', 'circle', 'ellipse', 'triangle', 'sprite', 'text', 'box', 'cube', 'ball'];
 
   // Scene registry for multi-scene support
   const scenes = new Set();
@@ -23,6 +27,15 @@ function createPhaserAdapter(phaserScene, options = {}) {
 
   // Type counters for auto-naming
   const typeCounters = {};
+
+  // Known object presets (passed from emitter or page)
+  const KNOWN_OBJECTS = options.knownObjects || {};
+
+  // Asset base path for sprites
+  const assetPath = options.assetPath || '';
+
+  // Default size in pixels
+  const DEFAULT_SIZE = 50;
 
   // Color mappings (Phaser uses hex numbers)
   const COLOR_MAP = {
@@ -85,11 +98,55 @@ function createPhaserAdapter(phaserScene, options = {}) {
     return '';
   }
 
+  // Create a shape by type
+  function createShape(typeName, x, y, size, colorHex, preset2d) {
+    let obj;
+    const w = preset2d && preset2d.width ? preset2d.width * size : size;
+    const h = preset2d && preset2d.height ? preset2d.height * size : size;
+
+    switch (typeName) {
+      case 'circle':
+      case 'ball':
+        const radius = (preset2d && preset2d.scale ? preset2d.scale : 1) * size / 2;
+        obj = phaserScene.add.circle(x, y, radius, colorHex);
+        break;
+      case 'ellipse':
+        obj = phaserScene.add.ellipse(x, y, w, h, colorHex);
+        break;
+      case 'triangle':
+        obj = phaserScene.add.triangle(x, y, 0, size, size/2, 0, size, size, colorHex);
+        break;
+      case 'text':
+        obj = phaserScene.add.text(x, y, 'text', {
+          fontSize: '24px',
+          color: '#' + colorHex.toString(16).padStart(6, '0')
+        });
+        obj.setOrigin(0.5);
+        break;
+      case 'rect':
+      case 'rectangle':
+      case 'cube':
+      case 'box':
+      default:
+        obj = phaserScene.add.rectangle(x, y, w, h, colorHex);
+    }
+
+    return obj;
+  }
+
   // ==========================================================================
   // ADAPTER INTERFACE
   // ==========================================================================
 
   const adapter = {
+    // Platform identifier for welcome message
+    platform: 'Phaser',
+
+    // Supported types for this engine
+    getSupportedTypes: function() {
+      return PRIMITIVE_TYPES.slice();
+    },
+
     // Registry management
     registerObject: function(name, obj) {
       objects[name] = obj;
@@ -133,6 +190,15 @@ function createPhaserAdapter(phaserScene, options = {}) {
       return results;
     },
 
+    // Get all objects (for query syntax)
+    getAllObjects: function() {
+      return Object.entries(objects).map(([name, obj]) => ({
+        name,
+        object: obj,
+        type: getTypeName(obj)
+      }));
+    },
+
     // Deep search
     deepSearch: function(args) {
       const results = [];
@@ -172,41 +238,100 @@ function createPhaserAdapter(phaserScene, options = {}) {
 
     // Object creation
     createObject: function(typeName, name, options = {}) {
-      const objName = name || generateName(typeName);
+      const objName = (typeof name === 'string' ? name : options.name) || generateName(typeName);
       const modifiers = options.modifiers || [];
-      const color = modifiers.find(m => COLOR_MAP[m]) || 'gray';
+
+      // Size modifiers
+      const SIZE_MAP = { tiny: 0.25, small: 0.5, big: 2, large: 2, huge: 4 };
+
+      // Get color from options, modifiers, or default
+      const color = options.color || modifiers.find(m => COLOR_MAP[m]) || 'gray';
       const colorHex = COLOR_MAP[color] || 0x888888;
 
-      let obj;
-      const x = 400 + (Math.random() - 0.5) * 200;
-      const y = 300 + (Math.random() - 0.5) * 200;
+      // Get size from options or modifiers
+      const sizeModifier = modifiers.find(m => SIZE_MAP[m]);
+      const scale = options.size || (sizeModifier ? SIZE_MAP[sizeModifier] : 1);
 
-      switch (typeName) {
-        case 'circle':
-        case 'ball':
-          obj = phaserScene.add.circle(x, y, 25, colorHex);
-          break;
-        case 'text':
-          obj = phaserScene.add.text(x, y, objName, { color: '#' + colorHex.toString(16) });
-          break;
-        case 'rect':
-        case 'rectangle':
-        case 'cube':
-        case 'box':
-        default:
-          obj = phaserScene.add.rectangle(x, y, 50, 50, colorHex);
-          typeName = 'rect';
+      // Position
+      const gameWidth = phaserScene.sys.game.config.width;
+      const gameHeight = phaserScene.sys.game.config.height;
+      const x = options.x !== undefined ? options.x : gameWidth / 2 + (Math.random() - 0.5) * 200;
+      const y = options.y !== undefined ? options.y : gameHeight / 2 + (Math.random() - 0.5) * 200;
+
+      // Check known objects preset
+      const preset = KNOWN_OBJECTS[typeName];
+      const preset2d = preset ? preset['2d'] : null;
+      const description = preset ? preset.description : null;
+      const isKnownType = PRIMITIVE_TYPES.includes(typeName) || !!preset;
+
+      let obj;
+      const size = DEFAULT_SIZE * scale;
+
+      // Try sprite from preset first
+      if (preset2d && preset2d.sprite) {
+        const spritePath = assetPath + preset2d.sprite;
+        const spriteKey = 'rosh_' + typeName;
+
+        if (phaserScene.textures.exists(spriteKey)) {
+          // Texture already loaded
+          obj = phaserScene.add.sprite(x, y, spriteKey);
+          obj.setScale(scale * 0.5);  // Sprites often need scaling down
+        } else {
+          // Create shape placeholder while sprite loads
+          const presetColor = preset2d.color ? parseColor(preset2d.color) : colorHex;
+          obj = createShape(preset2d.shape || 'rectangle', x, y, size, presetColor, preset2d);
+          obj.setAlpha(0.6);
+
+          // Load sprite asynchronously
+          phaserScene.load.image(spriteKey, spritePath);
+          phaserScene.load.once('complete', () => {
+            if (phaserScene.textures.exists(spriteKey)) {
+              const sprite = phaserScene.add.sprite(obj.x, obj.y, spriteKey);
+              sprite.name = objName;
+              sprite.setData('_type', typeName);
+              sprite.setData('_color', color);
+              sprite.setData('_roshId', objName);
+              sprite.setData('_description', description);
+              sprite.setScale(scale * 0.5);
+
+              obj.destroy();
+              objects[objName] = sprite;
+
+              if (typeof RoshRuntime !== 'undefined') {
+                RoshRuntime.log('   [sprite loaded]', 'dim');
+              }
+            }
+          });
+          phaserScene.load.start();
+        }
+      } else if (preset2d) {
+        // Use shape from preset
+        const presetColor = preset2d.color ? parseColor(preset2d.color) : colorHex;
+        obj = createShape(preset2d.shape || 'rectangle', x, y, size, presetColor, preset2d);
+      } else {
+        // Primitive shapes
+        obj = createShape(typeName, x, y, size, colorHex);
       }
 
+      if (!obj) {
+        return { success: false, error: 'Failed to create object' };
+      }
+
+      // Set common properties
       obj.name = objName;
       obj.setData('_type', typeName);
       obj.setData('_color', color);
       obj.setData('_roshId', objName);
+      if (description) obj.setData('_description', description);
+      if (preset && preset.credit) obj.setData('_credit', preset.credit);
 
       objects[objName] = obj;
 
-      return { success: true, name: objName, object: obj };
+      return { success: true, name: objName, object: obj, color: color, size: scale, knownType: isKnownType, description };
     },
+
+    // Helper: create a shape
+    _createShape: createShape,
 
     // Object deletion
     deleteObject: function(name) {
@@ -343,7 +468,9 @@ function createPhaserAdapter(phaserScene, options = {}) {
         color: getColorName(obj),
         position: { x: obj.x.toFixed(0), y: obj.y.toFixed(0) },
         scale: { x: (obj.scaleX || 1).toFixed(2), y: (obj.scaleY || 1).toFixed(2) },
-        visible: obj.visible
+        visible: obj.visible,
+        description: obj.getData ? obj.getData('_description') : null,
+        credit: obj.getData ? obj.getData('_credit') : null
       };
     },
 

@@ -1197,6 +1197,13 @@ const RoshRuntime = (function() {
     const firstWord = args[0].toLowerCase();
     const matchIdx = existingLower.findIndex(n => n === firstWord || n.startsWith(firstWord + '-'));
 
+    // Size modifiers
+    const SIZE_MODIFIERS = {
+      tiny: 0.25, small: 0.5, big: 2, large: 2, huge: 4,
+      bigger: 1.5, smaller: 0.67, larger: 1.5
+    };
+    const COLORS = ['red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'white', 'black', 'orange', 'purple', 'pink', 'gray', 'grey', 'gold', 'silver'];
+
     if (matchIdx !== -1) {
       // Object exists - treat as "set" command
       const objName = existingNames[matchIdx];
@@ -1213,7 +1220,25 @@ const RoshRuntime = (function() {
         return;
       }
 
-      // "make banana scale 4" or "make banana red"
+      // Check for size modifier: "make ball big" -> multiply scale
+      const firstArg = restArgs[0].toLowerCase();
+      if (SIZE_MODIFIERS[firstArg] && restArgs.length === 1) {
+        const multiplier = SIZE_MODIFIERS[firstArg];
+        const currentScale = adapter.getProperty ? adapter.getProperty(objName, 'scale') : 1;
+        const newScale = (currentScale || 1) * multiplier;
+        adapter.setProperty(objName, 'scale', newScale);
+        log(objName + '.scale = ' + newScale.toFixed(2), 'ok');
+        return;
+      }
+
+      // Check for color modifier: "make ball red" -> set color
+      if (COLORS.includes(firstArg) && restArgs.length === 1) {
+        adapter.setProperty(objName, 'color', firstArg);
+        log(objName + '.color = ' + firstArg, 'ok');
+        return;
+      }
+
+      // "make banana scale 4" or other property setting
       // Reconstruct as set command
       const setCmd = 'set ' + objName + ' ' + restArgs.join(' ');
       log('[→ ' + setCmd + ']', 'dim');
