@@ -59,19 +59,19 @@ create object label_cat
     set z to 0
 end
 
-# Stirling Torc (far right)
-create object torc
-    set type to "stirling_torc"
+# Invereen Stone (far right)
+create object stone
+    set type to "invereen_stone"
     set x to 15
     set y to 2
     set z to 0
     set size to 4
-    set description to "Stirling Torc - Iron Age gold"
+    set description to "Pictish symbol stone from the National Museum of Scotland"
 end
 
-create object label_torc
+create object label_stone
     set type to "text"
-    set text to "Stirling Torc"
+    set text to "Invereen Stone"
     set x to 15
     set y to 10
     set z to 0

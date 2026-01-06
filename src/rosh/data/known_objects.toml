@@ -598,6 +598,7 @@ credit_url = "https://skfb.ly/pyWRH"
 description = "A king from the Lewis Chessmen, 12th century Norse-Gaelic walrus ivory chess piece found on the Isle of Lewis"
 category = "heritage"
 [lewis_chess_king.2d]
+sprite = "sprites/heritage/lewis_chess_king.png"
 color = "white"
 shape = "rectangle"
 width = 0.8
@@ -614,6 +615,7 @@ credit_url = "https://skfb.ly/66LHu"
 description = "A queen from the Lewis Chessmen, 12th century walrus ivory chess piece depicting a contemplative queen"
 category = "heritage"
 [lewis_chess_queen.2d]
+sprite = "sprites/heritage/lewis_chess_queen.png"
 color = "white"
 shape = "rectangle"
 width = 0.8
@@ -626,26 +628,30 @@ model = "3d_glb/lewis_chess_queen.glb"
 credit = "The British Museum (CC BY-NC-SA)"
 credit_url = "https://skfb.ly/66Gty"
 
-[pictish_stone]
-description = "Brandsbutt Pictish Stone from Inverurie, Scotland - ancient carved symbol stone with Ogham inscription"
+[invereen_stone]
+description = "The Invereen Stone, a Class I Pictish symbol stone from the National Museum of Scotland"
 category = "heritage"
-[pictish_stone.2d]
+[invereen_stone.2d]
+sprite = "sprites/heritage/invereen_stone.jpg"
 color = "gray"
 shape = "rectangle"
-width = 0.8
-height = 2.0
-[pictish_stone.3d]
+width = 0.6
+height = 1.5
+[invereen_stone.3d]
 shape = "box"
 color = 0x808080
-scaleY = 2.0
-model = "3d_glb/pictish_stone.glb"
-credit = "Douglas Ledingham (CC BY-NC)"
-credit_url = "https://skfb.ly/ovwNy"
+scaleY = 1.5
+model = "3d_glb/invereen_stone.glb"
+credit = "Thomas Flynn (CC BY-NC-SA)"
+credit_url = "https://skfb.ly/BRMS"
+image_credit = "Catfish Jim and the soapdish (CC BY-SA 3.0)"
+image_credit_url = "https://commons.wikimedia.org/w/index.php?curid=12159551"
 
 [cutty_sark_cat]
 description = "Cat figurehead from the Cutty Sark clipper ship, one of the last tea clippers built"
 category = "heritage"
 [cutty_sark_cat.2d]
+sprite = "sprites/heritage/cutty_sark_cat.png"
 color = "gold"
 shape = "ellipse"
 width = 0.8
@@ -689,23 +695,6 @@ color = 0xc0c0c0
 scaleY = 0.1
 credit = "National Museums Scotland"
 credit_url = "https://www.nms.ac.uk/explore-our-collections/collection-search-results/brooch/142912"
-
-[stirling_torc]
-description = "Iron Age gold torc from the Stirling Hoard, 300-100 BCE, one of the most significant Iron Age finds in Scotland"
-category = "heritage"
-[stirling_torc.2d]
-color = "gold"
-shape = "circle"
-width = 1.2
-height = 1.0
-[stirling_torc.3d]
-shape = "torus"
-color = 0xffd700
-scaleX = 1.2
-scaleY = 0.3
-scaleZ = 1.2
-credit = "National Museums Scotland"
-credit_url = "https://www.nms.ac.uk/explore-our-collections/stories/scottish-history-and-archaeology/the-blair-drummond-hoard/"
 
 [explosion]
 description = "A fiery explosion"
