@@ -608,7 +608,7 @@ color = 0xf5f5dc
 scaleY = 1.4
 model = "3d_glb/lewis_chess_king.glb"
 credit = "The British Museum (CC BY-NC-SA)"
-credit_url = "https://sketchfab.com/3d-models/a-king-from-the-lewis-chessmen-504da084a1cd47f3af2aea97280d3fee"
+credit_url = "https://skfb.ly/66LHu"
 
 [lewis_chess_queen]
 description = "A queen from the Lewis Chessmen, 12th century walrus ivory chess piece depicting a contemplative queen"
@@ -624,7 +624,38 @@ color = 0xf5f5dc
 scaleY = 1.3
 model = "3d_glb/lewis_chess_queen.glb"
 credit = "The British Museum (CC BY-NC-SA)"
-credit_url = "https://sketchfab.com/3d-models/a-queen-from-the-lewis-chessmen-af096aa7ca934f84b6d64c89a8e312d4"
+credit_url = "https://skfb.ly/66Gty"
+
+[pictish_stone]
+description = "Brandsbutt Pictish Stone from Inverurie, Scotland - ancient carved symbol stone with Ogham inscription"
+category = "heritage"
+[pictish_stone.2d]
+color = "gray"
+shape = "rectangle"
+width = 0.8
+height = 2.0
+[pictish_stone.3d]
+shape = "box"
+color = 0x808080
+scaleY = 2.0
+model = "3d_glb/pictish_stone.glb"
+credit = "Douglas Ledingham (CC BY-NC)"
+credit_url = "https://skfb.ly/ovwNy"
+
+[cutty_sark_cat]
+description = "Cat figurehead from the Cutty Sark clipper ship, one of the last tea clippers built"
+category = "heritage"
+[cutty_sark_cat.2d]
+color = "gold"
+shape = "ellipse"
+width = 0.8
+height = 1.0
+[cutty_sark_cat.3d]
+shape = "sphere"
+color = 0xffd700
+model = "3d_glb/cutty_sark_cat.glb"
+credit = "Royal Museums Greenwich (CC0 Public Domain)"
+credit_url = "https://sketchfab.com/rmg"
 
 [dolly_the_sheep]
 description = "Dolly the Sheep (1996-2003), the first mammal cloned from an adult cell, created at the Roslin Institute, Scotland"

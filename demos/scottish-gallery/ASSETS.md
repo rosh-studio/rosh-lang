@@ -4,64 +4,71 @@
 
 | Object | 3D Model | 2D Fallback | Credits | Status |
 |--------|----------|-------------|---------|--------|
-| Lewis Chess King | Need GLB | ✅ Shape | British Museum CC BY-NC-SA | **NEED 3D** |
-| Lewis Chess Queen | Need GLB | ✅ Shape | British Museum CC BY-NC-SA | **NEED 3D** |
-| Dolly the Sheep | Need GLB | ✅ Shape | NMS (check license) | **NEED 3D** |
-| Stirling Torc | N/A | ✅ Torus shape | NMS | ✅ Ready |
-| Hunterston Brooch | N/A | Need PNG | NMS | **NEED PNG** |
+| Lewis Chess King | ✅ GLB | ✅ Rectangle | British Museum CC BY-NC-SA | ✅ Ready |
+| Lewis Chess Queen | ✅ GLB | ✅ Rectangle | British Museum CC BY-NC-SA | ✅ Ready |
+| Pictish Stone | ✅ GLB | ✅ Rectangle | Douglas Ledingham CC BY-NC | ✅ Ready |
+| Cutty Sark Cat | ✅ GLB | ✅ Ellipse | Royal Museums Greenwich CC0 | ✅ Ready |
+| Dolly the Sheep | Premium | ✅ Ellipse | NMS | Shape fallback |
+| Stirling Torc | N/A | ✅ Torus shape | NMS | ✅ Ready (built-in) |
 
-## 3D Models to Download (Manual - Sketchfab)
+## 3D Models Downloaded
 
-### 1. Lewis Chess King
-- **URL**: https://sketchfab.com/3d-models/a-king-from-the-lewis-chessmen-504da084a1cd47f3af2aea97280d3fee
-- **License**: CC BY-NC-SA (The British Museum)
-- **Download**: Click "Download 3D Model" → Select glTF format
-- **Save as**: `assets/3d_glb/lewis_chess_king.glb`
+### Lewis Chess King & Queen
+- **Source**: The British Museum (Sketchfab)
+- **License**: CC BY-NC-SA
+- **Files**: `assets/3d_glb/lewis_chess_king.glb`, `lewis_chess_queen.glb`
 
-### 2. Lewis Chess Queen
-- **URL**: https://sketchfab.com/3d-models/a-queen-from-the-lewis-chessmen-af096aa7ca934f84b6d64c89a8e312d4
-- **License**: CC BY-NC-SA (The British Museum)
-- **Download**: Click "Download 3D Model" → Select glTF format
-- **Save as**: `assets/3d_glb/lewis_chess_queen.glb`
+### Pictish Stone
+- **Source**: Douglas Ledingham (Sketchfab)
+- **License**: CC BY-NC
+- **File**: `assets/3d_glb/pictish_stone.glb` (77MB - detailed scan)
 
-### 3. Dolly the Sheep
-- **URL**: https://sketchfab.com/3d-models/dolly-the-sheep-24f946d5b36a40239c222a6e3a5f4414
-- **License**: Check on Sketchfab (National Museums Scotland)
-- **Download**: Click "Download 3D Model" → Select glTF format
-- **Save as**: `assets/3d_glb/dolly_the_sheep.glb`
+### Cutty Sark Cat
+- **Source**: Royal Museums Greenwich (Sketchfab)
+- **License**: CC0 Public Domain
+- **File**: `assets/3d_glb/cutty_sark_cat.glb`
 
-## 2D Sprites Needed
+## Objects Using Shape Fallbacks
 
-### Hunterston Brooch
-- **Source**: National Museums Scotland collection
-- **URL**: https://www.nms.ac.uk/explore-our-collections/collection-search-results/brooch/142912
-- **Task**: Find/screenshot a good image, crop to PNG with transparency
-- **Save as**: `assets/sprites/hunterston_brooch.png`
+### Dolly the Sheep
+- **Reason**: 3D model is premium on Sketchfab
+- **Fallback**: White ellipse (2D), sphere (3D)
+- **Alternative**: Could photograph/scan a model or find another CC source
 
-## Already Defined in known_objects.toml
-
-All five Scottish heritage objects are now defined:
-- `lewis_chess_king` - with 3D model path, 2D rectangle fallback
-- `lewis_chess_queen` - with 3D model path, 2D rectangle fallback
-- `dolly_the_sheep` - with 3D model path, 2D ellipse fallback
-- `stirling_torc` - 3D torus shape, 2D gold circle (no external model needed)
-- `hunterston_brooch` - sprite fallback (billboard in 3D)
-
-## After Downloads
-
-1. Copy GLB files to `rosh-lang/assets/3d_glb/`
-2. Test with: `rosh build demos/scottish-gallery/gallery.rosh --target threejs`
-3. Objects will use shape fallbacks until models are in place
+### Stirling Torc
+- **Reason**: Simple geometric form works well as torus
+- **Fallback**: Built-in torus shape with gold color
+- **Note**: Real model would be nice but shape captures essence
 
 ## Demo Commands
 
 ```bash
-# Build for Three.js
-rosh build demos/scottish-gallery/gallery.rosh --target threejs --output demos/scottish-gallery/threejs/
+# Build for Three.js (3D)
+uv run rosh build demos/scottish-gallery/gallery.rosh --target threejs --output demos/scottish-gallery/threejs/ --copy-assets
 
-# Build for Phaser
-rosh build demos/scottish-gallery/gallery.rosh --target phaser --output demos/scottish-gallery/phaser/
+# Build for Phaser (2D)
+uv run rosh build demos/scottish-gallery/gallery.rosh --target phaser --output demos/scottish-gallery/phaser/ --copy-assets
 
 # Run in CLI
-rosh run demos/scottish-gallery/gallery.rosh
+uv run rosh run demos/scottish-gallery/gallery.rosh
 ```
+
+## Gallery Layout
+
+```
++------------------------------------------+
+|                                          |
+|   [King]    [Queen]    [Stone]           |  North Wall (Medieval)
+|   -3,-4      -1,-4      1,-4             |
+|                                          |
+|              [Torc]                      |  Center (Iron Age Gold)
+|               0,0                        |
+|                                          |
+|   [Cat]                [Dolly]           |  South Wall (Maritime/Science)
+|   -2,4                  2,4              |
+|                                          |
++------------------------------------------+
+```
+
+## Credits File
+All credits are recorded in `assets/3d_glb/3d Model Credits.txt`
