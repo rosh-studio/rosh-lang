@@ -132,11 +132,11 @@ const RoshRuntime = (function() {
     `;
     document.head.appendChild(style);
 
-    // HTML
+    // HTML - engine name will be updated when init() is called
     const consoleDiv = document.createElement('div');
     consoleDiv.id = 'rosh-console';
     consoleDiv.innerHTML = `
-      <div style="padding:8px;background:#111;border-bottom:1px solid #0f0">
+      <div id="rosh-console-header" style="padding:8px;background:#111;border-bottom:1px solid #0f0">
         <strong>ROSH CONSOLE</strong> <small style="color:#888">Press \` to toggle</small>
       </div>
       <div id="rosh-output"></div>
@@ -227,6 +227,18 @@ const RoshRuntime = (function() {
     // Sync with global consoleVisible (for emitter's WASD handler)
     if (typeof window !== 'undefined') {
       window.consoleVisible = consoleVisible;
+    }
+  }
+
+  // ==========================================================================
+  // HEADER UPDATE
+  // ==========================================================================
+
+  function updateConsoleHeader(platform) {
+    const header = document.getElementById('rosh-console-header');
+    if (header) {
+      const engineLabel = platform ? ` <span style="color:#0ff">[${platform}]</span>` : '';
+      header.innerHTML = `<strong>ROSH CONSOLE</strong>${engineLabel} <small style="color:#888">Press \` to toggle</small>`;
     }
   }
 
@@ -1748,6 +1760,7 @@ const RoshRuntime = (function() {
       createConsoleUI();
       initVoice();
       const platform = adapter && adapter.platform ? adapter.platform : 'unknown';
+      updateConsoleHeader(platform);  // Display engine name in header
       log('Rosh v' + ROSH_VERSION + ' | ' + platform, 'cyan');
       log('Type help for commands. Press ` to toggle console.', 'dim');
       // Flush any pending logs from early print statements
