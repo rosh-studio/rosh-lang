@@ -37,8 +37,8 @@ function createPhaserAdapter(phaserScene, options = {}) {
   // Default size in pixels
   const DEFAULT_SIZE = 50;
 
-  // Color mappings (Phaser uses hex numbers)
-  const COLOR_MAP = {
+  // Color mappings - use RoshColors if available, otherwise fallback
+  const COLOR_MAP = (typeof RoshColors !== 'undefined') ? RoshColors.COLOR_MAP : {
     red: 0xff0000, green: 0x00ff00, blue: 0x0000ff,
     yellow: 0xffff00, cyan: 0x00ffff, magenta: 0xff00ff,
     white: 0xffffff, black: 0x111111, orange: 0xff8800,
@@ -57,6 +57,11 @@ function createPhaserAdapter(phaserScene, options = {}) {
   }
 
   function parseColor(str) {
+    // Delegate to RoshColors if available
+    if (typeof RoshColors !== 'undefined') {
+      return RoshColors.parse(str);
+    }
+    // Fallback
     if (typeof str === 'number') return str;
     const lower = str.toLowerCase();
     if (COLOR_MAP[lower] !== undefined) return COLOR_MAP[lower];

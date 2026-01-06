@@ -61,8 +61,8 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
   let selectedObject = null;
   let selectedOriginalEmissive = null;  // Store original emissive to restore on deselect
 
-  // Color mappings
-  const COLOR_MAP = {
+  // Color mappings - use RoshColors if available, otherwise fallback
+  const COLOR_MAP = (typeof RoshColors !== 'undefined') ? RoshColors.COLOR_MAP : {
     red: 0xff0000, green: 0x00ff00, blue: 0x0000ff,
     yellow: 0xffff00, cyan: 0x00ffff, magenta: 0xff00ff,
     white: 0xffffff, black: 0x111111, orange: 0xff8800,
@@ -71,7 +71,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
   };
 
   // Reverse color lookup for getColorName
-  const HEX_TO_COLOR = {
+  const HEX_TO_COLOR = (typeof RoshColors !== 'undefined') ? RoshColors.HEX_TO_COLOR : {
     0xff0000: 'red', 0x00ff00: 'green', 0x0000ff: 'blue',
     0xffff00: 'yellow', 0x00ffff: 'cyan', 0xff00ff: 'magenta',
     0xffffff: 'white', 0x000000: 'black', 0x111111: 'black',
@@ -90,6 +90,11 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
   }
 
   function parseColor(str) {
+    // Delegate to RoshColors if available
+    if (typeof RoshColors !== 'undefined') {
+      return RoshColors.parse(str);
+    }
+    // Fallback
     if (typeof str === 'number') return str;
     const lower = str.toLowerCase();
     if (COLOR_MAP[lower] !== undefined) return COLOR_MAP[lower];

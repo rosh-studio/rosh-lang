@@ -426,6 +426,11 @@ const RoshRuntime = (function() {
   }
 
   function parseColor(str) {
+    // Delegate to RoshColors if available
+    if (typeof RoshColors !== 'undefined') {
+      return RoshColors.parse(str);
+    }
+    // Fallback for standalone use
     const colorMap = {
       red: 0xff0000, green: 0x00ff00, blue: 0x0000ff,
       yellow: 0xffff00, cyan: 0x00ffff, magenta: 0xff00ff,
@@ -1522,17 +1527,12 @@ const RoshRuntime = (function() {
             propValue = objData.userData.color;
           } else if (objData.material && objData.material.color) {
             // Convert hex to color name for comparison
-            const hex = '#' + objData.material.color.getHexString();
-            propValue = hex;
-            // Also check if it matches common color names
-            const colorMap = {
-              '#ffffff': 'white', '#000000': 'black', '#ff0000': 'red',
-              '#00ff00': 'green', '#0000ff': 'blue', '#ffff00': 'yellow',
-              '#ff00ff': 'magenta', '#00ffff': 'cyan', '#ffa500': 'orange',
-              '#800080': 'purple', '#ffc0cb': 'pink', '#808080': 'gray'
-            };
-            if (colorMap[hex.toLowerCase()]) {
-              propValue = colorMap[hex.toLowerCase()];
+            const hexNum = objData.material.color.getHex();
+            // Use RoshColors if available for reverse lookup
+            if (typeof RoshColors !== 'undefined') {
+              propValue = RoshColors.getName(hexNum) || RoshColors.toHexString(hexNum);
+            } else {
+              propValue = '#' + objData.material.color.getHexString();
             }
           }
         }
