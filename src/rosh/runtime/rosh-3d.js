@@ -190,21 +190,81 @@ class Rosh3DRuntime extends RoshCore {
             return;
         }
 
-        // Parse: create [modifiers] type [name]
-        const typeName = this.singularize(args[args.length - 1]);
-        const name = this.nextName(typeName);
+        // Parse: create [a] [modifiers] type [name]
+        // Filter out articles
+        const filtered = args.filter(w => !['a', 'an', 'the'].includes(w.toLowerCase()));
 
-        const obj = this.adapter.createObject(typeName, name, {});
+        // Known modifiers
+        const sizeModifiers = { tiny: 0.25, small: 0.5, medium: 1.0, big: 2.0, large: 2.0, huge: 4.0 };
+        const colorNames = ['red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
+                           'white', 'black', 'orange', 'purple', 'pink', 'gray', 'grey', 'gold', 'silver'];
+
+        // Extract modifiers and type
+        const props = {};
+        let typeName = null;
+
+        for (const word of filtered) {
+            const lower = word.toLowerCase();
+            if (sizeModifiers[lower] !== undefined) {
+                props.scale = sizeModifiers[lower];
+            } else if (colorNames.includes(lower)) {
+                props.color = lower;
+            } else {
+                // Last non-modifier word is the type
+                typeName = this.singularize(lower);
+            }
+        }
+
+        if (!typeName) {
+            this.log('Usage: create [a] [big/small] [color] <type>', 'err');
+            return;
+        }
+
+        const name = this.nextName(typeName);
+        const obj = this.adapter.createObject(typeName, name, props);
+
         if (obj) {
-            this.log("Created '" + name + "' (" + typeName + ")", 'ok');
+            // Apply properties
+            if (props.scale) this.adapter.setProperty(obj, 'scale', props.scale);
+            if (props.color) this.adapter.setObjectColor(obj, this.colorNameToHex(props.color));
+
+            // Build description
+            const desc = [];
+            if (props.scale && props.scale !== 1.0) {
+                const sizeName = Object.entries(sizeModifiers).find(([k,v]) => v === props.scale)?.[0] || '';
+                if (sizeName) desc.push(sizeName);
+            }
+            if (props.color) desc.push(props.color);
+            desc.push(typeName);
+
+            this.log("Created '" + name + "'", 'ok');
+            this.log("  " + desc.join(' '), 'dim');
+            if (props.color) this.log("  color: " + props.color, 'dim');
+            if (props.scale) this.log("  scale: " + props.scale, 'dim');
+
             this.pushUndo(
                 "create '" + name + "'",
                 () => this.adapter.deleteObject(obj),
-                () => this.adapter.createObject(typeName, name, {})
+                () => {
+                    const newObj = this.adapter.createObject(typeName, name, props);
+                    if (props.scale) this.adapter.setProperty(newObj, 'scale', props.scale);
+                    if (props.color) this.adapter.setObjectColor(newObj, this.colorNameToHex(props.color));
+                }
             );
         } else {
             this.log('Failed to create object', 'err');
         }
+    }
+
+    colorNameToHex(name) {
+        const colors = {
+            red: 0xff0000, green: 0x00ff00, blue: 0x0000ff,
+            yellow: 0xffff00, cyan: 0x00ffff, magenta: 0xff00ff,
+            white: 0xffffff, black: 0x000000, orange: 0xff8800,
+            purple: 0x8800ff, pink: 0xff88ff, gray: 0x888888,
+            grey: 0x888888, gold: 0xffd700, silver: 0xc0c0c0
+        };
+        return colors[name.toLowerCase()] || 0x00ff00;
     }
 
     createBulk(typeName, count) {

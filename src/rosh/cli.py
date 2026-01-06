@@ -2085,16 +2085,71 @@ def run_repl(interpreter: Interpreter = None):
                 out.warning(f"Object '{obj_name}' not found")
                 continue
 
-            # make - natural language for modifications
+            # make - "upsert" command: create if not exists, then modify
+            # make <obj> → create if not exists, select if exists
             # make <obj> <color> → set <obj> color to <color>
             # make <obj> <prop> <value> → set <obj> <prop> to <value>
             # make <obj> visible/hidden → show/hide
             # make <obj> big/bigger → scale up
             # make <obj> faster/slower → adjust speed
-            if stripped.startswith('make ') and len(parts) >= 3:
+            if stripped.startswith('make ') and len(parts) >= 2:
                 obj_name = parts[1]
-                rest = parts[2:]
+                rest = parts[2:] if len(parts) >= 3 else []
                 known_colors = {'red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'white', 'black', 'orange', 'purple', 'pink', 'gray', 'grey', 'gold', 'silver'}
+                known_types = {'cube', 'box', 'sphere', 'ball', 'cylinder', 'cone', 'torus', 'plane', 'sprite', 'text'}
+
+                # Check if object exists
+                obj_exists = interpreter and interpreter.current_env.exists(obj_name)
+
+                # If object doesn't exist and name looks like a type, create it
+                if not obj_exists:
+                    # Check if this is a known type or known object
+                    # Try to create it first
+                    create_type = obj_name
+                    create_modifiers = []
+
+                    # Parse any modifiers from rest for creation
+                    for word in rest:
+                        if word.lower() in known_colors:
+                            create_modifiers.append(word)
+                        elif word.lower() in ('big', 'large', 'small', 'tiny', 'huge'):
+                            create_modifiers.append(word)
+
+                    # Build create command
+                    create_cmd = f"create {' '.join(create_modifiers)} {create_type}" if create_modifiers else f"create {create_type}"
+                    out.dim(f"[→ {create_cmd}]")
+
+                    # Execute create
+                    try:
+                        lexer = Lexer(create_cmd)
+                        tokens = lexer.tokenize()
+                        parser = Parser(tokens)
+                        ast = parser.parse()
+                        interpreter.execute(ast)
+                        # Now the object should exist with auto-generated name
+                        # Find the newly created object (e.g., "banana" → "banana-1")
+                        for name in interpreter.current_env.bindings.keys():
+                            if name.lower().startswith(create_type.lower()):
+                                obj_name = name
+                                obj_exists = True
+                                break
+                    except Exception as e:
+                        out.error(f"Failed to create {create_type}: {e}")
+                        continue
+
+                    # If only "make banana" with no further modifiers, we're done
+                    remaining_rest = [w for w in rest if w.lower() not in known_colors and w.lower() not in ('big', 'large', 'small', 'tiny', 'huge')]
+                    if not remaining_rest:
+                        continue
+                    rest = remaining_rest
+
+                # Now handle modifications (object should exist)
+                if not rest:
+                    # Just "make <obj>" - select it if it exists
+                    if obj_exists:
+                        out.success(f"Selected: {obj_name}")
+                    continue
+
                 transformed = None
 
                 # make <obj> visible → show <obj>

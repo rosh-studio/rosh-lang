@@ -10,9 +10,11 @@
  *   2. Create a RoshAdapter object with engine-specific methods
  *   3. Call RoshRuntime.init(adapter)
  *
- * Version: 0.1.0
+ * Version: 0.2.8
  * Spec: rosh-console.toml v0.2.5
  */
+
+const ROSH_VERSION = '0.2.8';
 
 const RoshRuntime = (function() {
   'use strict';
@@ -377,7 +379,9 @@ const RoshRuntime = (function() {
     }
 
     // Try to correct object names (if adapter provides object list)
-    if (adapter && adapter.getObjectNames && parts.length > 1) {
+    // Skip for CREATE/MAKE commands - don't correct type names to object names
+    const isCreateCmd = ['create', 'make'].includes(parts[0]?.toLowerCase());
+    if (adapter && adapter.getObjectNames && parts.length > 1 && !isCreateCmd) {
       const objectNames = adapter.getObjectNames();
       const skipWords = ['to', 'the', 'a', 'an', 'is', 'are', 'color', 'size', 'x', 'y', 'z'];
       for (let i = 1; i < parts.length; i++) {
@@ -402,6 +406,9 @@ const RoshRuntime = (function() {
 
   function singularize(word) {
     const w = word.toLowerCase();
+    // Words that end in 's' but aren't plural
+    const exceptions = ['torus', 'bus', 'plus', 'radius', 'canvas', 'axis'];
+    if (exceptions.includes(w)) return w;
     if (w.endsWith('ies')) return w.slice(0, -3) + 'y';
     if (w.endsWith('es') && !w.endsWith('ses')) return w.slice(0, -2);
     if (w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
@@ -564,8 +571,11 @@ const RoshRuntime = (function() {
           break;
 
         case 'create':
-        case 'make':
           handleCreate(cmd, parts.slice(1));
+          break;
+
+        case 'make':
+          handleMake(cmd, parts.slice(1));
           break;
 
         case 'delete':
@@ -1124,9 +1134,29 @@ const RoshRuntime = (function() {
 
     const result = adapter.createObject(typeName, null, { modifiers });
     if (result.success) {
-      log('Created ' + result.name, 'ok');
+      log('✔ Created object: ' + result.name, 'ok');
       currentObject = result.object;
       currentObjectName = result.name;
+
+      // Show original input as description (without the command word)
+      const description = cmd.replace(/^(create|make)\s+/i, '');
+      log('   Description: "' + description + '"', 'dim');
+
+      // Show interpreted properties as JSON-like object
+      const props = [];
+      props.push('type: "' + typeName + '"');
+      if (result.color && result.color !== 'gray') props.push('color: "' + result.color + '"');
+      if (result.size && result.size !== 1) props.push('scale: ' + result.size);
+      log('   Interpreted as: { ' + props.join(', ') + ' }', 'dim');
+
+      // Warn if type wasn't recognized
+      if (result.knownType === false) {
+        const supported = adapter.getSupportedTypes ? adapter.getSupportedTypes() : [];
+        log('   ⚠ Unknown type "' + typeName + '" - created as cube', 'err');
+        if (supported.length > 0) {
+          log('   Supported types: ' + supported.join(', '), 'dim');
+        }
+      }
 
       // Broadcast to shared world if connected
       const obj = result.object;
@@ -1143,6 +1173,56 @@ const RoshRuntime = (function() {
       );
     } else {
       log(result.error || 'Failed to create ' + typeName, 'err');
+    }
+  }
+
+  function handleMake(cmd, args) {
+    // "make" is upsert: set property if object exists, create if not
+    // Examples:
+    //   make banana scale 4     → set banana's scale to 4 (or create banana, then set)
+    //   make banana red         → set banana's color to red (or create red banana)
+    //   make big red ball       → create a big red ball (no object named "big")
+    //   make banana             → create banana if doesn't exist
+
+    if (args.length === 0) {
+      log('Usage: make <object> [property] [value]', 'err');
+      return;
+    }
+
+    // Get list of existing objects
+    const existingNames = adapter.getObjectNames ? adapter.getObjectNames() : [];
+    const existingLower = existingNames.map(n => n.toLowerCase());
+
+    // Check if first word matches an existing object
+    const firstWord = args[0].toLowerCase();
+    const matchIdx = existingLower.findIndex(n => n === firstWord || n.startsWith(firstWord + '-'));
+
+    if (matchIdx !== -1) {
+      // Object exists - treat as "set" command
+      const objName = existingNames[matchIdx];
+      const restArgs = args.slice(1);
+
+      if (restArgs.length === 0) {
+        // Just "make banana" - select it
+        currentObjectName = objName;
+        if (adapter.getObject) {
+          const obj = adapter.getObject(objName);
+          if (obj) currentObject = obj.object;
+        }
+        log('Selected: ' + objName, 'ok');
+        return;
+      }
+
+      // "make banana scale 4" or "make banana red"
+      // Reconstruct as set command
+      const setCmd = 'set ' + objName + ' ' + restArgs.join(' ');
+      log('[→ ' + setCmd + ']', 'dim');
+      handleSet(setCmd, [objName].concat(restArgs));
+    } else {
+      // Object doesn't exist - treat as "create" command
+      const createCmd = 'create ' + args.join(' ');
+      log('[→ ' + createCmd + ']', 'dim');
+      handleCreate(createCmd, args);
     }
   }
 
@@ -1623,8 +1703,15 @@ const RoshRuntime = (function() {
     }
 
     log('=== ' + name + ' ===', 'cyan');
+    // Show description first if available (natural language)
+    if (details.description) {
+      log('  "' + details.description + '"', 'dim');
+    }
     for (const [key, value] of Object.entries(details)) {
-      log('  ' + key + ': ' + JSON.stringify(value), 'ok');
+      if (key === 'description') continue;  // Already shown above
+      if (value === null) continue;  // Skip null values
+      const formatted = typeof value === 'object' ? JSON.stringify(value) : value;
+      log('  ' + key + ': ' + formatted, 'ok');
     }
   }
 
@@ -1637,7 +1724,9 @@ const RoshRuntime = (function() {
       adapter = adapterObj;
       createConsoleUI();
       initVoice();
-      log('Rosh Console ready. Press ` to toggle.', 'dim');
+      const platform = adapter && adapter.platform ? adapter.platform : 'unknown';
+      log('Rosh v' + ROSH_VERSION + ' | ' + platform, 'cyan');
+      log('Type help for commands. Press ` to toggle console.', 'dim');
     },
 
     exec: execCommand,

@@ -113,7 +113,9 @@ class RoshCore {
     init() {
         this.initConsole();
         this.initKeyboardShortcuts();
-        this.log("Rosh Console v" + ROSH_CORE_VERSION + " ready. Type 'help' for commands.", 'ok');
+        const platform = this.options.platform || 'unknown';
+        this.log("Rosh v" + ROSH_CORE_VERSION + " (" + platform + ")", 'ok');
+        this.log("Type 'help' for commands.", 'dim');
     }
 
     nextName(typeName) {

@@ -15,6 +15,9 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
   // Object registry: name -> THREE.Object3D
   const objects = {};
 
+  // Supported primitive types for this engine
+  const PRIMITIVE_TYPES = ['cube', 'box', 'sphere', 'ball', 'cylinder', 'cone', 'torus', 'plane'];
+
   // Scene registry for multi-scene support
   const scenes = new Set();
   let currentScene = options.defaultScene || null;
@@ -165,6 +168,14 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
   // ==========================================================================
 
   const adapter = {
+    // Platform identifier for welcome message
+    platform: 'Three.js',
+
+    // Supported types for this engine
+    getSupportedTypes: function() {
+      return PRIMITIVE_TYPES.slice();  // Return copy
+    },
+
     // Registry management
     registerObject: function(name, obj) {
       objects[name] = obj;
@@ -275,12 +286,93 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       const objName = (typeof name === 'string' ? name : options.name) || generateName(typeName);
       const modifiers = options.modifiers || [];
 
+      // Size modifiers
+      const SIZE_MAP = { tiny: 0.25, small: 0.5, big: 2, large: 2, huge: 4 };
+
       // Check options.color first (from Project Twin), then modifiers, then default
       const color = options.color || modifiers.find(m => COLOR_MAP[m]) || 'gray';
       const colorHex = COLOR_MAP[color] || 0x888888;
 
-      // Check if this is a known object with a model
+      // Check for size modifier
+      const sizeModifier = modifiers.find(m => SIZE_MAP[m]);
+      const scale = options.size || (sizeModifier ? SIZE_MAP[sizeModifier] : 1);
+
+      // Check if type is recognized (primitive or known object)
       const preset = KNOWN_OBJECTS[typeName];
+      const isKnownType = PRIMITIVE_TYPES.includes(typeName) || preset;
+
+      // Store description for examine command
+      const description = preset?.description || null;
+
+      // Helper: create sprite billboard from image
+      const createSpriteBillboard = (spritePath, pos, fallbackFn) => {
+        const loader = new THREE.TextureLoader();
+        loader.load(
+          spritePath,
+          (texture) => {
+            const material = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(material);
+            sprite.name = objName;
+            sprite.userData._type = typeName;
+            sprite.userData._color = color;
+            sprite.userData._roshId = objName;
+            sprite.userData._description = description;
+            sprite.userData.fixed = false;
+            sprite.scale.set(scale * 2, scale * 2, 1);
+            sprite.position.set(pos.x, pos.y + scale, pos.z);
+
+            // Replace placeholder
+            const existing = objects[objName];
+            if (existing) {
+              scene.remove(existing);
+              if (existing.geometry) existing.geometry.dispose();
+              if (existing.material) existing.material.dispose();
+            }
+            scene.add(sprite);
+            objects[objName] = sprite;
+            console.log(`[Rosh] Loaded sprite billboard: ${spritePath}`);
+          },
+          undefined,
+          (error) => {
+            console.warn(`[Rosh] Failed to load sprite ${spritePath}:`, error);
+            if (fallbackFn) fallbackFn();
+          }
+        );
+      };
+
+      // Helper: create primitive shape fallback
+      const createPrimitiveFallback = (pos) => {
+        const shape = preset?.shape || 'box';
+        let geom;
+        switch (shape) {
+          case 'sphere': geom = new THREE.SphereGeometry(0.5, 32, 32); break;
+          case 'cylinder': geom = new THREE.CylinderGeometry(0.5, 0.5, 1, 32); break;
+          case 'cone': geom = new THREE.ConeGeometry(0.5, 1, 32); break;
+          default: geom = new THREE.BoxGeometry(1, 1, 1);
+        }
+        const mat = new THREE.MeshStandardMaterial({ color: colorHex });
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.name = objName;
+        mesh.userData._type = typeName;
+        mesh.userData._color = color;
+        mesh.userData._roshId = objName;
+        mesh.userData._description = description;
+        mesh.userData.fixed = false;
+        mesh.scale.set(scale, scale * (preset?.scaleY || 1), scale);
+        mesh.position.set(pos.x, pos.y + 0.5 * scale, pos.z);
+
+        // Replace placeholder
+        const existing = objects[objName];
+        if (existing) {
+          scene.remove(existing);
+          if (existing.geometry) existing.geometry.dispose();
+          if (existing.material) existing.material.dispose();
+        }
+        scene.add(mesh);
+        objects[objName] = mesh;
+      };
+
+      // Check if this is a known object with a model
       if (preset && preset.model && gltfLoader) {
         // Load GLB model asynchronously
         const position = {
@@ -297,6 +389,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         placeholder.userData._type = typeName;
         placeholder.userData._color = color;
         placeholder.userData._roshId = objName;
+        placeholder.userData._description = description;
         placeholder.userData.fixed = false;
         placeholder.userData._isPlaceholder = true;
         placeholder.position.set(position.x, position.y + 0.5, position.z);
@@ -312,12 +405,41 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
             model.userData._type = typeName;
             model.userData._color = color;
             model.userData._roshId = objName;
+            model.userData._description = description;
             model.userData.fixed = false;
 
-            // Scale the model
-            const gs = modelScale * (preset.scaleX || 1);
-            model.scale.set(gs, gs * (preset.scaleY || 1) / (preset.scaleX || 1), gs * (preset.scaleZ || 1) / (preset.scaleX || 1));
-            model.position.set(position.x, position.y, position.z);
+            // Store credit as non-editable metadata
+            if (preset.credit) {
+              Object.defineProperty(model.userData, '_credit', {
+                value: preset.credit,
+                writable: false,
+                enumerable: true
+              });
+            }
+
+            // Normalize scale based on bounding box
+            // 1. Measure model and normalize to fit in 1 unit cube
+            // 2. Apply base scale (modelScale, default 2) so objects are visible
+            // 3. Apply preset scale multipliers for aspect ratio (scaleX, scaleY, scaleZ)
+            // 4. Apply user scale modifier (big = 2, small = 0.5)
+            const box = new THREE.Box3().setFromObject(model);
+            const modelSize = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z);
+            const normalizeScale = maxDim > 0 ? 1 / maxDim : 1;
+
+            // Base scale: normalized (1 unit) × modelScale (default 2) × user scale
+            const baseScale = normalizeScale * modelScale * scale;
+
+            // Apply preset aspect ratios (default 1 = no change)
+            const sx = baseScale * (preset.scaleX || 1);
+            const sy = baseScale * (preset.scaleY || 1);
+            const sz = baseScale * (preset.scaleZ || 1);
+            model.scale.set(sx, sy, sz);
+
+            // Position model so it sits on ground
+            const scaledBox = new THREE.Box3().setFromObject(model);
+            const minY = scaledBox.min.y;
+            model.position.set(position.x, position.y - minY, position.z);
 
             // Remove placeholder, add model
             scene.remove(placeholder);
@@ -327,20 +449,51 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
             scene.add(model);
             objects[objName] = model;
 
-            if (preset.credit) {
-              console.log(`[Rosh] Model credit: ${preset.credit}`);
+            // Show credit in Rosh console
+            if (preset.credit && typeof RoshRuntime !== 'undefined') {
+              RoshRuntime.log('   Credit: ' + preset.credit, 'dim');
             }
           },
           undefined,
           (error) => {
             console.warn(`[Rosh] Failed to load model ${preset.model}:`, error);
-            // Keep placeholder as fallback
-            placeholder.userData._isPlaceholder = false;
-            placeholder.material.opacity = 1;
+            // Fallback cascade: try sprite billboard, then primitive
+            if (preset.sprite) {
+              createSpriteBillboard(preset.sprite, position, () => createPrimitiveFallback(position));
+            } else {
+              createPrimitiveFallback(position);
+            }
           }
         );
 
-        return { success: true, name: objName, object: placeholder, loading: true };
+        return { success: true, name: objName, object: placeholder, loading: true, color: color, size: scale, knownType: true, description };
+      }
+
+      // No 3D model - try sprite billboard first
+      if (preset && preset.sprite) {
+        const position = {
+          x: options.x !== undefined ? options.x : (Math.random() - 0.5) * 4,
+          y: options.y !== undefined ? options.y : 0,
+          z: options.z !== undefined ? options.z : (Math.random() - 0.5) * 4
+        };
+
+        // Create placeholder while sprite loads
+        const placeholderGeom = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        const placeholderMat = new THREE.MeshStandardMaterial({ color: colorHex, transparent: true, opacity: 0.3 });
+        const placeholder = new THREE.Mesh(placeholderGeom, placeholderMat);
+        placeholder.name = objName;
+        placeholder.userData._type = typeName;
+        placeholder.userData._color = color;
+        placeholder.userData._roshId = objName;
+        placeholder.userData._description = description;
+        placeholder.userData.fixed = false;
+        placeholder.position.set(position.x, position.y + 0.5, position.z);
+        scene.add(placeholder);
+        objects[objName] = placeholder;
+
+        createSpriteBillboard(preset.sprite, position, () => createPrimitiveFallback(position));
+
+        return { success: true, name: objName, object: placeholder, loading: true, color: color, size: scale, knownType: true, description };
       }
 
       // Fallback to primitive geometry
@@ -377,7 +530,11 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       mesh.userData._type = typeName;
       mesh.userData._color = color;
       mesh.userData._roshId = objName;
+      mesh.userData._description = description;
       mesh.userData.fixed = false;  // Console-created objects affected by physics
+
+      // Apply scale from size modifier
+      mesh.scale.set(scale, scale, scale);
 
       // Use provided position (from Twin) or random to avoid stacking
       if (options.x !== undefined || options.y !== undefined || options.z !== undefined) {
@@ -385,7 +542,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       } else {
         mesh.position.set(
           (Math.random() - 0.5) * 4,
-          0.5,
+          0.5 * scale,  // Adjust Y so object sits on ground
           (Math.random() - 0.5) * 4
         );
       }
@@ -393,7 +550,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       scene.add(mesh);
       objects[objName] = mesh;
 
-      return { success: true, name: objName, object: mesh };
+      return { success: true, name: objName, object: mesh, color: color, size: scale, knownType: isKnownType, description };
     },
 
     // Object deletion
@@ -593,7 +750,9 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         position: { x: obj.position.x.toFixed(2), y: obj.position.y.toFixed(2), z: obj.position.z.toFixed(2) },
         scale: { x: obj.scale.x.toFixed(2), y: obj.scale.y.toFixed(2), z: obj.scale.z.toFixed(2) },
         visible: obj.visible,
-        scene: obj.userData._scene || '(default)'
+        scene: obj.userData._scene || '(default)',
+        description: obj.userData._description || null,
+        credit: obj.userData._credit || null
       };
     },
 

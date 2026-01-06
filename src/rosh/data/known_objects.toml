@@ -115,14 +115,16 @@ scaleZ = 1.2
 description = "A tall green tree"
 category = "nature"
 [tree.2d]
-color = "green"
+sprite = "sprites/tree.png"  # Primary: 2D sprite
+color = "green"              # Fallback: colored shape
 shape = "triangle"
 height = 2.0
 [tree.3d]
-shape = "cylinder"
+model = "3d_glb/pine_tree.glb"  # Primary: 3D model
+sprite = "sprites/tree.png"      # Fallback: billboard sprite
+shape = "cylinder"               # Fallback: primitive
 color = 0x228b22
 scaleY = 2.0
-model = "3d_glb/pine_tree.glb"
 credit = "Pine tree by Andriy Shekh (CC BY 4.0)"
 credit_url = "https://skfb.ly/6VKKJ"
 
@@ -328,16 +330,18 @@ scaleZ = 1.3
 description = "A fierce green orc warrior"
 category = "character"
 [orc.2d]
-color = "green"
+sprite = "sprites/orc.png"   # Primary: 2D sprite
+color = "green"              # Fallback: colored shape
 shape = "rectangle"
 height = 1.6
 [orc.3d]
-shape = "box"
+model = "3d_glb/orc_warrior.glb"  # Primary: 3D model
+sprite = "sprites/orc.png"         # Fallback: billboard sprite
+shape = "box"                      # Fallback: primitive
 color = 0x228b22
 scaleX = 2.5
 scaleY = 2.5
 scaleZ = 2.5
-model = "3d_glb/orc_warrior.glb"
 credit = "Orc_Warrior by EvgeshQa (CC BY 4.0)"
 credit_url = "https://skfb.ly/oqIMM"
 
