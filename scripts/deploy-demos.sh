@@ -71,7 +71,8 @@ uv run rosh build demos/rosh-intro/game.rosh \
     --target threejs \
     --output "$ROSH_PORTAL/demos/rosh-intro-threejs/" \
     --copy-assets
-cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/rosh-intro-threejs/"
+mkdir -p "$ROSH_PORTAL/demos/rosh-intro-threejs/assets"
+cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/rosh-intro-threejs/assets/"
 
 echo ""
 echo "📦 Building space-shooter (Three.js)..."
@@ -79,7 +80,8 @@ uv run rosh build demos/space-shooter/game.rosh \
     --target threejs \
     --output "$ROSH_PORTAL/demos/space-shooter-threejs/" \
     --copy-assets
-cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/space-shooter-threejs/"
+mkdir -p "$ROSH_PORTAL/demos/space-shooter-threejs/assets"
+cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/space-shooter-threejs/assets/"
 
 echo ""
 echo "📦 Building block-pusher (Three.js)..."
@@ -87,7 +89,8 @@ uv run rosh build demos/block-pusher/game.rosh \
     --target threejs \
     --output "$ROSH_PORTAL/demos/block-pusher-threejs/" \
     --copy-assets
-cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/block-pusher-threejs/"
+mkdir -p "$ROSH_PORTAL/demos/block-pusher-threejs/assets"
+cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/block-pusher-threejs/assets/"
 
 echo ""
 echo "📦 Building virtual-gallery (Three.js)..."
@@ -95,7 +98,8 @@ uv run rosh build demos/virtual-gallery/game.rosh \
     --target threejs \
     --output "$ROSH_PORTAL/demos/virtual-gallery-threejs/" \
     --copy-assets
-cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/virtual-gallery-threejs/"
+mkdir -p "$ROSH_PORTAL/demos/virtual-gallery-threejs/assets"
+cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/virtual-gallery-threejs/assets/"
 
 echo ""
 echo "📦 Building scottish-gallery (Three.js)..."
@@ -103,7 +107,8 @@ uv run rosh build demos/scottish-gallery/gallery.rosh \
     --target threejs \
     --output "$ROSH_PORTAL/demos/scottish-gallery-threejs/" \
     --copy-assets
-cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/scottish-gallery-threejs/"
+mkdir -p "$ROSH_PORTAL/demos/scottish-gallery-threejs/assets"
+cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/scottish-gallery-threejs/assets/"
 
 # =============================================================================
 # PYGAME BUILDS (Desktop - local testing only)

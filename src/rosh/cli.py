@@ -2906,6 +2906,12 @@ def generate_phaser_output(js_code: str, output_dir: str):
     template_dir = Path(__file__).parent / "emitters" / "templates"
     shutil.copy(template_dir / "phaser_index.html", output_path / "index.html")
 
+    # Copy network module for multiplayer support
+    static_dir = Path(__file__).parent.parent.parent / "static"
+    network_js = static_dir / "rosh-network.js"
+    if network_js.exists():
+        shutil.copy(network_js, output_path / "rosh-network.js")
+
     # Create assets directory
     (output_path / "assets").mkdir(exist_ok=True)
 

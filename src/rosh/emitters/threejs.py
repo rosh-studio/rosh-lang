@@ -3053,7 +3053,8 @@ class ThreeJSEmitter(BaseEmitter):
             if opacity is not None:
                 parts.append(f"opacity: {opacity}")
             if model is not None:
-                parts.append(f"model: '{model}'")
+                # Add assets/ prefix for runtime loading
+                parts.append(f"model: 'assets/{model}'")
             if credit is not None:
                 # Escape quotes in credit string
                 credit_escaped = credit.replace("'", "\\'")
