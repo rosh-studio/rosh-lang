@@ -1,93 +1,86 @@
 # Scottish Heritage Gallery
 # A cross-platform virtual exhibition showcasing Scottish national treasures
-# Works in Three.js (3D), Phaser (2D), and CLI (text)
-
-# Gallery settings
-set title to "Scottish Heritage Gallery"
-set description to "Discover Scotland's national treasures"
 
 # =============================================================================
-# GALLERY LAYOUT
+# EXHIBITS - Line left to right using x coordinates
 # =============================================================================
 
-# Floor (rendered differently per platform)
-create platform floor
-set floor color to gray
-set floor x to 0
-set floor y to 0
-set floor scale to 12
+# Lewis Chess King (far left)
+create object chess_king
+    set type to "lewis_chess_king"
+    set x to -15
+    set y to 2
+    set z to 0
+    set size to 4
+    set description to "Lewis Chess King - 12th century Norse-Gaelic chess piece"
+end
 
-# =============================================================================
-# EXHIBITS - North Wall (Medieval)
-# =============================================================================
+create object label_king
+    set type to "text"
+    set text to "Chess King"
+    set x to -15
+    set y to 10
+    set z to 0
+end
 
-# Exhibit 1: Lewis Chess King
-create lewis_chess_king chess_king
-set chess_king x to -3
-set chess_king z to -4
-set chess_king description to "Lewis Chess King - 12th century Norse-Gaelic chess piece"
+# Lewis Chess Queen (center-left)
+create object chess_queen
+    set type to "lewis_chess_queen"
+    set x to -5
+    set y to 2
+    set z to 0
+    set size to 4
+    set description to "Lewis Chess Queen - found on the Isle of Lewis in 1831"
+end
 
-# Exhibit 2: Lewis Chess Queen
-create lewis_chess_queen chess_queen
-set chess_queen x to -1
-set chess_queen z to -4
-set chess_queen description to "Lewis Chess Queen - found on the Isle of Lewis in 1831"
+create object label_queen
+    set type to "text"
+    set text to "Chess Queen"
+    set x to -5
+    set y to 10
+    set z to 0
+end
 
-# Exhibit 3: Pictish Stone
-create pictish_stone stone
-set stone x to 1
-set stone z to -4
-set stone description to "Brandsbutt Pictish Stone - ancient symbol stone with Ogham inscription"
+# Cutty Sark Cat (center-right)
+create object cat
+    set type to "cutty_sark_cat"
+    set x to 5
+    set y to 2
+    set z to 0
+    set size to 4
+    set description to "Cat figurehead from the Cutty Sark clipper ship"
+end
 
-# =============================================================================
-# EXHIBITS - South Wall (Maritime & Science)
-# =============================================================================
+create object label_cat
+    set type to "text"
+    set text to "Cutty Sark Cat"
+    set x to 5
+    set y to 10
+    set z to 0
+end
 
-# Exhibit 4: Cutty Sark Cat
-create cutty_sark_cat cat
-set cat x to -2
-set cat z to 4
-set cat description to "Cat figurehead from the Cutty Sark clipper ship"
+# Stirling Torc (far right)
+create object torc
+    set type to "stirling_torc"
+    set x to 15
+    set y to 2
+    set z to 0
+    set size to 4
+    set description to "Stirling Torc - Iron Age gold"
+end
 
-# Exhibit 5: Dolly the Sheep (shape fallback - model is premium)
-create dolly_the_sheep dolly
-set dolly x to 2
-set dolly z to 4
-set dolly description to "Dolly the Sheep - first mammal cloned from an adult cell, 1996"
-
-# =============================================================================
-# EXHIBITS - Center Display (Iron Age Gold)
-# =============================================================================
-
-# Exhibit 6: Stirling Torc (uses built-in torus shape)
-create stirling_torc torc
-set torc x to 0
-set torc z to 0
-set torc description to "Stirling Torc - Iron Age gold from the Blair Drummond Hoard"
-
-# =============================================================================
-# LABELS
-# =============================================================================
-
-create text label_medieval
-set label_medieval text to "Medieval Scotland"
-set label_medieval x to -1
-set label_medieval z to -5
-
-create text label_maritime
-set label_maritime text to "Maritime & Science"
-set label_maritime x to 0
-set label_maritime z to 5
-
-create text label_gold
-set label_gold text to "Iron Age Gold"
-set label_gold x to 0
-set label_gold z to -1.5
+create object label_torc
+    set type to "text"
+    set text to "Stirling Torc"
+    set x to 15
+    set y to 10
+    set z to 0
+end
 
 # =============================================================================
 # WELCOME MESSAGE
 # =============================================================================
 
 print "Welcome to the Scottish Heritage Gallery"
-print "Type 'look <object>' to learn more about each exhibit"
-print "Type 'list' to see all objects"
+print "Use look <object> to learn more"
+print "Use list to see all objects"

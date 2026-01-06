@@ -242,7 +242,7 @@ class ThreeJSEmitter(BaseEmitter):
         self._register_capability(
             "scale",
             handler="scale",
-            applies_to=["mesh", "sprite"],
+            applies_to=["mesh", "sprite", "model"],
             tags=["safe"],
             args=["uniform|x y z"],
             description="Scale objects uniformly or per-axis."
@@ -250,7 +250,7 @@ class ThreeJSEmitter(BaseEmitter):
         self._register_capability(
             "spin",
             handler="spin",
-            applies_to=["mesh", "sprite"],
+            applies_to=["mesh", "sprite", "model"],
             tags=["safe"],
             args=["xSpeed ySpeed zSpeed"],
             description="Rotate objects continuously (degrees per second)."
@@ -258,7 +258,7 @@ class ThreeJSEmitter(BaseEmitter):
         self._register_capability(
             "bounce",
             handler="bounce",
-            applies_to=["mesh", "sprite"],
+            applies_to=["mesh", "sprite", "model"],
             tags=["safe"],
             args=["amplitude frequency"],
             description="Apply vertical bounce animation (frequency per second)."
@@ -266,7 +266,7 @@ class ThreeJSEmitter(BaseEmitter):
         self._register_capability(
             "pulse",
             handler="pulse",
-            applies_to=["mesh", "sprite", "text", "hud"],
+            applies_to=["mesh", "sprite", "text", "hud", "model"],
             tags=["safe"],
             args=["amplitude frequency"],
             description="Scale object in/out with a sine wave (amplitude multiplier, frequency in Hz)."
@@ -274,7 +274,7 @@ class ThreeJSEmitter(BaseEmitter):
         self._register_capability(
             "orbit",
             handler="orbit",
-            applies_to=["mesh", "sprite"],
+            applies_to=["mesh", "sprite", "model"],
             tags=["safe"],
             args=["radius speed [height]"],
             description="Orbit around the object's starting point (radius in world units, speed in degrees/sec, optional height override)."
@@ -882,7 +882,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write_comment("Edit mode click selection")
         self.write("renderer.domElement.addEventListener('click', (e) => {")
         self.indent()
-        self.write("if (!editMode || window.consoleVisible) return;")
+        self.write("if (!editMode && !window.editMode) return;")
+        self.write("if (window.consoleVisible) return;")
         self.write("mouse.x = (e.clientX / window.innerWidth) * 2 - 1;")
         self.write("mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;")
         self.write("raycaster.setFromCamera(mouse, camera);")
@@ -890,19 +891,33 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const intersects = raycaster.intersectObjects(selectables, true);")
         self.write("if (intersects.length > 0) {")
         self.indent()
-        self.write("let obj = intersects[0].object;")
-        self.write("while (obj.parent && !obj.userData._rosh_uuid) obj = obj.parent;")
-        self.write("if (obj.userData._rosh_uuid) {")
+        self.write("let hitObj = intersects[0].object;")
+        self.write("// Find which gameObject contains this hit (works for both primitives and loaded models)")
+        self.write("let foundName = null;")
+        self.write("for (const [name, go] of Object.entries(gameObjects)) {")
         self.indent()
-        self.write("selectedObject = obj;")
-        self.write("const name = Object.keys(gameObjects).find(k => gameObjects[k] === obj) || 'unknown';")
-        self.write("console.log('Selected: ' + name);")
+        self.write("if (!go) continue;")
+        self.write("// Check if hitObj is the object or a descendant of it")
+        self.write("let check = hitObj;")
+        self.write("while (check) {")
+        self.indent()
+        self.write("if (check === go) { foundName = name; break; }")
+        self.write("check = check.parent;")
+        self.dedent()
+        self.write("}")
+        self.write("if (foundName) break;")
+        self.dedent()
+        self.write("}")
+        self.write("if (foundName && gameObjects[foundName]) {")
+        self.indent()
+        self.write("window.selectedObject = gameObjects[foundName];")
+        self.write("console.log('Selected:', foundName);")
         self.dedent()
         self.write("}")
         self.dedent()
         self.write("} else {")
         self.indent()
-        self.write("selectedObject = null;")
+        self.write("window.selectedObject = null;")
         self.write("console.log('Selection cleared');")
         self.dedent()
         self.write("}")
@@ -916,7 +931,9 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const arrowState = { left: false, right: false, up: false, down: false, rise: false, fall: false };")
         self.write("document.addEventListener('keydown', (e) => {")
         self.indent()
-        self.write("if (window.consoleVisible || consoleVisible) return;  // Skip when any console open")
+        self.write("// Allow arrow keys in edit mode even when console not focused")
+        self.write("const isArrowKey = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '.', '/'].includes(e.key);")
+        self.write("if ((window.consoleVisible || consoleVisible) && !(window.editMode && isArrowKey)) return;")
 
         # Game keydown events
         if self.keydown_events:
@@ -966,11 +983,15 @@ class ThreeJSEmitter(BaseEmitter):
 
         # Lighting
         self.write_comment("Lighting")
-        self.write("const ambientLight = new THREE.AmbientLight(0x404040, 0.5);")
+        self.write("const ambientLight = new THREE.AmbientLight(0x606060, 1.0);")
         self.write("scene.add(ambientLight);")
-        self.write("const directionalLight = new THREE.DirectionalLight(0xffffff, 1);")
+        self.write("const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);")
         self.write("directionalLight.position.set(5, 10, 7);")
         self.write("scene.add(directionalLight);")
+        self.write("// Add fill light from opposite side for better visibility")
+        self.write("const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);")
+        self.write("fillLight.position.set(-5, 5, -5);")
+        self.write("scene.add(fillLight);")
         self.write_blank()
 
         # Ground grid and floor
@@ -1081,20 +1102,36 @@ class ThreeJSEmitter(BaseEmitter):
         z = self._get_prop_value(obj, 'z', 0)
 
         # Convert normalized coords to 3D world
-        # x: 0-1 maps to roughly -8 to 8
-        # y: 0-1 maps to roughly 8 to 0 (inverted, above ground)
+        # Values in 0-1 range are normalized, outside that range are world coords
+        # x: 0-1 maps to roughly -8 to 8, else used directly
+        # y: 0-1 maps to roughly 8 to 0 (inverted, above ground), else used directly
         # z: used directly as world coordinate (not normalized)
-        world_x = (x - 0.5) * 16
-        world_y = (0.5 - y) * 8 + 2  # Center at y=2 (above ground)
+        if 0 <= x <= 1:
+            world_x = (x - 0.5) * 16
+        else:
+            world_x = x  # World coordinate
+        if 0 <= y <= 1:
+            world_y = (0.5 - y) * 8 + 2  # Center at y=2 (above ground)
+        else:
+            world_y = y  # World coordinate
         world_z = z  # Z is passed through directly as world coordinate
 
         # Get shape type - check both 'shape' and 'type' properties
         shape = 'box'
+        type_val = None
         for shape_prop in ('type', 'shape'):
             if shape_prop in obj.properties:
-                shape_val = obj.properties[shape_prop]
-                shape = shape_val.value if hasattr(shape_val, 'value') else str(shape_val)
+                prop_val = obj.properties[shape_prop]
+                shape = prop_val.value if hasattr(prop_val, 'value') else str(prop_val)
+                if shape_prop == 'type':
+                    type_val = shape
                 break
+
+        # If type is a known object, look up its shape from known_objects
+        if type_val:
+            known_objects = get_known_objects_3d()
+            if type_val in known_objects and 'shape' in known_objects[type_val]:
+                shape = known_objects[type_val]['shape']
 
         # Get size
         width = self._get_prop_value(obj, 'width', 0.05) * 16
@@ -1956,6 +1993,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("}")
         self.write("const applyPulse = () => {")
         self.indent()
+        self.write("console.log('Applying pulse to', target.name, 'type:', target.type, 'scale:', target.scale.x, target.scale.y, target.scale.z);")
         self.write("capabilityState.pulse.set(target, { amplitude, frequency: freq * Math.PI * 2, elapsed: 0, base: { x: target.scale.x, y: target.scale.y, z: target.scale.z } });")
         self.write("target.userData._pulse = { amplitude, freq };")
         self.dedent()
@@ -2106,7 +2144,7 @@ class ThreeJSEmitter(BaseEmitter):
 
         # Edit mode: move selected object with arrow keys
         self.write_comment("Edit mode: move selected object")
-        self.write("if (window.editMode && window.selectedObject && !window.consoleVisible && !consoleVisible) {")
+        self.write("if (window.editMode && window.selectedObject) {")
         self.indent()
         self.write("const editSpeed = 0.2;")
         self.write("const anyMove = arrowState.left || arrowState.right || arrowState.up || arrowState.down || arrowState.rise || arrowState.fall;")
@@ -2287,16 +2325,24 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const pos = obj.position.clone();")
         self.write("const size = obj.userData.size || 1;")
         self.write("const spin = obj.userData._spin;")
+        self.write("const bounce = obj.userData._bounce;")
+        self.write("const pulse = obj.userData._pulse;")
+        self.write("const orbit = obj.userData._orbit;")
         self.write("const objScene = obj.userData._scene;")
         self.write("const objName = obj.name;")
+        self.write("const objUuid = obj.userData._rosh_uuid;")
         self.write("gltfLoader.load(preset.model, (gltf) => {")
         self.indent()
         self.write("const model = gltf.scene;")
         self.write("model.name = objName;")
         self.write("model.userData._type = typeName;")
         self.write("model.userData._rosh_kind = 'model';")
+        self.write("model.userData._rosh_uuid = objUuid;  // Copy UUID for edit mode selection")
         self.write("if (objScene) model.userData._scene = objScene;")
         self.write("if (spin) model.userData._spin = spin;")
+        self.write("if (bounce) model.userData._bounce = bounce;")
+        self.write("if (pulse) model.userData._pulse = pulse;")
+        self.write("if (orbit) model.userData._orbit = orbit;")
         self.write("if (preset.credit) model.userData._credit = preset.credit;")
         self.write("const box = new THREE.Box3().setFromObject(model);")
         self.write("const modelSize = box.getSize(new THREE.Vector3());")
@@ -2310,9 +2356,25 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("model.position.set(pos.x - center.x, pos.y - center.y, pos.z - center.z);")
         self.write("scene.remove(obj);")
         self.write("scene.add(model);")
+        self.write("// Transfer capability states from old placeholder to loaded model")
+        self.write("if (capabilityState.spin.has(obj)) { capabilityState.spin.set(model, capabilityState.spin.get(obj)); capabilityState.spin.delete(obj); }")
+        self.write("if (capabilityState.bounce.has(obj)) { capabilityState.bounce.set(model, capabilityState.bounce.get(obj)); capabilityState.bounce.delete(obj); }")
+        self.write("if (capabilityState.pulse.has(obj)) { capabilityState.pulse.set(model, capabilityState.pulse.get(obj)); capabilityState.pulse.delete(obj); }")
+        self.write("if (capabilityState.orbit.has(obj)) { const s = capabilityState.orbit.get(obj); s.center = model.position.clone(); capabilityState.orbit.set(model, s); capabilityState.orbit.delete(obj); }")
+        self.write("// Update ALL registries so edit mode and console commands work with loaded models")
+        self.write("const oldObj = gameObjects[objName];")
+        self.write("gameObjects[objName] = model;")
+        self.write("window._objects[objName] = model;")
+        self.write("if (typeof adapter !== 'undefined' && adapter.registerObject) adapter.registerObject(objName, model);")
+        self.write("// If the old placeholder was selected, update selection to the new model")
+        self.write("if (window.selectedObject === oldObj) {")
+        self.indent()
+        self.write("window.selectedObject = model;")
+        self.dedent()
+        self.write("}")
         self.write("if (objScene && objScene !== currentScene) model.visible = false;")
         self.dedent()
-        self.write("});")
+        self.write("}, undefined, (err) => console.error('Model load error:', objName, err));")
         self.dedent()
         self.write("}")
         self.dedent()
@@ -2396,6 +2458,32 @@ class ThreeJSEmitter(BaseEmitter):
         self.write(f"defaultScene: '{self.ir.metadata.extra.get('scene', 'default')}'")
         self.dedent()
         self.write("});")
+        self.write_blank()
+
+        # Wrap adapter.setProperty to route capability properties through the capability system
+        self.write("// Wrap setProperty to handle capabilities (pulse, orbit, spin, bounce)")
+        self.write("const originalSetProperty = roshAdapter.setProperty.bind(roshAdapter);")
+        self.write("roshAdapter.setProperty = function(objName, prop, value) {")
+        self.indent()
+        self.write("const capabilityProps = ['pulse', 'orbit', 'spin', 'bounce'];")
+        self.write("if (capabilityProps.includes(prop)) {")
+        self.indent()
+        self.write("// Route through capability system")
+        self.write("const obj = gameObjects[objName] || scene.getObjectByName(objName);")
+        self.write("if (obj && typeof applyCapabilityBridge === 'function') {")
+        self.indent()
+        self.write("// Split value into tokens array as expected by capability handlers")
+        self.write("const tokens = String(value).trim().split(/\\s+/);")
+        self.write("const capResult = applyCapabilityBridge(obj, prop, tokens);")
+        self.write("return { success: capResult && capResult.ok !== false };")
+        self.dedent()
+        self.write("}")
+        self.dedent()
+        self.write("}")
+        self.write("// Fall through to original for non-capability properties")
+        self.write("originalSetProperty(objName, prop, value);")
+        self.dedent()
+        self.write("};")
         self.write_blank()
 
         # Register existing objects with the adapter
@@ -5041,7 +5129,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("let valueTokens = [];")
         self.write("if (filtered.length >= 4) {")
         self.indent()
-        self.write("const candidate = scene.getObjectByName(filtered[1]);")
+        self.write("// Prefer gameObjects lookup (updated when models load) over scene.getObjectByName")
+        self.write("const candidate = gameObjects[filtered[1]] || scene.getObjectByName(filtered[1]);")
         self.write("if (candidate) {")
         self.indent()
         self.write("obj = candidate;")
@@ -5494,8 +5583,9 @@ class ThreeJSEmitter(BaseEmitter):
             msg = params.get('message')
             if msg:
                 expr = self.emit_expression(msg)
-                return f"console.log({expr});"
-            return "console.log();"
+                # Use roshLog if available, otherwise queue for later
+                return f"if (typeof window.roshLog === 'function') {{ window.roshLog({expr}); }} else {{ (window._roshPendingLogs = window._roshPendingLogs || []).push({expr}); }}"
+            return ""
         elif action_type == 'play_sound':
             asset = params.get('asset', '')
             safe_name = asset.replace('.', '_').replace('-', '_').replace('/', '_')

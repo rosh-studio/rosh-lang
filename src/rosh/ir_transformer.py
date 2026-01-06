@@ -490,6 +490,17 @@ class IRTransformer:
         # Handle coordinate properties
         if context_prop in self.coordinate_props:
             if type_name == 'number':
+                # Check if this looks like a world coordinate (3D) vs pixel coordinate (2D)
+                # World coords: negative values, or small values that look like 3D units
+                # Pixel coords: positive values within typical canvas bounds
+                is_world_coord = (value < 0 or
+                                  (context_prop in ('x', 'width') and abs(value) <= 100) or
+                                  (context_prop in ('y', 'height') and abs(value) <= 100))
+
+                if is_world_coord:
+                    # Pass through as-is for 3D emitters
+                    return IR_Value('number', value)
+
                 # Bare numbers are pixels - normalize to 0-1 range for emitters
                 if context_prop in ('x', 'width'):
                     normalized = value / self.canvas_width

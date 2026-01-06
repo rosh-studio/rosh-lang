@@ -1750,6 +1750,11 @@ const RoshRuntime = (function() {
       const platform = adapter && adapter.platform ? adapter.platform : 'unknown';
       log('Rosh v' + ROSH_VERSION + ' | ' + platform, 'cyan');
       log('Type help for commands. Press ` to toggle console.', 'dim');
+      // Flush any pending logs from early print statements
+      if (window._roshPendingLogs) {
+        window._roshPendingLogs.forEach(m => log(m));
+        delete window._roshPendingLogs;
+      }
     },
 
     exec: execCommand,
