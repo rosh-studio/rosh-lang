@@ -86,6 +86,6 @@ end
 # WELCOME MESSAGE
 # =============================================================================
 
-print "Welcome to the Scottish Heritage Gallery"
+print "Welcome to the Scottish Heritage Gallery (v2)"
 print "Use look <object> to learn more"
 print "Use list to see all objects"
