@@ -5243,7 +5243,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("else if (obj.material && obj.material.color) log('  color: #' + obj.material.color.getHexString());")
         self.write("if (obj._text) log('  text: ' + obj._text);")
         self.write("log('  visible: ' + obj.visible);")
-        self.write("if (obj.userData._description) log('  description: ' + obj.userData._description);")
+        self.write("if (obj.userData.description) log('  description: ' + obj.userData.description);")
         self.write("for (const [k, v] of Object.entries(obj.userData)) { if (!k.startsWith('_')) log('  ' + k + ': ' + v); }")
         self.write("const caps = availableCapabilitiesFor(obj);")
         self.write("if (caps.length) {")
