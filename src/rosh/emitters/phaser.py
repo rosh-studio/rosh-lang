@@ -2290,7 +2290,9 @@ class PhaserEmitter(BaseEmitter):
                     # JavaScript uses lowercase booleans
                     self.write(f"this.{obj.name}.{safe_prop} = {'true' if val else 'false'};")
                 elif isinstance(val, str):
-                    self.write(f"this.{obj.name}.{safe_prop} = '{val}';")
+                    # Escape single quotes for JavaScript string literals
+                    escaped_val = val.replace("\\", "\\\\").replace("'", "\\'")
+                    self.write(f"this.{obj.name}.{safe_prop} = '{escaped_val}';")
                 else:
                     self.write(f"this.{obj.name}.{safe_prop} = {val};")
 
