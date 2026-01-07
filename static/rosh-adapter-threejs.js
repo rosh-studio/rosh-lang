@@ -756,8 +756,8 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         scale: { x: obj.scale.x.toFixed(2), y: obj.scale.y.toFixed(2), z: obj.scale.z.toFixed(2) },
         visible: obj.visible,
         scene: obj.userData._scene || '(default)',
-        description: obj.userData.description || obj.userData._description || null,
-        credit: obj.userData.credit || obj.userData._credit || null
+        description: obj.userData.description || null,
+        credit: obj.userData.credit || null
       };
     },
 
