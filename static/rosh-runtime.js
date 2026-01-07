@@ -372,6 +372,32 @@ const RoshRuntime = (function() {
     'connect', 'disconnect', 'twin', 'say', 'users', 'who'
   ];
 
+  /**
+   * Find objects by fuzzy substring matching
+   * Returns array of matching objects (name, object)
+   */
+  function fuzzyFindObjects(searchName) {
+    if (!adapter.getAllObjects) return [];
+
+    const allObjects = adapter.getAllObjects();
+    const lowerSearch = searchName.toLowerCase();
+    const matches = [];
+
+    for (const obj of allObjects) {
+      const objName = obj.name || (obj.userData && obj.userData._name) || '';
+      if (!objName || objName.startsWith('_')) continue;  // Skip hidden objects
+
+      const lowerObjName = objName.toLowerCase();
+
+      // Check if search term is contained in object name or vice versa
+      if (lowerObjName.includes(lowerSearch) || lowerSearch.includes(lowerObjName)) {
+        matches.push({ name: objName, object: obj });
+      }
+    }
+
+    return matches;
+  }
+
   function fuzzyCorrectCommand(cmd) {
     const parts = cmd.trim().split(/\s+/);
     const corrections = [];
@@ -1424,12 +1450,12 @@ const RoshRuntime = (function() {
     // Deep search with modifiers
     if (adapter.deepSearch) {
       const result = adapter.deepSearch(args);
-      if (result.success) {
+      if (result.success && result.objects.length > 0) {
         if (result.objects.length === 1) {
           currentObject = result.objects[0].object;
           currentObjectName = result.objects[0].name;
           log('Selected: ' + currentObjectName, 'ok');
-        } else if (result.objects.length > 1) {
+        } else {
           currentSelection = result.objects;
           log('Found ' + result.objects.length + ' matches:', 'ok');
           for (const o of result.objects.slice(0, 5)) {
@@ -1438,21 +1464,40 @@ const RoshRuntime = (function() {
           if (result.objects.length > 5) {
             log('  ... and ' + (result.objects.length - 5) + ' more', 'dim');
           }
-        } else {
-          log('No matches found', 'err');
         }
+        return;
+      }
+      // Fall through to fuzzy matching if deepSearch found nothing
+    }
+
+    // Simple name lookup first
+    let obj = adapter.getObject(name);
+
+    // If not found, try fuzzy matching (same as look command)
+    if (!obj && adapter.getAllObjects) {
+      const matches = fuzzyFindObjects(name);
+      if (matches.length === 1) {
+        log('[resolved: "' + name + '" -> "' + matches[0].name + '"]', 'dim');
+        obj = adapter.getObject(matches[0].name);
+      } else if (matches.length > 1) {
+        log('Multiple matches for "' + name + '":', 'cyan');
+        for (const m of matches.slice(0, 8)) {
+          log('  ' + m.name, 'dim');
+        }
+        if (matches.length > 8) {
+          log('  ... and ' + (matches.length - 8) + ' more', 'dim');
+        }
+        log('Which one did you mean?', 'dim');
         return;
       }
     }
 
-    // Simple name lookup
-    const obj = adapter.getObject(name);
     if (obj) {
       currentObject = obj.object;
       currentObjectName = obj.name;
       log('Selected: ' + currentObjectName, 'ok');
     } else {
-      log('Object not found: ' + name, 'err');
+      log('No matches found', 'err');
     }
   }
 
@@ -1696,39 +1741,33 @@ const RoshRuntime = (function() {
 
     // If not found, try fuzzy matching
     if (!details && adapter.getAllObjects) {
-      const allObjects = adapter.getAllObjects();
-      const lowerName = name.toLowerCase();
+      const matches = fuzzyFindObjects(name);
 
-      // Try substring match first
-      for (const obj of allObjects) {
-        const objName = obj.name || (obj.userData && obj.userData._name) || '';
-        if (objName.toLowerCase().includes(lowerName) || lowerName.includes(objName.toLowerCase())) {
-          log('[resolved: "' + name + '" -> "' + objName + '"]', 'dim');
-          name = objName;
-          details = adapter.getObjectDetails(name);
-          break;
+      if (matches.length === 1) {
+        log('[resolved: "' + name + '" -> "' + matches[0].name + '"]', 'dim');
+        name = matches[0].name;
+        details = adapter.getObjectDetails(name);
+      } else if (matches.length > 1) {
+        // Multiple matches - ask user to clarify
+        log('Multiple matches for "' + name + '":', 'cyan');
+        for (const m of matches.slice(0, 8)) {
+          log('  ' + m.name, 'dim');
         }
-      }
-
-      // If still not found, suggest alternatives
-      if (!details) {
-        const suggestions = allObjects
+        if (matches.length > 8) {
+          log('  ... and ' + (matches.length - 8) + ' more', 'dim');
+        }
+        log('Which one did you mean?', 'dim');
+        return;
+      } else {
+        // No matches - show suggestions
+        const allObjects = adapter.getAllObjects();
+        const available = allObjects
           .map(obj => obj.name || (obj.userData && obj.userData._name) || '')
           .filter(n => n && !n.startsWith('_'))
-          .filter(n => n.toLowerCase().includes(lowerName) || lowerName.includes(n.substring(0, Math.min(n.length, lowerName.length))))
-          .slice(0, 5);
-
+          .slice(0, 10);
         log('Object not found: ' + name, 'err');
-        if (suggestions.length > 0) {
-          log('Did you mean: ' + suggestions.join(', ') + '?', 'cyan');
-        } else {
-          const available = allObjects
-            .map(obj => obj.name || (obj.userData && obj.userData._name) || '')
-            .filter(n => n && !n.startsWith('_'))
-            .slice(0, 10);
-          if (available.length > 0) {
-            log('Available: ' + available.join(', ') + (allObjects.length > 10 ? '...' : ''), 'dim');
-          }
+        if (available.length > 0) {
+          log('Available: ' + available.join(', ') + (allObjects.length > 10 ? '...' : ''), 'dim');
         }
         return;
       }

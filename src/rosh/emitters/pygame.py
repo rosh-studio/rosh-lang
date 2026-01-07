@@ -192,6 +192,18 @@ class PygameEmitter(BaseEmitter):
         if self.sprite_assets or self.sound_assets or self.music_file:
             self.write("import os")
         self.write_blank()
+        self.write_comment("Project Twin - shared world networking")
+        self.write("try:")
+        self.indent()
+        self.write("from rosh_network import RoshNetwork")
+        self.write("NETWORK_AVAILABLE = True")
+        self.dedent()
+        self.write("except ImportError:")
+        self.indent()
+        self.write("NETWORK_AVAILABLE = False")
+        self.write("RoshNetwork = None")
+        self.dedent()
+        self.write_blank()
 
     def _emit_class_start(self):
         """Emit class declaration."""
@@ -229,6 +241,22 @@ class PygameEmitter(BaseEmitter):
         self.write(f"self.console_output.append('Rosh v{__version__} | Pygame')")
         self.write("self.console_output.append('Type help for commands. Press ` to toggle console.')")
         self.write("self.console_font = pygame.font.Font(None, 20)")
+        self.write_blank()
+
+        # Network state
+        self.write_comment("Project Twin - shared world networking")
+        self.write("self.network = None")
+        self.write("if NETWORK_AVAILABLE:")
+        self.indent()
+        self.write("self.network = RoshNetwork(")
+        self.indent()
+        self.write("on_object_created=self._network_create_object,")
+        self.write("on_object_deleted=self._network_delete_object,")
+        self.write("on_object_moved=self._network_move_object,")
+        self.write("on_log=lambda msg, style=None: self.console_output.append(msg)")
+        self.dedent()
+        self.write(")")
+        self.dedent()
 
         # Scene/level state
         if self.uses_scenes:
@@ -299,11 +327,21 @@ class PygameEmitter(BaseEmitter):
     def _emit_create_object(self, obj: IR_Object):
         """Emit code to create an object.
 
-        Hidden objects (name starts with '_') are skipped - they exist in IR
-        for templates, config, meta, etc. but are not rendered in the game.
+        Hidden objects (name starts with '_') still have their properties initialized
+        for game state, but are not rendered visually.
         """
-        # Skip hidden objects - they exist in world state but are not rendered
+        # Hidden objects: create properties but no visual representation
         if obj.hidden:
+            self.write_comment(f"Hidden data object: {obj.name}")
+            self.write(f"self.{obj.name} = {{ }}")
+            for prop_name, prop_value in obj.properties.items():
+                val = self.get_value(prop_value)
+                if isinstance(val, str):
+                    self.write(f"self.{obj.name}_{prop_name} = '{val}'")
+                elif isinstance(val, bool):
+                    self.write(f"self.{obj.name}_{prop_name} = {val}")
+                else:
+                    self.write(f"self.{obj.name}_{prop_name} = {val}")
             return
 
         x = self._get_prop_value(obj, 'x', 0.5)
@@ -362,6 +400,11 @@ class PygameEmitter(BaseEmitter):
         self.indent()
         self.write("while self.running:")
         self.indent()
+        self.write_comment("Process network messages from shared world")
+        self.write("if self.network:")
+        self.indent()
+        self.write("self.network.process_messages()")
+        self.dedent()
         self.write("self.handle_events()")
         self.write("self.update()")
         self.write("self.draw()")
@@ -499,6 +542,8 @@ class PygameEmitter(BaseEmitter):
         # Draw objects
         self.write_comment("Draw objects")
         for obj in self.ir.objects:
+            if obj.hidden:
+                continue  # Skip hidden objects (game state, not rendered)
             if 'target' in obj.properties:
                 continue  # Skip HUD objects here
 
@@ -563,7 +608,7 @@ class PygameEmitter(BaseEmitter):
         self.indent()
         self.write("if not attr.startswith('_') and isinstance(getattr(self, attr, None), pygame.Rect):")
         self.indent()
-        known_objects = [obj.name for obj in self.ir.objects if 'target' not in obj.properties]
+        known_objects = [obj.name for obj in self.ir.objects if 'target' not in obj.properties and not obj.hidden]
         self.write(f"if attr not in {known_objects}:")
         self.indent()
         self.write("rect = getattr(self, attr)")
@@ -592,6 +637,9 @@ class PygameEmitter(BaseEmitter):
         """Emit any helper methods needed."""
         # Always emit console methods
         self._emit_console_methods()
+
+        # Network callback methods (Project Twin)
+        self._emit_network_callbacks()
 
         if self.uses_scenes:
             self._emit_scene_visibility_method()
@@ -805,6 +853,53 @@ class PygameEmitter(BaseEmitter):
         self.write("setattr(self, f'{name}_color', (0, 255, 0))")
         self.write("setattr(self, f'{name}_visible', True)")
         self.write("self.console_output.append(f'Created {name} at ({x}, {y})')")
+        self.write_comment("Broadcast to network if connected")
+        self.write("if self.network and self.network.is_connected():")
+        self.indent()
+        self.write("self.network.broadcast_create(name, {'type': base_name, 'x': (x - 400) / 50, 'z': (y - 300) / 50, 'color': 'green'})")
+        self.dedent()
+        self.dedent()
+        self.dedent()
+
+        # connect command (Project Twin)
+        self.write("elif command in ('connect', 'twin'):")
+        self.indent()
+        self.write("if self.network:")
+        self.indent()
+        self.write("world_id = parts[1] if len(parts) > 1 else 'default'")
+        self.write("self.network.connect(world_id)")
+        self.dedent()
+        self.write("else:")
+        self.indent()
+        self.write("self.console_output.append('Network not available. Install: pip install websocket-client')")
+        self.dedent()
+        self.dedent()
+
+        # disconnect command
+        self.write("elif command == 'disconnect':")
+        self.indent()
+        self.write("if self.network:")
+        self.indent()
+        self.write("self.network.disconnect()")
+        self.dedent()
+        self.dedent()
+
+        # say command
+        self.write("elif command == 'say':")
+        self.indent()
+        self.write("if self.network:")
+        self.indent()
+        self.write("message = ' '.join(parts[1:]) if len(parts) > 1 else ''")
+        self.write("self.network.say(message)")
+        self.dedent()
+        self.dedent()
+
+        # users/who command
+        self.write("elif command in ('users', 'who'):")
+        self.indent()
+        self.write("if self.network:")
+        self.indent()
+        self.write("self.network.list_users()")
         self.dedent()
         self.dedent()
 
@@ -813,6 +908,7 @@ class PygameEmitter(BaseEmitter):
         self.indent()
         self.write("self.console_output.append('Commands: list, look <obj>, set <obj> <prop> to <value>')")
         self.write("self.console_output.append('          hide <obj>, show <obj>, create <name>, help')")
+        self.write("self.console_output.append('Network: connect [world], disconnect, say <msg>, users')")
         self.dedent()
 
         # unknown command
@@ -828,6 +924,76 @@ class PygameEmitter(BaseEmitter):
         self.dedent()
 
         self.dedent()  # function
+        self.write_blank()
+
+    def _emit_network_callbacks(self):
+        """Emit network callback methods for Project Twin shared worlds."""
+        # _network_create_object callback
+        self.write("def _network_create_object(self, obj_id, data):")
+        self.indent()
+        self.write_comment("Called when another user creates an object")
+        self.write("if hasattr(self, obj_id):")
+        self.indent()
+        self.write("return  # Object already exists")
+        self.dedent()
+        self.write_blank()
+        self.write_comment("Transform 3D coords to 2D: Three.js x,z -> Pygame x,y")
+        self.write("x = data.get('x', 0)")
+        self.write("z = data.get('z', 0)  # In 3D, z is horizontal depth")
+        self.write("px = 400 + (x * 50)  # Center + scale")
+        self.write("py = 300 + (z * 50)")
+        self.write_blank()
+        self.write("rect = pygame.Rect(int(px) - 25, int(py) - 25, 50, 50)")
+        self.write("setattr(self, obj_id, rect)")
+        self.write_blank()
+        self.write_comment("Parse color")
+        self.write("color = data.get('color', 'green')")
+        self.write("colors = {'red': (255,0,0), 'green': (0,255,0), 'blue': (0,0,255), 'yellow': (255,255,0), 'cyan': (0,255,255), 'magenta': (255,0,255), 'white': (255,255,255), 'black': (0,0,0), 'orange': (255,136,0), 'purple': (136,0,255)}")
+        self.write("if isinstance(color, str):")
+        self.indent()
+        self.write("color_tuple = colors.get(color.lower(), (0, 255, 0))")
+        self.dedent()
+        self.write("elif isinstance(color, int):")
+        self.indent()
+        self.write("color_tuple = ((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF)")
+        self.dedent()
+        self.write("else:")
+        self.indent()
+        self.write("color_tuple = (0, 255, 0)")
+        self.dedent()
+        self.write("setattr(self, f'{obj_id}_color', color_tuple)")
+        self.write("setattr(self, f'{obj_id}_visible', True)")
+        self.dedent()
+        self.write_blank()
+
+        # _network_delete_object callback
+        self.write("def _network_delete_object(self, obj_id):")
+        self.indent()
+        self.write_comment("Called when another user deletes an object")
+        self.write("if hasattr(self, obj_id):")
+        self.indent()
+        self.write("rect = getattr(self, obj_id)")
+        self.write("rect.width = 0")
+        self.write("rect.height = 0")
+        self.write("setattr(self, f'{obj_id}_visible', False)")
+        self.dedent()
+        self.dedent()
+        self.write_blank()
+
+        # _network_move_object callback
+        self.write("def _network_move_object(self, obj_id, x, y, z):")
+        self.indent()
+        self.write_comment("Called when another user moves an object")
+        self.write("if hasattr(self, obj_id):")
+        self.indent()
+        self.write("rect = getattr(self, obj_id)")
+        self.write_comment("Transform 3D coords to 2D")
+        self.write("px = 400 + (x * 50)")
+        self.write("py = 300 + (z * 50)  # Use z for depth in 3D")
+        self.write("rect.centerx = int(px)")
+        self.write("rect.centery = int(py)")
+        self.dedent()
+        self.dedent()
         self.write_blank()
 
     def _emit_scene_visibility_method(self):

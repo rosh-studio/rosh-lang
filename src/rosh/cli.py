@@ -417,37 +417,43 @@ def _list_objects(interpreter, out, max_display=10, scene_filter=None, group_by_
         out.dim(f"  ... and {remaining} more (use 'list all' to see all)")
 
 
-def _examine_object(interpreter, out, obj_name: str):
+def _examine_object(interpreter, out, input_name: str):
     """Show properties of a specific object (Universal REPL command)"""
     from .values import RoshObject, rosh_to_python
-    import difflib
 
-    # Check if object exists
-    if not interpreter.current_env.exists(obj_name):
-        # Object not found - suggest alternatives
-        all_objects = []
-        for name in interpreter.current_env.bindings.keys():
-            try:
-                value = interpreter.current_env.get(name)
-                if isinstance(value, RoshObject):
-                    all_objects.append(name)
-            except:
-                pass
+    # Resolve with fuzzy matching
+    value, obj_name, matches = _resolve_object_name(interpreter, input_name)
 
-        out.error(f"Object '{obj_name}' not found.")
+    # Show resolution message if name was fuzzy matched
+    if value and obj_name and obj_name != input_name:
+        out.dim(f'[resolved: "{input_name}" → "{obj_name}"]')
 
-        if all_objects:
-            # Fuzzy match
-            matches = difflib.get_close_matches(obj_name, all_objects, n=3, cutoff=0.4)
-            if matches:
-                out.print(f"Did you mean: {', '.join(matches)}?", style="yellow")
-            else:
-                out.print(f"Available: {', '.join(all_objects)}", style="dim")
+    if value is None:
+        if matches:
+            # Multiple matches - ask user to clarify
+            out.print(f'Multiple matches for "{input_name}":', style="cyan")
+            for name, _ in matches[:8]:
+                out.dim(f"  {name}")
+            if len(matches) > 8:
+                out.dim(f"  ... and {len(matches) - 8} more")
+            out.dim("Which one did you mean?")
         else:
-            out.dim("No objects defined yet.")
+            # No matches at all
+            out.error(f"No matches found for '{input_name}'")
+            # Show available objects
+            all_objects = []
+            for name in interpreter.current_env.bindings.keys():
+                if name.startswith('_'):
+                    continue
+                try:
+                    val = interpreter.current_env.get(name)
+                    if isinstance(val, RoshObject):
+                        all_objects.append(name)
+                except:
+                    pass
+            if all_objects:
+                out.dim(f"Available: {', '.join(all_objects[:10])}" + ("..." if len(all_objects) > 10 else ""))
         return
-
-    value = interpreter.current_env.get(obj_name)
 
     if not isinstance(value, RoshObject):
         # Not an object, just show its value
@@ -752,6 +758,63 @@ def _deep_search(interpreter, words):
     return None, None
 
 
+def _resolve_object_name(interpreter, identifier: str):
+    """Resolve an object name with fuzzy substring matching.
+
+    Returns: (obj, resolved_name, matches) where:
+    - obj: The resolved object (or None)
+    - resolved_name: The actual object name found (or None)
+    - matches: List of (name, obj) tuples if multiple matches found (or None)
+    """
+    from .values import RoshObject
+
+    # First try exact match
+    if interpreter.current_env.exists(identifier):
+        obj = interpreter.current_env.get(identifier)
+        return obj, identifier, None
+
+    # Try UUID partial match (8+ chars)
+    if len(identifier) >= 8:
+        for name in interpreter.current_env.bindings.keys():
+            try:
+                value = interpreter.current_env.get(name)
+                if isinstance(value, RoshObject):
+                    if hasattr(value, 'uuid') and value.uuid:
+                        if value.uuid.startswith(identifier) or value.uuid == identifier:
+                            return value, name, None
+            except:
+                pass
+
+    # Try singular/plural conversion
+    singulars = _singularize(identifier)[1:]  # Skip original
+    for singular in singulars:
+        if interpreter.current_env.exists(singular):
+            return interpreter.current_env.get(singular), singular, None
+
+    # Try fuzzy substring matching
+    lower_id = identifier.lower()
+    matches = []
+    for name in interpreter.current_env.bindings.keys():
+        if name.startswith('_'):
+            continue  # Skip internal names
+        try:
+            value = interpreter.current_env.get(name)
+            if isinstance(value, RoshObject):
+                lower_name = name.lower()
+                # Check if search term is contained in name or vice versa
+                if lower_id in lower_name or lower_name in lower_id:
+                    matches.append((name, value))
+        except:
+            pass
+
+    if len(matches) == 1:
+        return matches[0][1], matches[0][0], None
+    elif len(matches) > 1:
+        return None, None, matches
+
+    return None, None, None
+
+
 def _get_command(interpreter, out, identifier: str, prop_name: str = None):
     """Unified get command - get object or property, push to stack, display.
 
@@ -761,61 +824,39 @@ def _get_command(interpreter, out, identifier: str, prop_name: str = None):
     - get <obj> <prop> - get property value
     """
     from .values import RoshObject, rosh_to_python
-    import difflib
 
-    # First, try to find the object by name
-    obj = None
-    obj_name_found = None
+    # Resolve the object name with fuzzy matching
+    obj, obj_name_found, matches = _resolve_object_name(interpreter, identifier)
 
-    if interpreter.current_env.exists(identifier):
-        obj = interpreter.current_env.get(identifier)
-        obj_name_found = identifier
-    else:
-        # Try to find by UUID (partial match, 8+ chars)
-        if len(identifier) >= 8:
+    # Show resolution message if name was fuzzy matched
+    if obj and obj_name_found and obj_name_found != identifier:
+        out.dim(f'[resolved: "{identifier}" → "{obj_name_found}"]')
+
+    if obj is None:
+        if matches:
+            # Multiple matches - ask user to clarify
+            out.print(f'Multiple matches for "{identifier}":', style="cyan")
+            for name, _ in matches[:8]:
+                out.dim(f"  {name}")
+            if len(matches) > 8:
+                out.dim(f"  ... and {len(matches) - 8} more")
+            out.dim("Which one did you mean?")
+        else:
+            # No matches at all
+            out.error(f"No matches found for '{identifier}'")
+            # Show available objects
+            all_objects = []
             for name in interpreter.current_env.bindings.keys():
+                if name.startswith('_'):
+                    continue
                 try:
                     value = interpreter.current_env.get(name)
                     if isinstance(value, RoshObject):
-                        if hasattr(value, 'uuid') and value.uuid:
-                            if value.uuid.startswith(identifier) or value.uuid == identifier:
-                                obj = value
-                                obj_name_found = name
-                                break
+                        all_objects.append(name)
                 except:
                     pass
-
-    if obj is None:
-        # Try plural-to-singular conversion before giving up
-        singulars = _singularize(identifier)[1:]  # Skip original, try singulars
-        for singular in singulars:
-            if interpreter.current_env.exists(singular):
-                out.warning(f"guessed: {identifier} → {singular}")
-                obj = interpreter.current_env.get(singular)
-                obj_name_found = singular
-                break
-
-    if obj is None:
-        # Object not found - suggest alternatives
-        all_objects = []
-        for name in interpreter.current_env.bindings.keys():
-            try:
-                value = interpreter.current_env.get(name)
-                if isinstance(value, RoshObject):
-                    all_objects.append(name)
-            except:
-                pass
-
-        out.error(f"Object '{identifier}' not found.")
-
-        if all_objects:
-            matches = difflib.get_close_matches(identifier, all_objects, n=3, cutoff=0.4)
-            if matches:
-                out.print(f"Did you mean: {', '.join(matches)}?", style="yellow")
-            else:
-                out.print(f"Available: {', '.join(all_objects)}", style="dim")
-        else:
-            out.dim("No objects defined yet.")
+            if all_objects:
+                out.dim(f"Available: {', '.join(all_objects[:10])}" + ("..." if len(all_objects) > 10 else ""))
         return
 
     # If no property requested, return the object itself
@@ -2067,22 +2108,36 @@ def run_repl(interpreter: Interpreter = None):
             # move <obj> to <x> <y> [z] - set position with one command
             move_match = re.match(r'^move\s+(\w+)\s+to\s+(-?\d+(?:\.\d+)?)\s*,?\s*(-?\d+(?:\.\d+)?)(?:\s*,?\s*(-?\d+(?:\.\d+)?))?$', stripped, re.IGNORECASE)
             if move_match:
-                obj_name = move_match.group(1)
+                input_name = move_match.group(1)
                 x_val = float(move_match.group(2))
                 y_val = float(move_match.group(3))
                 z_val = move_match.group(4)
-                if interpreter and interpreter.current_env.exists(obj_name):
-                    obj = interpreter.current_env.get(obj_name)
-                    if hasattr(obj, 'set'):
-                        obj.set('x', x_val)
-                        obj.set('y', y_val)
-                        if z_val:
-                            obj.set('z', float(z_val))
-                            out.success(f"{obj_name} moved to ({x_val}, {y_val}, {z_val})")
-                        else:
-                            out.success(f"{obj_name} moved to ({x_val}, {y_val})")
-                        continue
-                out.warning(f"Object '{obj_name}' not found")
+
+                # Resolve with fuzzy matching
+                obj, obj_name, matches = _resolve_object_name(interpreter, input_name)
+                if obj_name and obj_name != input_name:
+                    out.dim(f'[resolved: "{input_name}" → "{obj_name}"]')
+
+                if obj is None:
+                    if matches:
+                        out.print(f'Multiple matches for "{input_name}":', style="cyan")
+                        for name, _ in matches[:8]:
+                            out.dim(f"  {name}")
+                        out.dim("Which one did you mean?")
+                    else:
+                        out.warning(f"Object '{input_name}' not found")
+                    continue
+
+                if hasattr(obj, 'set'):
+                    obj.set('x', x_val)
+                    obj.set('y', y_val)
+                    if z_val:
+                        obj.set('z', float(z_val))
+                        out.success(f"{obj_name} moved to ({x_val}, {y_val}, {z_val})")
+                    else:
+                        out.success(f"{obj_name} moved to ({x_val}, {y_val})")
+                    continue
+                out.warning(f"Object '{obj_name}' cannot be moved")
                 continue
 
             # make - "upsert" command: create if not exists, then modify
@@ -2093,13 +2148,26 @@ def run_repl(interpreter: Interpreter = None):
             # make <obj> big/bigger → scale up
             # make <obj> faster/slower → adjust speed
             if stripped.startswith('make ') and len(parts) >= 2:
-                obj_name = parts[1]
+                input_name = parts[1]
                 rest = parts[2:] if len(parts) >= 3 else []
                 known_colors = {'red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'white', 'black', 'orange', 'purple', 'pink', 'gray', 'grey', 'gold', 'silver'}
                 known_types = {'cube', 'box', 'sphere', 'ball', 'cylinder', 'cone', 'torus', 'plane', 'sprite', 'text'}
 
-                # Check if object exists
-                obj_exists = interpreter and interpreter.current_env.exists(obj_name)
+                # Try to resolve existing object with fuzzy matching
+                resolved_obj, obj_name, matches = _resolve_object_name(interpreter, input_name)
+                if resolved_obj and obj_name != input_name:
+                    out.dim(f'[resolved: "{input_name}" → "{obj_name}"]')
+                elif matches:
+                    # Multiple matches - ask user to clarify
+                    out.print(f'Multiple matches for "{input_name}":', style="cyan")
+                    for name, _ in matches[:8]:
+                        out.dim(f"  {name}")
+                    out.dim("Which one did you mean?")
+                    continue
+
+                obj_exists = resolved_obj is not None
+                if not obj_exists:
+                    obj_name = input_name  # Use original name for creation
 
                 # If object doesn't exist and name looks like a type, create it
                 if not obj_exists:
@@ -2921,6 +2989,7 @@ def generate_pygame_output(py_code: str, output_dir: str):
 
     Creates:
     - game.py (generated Pygame code, executable)
+    - rosh_network.py (network module for Project Twin)
     - assets/ (placeholder directory)
 
     Args:
@@ -2928,6 +2997,7 @@ def generate_pygame_output(py_code: str, output_dir: str):
         output_dir: Directory for output files
     """
     from pathlib import Path
+    import shutil
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -2935,6 +3005,12 @@ def generate_pygame_output(py_code: str, output_dir: str):
     # Write game.py
     with open(output_path / "game.py", "w") as f:
         f.write(py_code)
+
+    # Copy network module for Project Twin multiplayer support
+    static_dir = Path(__file__).parent.parent.parent / "static"
+    network_py = static_dir / "rosh_network.py"
+    if network_py.exists():
+        shutil.copy(network_py, output_path / "rosh_network.py")
 
     # Create assets directory
     (output_path / "assets").mkdir(exist_ok=True)
