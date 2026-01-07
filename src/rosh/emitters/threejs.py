@@ -538,7 +538,8 @@ class ThreeJSEmitter(BaseEmitter):
                 for prop_name, prop_value in obj.properties.items():
                     val = prop_value.value
                     if isinstance(val, str):
-                        self.write(f"{name}.userData.{prop_name} = '{val}';")
+                        escaped_val = val.replace("\\", "\\\\").replace("'", "\\'")
+                        self.write(f"{name}.userData.{prop_name} = '{escaped_val}';")
                     elif isinstance(val, bool):
                         self.write(f"{name}.userData.{prop_name} = {str(val).lower()};")
                     else:
@@ -574,7 +575,8 @@ class ThreeJSEmitter(BaseEmitter):
                 if key not in ('x', 'y', 'width', 'height', 'visible', 'color', 'sprite', 'text', 'font_size'):
                     val = ir_val.value
                     if isinstance(val, str):
-                        custom_props[key] = f"'{val}'"
+                        escaped_val = val.replace("\\", "\\\\").replace("'", "\\'")
+                        custom_props[key] = f"'{escaped_val}'"
                     elif isinstance(val, bool):
                         custom_props[key] = str(val).lower()
                     else:
@@ -1088,7 +1090,8 @@ class ThreeJSEmitter(BaseEmitter):
                 if isinstance(val, bool):
                     self.write(f"{name}.userData.{prop_name} = {'true' if val else 'false'};")
                 elif isinstance(val, str):
-                    self.write(f"{name}.userData.{prop_name} = '{val}';")
+                    escaped_val = val.replace("\\", "\\\\").replace("'", "\\'")
+                    self.write(f"{name}.userData.{prop_name} = '{escaped_val}';")
                 else:
                     self.write(f"{name}.userData.{prop_name} = {val};")
             # Register in _objects for queries
@@ -1246,7 +1249,8 @@ class ThreeJSEmitter(BaseEmitter):
                     else:
                         self.write(f"{name}.userData._{prop_name} = {val};")
                 elif isinstance(val, str):
-                    self.write(f"{name}.userData.{prop_name} = '{val}';")
+                    escaped_val = val.replace("\\", "\\\\").replace("'", "\\'")
+                    self.write(f"{name}.userData.{prop_name} = '{escaped_val}';")
                 elif isinstance(val, bool):
                     self.write(f"{name}.userData.{prop_name} = {'true' if val else 'false'};")
                 else:
