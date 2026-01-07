@@ -455,6 +455,12 @@ class PhaserEmitter(BaseEmitter):
             self.write("// Update instruction text for mobile")
             self.write("if (this.isMobile) this.updateTextForMobile();")
 
+        # Initialize shared runtime at END (after objects created, flushes queued print messages)
+        if self.use_shared_runtime:
+            self.write_blank()
+            self.write("// Initialize Rosh Runtime (registers objects, flushes queued logs)")
+            self.write("initRoshRuntime(this);")
+
         self.dedent()
         self.write("}")
         self.write_blank()
@@ -1276,10 +1282,10 @@ class PhaserEmitter(BaseEmitter):
         self.write("phaserScene = scene;")
         self.write("const roshAdapter = createPhaserAdapter(phaserScene, {});")
 
-        # Register existing objects
+        # Register existing objects from the scene
         self.write("// Register pre-defined objects with the adapter")
         for obj in self.ir.objects:
-            self.write(f"if (typeof rosh_{obj.name} !== 'undefined') roshAdapter.registerObject('{obj.name}', rosh_{obj.name});")
+            self.write(f"if (scene.{obj.name}) roshAdapter.registerObject('{obj.name}', scene.{obj.name});")
 
         self.write("RoshRuntime.init(roshAdapter);")
         self.dedent()

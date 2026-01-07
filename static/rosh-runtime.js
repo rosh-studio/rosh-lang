@@ -247,7 +247,12 @@ const RoshRuntime = (function() {
   // ==========================================================================
 
   function log(msg, cls = '') {
-    if (!outputEl) return;
+    // Queue messages if console not ready yet (early print statements)
+    if (!outputEl) {
+      if (!window._roshPendingLogs) window._roshPendingLogs = [];
+      window._roshPendingLogs.push({ msg, cls });
+      return;
+    }
     const div = document.createElement('div');
     div.className = cls;
     div.textContent = msg;
@@ -1804,7 +1809,7 @@ const RoshRuntime = (function() {
       log('Type help for commands. Press ` to toggle console.', 'dim');
       // Flush any pending logs from early print statements
       if (window._roshPendingLogs) {
-        window._roshPendingLogs.forEach(m => log(m));
+        window._roshPendingLogs.forEach(item => log(item.msg, item.cls));
         delete window._roshPendingLogs;
       }
     },
