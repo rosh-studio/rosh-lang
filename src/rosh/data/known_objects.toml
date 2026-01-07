@@ -632,11 +632,13 @@ credit_url = "https://skfb.ly/66Gty"
 description = "The Invereen Stone, a Class I Pictish symbol stone from the National Museum of Scotland"
 category = "heritage"
 [invereen_stone.2d]
-sprite = "sprites/heritage/invereen_stone.jpg"
+sprite = "sprites/heritage/invereen_stone.png"
 color = "gray"
 shape = "rectangle"
 width = 0.6
 height = 1.5
+image_credit = "Catfish Jim and the soapdish (CC BY-SA 3.0)"
+image_credit_url = "https://commons.wikimedia.org/w/index.php?curid=12159551"
 [invereen_stone.3d]
 shape = "box"
 color = 0x808080

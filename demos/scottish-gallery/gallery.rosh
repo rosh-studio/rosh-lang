@@ -70,7 +70,7 @@ create object stone
     set z to 0
     set size to 4
     set description to "Invereen Symbol Stone (c. 700-850 AD). This Class I Pictish stone features the distinctive double-disc and Z-rod symbol, along with a serpent. The Picts were a confederation of Celtic-speaking peoples who lived in what is now eastern and northern Scotland. Their symbol stones remain enigmatic - the meanings of their intricate carvings are still debated by scholars."
-    set credit to "National Museums Scotland (CC BY-NC-SA)"
+    set credit to "Catfish Jim and the soapdish (CC BY-SA 3.0)"
 end
 
 create object label_stone
