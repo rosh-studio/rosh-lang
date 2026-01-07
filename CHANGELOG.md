@@ -29,6 +29,11 @@
   - `get meta` → `get config`
 
 ### Added
+- **Build Flags: Minify + Obfuscate (JS targets)**
+  - `rosh build ... --minify` for smaller Phaser/Three.js output
+  - `rosh build ... --obfuscate` for basic JS source protection
+  - Requires optional tooling: `rjsmin` or `jsmin` for minify; `javascript-obfuscator` for obfuscate
+
 - **Voice Escapes** - Spoken syntax characters (always applied, useful for demos)
   - `dot` → `.` joins words: "player dot speed" → `player.speed`
   - `underscore` → `_` joins words: "player underscore id" → `player_id`

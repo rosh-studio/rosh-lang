@@ -2770,7 +2770,60 @@ def copy_model_assets(source_path: Path, output_dir: Path, model_assets: set):
         print(f"✅ Copied {copied_count} 3D model(s)", file=sys.stderr)
 
 
-def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = False, enable_repl: bool = False):
+def _minify_js_code(js_code: str) -> str:
+    """Minify JavaScript source code using an optional dependency."""
+    try:
+        import rjsmin
+        return rjsmin.jsmin(js_code)
+    except ImportError:
+        try:
+            from jsmin import jsmin as _jsmin
+            return _jsmin(js_code)
+        except ImportError:
+            print(
+                "Error: --minify requires rjsmin (preferred) or jsmin. "
+                "Install with: pip install rjsmin",
+                file=sys.stderr
+            )
+            sys.exit(1)
+
+
+def _obfuscate_js_file(file_path: Path):
+    """Obfuscate a JavaScript file using javascript-obfuscator if available."""
+    import shutil
+    import subprocess
+
+    tool = shutil.which("javascript-obfuscator")
+    if tool:
+        cmd = [tool, str(file_path), "--output", str(file_path)]
+    else:
+        npx = shutil.which("npx")
+        if not npx:
+            print(
+                "Error: --obfuscate requires javascript-obfuscator. "
+                "Install with: npm i -g javascript-obfuscator",
+                file=sys.stderr
+            )
+            sys.exit(1)
+        cmd = [npx, "--no-install", "javascript-obfuscator", str(file_path), "--output", str(file_path)]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print("Error: JavaScript obfuscation failed.", file=sys.stderr)
+        if result.stderr:
+            print(result.stderr.strip(), file=sys.stderr)
+        sys.exit(1)
+
+
+def run_build(
+    filepath: str,
+    target: str,
+    output_dir: str,
+    copy_assets: bool = False,
+    enable_repl: bool = False,
+    minify_js: bool = False,
+    obfuscate_js: bool = False,
+):
     """Transpile Rosh code to target platform
 
     Args:
@@ -2814,6 +2867,11 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             print(f"       To use REPL: rosh build {filepath} --target phaser --repl", file=sys.stderr)
             sys.exit(1)
 
+        # Validate JS-only flags
+        if (minify_js or obfuscate_js) and target not in ('phaser', 'threejs'):
+            print("Error: --minify/--obfuscate are only supported for Phaser and Three.js builds.", file=sys.stderr)
+            sys.exit(1)
+
         # Load meta settings from project directory
         from .meta import load_meta
         project_dir = str(path.parent)
@@ -2843,11 +2901,17 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             if enable_repl:
                 print(f"Warning: --repl not yet supported with IR emitter", file=sys.stderr)
 
+            if minify_js:
+                js_code = _minify_js_code(js_code)
+
             generate_phaser_output(js_code, output_dir)
 
             # Copy assets if requested
             if copy_assets and emitter.sprite_assets:
                 copy_sprite_assets(path, Path(output_dir), emitter.sprite_assets)
+
+            if obfuscate_js:
+                _obfuscate_js_file(Path(output_dir) / "game.js")
 
             print(f"✅ Build successful!", file=sys.stderr)
             print(f"📁 Output: {output_dir}", file=sys.stderr)
@@ -2900,6 +2964,8 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             )
             emitter = ThreeJSEmitter(ir, meta=meta)
             js_code = emitter.emit()
+            if minify_js:
+                js_code = _minify_js_code(js_code)
             generate_threejs_output(js_code, output_dir, emitter.capability_manifest)
 
             # Copy assets if requested
@@ -2909,6 +2975,9 @@ def run_build(filepath: str, target: str, output_dir: str, copy_assets: bool = F
             # Always copy 3D model assets if they exist (essential for scene)
             if emitter.model_assets:
                 copy_model_assets(path, Path(output_dir), emitter.model_assets)
+
+            if obfuscate_js:
+                _obfuscate_js_file(Path(output_dir) / "game.js")
 
             print(f"✅ Build successful!", file=sys.stderr)
             print(f"📁 Output: {output_dir}", file=sys.stderr)
@@ -3700,6 +3769,10 @@ def main():
                                   help='Automatically copy required sprite assets to output')
         build_parser.add_argument('--repl', action='store_true',
                                   help='🔧 DEV MODE: Enable in-game REPL (press ` or F12 to toggle console)')
+        build_parser.add_argument('--minify', action='store_true',
+                                  help='Minify JavaScript output (Phaser/Three.js only)')
+        build_parser.add_argument('--obfuscate', action='store_true',
+                                  help='Obfuscate JavaScript output (Phaser/Three.js only)')
 
         # Test subcommand
         test_parser = subparsers.add_parser('test', help='Run Rosh spec tests')
@@ -3805,7 +3878,15 @@ def main():
     if hasattr(args, 'subcommand') and args.subcommand == 'build':
         copy_assets = getattr(args, 'copy_assets', False)
         enable_repl = getattr(args, 'repl', False)
-        run_build(args.file, args.target, args.output, copy_assets, enable_repl)
+        run_build(
+            args.file,
+            args.target,
+            args.output,
+            copy_assets,
+            enable_repl,
+            minify_js=getattr(args, 'minify', False),
+            obfuscate_js=getattr(args, 'obfuscate', False),
+        )
         return
 
     # Handle test subcommand
