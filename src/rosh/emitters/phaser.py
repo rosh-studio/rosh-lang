@@ -256,8 +256,8 @@ class PhaserEmitter(BaseEmitter):
         self._emit_helper_methods()
         self._emit_functions()
         self._emit_class_end()
+        self._emit_console()  # Must be before game config so roshLog exists when create() runs
         self._emit_game_config()
-        self._emit_console()
 
         return self.get_code()
 
@@ -2443,8 +2443,8 @@ class PhaserEmitter(BaseEmitter):
             msg = params.get('message')
             if msg:
                 expr = self.emit_expression(msg)
-                return f"console.log({expr});"
-            return "console.log();"
+                return f"roshLog({expr});"
+            return "roshLog('');"
         elif action_type == 'play_sound':
             key = self._asset_key(params.get('asset', ''))
             return f"if (this.cache.audio.exists('{key}')) {{ this.sound.play('{key}'); }} else {{ console.warn('Sound not found: {key}'); }}"
