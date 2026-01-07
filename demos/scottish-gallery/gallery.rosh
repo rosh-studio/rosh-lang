@@ -12,12 +12,13 @@ create object chess_king
     set y to 2
     set z to 0
     set size to 4
-    set description to "Lewis Chess King - 12th century Norse-Gaelic chess piece"
+    set description to "Lewis Chess King (c. 1150-1200 AD). Carved from walrus ivory, this regal figure is part of the famous Lewis Chessmen hoard discovered on the Isle of Lewis in 1831. The king sits on an ornate throne, clutching a sword across his lap. The pieces are thought to have been made in Trondheim, Norway, and may have been hidden by a merchant or buried for safekeeping."
+    set credit to "The British Museum (CC BY-NC-SA)"
 end
 
 create object label_king
     set type to "text"
-    set text to "Chess King"
+    set text to "Lewis Chess King"
     set x to -15
     set y to 10
     set z to 0
@@ -30,12 +31,13 @@ create object chess_queen
     set y to 2
     set z to 0
     set size to 4
-    set description to "Lewis Chess Queen - found on the Isle of Lewis in 1831"
+    set description to "Lewis Chess Queen (c. 1150-1200 AD). This contemplative figure rests her chin on her hand in a gesture of thought or sorrow. The Lewis Chessmen are considered among the most significant archaeological finds in Scotland. Of the 93 pieces discovered, 82 are held by the British Museum and 11 by the National Museum of Scotland."
+    set credit to "The British Museum (CC BY-NC-SA)"
 end
 
 create object label_queen
     set type to "text"
-    set text to "Chess Queen"
+    set text to "Lewis Chess Queen"
     set x to -5
     set y to 10
     set z to 0
@@ -48,7 +50,8 @@ create object cat
     set y to 2
     set z to 0
     set size to 4
-    set description to "Cat figurehead from the Cutty Sark clipper ship"
+    set description to "Cutty Sark Ship's Cat. This bronze figurine commemorates the ships cats that served aboard the famous Cutty Sark clipper ship, built in 1869 at Dumbarton, Scotland. The Cutty Sark was one of the fastest tea clippers of her era, racing from China to London. Ships cats were considered good luck and helped control rodents that could damage cargo and ship's stores."
+    set credit to "Cutty Sark Trust"
 end
 
 create object label_cat
@@ -66,7 +69,8 @@ create object stone
     set y to 2
     set z to 0
     set size to 4
-    set description to "Pictish symbol stone from the National Museum of Scotland"
+    set description to "Invereen Symbol Stone (c. 700-850 AD). This Class I Pictish stone features the distinctive double-disc and Z-rod symbol, along with a serpent. The Picts were a confederation of Celtic-speaking peoples who lived in what is now eastern and northern Scotland. Their symbol stones remain enigmatic - the meanings of their intricate carvings are still debated by scholars."
+    set credit to "National Museums Scotland (CC BY-NC-SA)"
 end
 
 create object label_stone
