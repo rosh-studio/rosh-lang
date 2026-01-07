@@ -87,8 +87,8 @@ class PhaserEmitter(BaseEmitter):
         # Save/Load support
         self.uses_save_load = False  # True if save/load commands used
 
-        # Shared runtime option (new architecture)
-        self.use_shared_runtime = self.meta.get('use_shared_runtime', False)
+        # Shared runtime option (new architecture) - enabled by default for consistency with Three.js
+        self.use_shared_runtime = self.meta.get('use_shared_runtime', True)
 
         # Mobile touch controls
         self.needs_touch_controls = False  # Set True if player objects exist
@@ -1228,7 +1228,8 @@ class PhaserEmitter(BaseEmitter):
 
     def _get_shared_runtime_path(self) -> Path:
         """Get path to shared runtime files."""
-        emitter_dir = Path(__file__).parent.parent.parent
+        # Path: emitters/phaser.py -> emitters -> rosh -> src -> rosh-lang -> static
+        emitter_dir = Path(__file__).parent.parent.parent.parent
         static_dir = emitter_dir / 'static'
         return static_dir
 
