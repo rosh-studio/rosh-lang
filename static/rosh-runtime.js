@@ -1112,9 +1112,138 @@ const RoshRuntime = (function() {
       log('Type "help <command>" for details', 'dim');
     } else {
       const topic = args[0].toLowerCase();
-      // Could expand with detailed help per command
-      log('Help for: ' + topic, 'cyan');
-      log('(Detailed help not yet implemented)', 'dim');
+      showDetailedHelp(topic);
+    }
+  }
+
+  function showDetailedHelp(topic) {
+    switch (topic) {
+      case 'create':
+      case 'clone':
+        log('=== create - Create objects ===', 'cyan');
+        log('', '');
+        log('You can create any object:', 'ok');
+        log('  create ball           - Create object "ball"', 'dim');
+        log('  create red cube       - Create red cube', 'dim');
+        log('  create big blue ball  - With size and color', 'dim');
+        log('  create 5 cubes        - Create multiple', 'dim');
+        log('  create three balls    - Number words work too', 'dim');
+        log('  clone ball            - Clone existing object', 'dim');
+        log('', '');
+        log('Supported types: cube, sphere, ball, box, cylinder,', 'ok');
+        log('  cone, torus, plane, capsule, pyramid, tetrahedron', 'dim');
+        log('', '');
+        log('Size modifiers: tiny, small, medium, big, large, huge, giant, massive', 'ok');
+        log('Color modifiers: red, green, blue, yellow, orange, purple, pink,', 'ok');
+        log('  cyan, white, black, gray, brown, gold, silver', 'dim');
+        break;
+
+      case 'make':
+        log('=== make - Adjust object properties ===', 'cyan');
+        log('', '');
+        log('Usage:', 'ok');
+        log('  make <obj> bigger     - Scale up by 1.5x', 'dim');
+        log('  make <obj> smaller    - Scale down by 0.67x', 'dim');
+        log('  make <obj> red        - Change color', 'dim');
+        log('  make <obj> scale 2    - Set exact scale', 'dim');
+        log('  make big red ball     - Create if not exists', 'dim');
+        log('', '');
+        log('"make" is upsert: sets property if object exists,', 'ok');
+        log('creates object if it doesn\'t exist.', 'dim');
+        break;
+
+      case 'set':
+        log('=== set - Set object properties ===', 'cyan');
+        log('', '');
+        log('Usage:', 'ok');
+        log('  set <obj> <prop> to <value>', 'dim');
+        log('  set ball color to red', 'dim');
+        log('  set cube x to 100', 'dim');
+        log('  set sphere scale to 2', 'dim');
+        log('', '');
+        log('Common properties: x, y, z, color, scale, visible,', 'ok');
+        log('  rotation, opacity, speed, group', 'dim');
+        break;
+
+      case 'get':
+        log('=== get - Select/examine objects ===', 'cyan');
+        log('', '');
+        log('Usage:', 'ok');
+        log('  get <name>            - Select single object', 'dim');
+        log('  get all cubes         - Select all of type', 'dim');
+        log('  get all red balls     - With color modifier', 'dim');
+        log('  get all where x > 0   - Filter by condition', 'dim');
+        log('', '');
+        log('After selecting, use "it" or "this" to reference.', 'dim');
+        break;
+
+      case 'delete':
+      case 'destroy':
+      case 'remove':
+        log('=== delete - Remove objects ===', 'cyan');
+        log('', '');
+        log('Usage:', 'ok');
+        log('  delete <name>         - Delete single object', 'dim');
+        log('  delete all cubes      - Delete all of type', 'dim');
+        log('  delete all red balls  - With color modifier', 'dim');
+        log('', '');
+        log('Bulk deletes require confirmation (type "go" or "yes").', 'dim');
+        break;
+
+      case 'move':
+        log('=== move - Move objects ===', 'cyan');
+        log('', '');
+        log('Relative movement:', 'ok');
+        log('  move <obj> up 5       - Move up by 5', 'dim');
+        log('  move <obj> left 10    - Move left by 10', 'dim');
+        log('  move <obj> forward 3  - Move forward by 3', 'dim');
+        log('', '');
+        log('Absolute position:', 'ok');
+        log('  move <obj> to 0 10 0  - Move to x=0, y=10, z=0', 'dim');
+        log('', '');
+        log('Directions: up, down, left, right, forward, back', 'dim');
+        break;
+
+      case 'hide':
+      case 'show':
+        log('=== hide/show - Toggle visibility ===', 'cyan');
+        log('', '');
+        log('Usage:', 'ok');
+        log('  hide <name>           - Hide single object', 'dim');
+        log('  show <name>           - Show single object', 'dim');
+        log('  hide all cubes        - Hide all of type', 'dim');
+        log('  show all red balls    - Show with modifier', 'dim');
+        log('', '');
+        log('Bulk operations require confirmation.', 'dim');
+        break;
+
+      case 'list':
+      case 'ls':
+        log('=== list - List objects ===', 'cyan');
+        log('', '');
+        log('Usage:', 'ok');
+        log('  list                  - List all objects', 'dim');
+        log('  list cubes            - List objects of type', 'dim');
+        log('  list all              - Include hidden objects', 'dim');
+        break;
+
+      case 'connect':
+      case 'twin':
+        log('=== connect - Join shared world ===', 'cyan');
+        log('', '');
+        log('Usage:', 'ok');
+        log('  connect               - Join default world', 'dim');
+        log('  connect myworld       - Join named world', 'dim');
+        log('  disconnect            - Leave world', 'dim');
+        log('  say hello             - Chat with others', 'dim');
+        log('  users                 - List connected users', 'dim');
+        log('', '');
+        log('Objects created/moved are synced to all users.', 'dim');
+        break;
+
+      default:
+        log('No detailed help for: ' + topic, 'warn');
+        log('Type "help" to see all commands.', 'dim');
     }
   }
 
