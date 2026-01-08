@@ -209,34 +209,47 @@ const RoshNetwork = (function() {
         break;
 
       case 'OBJECT_CREATED':
-        console.log('[RoshNetwork] OBJECT_CREATED - by:', msg.by, 'me:', userId, 'skip?', msg.by === userId);
         if (msg.by !== userId) {
           const data = msg.data || {};
-          console.log('[RoshNetwork] Creating object:', msg.id, 'data:', data);
+          // Build human-readable command description
+          const sizeWord = data.size ? data.size + ' ' : '';
+          const colorWord = data.color ? data.color + ' ' : '';
+          const typeWord = data.type || 'object';
+          const cmdDesc = 'create a ' + sizeWord + colorWord + typeWord;
+
+          // Log clearly what was received
+          log('[' + msg.by.slice(0,6) + '] sent: ' + cmdDesc, 'cyan');
+
+          // Attempt to render
           if (adapter.createObject) {
-            adapter.createObject(data.type || 'sphere', {
-              name: msg.id,
+            adapter.createObject(data.type || 'sphere', msg.id, {
               x: data.x, y: data.y, z: data.z,
               color: data.color,
               size: data.size
             });
           } else {
-            console.log('[RoshNetwork] ERROR: adapter.createObject not defined!');
+            log('  (cannot render - no adapter)', 'dim');
           }
-          log('[' + msg.by + '] created ' + msg.id, 'cyan');
         }
         break;
 
       case 'OBJECT_DELETED':
-        if (msg.by !== userId && adapter.deleteObject) {
-          adapter.deleteObject(msg.id);
-          log('[' + msg.by + '] deleted ' + msg.id, 'cyan');
+        if (msg.by !== userId) {
+          log('[' + msg.by.slice(0,6) + '] sent: delete ' + msg.id, 'cyan');
+          if (adapter.deleteObject) {
+            adapter.deleteObject(msg.id);
+          } else {
+            log('  (cannot render - no adapter)', 'dim');
+          }
         }
         break;
 
       case 'OBJECT_MOVED':
-        if (msg.by !== userId && adapter.moveObject) {
-          adapter.moveObject(msg.id, { x: msg.x, y: msg.y, z: msg.z });
+        if (msg.by !== userId) {
+          log('[' + msg.by.slice(0,6) + '] sent: move ' + msg.id + ' to (' + msg.x + ', ' + msg.y + ')', 'dim');
+          if (adapter.moveObject) {
+            adapter.moveObject(msg.id, { x: msg.x, y: msg.y, z: msg.z });
+          }
         }
         break;
 
@@ -248,17 +261,24 @@ const RoshNetwork = (function() {
         const objects = msg.objects || {};
         const count = Object.keys(objects).length;
         if (count > 0) {
-          log('Loading ' + count + ' shared object(s)...', 'dim');
+          log('Loading ' + count + ' shared object(s) from world...', 'dim');
           for (const [id, data] of Object.entries(objects)) {
+            // Build human-readable description
+            const sizeWord = data.size ? data.size + ' ' : '';
+            const colorWord = data.color ? data.color + ' ' : '';
+            const typeWord = data.type || 'object';
+            log('  - ' + id + ': ' + sizeWord + colorWord + typeWord, 'dim');
+
             if (adapter.createObject) {
-              adapter.createObject(data.type || 'sphere', {
-                name: id,
+              adapter.createObject(data.type || 'sphere', id, {
                 x: data.x, y: data.y, z: data.z,
                 color: data.color,
                 size: data.size
               });
             }
           }
+        } else {
+          log('World is empty - you can create objects!', 'dim');
         }
         break;
 

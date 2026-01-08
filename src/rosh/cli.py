@@ -1069,7 +1069,9 @@ def run_repl(interpreter: Interpreter = None):
     """
     out = get_color_output()
 
-    out.print(f"🤖 rosh v{__version__}", style="bold cyan")
+    from datetime import datetime
+    build_time = datetime.now().strftime('%H:%M:%S')
+    out.print(f"🤖 rosh v{__version__} | {build_time}", style="bold cyan")
 
     if interpreter:
         out.print("Interactive REPL (script state preserved)", style="dim green")
@@ -2839,6 +2841,7 @@ def run_build(
     """
     from pathlib import Path
     import shutil
+    from datetime import datetime
     from .lexer import Lexer
     from .parser import Parser
     from .ir_transformer import transform_ast_to_ir
@@ -2847,6 +2850,9 @@ def run_build(
     from .emitters.threejs import ThreeJSEmitter
     from .emitters.godot import GodotEmitter
     from .errors import RoshError
+
+    # Generate build timestamp (shared between Python output and JS)
+    build_time = datetime.now().strftime('%H:%M:%S')
 
     try:
         # Resolve directory to main.rosh if needed
@@ -3035,9 +3041,16 @@ def generate_phaser_output(js_code: str, output_dir: str):
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
+    # Inject build timestamp into JS
+    from datetime import datetime
+    build_time = datetime.now().strftime('%H:%M:%S')
+    js_code = js_code.replace('__BUILD_TIME__', build_time)
+
     # Write game.js
     with open(output_path / "game.js", "w") as f:
         f.write(js_code)
+
+    print(f"🕐 Build time: {build_time}", file=sys.stderr)
 
     # Copy HTML template
     template_dir = Path(__file__).parent / "emitters" / "templates"
@@ -3145,9 +3158,16 @@ def generate_threejs_output(js_code: str, output_dir: str, capabilities: dict | 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
+    # Inject build timestamp into JS
+    from datetime import datetime
+    build_time = datetime.now().strftime('%H:%M:%S')
+    js_code = js_code.replace('__BUILD_TIME__', build_time)
+
     # Write game.js
     with open(output_path / "game.js", "w") as f:
         f.write(js_code)
+
+    print(f"🕐 Build time: {build_time}", file=sys.stderr)
 
     # Copy HTML template
     template_dir = Path(__file__).parent / "emitters" / "templates"

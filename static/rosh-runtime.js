@@ -15,6 +15,7 @@
  */
 
 const ROSH_VERSION = '0.2.8';
+const ROSH_BUILD_TIME = '__BUILD_TIME__';  // Replaced by Python at build time
 
 const RoshRuntime = (function() {
   'use strict';
@@ -55,7 +56,7 @@ const RoshRuntime = (function() {
   // Project Twin - broadcast helpers
   function twinBroadcastCreate(name, objType, x, y, z, color, size) {
     if (twinSocket && twinSocket.readyState === WebSocket.OPEN) {
-      twinSocket.send(JSON.stringify({
+      const msg = {
         type: 'CREATE',
         id: name,
         object_type: objType,
@@ -64,28 +65,31 @@ const RoshRuntime = (function() {
         z: z,
         color: color,
         size: size
-      }));
+      };
+      console.log('[Twin SEND]', JSON.stringify(msg));
+      twinSocket.send(JSON.stringify(msg));
     }
   }
 
   function twinBroadcastDelete(name) {
     if (twinSocket && twinSocket.readyState === WebSocket.OPEN) {
-      twinSocket.send(JSON.stringify({
-        type: 'DELETE',
-        id: name
-      }));
+      const msg = { type: 'DELETE', id: name };
+      console.log('[Twin SEND]', JSON.stringify(msg));
+      twinSocket.send(JSON.stringify(msg));
     }
   }
 
   function twinBroadcastMove(name, x, y, z) {
     if (twinSocket && twinSocket.readyState === WebSocket.OPEN) {
-      twinSocket.send(JSON.stringify({
+      const msg = {
         type: 'MOVE',
         id: name,
         x: x,
         y: y,
         z: z
-      }));
+      };
+      console.log('[Twin SEND]', JSON.stringify(msg));
+      twinSocket.send(JSON.stringify(msg));
     }
   }
 
@@ -905,29 +909,48 @@ const RoshRuntime = (function() {
               twinSocket.onmessage = (event) => {
                 try {
                   const msg = JSON.parse(event.data);
+                  // RAW: Log every message before processing
+                  console.log('[Twin RAW]', JSON.stringify(msg));
                   if (msg.type === 'CONNECTED') {
                     twinUserId = msg.user_id;
                     log('Connected to "' + worldId + '" as user ' + msg.user_id, 'ok');
                     log('Objects you create will be shared with others!', 'cyan');
                   } else if (msg.type === 'OBJECT_CREATED') {
-                    if (msg.by !== twinUserId && adapter.createObject) {
+                    if (msg.by !== twinUserId) {
                       const data = msg.data || {};
-                      adapter.createObject(data.type || 'sphere', {
-                        name: msg.id,
-                        x: data.x, y: data.y, z: data.z,
-                        color: data.color,
-                        size: data.size
-                      });
-                      log('[' + msg.by + '] created ' + msg.id, 'cyan');
+                      // Build human-readable command description
+                      const sizeWord = data.size ? data.size + ' ' : '';
+                      const colorWord = data.color ? data.color + ' ' : '';
+                      const typeWord = data.type || 'object';
+                      const cmdDesc = 'create a ' + sizeWord + colorWord + typeWord;
+
+                      // Log clearly what was received
+                      log('[' + msg.by.slice(0,6) + '] sent: ' + cmdDesc, 'cyan');
+
+                      // Attempt to render
+                      if (adapter.createObject) {
+                        adapter.createObject(data.type || 'sphere', msg.id, {
+                          x: data.x, y: data.y, z: data.z,
+                          color: data.color,
+                          size: data.size
+                        });
+                      } else {
+                        log('  (cannot render - no adapter)', 'dim');
+                      }
                     }
                   } else if (msg.type === 'OBJECT_DELETED') {
-                    if (msg.by !== twinUserId && adapter.deleteObject) {
-                      adapter.deleteObject(msg.id);
-                      log('[' + msg.by + '] deleted ' + msg.id, 'cyan');
+                    if (msg.by !== twinUserId) {
+                      log('[' + msg.by.slice(0,6) + '] sent: delete ' + msg.id, 'cyan');
+                      if (adapter.deleteObject) {
+                        adapter.deleteObject(msg.id);
+                      }
                     }
                   } else if (msg.type === 'OBJECT_MOVED') {
-                    if (msg.by !== twinUserId && adapter.moveObject) {
-                      adapter.moveObject(msg.id, { x: msg.x, y: msg.y, z: msg.z });
+                    if (msg.by !== twinUserId) {
+                      log('[' + msg.by.slice(0,6) + '] sent: move ' + msg.id + ' to (' + msg.x + ', ' + msg.y + ')', 'dim');
+                      if (adapter.moveObject) {
+                        adapter.moveObject(msg.id, { x: msg.x, y: msg.y, z: msg.z });
+                      }
                     }
                   } else if (msg.type === 'CHAT') {
                     log('[' + msg.by + ']: ' + msg.message, 'cyan');
@@ -935,17 +958,24 @@ const RoshRuntime = (function() {
                     const objects = msg.objects || {};
                     const count = Object.keys(objects).length;
                     if (count > 0) {
-                      log('Loading ' + count + ' shared object(s)...', 'dim');
+                      log('Loading ' + count + ' shared object(s) from world...', 'dim');
                       for (const [id, data] of Object.entries(objects)) {
+                        // Build human-readable description
+                        const sizeWord = data.size ? data.size + ' ' : '';
+                        const colorWord = data.color ? data.color + ' ' : '';
+                        const typeWord = data.type || 'object';
+                        log('  - ' + id + ': ' + sizeWord + colorWord + typeWord, 'dim');
+
                         if (adapter.createObject) {
-                          adapter.createObject(data.type || 'sphere', {
-                            name: id,
+                          adapter.createObject(data.type || 'sphere', id, {
                             x: data.x, y: data.y, z: data.z,
                             color: data.color,
                             size: data.size
                           });
                         }
                       }
+                    } else {
+                      log('World is empty - you can create objects!', 'dim');
                     }
                   } else if (msg.type === 'USERS_LIST') {
                     log('=== Users in "' + msg.world_id + '" (' + msg.count + ') ===', 'cyan');
@@ -977,6 +1007,16 @@ const RoshRuntime = (function() {
             twinWorldId = null;
           } else {
             log('Not connected to any shared world', 'dim');
+          }
+          break;
+
+        case 'clearworld':
+        case 'resetworld':
+          if (!twinSocket || twinSocket.readyState !== WebSocket.OPEN) {
+            log('Not connected. Use "connect" first.', 'err');
+          } else {
+            twinSocket.send(JSON.stringify({ type: 'CLEAR_WORLD' }));
+            log('Sent clear world request...', 'dim');
           }
           break;
 
@@ -1692,6 +1732,8 @@ const RoshRuntime = (function() {
       const result = adapter.moveObject(name, { x: parseFloat(x), y: parseFloat(y), z: z ? parseFloat(z) : undefined });
       if (result.success) {
         log('Moved ' + name + ' to ' + x + ', ' + y + (z ? ', ' + z : ''), 'ok');
+        // Broadcast move to network
+        twinBroadcastMove(name, parseFloat(x), parseFloat(y), z ? parseFloat(z) : 0);
         if (oldPos) {
           pushUndo('move ' + name,
             () => adapter.moveObject(name, oldPos),
@@ -1712,6 +1754,11 @@ const RoshRuntime = (function() {
       const result = adapter.moveObjectRelative(name, dir.toLowerCase(), amount);
       if (result.success) {
         log('Moved ' + name + ' ' + dir + ' ' + amt, 'ok');
+        // Broadcast new position to network
+        const newPos = adapter.getPosition ? adapter.getPosition(name) : null;
+        if (newPos) {
+          twinBroadcastMove(name, newPos.x, newPos.y, newPos.z || 0);
+        }
         if (oldPos) {
           pushUndo('move ' + name + ' ' + dir,
             () => adapter.moveObject(name, oldPos),
@@ -1805,7 +1852,7 @@ const RoshRuntime = (function() {
       initVoice();
       const platform = adapter && adapter.platform ? adapter.platform : 'unknown';
       updateConsoleHeader(platform);  // Display engine name in header
-      log('Rosh v' + ROSH_VERSION + ' | ' + platform, 'cyan');
+      log('Rosh v' + ROSH_VERSION + ' | ' + platform + ' | Build ' + ROSH_BUILD_TIME, 'cyan');
       log('Type help for commands. Press ` to toggle console.', 'dim');
       // Flush any pending logs from early print statements
       if (window._roshPendingLogs) {

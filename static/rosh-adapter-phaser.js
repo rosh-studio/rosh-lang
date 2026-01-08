@@ -250,16 +250,21 @@ function createPhaserAdapter(phaserScene, options = {}) {
       const objName = (typeof name === 'string' ? name : options.name) || generateName(typeName);
       const modifiers = options.modifiers || [];
 
-      // Size modifiers
-      const SIZE_MAP = { tiny: 0.25, small: 0.5, big: 2, large: 2, huge: 4 };
+      // Size modifiers (semantic name -> scale multiplier)
+      const SIZE_MAP = { tiny: 0.25, small: 0.5, medium: 1, big: 2, large: 2, huge: 4 };
 
       // Get color from options, modifiers, or default
-      const color = options.color || modifiers.find(m => COLOR_MAP[m]) || 'gray';
+      const userSpecifiedColor = options.color || modifiers.find(m => COLOR_MAP[m]);
+      const color = userSpecifiedColor || 'gray';
       const colorHex = COLOR_MAP[color] || 0x888888;
+      console.log('[Adapter] createObject:', typeName, 'modifiers:', modifiers, 'userSpecifiedColor:', userSpecifiedColor, 'color:', color, 'colorHex:', colorHex.toString(16));
 
       // Get size from options or modifiers
+      // Handle: string name ("big"), numeric scale (2), or modifiers array
       const sizeModifier = modifiers.find(m => SIZE_MAP[m]);
-      const scale = options.size || (sizeModifier ? SIZE_MAP[sizeModifier] : 1);
+      const scale = SIZE_MAP[options.size] ||
+                    (typeof options.size === 'number' ? options.size :
+                     (sizeModifier ? SIZE_MAP[sizeModifier] : 1));
 
       // Position
       const gameWidth = phaserScene.sys.game.config.width;
@@ -289,7 +294,7 @@ function createPhaserAdapter(phaserScene, options = {}) {
         } else {
           // Create shape placeholder while sprite loads
           // User/network color takes precedence over preset color
-          const presetColor = options.color ? colorHex : (preset2d.color ? parseColor(preset2d.color) : colorHex);
+          const presetColor = userSpecifiedColor ? colorHex : (preset2d.color ? parseColor(preset2d.color) : colorHex);
           obj = createShape(preset2d.shape || 'rectangle', x, y, size, presetColor, preset2d);
           obj.setAlpha(0.6);
 
@@ -318,7 +323,7 @@ function createPhaserAdapter(phaserScene, options = {}) {
       } else if (preset2d) {
         // Use shape from preset
         // User/network color takes precedence over preset color
-        const presetColor = options.color ? colorHex : (preset2d.color ? parseColor(preset2d.color) : colorHex);
+        const presetColor = userSpecifiedColor ? colorHex : (preset2d.color ? parseColor(preset2d.color) : colorHex);
         obj = createShape(preset2d.shape || 'rectangle', x, y, size, presetColor, preset2d);
       } else {
         // Primitive shapes
