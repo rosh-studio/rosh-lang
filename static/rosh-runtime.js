@@ -946,11 +946,17 @@ const RoshRuntime = (function() {
                       }
                     }
                   } else if (msg.type === 'OBJECT_MOVED') {
+                    console.log('[DEBUG] OBJECT_MOVED received, msg.by:', msg.by, 'twinUserId:', twinUserId);
                     if (msg.by !== twinUserId) {
-                      log('[' + msg.by.slice(0,6) + '] sent: move ' + msg.id + ' to (' + msg.x + ', ' + msg.y + ')', 'dim');
+                      log('[' + msg.by.slice(0,6) + '] sent: move ' + msg.id + ' to (' + msg.x + ', ' + msg.y + ')', 'cyan');
                       if (adapter.moveObject) {
-                        adapter.moveObject(msg.id, { x: msg.x, y: msg.y, z: msg.z });
+                        const result = adapter.moveObject(msg.id, { x: msg.x, y: msg.y, z: msg.z });
+                        console.log('[DEBUG] moveObject result:', result);
+                      } else {
+                        console.log('[DEBUG] No adapter.moveObject!');
                       }
+                    } else {
+                      console.log('[DEBUG] Skipped - own message');
                     }
                   } else if (msg.type === 'CHAT') {
                     log('[' + msg.by + ']: ' + msg.message, 'cyan');
