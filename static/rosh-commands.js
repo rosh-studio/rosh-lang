@@ -77,6 +77,15 @@ const RoshCommands = (function() {
     'massive': 8
   };
 
+  // Number words to numeric values
+  const NUMBER_WORDS = {
+    'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+    'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10
+  };
+
+  // Articles to skip in parsing
+  const ARTICLES = ['a', 'an', 'the', 'some', 'my', 'this'];
+
   // All known commands (for fuzzy matching)
   const KNOWN_COMMANDS = [
     'create', 'make', 'delete', 'clone', 'list', 'look', 'set', 'get',
@@ -153,6 +162,8 @@ const RoshCommands = (function() {
   /**
    * Parse CREATE/MAKE command
    * "create big red cube" -> { action: 'create', type: 'cube', modifiers: { size: 'big', color: 'red' } }
+   * "create three balls" -> { action: 'create', type: 'ball', count: 3 }
+   * "create the red ball" -> { action: 'create', type: 'ball', modifiers: { color: 'red' } }
    */
   function parseCreateIntent(intent, args) {
     const modifiers = {};
@@ -164,10 +175,20 @@ const RoshCommands = (function() {
       count = parseInt(args[0], 10);
       args = args.slice(1);
     }
+    // Check for number word: "create three cubes"
+    else if (args.length > 0 && NUMBER_WORDS[args[0].toLowerCase()]) {
+      count = NUMBER_WORDS[args[0].toLowerCase()];
+      args = args.slice(1);
+    }
 
     // Extract modifiers and type from remaining args
     for (const arg of args) {
       const lower = arg.toLowerCase();
+
+      // Skip articles
+      if (ARTICLES.includes(lower)) {
+        continue;
+      }
 
       // Size modifier?
       if (SIZE_MODIFIERS[lower] !== undefined) {
@@ -319,6 +340,27 @@ const RoshCommands = (function() {
   }
 
   // Public API
+  /**
+   * Check if a word is a number word (one-ten)
+   */
+  function isNumberWord(word) {
+    return NUMBER_WORDS[word.toLowerCase()] !== undefined;
+  }
+
+  /**
+   * Get numeric value for a number word
+   */
+  function getNumberValue(word) {
+    return NUMBER_WORDS[word.toLowerCase()] || null;
+  }
+
+  /**
+   * Check if a word is an article
+   */
+  function isArticle(word) {
+    return ARTICLES.includes(word.toLowerCase());
+  }
+
   return {
     parse: parse,
     normalizeCommand: normalizeCommand,
@@ -327,10 +369,15 @@ const RoshCommands = (function() {
     getCommands: getCommands,
     isSizeModifier: isSizeModifier,
     getSizeScale: getSizeScale,
+    isNumberWord: isNumberWord,
+    getNumberValue: getNumberValue,
+    isArticle: isArticle,
     // Direct access
     COMMAND_ALIASES: COMMAND_ALIASES,
     SIZE_MODIFIERS: SIZE_MODIFIERS,
-    KNOWN_COMMANDS: KNOWN_COMMANDS
+    KNOWN_COMMANDS: KNOWN_COMMANDS,
+    NUMBER_WORDS: NUMBER_WORDS,
+    ARTICLES: ARTICLES
   };
 })();
 

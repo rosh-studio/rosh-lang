@@ -971,7 +971,8 @@ def _find_all_matching(interpreter, obj_ref: str):
     # Known modifiers
     colors = {'red', 'green', 'blue', 'yellow', 'orange', 'purple', 'pink',
               'cyan', 'white', 'black', 'gray', 'grey', 'brown'}
-    size_words = {'big': 2, 'large': 2, 'huge': 3, 'small': 0.5, 'tiny': 0.25}
+    size_words = {'big': 2, 'large': 2, 'huge': 4, 'giant': 6, 'massive': 8,
+                  'medium': 1, 'small': 0.5, 'tiny': 0.25}
 
     # Parse reference into modifiers and type
     ref_words = obj_ref.lower().split()

@@ -49,6 +49,7 @@ const RoshRuntime = (function() {
   let twinSocket = null;
   let twinUserId = null;
   let twinWorldId = null;
+  let isNetworkCommand = false;  // True when executing a command received from network
   // Always use production WebSocket server for Project Twin
   // Local Python HTTP servers don't support WebSockets, so always connect to rosh.cloud
   const TWIN_SERVER = 'wss://rosh.cloud/ws/world/';
@@ -79,14 +80,16 @@ const RoshRuntime = (function() {
     }
   }
 
-  function twinBroadcastMove(name, x, y, z) {
+  function twinBroadcastMove(name, x, y, z, rawCommand) {
+    if (isNetworkCommand) return;  // Don't re-broadcast received commands
     if (twinSocket && twinSocket.readyState === WebSocket.OPEN) {
       const msg = {
         type: 'MOVE',
         id: name,
         x: x,
         y: y,
-        z: z
+        z: z,
+        command: rawCommand || null
       };
       console.log('[Twin SEND]', JSON.stringify(msg));
       twinSocket.send(JSON.stringify(msg));
@@ -946,17 +949,19 @@ const RoshRuntime = (function() {
                       }
                     }
                   } else if (msg.type === 'OBJECT_MOVED') {
-                    console.log('[DEBUG] OBJECT_MOVED received, msg.by:', msg.by, 'twinUserId:', twinUserId);
                     if (msg.by !== twinUserId) {
-                      log('[' + msg.by.slice(0,6) + '] sent: move ' + msg.id + ' to (' + msg.x + ', ' + msg.y + ')', 'cyan');
-                      if (adapter.moveObject) {
-                        const result = adapter.moveObject(msg.id, { x: msg.x, y: msg.y, z: msg.z });
-                        console.log('[DEBUG] moveObject result:', result);
+                      // If raw command provided, execute it locally (each engine interprets in own coords)
+                      if (msg.command) {
+                        log('[' + msg.by.slice(0,6) + '] sent: ' + msg.command, 'cyan');
+                        isNetworkCommand = true;
+                        try { execCommand(msg.command, false); } finally { isNetworkCommand = false; }
                       } else {
-                        console.log('[DEBUG] No adapter.moveObject!');
+                        // Fallback to coordinate-based move (legacy)
+                        log('[' + msg.by.slice(0,6) + '] sent: move ' + msg.id + ' to (' + msg.x + ', ' + msg.y + ')', 'cyan');
+                        if (adapter.moveObject) {
+                          adapter.moveObject(msg.id, { x: msg.x, y: msg.y, z: msg.z });
+                        }
                       }
-                    } else {
-                      console.log('[DEBUG] Skipped - own message');
                     }
                   } else if (msg.type === 'CHAT') {
                     log('[' + msg.by + ']: ' + msg.message, 'cyan');
@@ -1181,12 +1186,23 @@ const RoshRuntime = (function() {
   function handleCreate(cmd, args) {
     if (!adapter.createObject) return;
 
-    // Check for bulk create: create N type
+    // Number words mapping
+    const numberWords = { one: 1, two: 2, three: 3, four: 4, five: 5,
+                          six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+    // Articles to filter out
+    const articles = ['a', 'an', 'the', 'some', 'my', 'this'];
+
+    // Check for bulk create: create N type (numeric)
     const bulkMatch = cmd.match(/^create\s+(\d+)\s+(.+)$/i);
-    if (bulkMatch) {
-      const count = parseInt(bulkMatch[1], 10);
-      const typeAndMods = bulkMatch[2].trim().split(/\s+/);
-      const typeName = singularize(typeAndMods[typeAndMods.length - 1]);
+    // Check for bulk create: create three cubes (number word)
+    const wordMatch = cmd.match(/^create\s+(one|two|three|four|five|six|seven|eight|nine|ten)\s+(.+)$/i);
+
+    if (bulkMatch || wordMatch) {
+      const match = bulkMatch || wordMatch;
+      const count = bulkMatch ? parseInt(match[1], 10) : numberWords[match[1].toLowerCase()];
+      // Filter articles from type/modifiers
+      const typeAndMods = match[2].trim().split(/\s+/).filter(w => !articles.includes(w.toLowerCase()));
+      const typeName = singularize(typeAndMods[typeAndMods.length - 1] || 'cube');
       const modifiers = typeAndMods.slice(0, -1);
 
       if (count >= 10) {
@@ -1220,9 +1236,10 @@ const RoshRuntime = (function() {
       return;
     }
 
-    // Single create
-    const typeName = singularize(args[args.length - 1] || 'cube');
-    const modifiers = args.slice(0, -1);
+    // Single create - filter articles
+    const filteredArgs = args.filter(w => !articles.includes(w.toLowerCase()));
+    const typeName = singularize(filteredArgs[filteredArgs.length - 1] || 'cube');
+    const modifiers = filteredArgs.slice(0, -1);
 
     const result = adapter.createObject(typeName, null, { modifiers });
     if (result.success) {
@@ -1346,6 +1363,12 @@ const RoshRuntime = (function() {
   function handleDelete(args) {
     if (!adapter.deleteObject) return;
     let name = args.join(' ');
+
+    // Handle bulk delete: delete all [modifiers] <type>
+    if (args[0]?.toLowerCase() === 'all' && args.length > 1) {
+      handleDeleteAll(args.slice(1));
+      return;
+    }
 
     // Handle selection-based deletion: destroy / destroy confirmed
     if (!name || name.toLowerCase() === 'confirmed') {
@@ -1681,6 +1704,13 @@ const RoshRuntime = (function() {
 
   function handleHide(args) {
     if (!adapter.setVisible) return;
+
+    // Handle bulk hide: hide all [modifiers] <type>
+    if (args[0]?.toLowerCase() === 'all' && args.length > 1) {
+      handleHideAll(args.slice(1));
+      return;
+    }
+
     const names = args.length ? args : (currentObjectName ? [currentObjectName] : []);
 
     if (names.length === 0) {
@@ -1704,6 +1734,13 @@ const RoshRuntime = (function() {
 
   function handleShow(args) {
     if (!adapter.setVisible) return;
+
+    // Handle bulk show: show all [modifiers] <type>
+    if (args[0]?.toLowerCase() === 'all' && args.length > 1) {
+      handleShowAll(args.slice(1));
+      return;
+    }
+
     const names = args.length ? args : (currentObjectName ? [currentObjectName] : []);
 
     if (names.length === 0) {
@@ -1725,21 +1762,211 @@ const RoshRuntime = (function() {
     }
   }
 
+  // Bulk operations helper: find objects matching type and modifiers
+  function findMatchingObjects(args) {
+    if (!adapter.getAllObjects) return { objects: [], desc: args.join(' ') };
+
+    const allObjects = adapter.getAllObjects();
+    const colors = ['red', 'green', 'blue', 'yellow', 'orange', 'purple', 'pink',
+                    'cyan', 'white', 'black', 'gray', 'grey', 'brown', 'gold', 'silver'];
+    const sizes = { big: 2, large: 2, huge: 4, small: 0.5, tiny: 0.25 };
+
+    // Parse args into modifiers and type
+    let targetColor = null;
+    let targetSize = null;
+    let targetType = null;
+
+    for (const arg of args) {
+      const lower = arg.toLowerCase();
+      if (colors.includes(lower)) {
+        targetColor = lower;
+      } else if (sizes[lower] !== undefined) {
+        targetSize = lower;
+      } else {
+        targetType = singularize(lower);
+      }
+    }
+
+    // Filter objects
+    const matching = allObjects.filter(obj => {
+      const objType = (obj.userData?.type || obj.name?.split('-')[0] || '').toLowerCase();
+      const objColor = (obj.userData?.color || '').toLowerCase();
+      const objScale = obj.userData?.scale || obj.scale?.x || 1;
+
+      // Type must match if specified
+      if (targetType && objType !== targetType) return false;
+
+      // Color must match if specified
+      if (targetColor && objColor !== targetColor) return false;
+
+      // Size must match if specified
+      if (targetSize) {
+        const targetScale = sizes[targetSize];
+        if (targetSize === 'big' || targetSize === 'large' || targetSize === 'huge') {
+          if (objScale < 1.5) return false;
+        } else if (targetSize === 'small' || targetSize === 'tiny') {
+          if (objScale > 0.75) return false;
+        }
+      }
+
+      return true;
+    });
+
+    // Build description
+    const descParts = [];
+    if (targetColor) descParts.push(targetColor);
+    if (targetSize) descParts.push(targetSize);
+    if (targetType) descParts.push(targetType + (matching.length !== 1 ? 's' : ''));
+    const desc = descParts.join(' ') || 'objects';
+
+    return { objects: matching, desc };
+  }
+
+  function handleDeleteAll(args) {
+    const { objects, desc } = findMatchingObjects(args);
+
+    if (objects.length === 0) {
+      log('No ' + desc + ' found', 'warn');
+      return;
+    }
+
+    // Set up pending operation with confirmation
+    pendingOp = {
+      desc: 'delete ' + objects.length + ' ' + desc,
+      execute: () => {
+        let deleted = 0;
+        for (const obj of objects) {
+          const name = obj.userData?._name || obj.name;
+          if (name && adapter.deleteObject) {
+            const result = adapter.deleteObject(name);
+            if (result.success) {
+              deleted++;
+              twinBroadcastDelete(name);
+            }
+          }
+        }
+        log('Deleted ' + deleted + ' ' + desc, 'ok');
+      }
+    };
+
+    log('⚠ About to delete ' + objects.length + ' ' + desc + '. Type "go" or "yes" to confirm.', 'warn');
+  }
+
+  function handleHideAll(args) {
+    const { objects, desc } = findMatchingObjects(args);
+
+    if (objects.length === 0) {
+      log('No ' + desc + ' found', 'warn');
+      return;
+    }
+
+    // Set up pending operation with confirmation
+    pendingOp = {
+      desc: 'hide ' + objects.length + ' ' + desc,
+      execute: () => {
+        let hidden = 0;
+        for (const obj of objects) {
+          const name = obj.userData?._name || obj.name;
+          if (name && adapter.setVisible) {
+            const result = adapter.setVisible(name, false);
+            if (result.success) hidden++;
+          }
+        }
+        log('Hid ' + hidden + ' ' + desc, 'ok');
+      }
+    };
+
+    log('⚠ About to hide ' + objects.length + ' ' + desc + '. Type "go" or "yes" to confirm.', 'warn');
+  }
+
+  function handleShowAll(args) {
+    const { objects, desc } = findMatchingObjects(args);
+
+    if (objects.length === 0) {
+      log('No ' + desc + ' found', 'warn');
+      return;
+    }
+
+    // Set up pending operation with confirmation
+    pendingOp = {
+      desc: 'show ' + objects.length + ' ' + desc,
+      execute: () => {
+        let shown = 0;
+        for (const obj of objects) {
+          const name = obj.userData?._name || obj.name;
+          if (name && adapter.setVisible) {
+            const result = adapter.setVisible(name, true);
+            if (result.success) shown++;
+          }
+        }
+        log('Showed ' + shown + ' ' + desc, 'ok');
+      }
+    };
+
+    log('⚠ About to show ' + objects.length + ' ' + desc + '. Type "go" or "yes" to confirm.', 'warn');
+  }
+
+  // Fuzzy match object reference (e.g., "red ball" -> "ball-1" with color red)
+  function fuzzyMatchObject(objRef) {
+    if (!adapter.getAllObjects) return objRef;
+
+    const allObjects = adapter.getAllObjects();
+    const refWords = objRef.toLowerCase().split(/\s+/);
+
+    // First try exact match
+    for (const obj of allObjects) {
+      const name = obj.name || (obj.userData && obj.userData._name) || '';
+      if (name.toLowerCase() === objRef.toLowerCase()) return name;
+    }
+
+    // Fuzzy match by type and color
+    let bestMatch = null;
+    let bestScore = 0;
+
+    for (const obj of allObjects) {
+      const name = obj.name || (obj.userData && obj.userData._name) || '';
+      if (!name || name.startsWith('_')) continue;
+
+      const objType = (obj.userData && obj.userData._type) || '';
+      const objColor = (obj.userData && obj.userData.color) || '';
+      const nameLower = name.toLowerCase();
+
+      let score = 0;
+      for (const word of refWords) {
+        if (word === objType.toLowerCase() || word === objType.toLowerCase() + 's') score += 10;
+        if (word === objColor.toLowerCase()) score += 5;
+        if (nameLower.includes(word)) score += 3;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = name;
+      }
+    }
+
+    if (bestMatch && bestScore > 0) {
+      log('[matched: "' + objRef + '" → "' + bestMatch + '"]', 'dim');
+      return bestMatch;
+    }
+
+    return objRef;  // Return original if no match
+  }
+
   function handleMove(cmd, args) {
     if (!adapter.moveObject) return;
 
-    // Parse: move <obj> <direction> <amount>
-    // or: move <obj> to <x> <y> [z]
-    const toMatch = cmd.match(/^move\s+(\S+)\s+to\s+(-?\d+\.?\d*)\s+(-?\d+\.?\d*)\s*(-?\d+\.?\d*)?$/i);
+    // Parse: move <obj_ref> to <x> <y> [z] (obj_ref can be multi-word)
+    const toMatch = cmd.match(/^move\s+(.+?)\s+to\s+(-?\d+\.?\d*)\s+(-?\d+\.?\d*)\s*(-?\d+\.?\d*)?$/i);
     if (toMatch) {
-      const [, name, x, y, z] = toMatch;
+      const [, objRef, x, y, z] = toMatch;
+      const name = fuzzyMatchObject(objRef);
       const oldPos = adapter.getPosition ? adapter.getPosition(name) : null;
 
       const result = adapter.moveObject(name, { x: parseFloat(x), y: parseFloat(y), z: z ? parseFloat(z) : undefined });
       if (result.success) {
         log('Moved ' + name + ' to ' + x + ', ' + y + (z ? ', ' + z : ''), 'ok');
-        // Broadcast move to network
-        twinBroadcastMove(name, parseFloat(x), parseFloat(y), z ? parseFloat(z) : 0);
+        // Broadcast move to network with raw command
+        twinBroadcastMove(name, parseFloat(x), parseFloat(y), z ? parseFloat(z) : 0, cmd);
         if (oldPos) {
           pushUndo('move ' + name,
             () => adapter.moveObject(name, oldPos),
@@ -1750,20 +1977,21 @@ const RoshRuntime = (function() {
       return;
     }
 
-    // Relative movement: move <obj> <dir> <amount>
-    const relMatch = cmd.match(/^move\s+(\S+)\s+(forward|back|backward|left|right|up|down)\s+(-?\d+\.?\d*)$/i);
+    // Relative movement: move <obj_ref> <dir> <amount> (obj_ref can be multi-word)
+    const relMatch = cmd.match(/^move\s+(.+?)\s+(forward|back|backward|left|right|up|down)\s+(-?\d+\.?\d*)$/i);
     if (relMatch) {
-      const [, name, dir, amt] = relMatch;
+      const [, objRef, dir, amt] = relMatch;
+      const name = fuzzyMatchObject(objRef);
       const amount = parseFloat(amt);
       const oldPos = adapter.getPosition ? adapter.getPosition(name) : null;
 
       const result = adapter.moveObjectRelative(name, dir.toLowerCase(), amount);
       if (result.success) {
         log('Moved ' + name + ' ' + dir + ' ' + amt, 'ok');
-        // Broadcast new position to network
+        // Broadcast new position to network with raw command
         const newPos = adapter.getPosition ? adapter.getPosition(name) : null;
         if (newPos) {
-          twinBroadcastMove(name, newPos.x, newPos.y, newPos.z || 0);
+          twinBroadcastMove(name, newPos.x, newPos.y, newPos.z || 0, cmd);
         }
         if (oldPos) {
           pushUndo('move ' + name + ' ' + dir,
@@ -1771,6 +1999,8 @@ const RoshRuntime = (function() {
             () => adapter.moveObjectRelative(name, dir.toLowerCase(), amount)
           );
         }
+      } else {
+        log('Failed to move ' + name + ': ' + (result.error || 'object not found'), 'err');
       }
       return;
     }

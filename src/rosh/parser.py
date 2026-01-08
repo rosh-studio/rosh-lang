@@ -175,7 +175,7 @@ class Parser:
     KNOWN_COLORS = {'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
                     'white', 'black', 'orange', 'purple', 'pink', 'gray',
                     'grey', 'gold', 'silver', 'brown'}
-    KNOWN_SIZES = {'big', 'small', 'large', 'tiny', 'huge'}
+    KNOWN_SIZES = {'big', 'small', 'large', 'tiny', 'huge', 'medium', 'giant', 'massive'}
     KNOWN_MODIFIERS = KNOWN_COLORS | KNOWN_SIZES
     NUMBER_WORDS = {
         'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
