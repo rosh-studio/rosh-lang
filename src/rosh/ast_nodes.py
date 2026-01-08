@@ -165,6 +165,7 @@ class BulkOperation(ASTNode):
     property_name: Optional[str] = None  # For set operations
     property_value: Optional[ASTNode] = None  # For set operations
     auto_confirm: bool = False  # If True, skip confirmation prompt (trailing 'go'/'confirm')
+    description: Optional[str] = None  # Full natural language description (e.g., "a big red ball")
     line: int = 0
 
 

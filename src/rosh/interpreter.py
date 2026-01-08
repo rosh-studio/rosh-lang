@@ -254,6 +254,92 @@ class Interpreter:
             env = env.parent
         return None
 
+    def _fuzzy_find_object(self, obj_ref: str) -> Optional[str]:
+        """Find an object by fuzzy matching. Returns actual object name or None.
+
+        Matching strategies:
+        1. Exact match: "ball-1" -> "ball-1"
+        2. Normalized match: "box01" -> "box-1", "ball1" -> "ball-1"
+        3. Type+color match: "red ball" -> ball with color red
+        4. Partial match: "ball" -> first ball found
+        """
+        # 1. Exact match
+        if self.current_env.exists(obj_ref):
+            return obj_ref
+
+        # Get all objects
+        all_objects = []
+        for name, binding in self.current_env.bindings.items():
+            if isinstance(binding.get('value'), RoshObject):
+                all_objects.append((name, binding['value']))
+
+        if not all_objects:
+            return None
+
+        # 2. Normalized match: strip/normalize numbers
+        # "box01" -> try "box-1", "ball1" -> try "ball-1"
+        import re
+        normalized = re.sub(r'(\D)(\d+)$', r'\1-\2', obj_ref)  # "box1" -> "box-1"
+        normalized = re.sub(r'-0+(\d)', r'-\1', normalized)     # "box-01" -> "box-1"
+        if normalized != obj_ref and self.current_env.exists(normalized):
+            self.color_out.dim(f"[matched '{obj_ref}' → '{normalized}']")
+            return normalized
+
+        # 3. Type+color+size match: "big red ball" -> ball with color red and size big
+        ref_words = obj_ref.lower().split()
+        best_match = None
+        best_score = 0
+
+        # Known size words and their scale values
+        size_words = {'big': 2, 'large': 2, 'huge': 3, 'small': 0.5, 'tiny': 0.25}
+
+        for name, obj in all_objects:
+            score = 0
+            obj_type = (obj.name or '').lower()
+            obj_color = ''
+            obj_size = ''
+            if obj.has('color'):
+                color_val = obj.get('color')
+                obj_color = str(color_val).lower() if color_val else ''
+            if obj.has('size'):
+                size_val = obj.get('size')
+                # Convert numeric size to word
+                if isinstance(size_val, (int, float)):
+                    if size_val >= 2:
+                        obj_size = 'big'
+                    elif size_val <= 0.5:
+                        obj_size = 'small'
+                else:
+                    obj_size = str(size_val).lower()
+            name_lower = name.lower()
+
+            for word in ref_words:
+                # Type match (highest priority)
+                if word == obj_type or word == obj_type + 's':
+                    score += 10
+                # Color match
+                if word == obj_color:
+                    score += 5
+                # Size match
+                if word in size_words and word == obj_size:
+                    score += 5
+                # Name contains word
+                if word in name_lower:
+                    score += 3
+                # Word matches start of name (e.g., "box" matches "box-1")
+                if name_lower.startswith(word):
+                    score += 4
+
+            if score > best_score:
+                best_score = score
+                best_match = name
+
+        if best_match and best_score > 0:
+            self.color_out.dim(f"[matched '{obj_ref}' → '{best_match}']")
+            return best_match
+
+        return None
+
     def _detach_object_instance(self, obj: Any):
         """Remove a RoshObject from tracking structures."""
         if not isinstance(obj, RoshObject):
@@ -671,6 +757,8 @@ class Interpreter:
             return self.eval_count_objects(node)
         elif isinstance(node, MoveObject):
             return self.eval_move_object(node)
+        elif isinstance(node, MoveDirection):
+            return self.eval_move_direction(node)
         elif isinstance(node, PropertiesCommand):
             return self.eval_properties(node)
         elif isinstance(node, GotoRoom):
@@ -1161,21 +1249,13 @@ class Interpreter:
             count = op['count']
             type_name = op['type_name']
             modifiers = op['modifiers']
+            description = op.get('description')  # Full natural language description
 
             # Known color and size mappings
             known_colors = {'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
                             'white', 'black', 'orange', 'purple', 'pink', 'gray',
                             'grey', 'gold', 'silver'}
             known_sizes = {'big': 2, 'large': 2, 'huge': 3, 'small': 0.5, 'tiny': 0.25}
-
-            # Collect unknown modifiers for description
-            description_words = []
-            for mod in modifiers:
-                if mod not in known_colors and mod not in known_sizes:
-                    description_words.append(mod)
-
-            # Build description: "angry orc", "big angry orc", etc.
-            description = ' '.join(description_words + [type_name]) if description_words else None
 
             self.batch_mode = True
             created = 0
@@ -1189,7 +1269,7 @@ class Interpreter:
                             obj.set('color', mod)
                         elif mod in known_sizes:
                             obj.set('scale', known_sizes[mod])
-                    # Set description if we have unknown modifiers
+                    # Set description from the full natural language phrase
                     if description:
                         obj.set('description', description)
                     created += 1
@@ -1251,6 +1331,7 @@ class Interpreter:
         type_name = node.type_name
         modifiers = node.modifiers
         auto_confirm = node.auto_confirm
+        description = node.description  # Full natural language description
 
         # Threshold for requiring confirmation (can be configured later)
         confirm_threshold = 10
@@ -1262,7 +1343,8 @@ class Interpreter:
                     'type': 'bulk_create',
                     'count': count,
                     'type_name': type_name,
-                    'modifiers': modifiers
+                    'modifiers': modifiers,
+                    'description': description
                 }
                 self.eval_confirm(Confirm(line=node.line))
             else:
@@ -1271,7 +1353,8 @@ class Interpreter:
                     'type': 'bulk_create',
                     'count': count,
                     'type_name': type_name,
-                    'modifiers': modifiers
+                    'modifiers': modifiers,
+                    'description': description
                 }
                 self.color_out.warning(f"Create {count} {type_name}(s)?")
                 self.color_out.info("Type 'yes' or 'go' to execute")
@@ -1720,14 +1803,22 @@ class Interpreter:
                 self.color_out.info(f"Got {instance.id} ({node.instance_index} of {len(instances)})")
 
             else:
-                # Get simple variable
-                value = self.current_env.get(target.name)
+                # Get simple variable - use fuzzy matching if exact name doesn't exist
+                obj_name = target.name
+                if not self.current_env.exists(obj_name):
+                    matched = self._fuzzy_find_object(obj_name)
+                    if matched:
+                        obj_name = matched
+                    else:
+                        raise RoshRuntimeError(f"'{target.name}' does not exist")
+
+                value = self.current_env.get(obj_name)
                 self.data_stack.append(value)
 
                 # Set as current object for contextual commands
                 if isinstance(value, RoshObject):
                     self.current_object = value
-                    self.current_object_name = target.name
+                    self.current_object_name = obj_name
 
                 # Show feedback if this is an instance of a type with multiple instances
                 if isinstance(value, RoshObject) and value.id:
@@ -3325,30 +3416,35 @@ Focus on the specific syntax or concept they need to correct."""
         If target is None, creates anonymous instance with auto-numbered ID
         If source doesn't exist but is a known object, create it first
         """
-        # Check if source object exists
-        if not self.current_env.exists(node.source):
-            # Check if this is a known object we can create
-            from .data import get_known_objects_text
-            known_objects = get_known_objects_text()
-            if node.source in known_objects:
-                # Create from known object template
-                # Use target name if provided (e.g., "create apple golden" → named "golden", type "apple")
-                # Otherwise use source name (e.g., "clone apple" → named "apple")
-                obj_name = node.target if node.target else node.source
-                new_obj = RoshObject(name=obj_name)
-                new_obj.set('object_type', node.source)  # Type is still the template type
-                new_obj.set('description', known_objects[node.source])
-                self.current_env.define(obj_name, new_obj)
-                self.color_out.success(f"Created '{obj_name}'" + (f" (type: {node.source})" if node.target else ""))
-                return
+        # Use fuzzy matching to find source object
+        source_name = node.source
+        if not self.current_env.exists(source_name):
+            matched = self._fuzzy_find_object(source_name)
+            if matched:
+                source_name = matched
             else:
-                raise RoshRuntimeError(f"Cannot clone: object '{node.source}' does not exist")
+                # Check if this is a known object we can create
+                from .data import get_known_objects_text
+                known_objects = get_known_objects_text()
+                if node.source in known_objects:
+                    # Create from known object template
+                    # Use target name if provided (e.g., "create apple golden" → named "golden", type "apple")
+                    # Otherwise use source name (e.g., "clone apple" → named "apple")
+                    obj_name = node.target if node.target else node.source
+                    new_obj = RoshObject(name=obj_name)
+                    new_obj.set('object_type', node.source)  # Type is still the template type
+                    new_obj.set('description', known_objects[node.source])
+                    self.current_env.define(obj_name, new_obj)
+                    self.color_out.success(f"Created '{obj_name}'" + (f" (type: {node.source})" if node.target else ""))
+                    return
+                else:
+                    raise RoshRuntimeError(f"Cannot clone: object '{node.source}' does not exist")
 
         # Get the source object
-        source_obj = self.current_env.get(node.source)
+        source_obj = self.current_env.get(source_name)
 
         if not isinstance(source_obj, RoshObject):
-            raise RoshTypeError(f"Cannot clone non-object: '{node.source}' is not an object")
+            raise RoshTypeError(f"Cannot clone non-object: '{source_name}' is not an object")
 
         # Determine if anonymous (auto-numbered) or explicit name
         is_anonymous = node.target is None
@@ -3442,12 +3538,17 @@ Focus on the specific syntax or concept they need to correct."""
             return
 
         # Single object deletion
-        # Check if the object exists
-        if not self.current_env.exists(node.name):
-            raise RoshRuntimeError(f"Cannot delete: '{node.name}' does not exist")
+        # Try fuzzy match if exact name doesn't exist
+        obj_name = node.name
+        if not self.current_env.exists(obj_name):
+            matched = self._fuzzy_find_object(obj_name)
+            if matched:
+                obj_name = matched
+            else:
+                raise RoshRuntimeError(f"Cannot delete: '{node.name}' does not exist")
 
-        env = self._find_env_for_binding(node.name) or self.current_env
-        binding = env.bindings.get(node.name)
+        env = self._find_env_for_binding(obj_name) or self.current_env
+        binding = env.bindings.get(obj_name)
         obj = binding['value']
         binding_type = binding['type']
 
@@ -3456,13 +3557,13 @@ Focus on the specific syntax or concept they need to correct."""
             self._detach_object_instance(obj)
 
         # Remove from environment
-        if node.name in env.bindings:
-            del env.bindings[node.name]
-            self.color_out.success(f"Deleted '{node.name}'")
+        if obj_name in env.bindings:
+            del env.bindings[obj_name]
+            self.color_out.success(f"Deleted '{obj_name}'")
         else:
-            raise RoshRuntimeError(f"Cannot delete: '{node.name}' is not in current scope")
+            raise RoshRuntimeError(f"Cannot delete: '{obj_name}' is not in current scope")
 
-        def undo_delete(target_env=env, name=node.name, value=obj, value_type=binding_type):
+        def undo_delete(target_env=env, name=obj_name, value=obj, value_type=binding_type):
             target_env.bindings[name] = {
                 'value': value,
                 'type': value_type
@@ -3507,13 +3608,18 @@ Focus on the specific syntax or concept they need to correct."""
 
     def eval_hide_object(self, node: HideObject) -> None:
         """Execute: hide <name> - Set object visible to false"""
-        # Check if the object exists
-        if not self.current_env.exists(node.name):
-            raise RoshRuntimeError(f"Cannot hide: '{node.name}' does not exist")
+        # Use fuzzy matching to find object
+        obj_name = node.name
+        if not self.current_env.exists(obj_name):
+            matched = self._fuzzy_find_object(obj_name)
+            if matched:
+                obj_name = matched
+            else:
+                raise RoshRuntimeError(f"Cannot hide: '{node.name}' does not exist")
 
-        obj = self.current_env.get(node.name)
+        obj = self.current_env.get(obj_name)
         if not isinstance(obj, RoshObject):
-            raise RoshTypeError(f"Cannot hide non-object: '{node.name}'")
+            raise RoshTypeError(f"Cannot hide non-object: '{obj_name}'")
 
         # Save current visibility for undo
         old_visible = obj.get('visible') if obj.has('visible') else True
@@ -3521,7 +3627,7 @@ Focus on the specific syntax or concept they need to correct."""
         # Set visible to false
         obj.set('visible', False)
 
-        self.color_out.success(f"Hid '{node.name}'")
+        self.color_out.success(f"Hid '{obj_name}'")
 
         def undo_hide(target_obj=obj, saved_visible=old_visible):
             target_obj.set('visible', saved_visible)
@@ -3529,17 +3635,22 @@ Focus on the specific syntax or concept they need to correct."""
         def redo_hide(target_obj=obj):
             target_obj.set('visible', False)
 
-        self.push_undo(f"hide {node.name}", undo_hide, redo_hide)
+        self.push_undo(f"hide {obj_name}", undo_hide, redo_hide)
 
     def eval_show_object(self, node: ShowObject) -> None:
         """Execute: show <name> - Set object visible to true"""
-        # Check if the object exists
-        if not self.current_env.exists(node.name):
-            raise RoshRuntimeError(f"Cannot show: '{node.name}' does not exist")
+        # Use fuzzy matching to find object
+        obj_name = node.name
+        if not self.current_env.exists(obj_name):
+            matched = self._fuzzy_find_object(obj_name)
+            if matched:
+                obj_name = matched
+            else:
+                raise RoshRuntimeError(f"Cannot show: '{node.name}' does not exist")
 
-        obj = self.current_env.get(node.name)
+        obj = self.current_env.get(obj_name)
         if not isinstance(obj, RoshObject):
-            raise RoshTypeError(f"Cannot show non-object: '{node.name}'")
+            raise RoshTypeError(f"Cannot show non-object: '{obj_name}'")
 
         # Save current visibility for undo
         old_visible = obj.get('visible') if obj.has('visible') else True
@@ -3547,7 +3658,7 @@ Focus on the specific syntax or concept they need to correct."""
         # Set visible to true
         obj.set('visible', True)
 
-        self.color_out.success(f"Showed '{node.name}'")
+        self.color_out.success(f"Showed '{obj_name}'")
 
         def undo_show(target_obj=obj, saved_visible=old_visible):
             target_obj.set('visible', saved_visible)
@@ -3555,7 +3666,7 @@ Focus on the specific syntax or concept they need to correct."""
         def redo_show(target_obj=obj):
             target_obj.set('visible', True)
 
-        self.push_undo(f"show {node.name}", undo_show, redo_show)
+        self.push_undo(f"show {obj_name}", undo_show, redo_show)
 
     def eval_count_objects(self, node: CountObjects) -> None:
         """Execute: count [type] - Count objects, optionally by type"""
@@ -3618,13 +3729,18 @@ Focus on the specific syntax or concept they need to correct."""
 
     def eval_move_object(self, node: MoveObject) -> None:
         """Execute: move <name> to x,y[,z] - Move object to coordinates"""
-        # Check if the object exists
-        if not self.current_env.exists(node.name):
-            raise RoshRuntimeError(f"Cannot move: '{node.name}' does not exist")
+        # Try fuzzy match if exact name doesn't exist
+        obj_name = node.name
+        if not self.current_env.exists(obj_name):
+            matched = self._fuzzy_find_object(obj_name)
+            if matched:
+                obj_name = matched
+            else:
+                raise RoshRuntimeError(f"Cannot move: '{node.name}' does not exist")
 
-        obj = self.current_env.get(node.name)
+        obj = self.current_env.get(obj_name)
         if not isinstance(obj, RoshObject):
-            raise RoshTypeError(f"Cannot move non-object: '{node.name}'")
+            raise RoshTypeError(f"Cannot move non-object: '{obj_name}'")
 
         # Evaluate coordinates
         x = self.eval_expression(node.x)
@@ -3644,9 +3760,9 @@ Focus on the specific syntax or concept they need to correct."""
 
         # Report the move
         if z is not None:
-            self.color_out.success(f"Moved '{node.name}' to ({x}, {y}, {z})")
+            self.color_out.success(f"Moved '{obj_name}' to ({x}, {y}, {z})")
         else:
-            self.color_out.success(f"Moved '{node.name}' to ({x}, {y})")
+            self.color_out.success(f"Moved '{obj_name}' to ({x}, {y})")
 
         def undo_move(target_obj=obj, sx=old_x, sy=old_y, sz=old_z):
             target_obj.set('x', sx)
@@ -3659,7 +3775,79 @@ Focus on the specific syntax or concept they need to correct."""
             if nz is not None:
                 target_obj.set('z', nz)
 
-        self.push_undo(f"move {node.name}", undo_move, redo_move)
+        self.push_undo(f"move {obj_name}", undo_move, redo_move)
+
+    def eval_move_direction(self, node: MoveDirection) -> None:
+        """Execute: move <target> <direction> by <amount> - Move in a direction"""
+        # Evaluate target to get object name
+        target_expr = node.target
+        if isinstance(target_expr, Identifier):
+            obj_ref = target_expr.name
+        else:
+            # Evaluate the expression to get the name
+            obj_ref = str(self.eval_expression(target_expr))
+
+        # Try fuzzy match if exact name doesn't exist
+        obj_name = obj_ref
+        if not self.current_env.exists(obj_name):
+            matched = self._fuzzy_find_object(obj_name)
+            if matched:
+                obj_name = matched
+            else:
+                raise RoshRuntimeError(f"Cannot move: '{obj_ref}' does not exist")
+
+        obj = self.current_env.get(obj_name)
+        if not isinstance(obj, RoshObject):
+            raise RoshTypeError(f"Cannot move non-object: '{obj_name}'")
+
+        # Evaluate the amount
+        amount = self.eval_expression(node.amount)
+        if not isinstance(amount, (int, float)):
+            raise RoshTypeError(f"Move amount must be a number, got {type(amount).__name__}")
+
+        # Get current position
+        old_x = obj.get('x') if obj.has('x') else 0
+        old_y = obj.get('y') if obj.has('y') else 0
+        old_z = obj.get('z') if obj.has('z') else 0
+
+        # Apply movement based on direction
+        direction = node.direction.lower()
+        new_x, new_y, new_z = old_x, old_y, old_z
+
+        if direction == 'right':
+            new_x = old_x + amount
+        elif direction == 'left':
+            new_x = old_x - amount
+        elif direction == 'up':
+            new_y = old_y - amount  # Y typically increases downward in 2D
+        elif direction == 'down':
+            new_y = old_y + amount
+        elif direction == 'forward':
+            new_z = old_z - amount
+        elif direction in ('back', 'backward'):
+            new_z = old_z + amount
+        else:
+            raise RoshRuntimeError(f"Unknown direction: '{direction}'")
+
+        # Set new position
+        obj.set('x', new_x)
+        obj.set('y', new_y)
+        if direction in ('forward', 'back', 'backward'):
+            obj.set('z', new_z)
+
+        self.color_out.success(f"Moved '{obj_name}' {direction} by {amount}")
+
+        def undo_move(target_obj=obj, sx=old_x, sy=old_y, sz=old_z):
+            target_obj.set('x', sx)
+            target_obj.set('y', sy)
+            target_obj.set('z', sz)
+
+        def redo_move(target_obj=obj, nx=new_x, ny=new_y, nz=new_z):
+            target_obj.set('x', nx)
+            target_obj.set('y', ny)
+            target_obj.set('z', nz)
+
+        self.push_undo(f"move {obj_name} {direction}", undo_move, redo_move)
 
     def eval_properties(self, node: PropertiesCommand) -> None:
         """Execute: properties <target> - List all properties of an object"""
@@ -3894,18 +4082,23 @@ Focus on the specific syntax or concept they need to correct."""
         """Execute: look [object] - Show current room or examine object"""
         # If target specified, examine that object
         if node.target:
-            # Same as properties command
-            if not self.current_env.exists(node.target):
-                raise RoshRuntimeError(f"Cannot look at '{node.target}': does not exist")
+            # Use fuzzy matching if exact name doesn't exist
+            obj_name = node.target
+            if not self.current_env.exists(obj_name):
+                matched = self._fuzzy_find_object(obj_name)
+                if matched:
+                    obj_name = matched
+                else:
+                    raise RoshRuntimeError(f"Cannot look at '{node.target}': does not exist")
 
-            obj = self.current_env.get(node.target)
+            obj = self.current_env.get(obj_name)
             if not isinstance(obj, RoshObject):
-                self.color_out.print(f"{node.target} = {obj}")
+                self.color_out.print(f"{obj_name} = {obj}")
                 return
 
             # Show object details
             self.color_out.print()
-            self.color_out.header(f"=== {node.target} ===")
+            self.color_out.header(f"=== {obj_name} ===")
             self.color_out.print(f"Type: {obj.name}", style="cyan")
             self.color_out.uuid(obj.uuid)
             if obj.id:

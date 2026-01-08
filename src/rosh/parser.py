@@ -150,6 +150,88 @@ class Parser:
         while self.current_token().type in (TokenType.NEWLINE, TokenType.SEMICOLON):
             self.advance()
 
+    def _is_word_token(self, token: 'Token') -> bool:
+        """Check if a token could be used as a word in natural language context.
+
+        Some keywords like 'read', 'set', etc. can appear in natural language
+        phrases like 'create a big read ball' where 'read' is a typo for 'red'.
+        This allows the parser to be more lenient with natural language input.
+        """
+        # Keywords that could reasonably be words/adjectives in natural language
+        # Note: END is NOT included - it's a critical block terminator
+        word_like_keywords = {
+            TokenType.READ,   # typo for "red"
+            TokenType.SET,    # could be a noun
+            TokenType.GET,    # could be a noun
+            TokenType.IN,     # could be preposition but also descriptive
+            TokenType.FOR,    # could appear in descriptive phrases
+            TokenType.LOOK,   # could be descriptive
+            TokenType.SAVE,   # could be a noun
+            TokenType.LOAD,   # could be a noun
+        }
+        return token.type in word_like_keywords
+
+    # Shared constants for natural language parsing
+    KNOWN_COLORS = {'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
+                    'white', 'black', 'orange', 'purple', 'pink', 'gray',
+                    'grey', 'gold', 'silver', 'brown'}
+    KNOWN_SIZES = {'big', 'small', 'large', 'tiny', 'huge'}
+    KNOWN_MODIFIERS = KNOWN_COLORS | KNOWN_SIZES
+    NUMBER_WORDS = {
+        'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+        'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10
+    }
+    ARTICLES = {'a', 'an', 'the', 'some', 'my', 'this'}
+
+    def _singularize(self, word: str) -> str:
+        """Convert plural word to singular form.
+
+        Examples: balls→ball, berries→berry, boxes→box
+        """
+        if word.endswith('ies') and len(word) > 3:
+            return word[:-3] + 'y'  # berries → berry
+        elif word.endswith('xes') or word.endswith('shes') or word.endswith('ches'):
+            return word[:-2]  # boxes → box, bushes → bush
+        elif word.endswith('ses') or word.endswith('zes'):
+            return word[:-2]  # buses → bus
+        elif word.endswith('s') and not word.endswith('ss') and len(word) > 1:
+            return word[:-1]  # balls → ball
+        return word
+
+    def _is_identifier_or_word(self, token: 'Token' = None) -> bool:
+        """Check if token is an identifier or word-like keyword."""
+        if token is None:
+            token = self.current_token()
+        return token.type == TokenType.IDENTIFIER or self._is_word_token(token)
+
+    def _collect_object_ref(self, stop_tokens: set = None) -> str:
+        """Collect a multi-word object reference.
+
+        Supports natural language like "red ball", "big green cube", etc.
+        Stops at EOF, NEWLINE, or any token in stop_tokens.
+
+        Returns the collected words joined by spaces, or None if no words found.
+        """
+        if stop_tokens is None:
+            stop_tokens = set()
+
+        words = []
+        while True:
+            token = self.current_token()
+            # Stop conditions
+            if token.type in (TokenType.EOF, TokenType.NEWLINE, TokenType.SEMICOLON):
+                break
+            if token.type in stop_tokens:
+                break
+            # Accept identifiers and word-like keywords
+            if token.type == TokenType.IDENTIFIER or self._is_word_token(token):
+                words.append(token.value)
+                self.advance()
+            else:
+                break
+
+        return ' '.join(words) if words else None
+
     def _collect_interpolation(self) -> str:
         """Collect tokens between { and } for string interpolation.
 
@@ -371,10 +453,20 @@ class Parser:
             self.pos = saved_pos
             return self._parse_bulk_operation('create', line)
 
-        # Skip 'a' or 'an' for natural language: "create a banana", "create an apple"
+        # Skip articles for natural language: "create a banana", "create the ball"
+        # But track the article so we can include it in descriptions
+        article = None
         if (self.current_token().type == TokenType.IDENTIFIER and
-            self.current_token().value.lower() in ('a', 'an')):
+            self.current_token().value.lower() in self.ARTICLES):
+            article = self.current_token().value
             self.advance()
+
+        # Handle number words: "create two balls" -> "create 2 balls"
+        if (self.current_token().type == TokenType.IDENTIFIER and
+            self.current_token().value.lower() in self.NUMBER_WORDS):
+            count = self.NUMBER_WORDS[self.current_token().value.lower()]
+            self.advance()
+            return self._parse_bulk_operation_with_count('create', count, line)
 
         type_token = self.current_token()
 
@@ -454,11 +546,12 @@ class Parser:
             # Ignore type_name, will be inferred from value
             return CreateValue(type_name=None, name=name, value=value_expr, line=line)
 
-        # Handle identifier - could be:
+        # Handle identifier or word-like keyword - could be:
         # 1. create <name> to <value> (new typeless syntax)
         # 2. create <template> <name> (clone with explicit name)
         # 3. create <template> (anonymous clone)
-        elif type_token.type == TokenType.IDENTIFIER:
+        # Note: Keywords like "read", "set" can appear as words in natural language
+        elif type_token.type == TokenType.IDENTIFIER or self._is_word_token(type_token):
             name = type_token.value
             self.advance()
 
@@ -480,66 +573,73 @@ class Parser:
                 value_expr = self.parse_expression()
                 return CreateValue(name=name, value=value_expr, annotated_type=None, line=line)
 
-            elif next_token.type == TokenType.IDENTIFIER:
-                # Could be: create <template> <name> OR create <modifier> <type>
-                # Check if first word is a known modifier (color/size)
-                known_modifiers = {
-                    'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
-                    'white', 'black', 'orange', 'purple', 'pink', 'gray',
-                    'grey', 'gold', 'silver',  # colors
-                    'big', 'small', 'large', 'tiny', 'huge'  # sizes
-                }
-                if name.lower() in known_modifiers:
-                    # First word is a modifier, treat as bulk create with count=1
-                    # E.g., "create red ball" -> create 1 red ball
-                    modifiers = [name.lower()]
-                    # Collect any additional modifiers and type name
-                    while self.current_token().type == TokenType.IDENTIFIER:
-                        word = self.current_token().value.lower()
-                        modifiers.append(word)
-                        self.advance()
-                    # Last word is type name, rest are modifiers
-                    type_name = modifiers[-1]
-                    modifiers = modifiers[:-1]
+            elif self._is_identifier_or_word(next_token):
+                # Could be: create <template> <name> OR create <modifiers> <type>
+                # Collect all words to determine if this is multi-word natural language
+                # E.g., "create big red ball" or "create shiny car"
+                words = [name, next_token.value]
+                self.advance()
+
+                while self._is_identifier_or_word():
+                    words.append(self.current_token().value)
+                    self.advance()
+
+                # If we have 3+ words, treat as natural language create with modifiers
+                # E.g., "create big red ball" -> ["big", "red", "ball"]
+                if len(words) >= 3:
+                    type_name = self._singularize(words[-1].lower())
+                    modifiers = [w.lower() for w in words[:-1]]
+                    known_mods = [m for m in modifiers if m in self.KNOWN_MODIFIERS]
+                    description = (article + ' ' if article else '') + ' '.join(words)
                     return BulkOperation(
                         operation='create',
                         count=1,
                         type_name=type_name,
-                        modifiers=modifiers,
+                        modifiers=known_mods,
                         auto_confirm=True,
+                        description=description,
                         line=line
                     )
-                elif next_token.value.lower() in known_modifiers:
-                    # Second word is a modifier: "make ball red" = set ball color to red
-                    # This is a natural language shorthand for setting properties
-                    target_name = name
-                    modifier = next_token.value.lower()
-                    self.advance()
 
-                    # Determine property based on modifier type
-                    colors = {'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
-                              'white', 'black', 'orange', 'purple', 'pink', 'gray',
-                              'grey', 'gold', 'silver'}
-                    sizes = {'big': 2, 'small': 0.5, 'large': 2, 'tiny': 0.25, 'huge': 3}
+                # Exactly 2 words: could be "create red ball" OR "create ball red" OR "create template name"
+                if len(words) == 2:
+                    first_word = words[0].lower()
+                    second_word = words[1].lower()
+                    description = (article + ' ' if article else '') + ' '.join(words)
 
-                    base_target = Identifier(name=target_name, line=line)
+                    # Check if first word is a modifier: "create red ball"
+                    if first_word in self.KNOWN_MODIFIERS:
+                        return BulkOperation(
+                            operation='create',
+                            count=1,
+                            type_name=self._singularize(second_word),
+                            modifiers=[first_word],
+                            auto_confirm=True,
+                            description=description,
+                            line=line
+                        )
+                    # Check if second word is a modifier: "make ball red" syntax
+                    elif second_word in self.KNOWN_MODIFIERS:
+                        SIZE_VALUES = {'big': 2, 'small': 0.5, 'large': 2, 'tiny': 0.25, 'huge': 3}
+                        base_target = Identifier(name=first_word, line=line)
 
-                    if modifier in colors:
-                        target = PropertyAccess(object=base_target, property='color', line=line)
-                        return SetProperty(target=target, value=Literal(value=modifier, type_name='string', line=line), line=line)
-                    elif modifier in sizes:
-                        target = PropertyAccess(object=base_target, property='scale', line=line)
-                        return SetProperty(target=target, value=Literal(value=sizes[modifier], type_name='number', line=line), line=line)
+                        if second_word in self.KNOWN_COLORS:
+                            target = PropertyAccess(object=base_target, property='color', line=line)
+                            return SetProperty(target=target, value=Literal(value=second_word, type_name='string', line=line), line=line)
+                        elif second_word in SIZE_VALUES:
+                            target = PropertyAccess(object=base_target, property='scale', line=line)
+                            return SetProperty(target=target, value=Literal(value=SIZE_VALUES[second_word], type_name='number', line=line), line=line)
                     else:
-                        # Unknown modifier - treat as description
-                        target = PropertyAccess(object=base_target, property='description', line=line)
-                        return SetProperty(target=target, value=Literal(value=modifier, type_name='string', line=line), line=line)
-                else:
-                    # Clone with explicit target: create <template> <name>
-                    target = next_token.value
-                    self.validate_identifier(target, "clone target")
-                    self.advance()
-                    return CloneObject(source=name, target=target, line=line)
+                        # Neither is a known modifier - treat as create with unknown adjective
+                        return BulkOperation(
+                            operation='create',
+                            count=1,
+                            type_name=self._singularize(second_word),
+                            modifiers=[],
+                            auto_confirm=True,
+                            description=description,
+                            line=line
+                        )
 
             else:
                 # Implied object creation: "create banana" = "create object banana"
@@ -576,17 +676,9 @@ class Parser:
         - get 10 balls
         - set 30 balls color to red
         """
-        from .ast_nodes import BulkOperation, Literal
-
         # Parse count
         count_token = self.expect(TokenType.NUMBER)
         count = int(count_token.value)
-
-        # Known modifiers (colors and sizes)
-        known_colors = {'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
-                        'white', 'black', 'orange', 'purple', 'pink', 'gray',
-                        'grey', 'gold', 'silver'}
-        known_sizes = {'big', 'small', 'large', 'tiny', 'huge'}
 
         modifiers = []
         type_name = None
@@ -594,7 +686,6 @@ class Parser:
         property_value = None
 
         # Collect all words, then treat the last one as type name
-        # This allows unknown modifiers like "angry" in "create 100 angry orcs"
         words = []
         while self.current_token().type == TokenType.IDENTIFIER:
             word = self.current_token().value.lower()
@@ -607,21 +698,9 @@ class Parser:
         if not words:
             self.error("Expected type name in bulk operation")
 
-        # Last word is the type name, rest are modifiers
-        type_name = words[-1]
-        # Singularize: boxes→box, berries→berry, balls→ball
-        if type_name.endswith('ies') and len(type_name) > 3:
-            type_name = type_name[:-3] + 'y'  # berries → berry
-        elif type_name.endswith('xes') or type_name.endswith('shes') or type_name.endswith('ches'):
-            type_name = type_name[:-2]  # boxes → box, bushes → bush
-        elif type_name.endswith('ses') or type_name.endswith('zes'):
-            type_name = type_name[:-2]  # buses → bus, quizzes → quiz (approximation)
-        elif type_name.endswith('s') and not type_name.endswith('ss') and len(type_name) > 1:
-            type_name = type_name[:-1]  # balls → ball
-
-        # Everything before the last word is a modifier
-        for word in words[:-1]:
-            modifiers.append(word)
+        # Last word is the type name (singularized), rest are modifiers
+        type_name = self._singularize(words[-1])
+        modifiers = words[:-1]
 
         # For set operations, parse property to value
         if operation == 'set':
@@ -651,6 +730,33 @@ class Parser:
             property_name=property_name,
             property_value=property_value,
             auto_confirm=auto_confirm,
+            line=line
+        )
+
+    def _parse_bulk_operation_with_count(self, operation: str, count: int, line: int) -> ASTNode:
+        """Parse bulk operation where count is already known (e.g., from number word).
+
+        Used for: "create two balls", "create three red cubes"
+        """
+        # Collect all words, then treat the last one as type name
+        words = []
+        while self._is_identifier_or_word():
+            words.append(self.current_token().value.lower())
+            self.advance()
+
+        if not words:
+            self.error("Expected type name after number word")
+
+        # Last word is the type name (singularized), rest are modifiers
+        type_name = self._singularize(words[-1])
+        modifiers = words[:-1]
+
+        return BulkOperation(
+            operation=operation,
+            count=count,
+            type_name=type_name,
+            modifiers=modifiers,
+            auto_confirm=True,
             line=line
         )
 
@@ -2184,12 +2290,17 @@ class Parser:
         return FunctionCall(name=name, arguments=arguments, line=line)
 
     def parse_clone(self) -> CloneObject:
-        """Parse: clone <source> [as <target>]"""
+        """Parse: clone <source_ref> [as <target>]
+
+        Supports multi-word source: clone red ball as myball
+        """
         line = self.current_token().line
         self.expect(TokenType.CLONE)
 
-        source_token = self.expect(TokenType.IDENTIFIER)
-        source = source_token.value
+        # Collect multi-word source reference, stopping at AS/TO
+        source = self._collect_object_ref(stop_tokens={TokenType.AS, TokenType.TO})
+        if not source:
+            self.error("Expected object name after 'clone'")
 
         # 'as <target>' is optional - if not provided, target=None means auto-generate
         target = None
@@ -2201,10 +2312,12 @@ class Parser:
         return CloneObject(source=source, target=target, line=line)
 
     def parse_delete(self) -> DeleteObject:
-        """Parse: delete <name> OR delete N type (bulk delete)
+        """Parse: delete <obj_ref> OR delete N type (bulk delete)
 
-        Supports:
+        Supports multi-word object references:
         - delete ball           → delete specific object
+        - delete red ball       → delete object matching "red ball"
+        - delete big green cube → fuzzy match at runtime
         - delete N type         → bulk delete (deprecated)
         - destroy               → delete current selection (warns without confirmed)
         - destroy confirmed     → confirm bulk delete
@@ -2222,12 +2335,24 @@ class Parser:
             return self._parse_bulk_operation('delete', line)
 
         # Check if this is just "destroy" with no target (operates on selection)
-        if self.current_token().type in (TokenType.EOF, TokenType.NEWLINE) or \
-           self.current_token().type not in (TokenType.IDENTIFIER,):
+        if self.current_token().type in (TokenType.EOF, TokenType.NEWLINE):
+            return DeleteObject(name='selection', confirmed=False, line=line)
+        # Must have an identifier or word-like token to continue
+        if self.current_token().type != TokenType.IDENTIFIER and not self._is_word_token(self.current_token()):
             return DeleteObject(name='selection', confirmed=False, line=line)
 
-        name_token = self.expect(TokenType.IDENTIFIER)
-        name = name_token.value
+        # Collect multi-word object reference (e.g., "red ball", "big green cube")
+        # Also accept keyword tokens that could be typos (e.g., "read" for "red")
+        obj_ref_parts = []
+        while (self.current_token().type == TokenType.IDENTIFIER or
+               self._is_word_token(self.current_token())):
+            # Stop if we hit 'confirmed' keyword
+            if self.current_token().value.lower() == 'confirmed':
+                break
+            obj_ref_parts.append(self.current_token().value)
+            self.advance()
+
+        name = ' '.join(obj_ref_parts) if obj_ref_parts else 'selection'
 
         # Check for 'confirmed' after name
         confirmed = False
@@ -2248,7 +2373,9 @@ class Parser:
         return ResetObject(name=name, line=line)
 
     def parse_hide(self) -> HideObject:
-        """Parse: hide <name> - Set object visible to false
+        """Parse: hide <obj_ref> - Set object visible to false
+
+        Supports multi-word references: hide red ball, hide big cube
 
         TODO (BACKLOG - Console Features Parity):
         - Support 'hide all' to hide all objects
@@ -2259,13 +2386,17 @@ class Parser:
         line = self.current_token().line
         self.expect(TokenType.HIDE)
 
-        name_token = self.expect(TokenType.IDENTIFIER)
-        name = name_token.value
+        # Collect multi-word object reference
+        name = self._collect_object_ref()
+        if not name:
+            self.error("Expected object name after 'hide'")
 
         return HideObject(name=name, line=line)
 
     def parse_show(self) -> ShowObject:
-        """Parse: show <name> - Set object visible to true
+        """Parse: show <obj_ref> - Set object visible to true
+
+        Supports multi-word references: show red ball, show big cube
 
         TODO (BACKLOG - Console Features Parity):
         - Support 'show all' to show all objects
@@ -2276,8 +2407,10 @@ class Parser:
         line = self.current_token().line
         self.expect(TokenType.SHOW)
 
-        name_token = self.expect(TokenType.IDENTIFIER)
-        name = name_token.value
+        # Collect multi-word object reference
+        name = self._collect_object_ref()
+        if not name:
+            self.error("Expected object name after 'show'")
 
         return ShowObject(name=name, line=line)
 
@@ -2334,7 +2467,12 @@ class Parser:
         return CountObjects(object_type=object_type, line=line)
 
     def parse_move(self):
-        """Parse: move <name> to x,y[,z] or move <target> <direction> by <amount>
+        """Parse: move <obj_ref> to x,y[,z] or move <obj_ref> <direction> [by] <amount>
+
+        Supports multi-word object references:
+        - move red ball up 10
+        - move big green cube left 5
+        - move ball-1 to 100, 200
 
         Directional syntax (arcade shorthand):
         - move bullet up by 10
@@ -2343,33 +2481,44 @@ class Parser:
         Coordinate syntax (original):
         - move ball to 100, 200
         - move ball 100 200
-
-        TODO (BACKLOG - Console Features Parity):
-        - Support named positions: 'move ball to center', 'move ball to origin', 'move ball to ground'
-        - Support 'move it to ...' / 'move this to ...' for current object
-        See: rosh-console.toml v0.2.5, BACKLOG.md "Console Features Parity"
         """
         line = self.current_token().line
         self.expect(TokenType.MOVE)
 
-        # Parse target (can be identifier, array access, or loop variable)
-        target = self.parse_target()
+        directions = {'up', 'down', 'left', 'right', 'forward', 'back', 'backward'}
 
-        # Check for directional syntax: move <target> <direction> by <amount>
-        directions = {'up', 'down', 'left', 'right'}
+        # Collect words until we hit a direction, 'to', or a number
+        # This allows: move red ball up 10, move big cube left 5
+        # Also accept keyword tokens that could be typos (e.g., "read" for "red")
+        obj_ref_parts = []
+        while ((self.current_token().type == TokenType.IDENTIFIER or
+                self._is_word_token(self.current_token())) and
+               self.current_token().value.lower() not in directions and
+               self.current_token().type != TokenType.TO):
+            obj_ref_parts.append(self.current_token().value)
+            self.advance()
+
+        if not obj_ref_parts:
+            self.error("Expected object name after 'move'")
+
+        # Join parts into object reference string
+        obj_ref = ' '.join(obj_ref_parts)
+        # Create Identifier with the full reference (fuzzy matching happens at runtime)
+        target = Identifier(name=obj_ref, line=line)
+
+        # Check for directional syntax: move <obj_ref> <direction> [by] <amount>
         if (self.current_token().type == TokenType.IDENTIFIER and
             self.current_token().value.lower() in directions):
             direction = self.current_token().value.lower()
             self.advance()
-            self.expect(TokenType.BY)
+            # 'by' is optional
+            if self.current_token().type == TokenType.BY:
+                self.advance()
             amount = self.parse_expression()
             return MoveDirection(target=target, direction=direction, amount=amount, line=line)
 
-        # Coordinate syntax: extract name from target for backwards compatibility
-        if isinstance(target, Identifier):
-            name = target.name
-        else:
-            self.error("move to coordinates requires a simple object name")
+        # Coordinate syntax: use obj_ref as name
+        name = obj_ref
 
         # Skip optional 'to'
         if self.current_token().type == TokenType.TO:
@@ -2455,15 +2604,15 @@ class Parser:
         return GotoRoom(room=room_token.value, line=line)
 
     def parse_look(self) -> LookCommand:
-        """Parse: look [object] - Show current room or examine object"""
+        """Parse: look [obj_ref] - Show current room or examine object
+
+        Supports multi-word references: look red ball, look big cube
+        """
         line = self.current_token().line
         self.expect(TokenType.LOOK)
 
-        # Optional target object
-        target = None
-        if self.current_token().type == TokenType.IDENTIFIER:
-            target_token = self.advance()
-            target = target_token.value
+        # Optional multi-word target object
+        target = self._collect_object_ref()
 
         return LookCommand(target=target, line=line)
 

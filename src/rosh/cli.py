@@ -759,7 +759,13 @@ def _deep_search(interpreter, words):
 
 
 def _resolve_object_name(interpreter, identifier: str):
-    """Resolve an object name with fuzzy substring matching.
+    """Resolve an object name with fuzzy matching.
+
+    Supports:
+    - Exact match: "ball" -> ball
+    - UUID partial match: "abc123..." -> object with that UUID
+    - Multi-word type/color/size: "red ball" -> ball with color red
+    - Substring: "ba" -> ball
 
     Returns: (obj, resolved_name, matches) where:
     - obj: The resolved object (or None)
@@ -772,6 +778,13 @@ def _resolve_object_name(interpreter, identifier: str):
     if interpreter.current_env.exists(identifier):
         obj = interpreter.current_env.get(identifier)
         return obj, identifier, None
+
+    # Try the interpreter's fuzzy matching (handles type+color+size)
+    if hasattr(interpreter, '_fuzzy_find_object'):
+        matched = interpreter._fuzzy_find_object(identifier)
+        if matched:
+            obj = interpreter.current_env.get(matched)
+            return obj, matched, None
 
     # Try UUID partial match (8+ chars)
     if len(identifier) >= 8:
@@ -791,7 +804,7 @@ def _resolve_object_name(interpreter, identifier: str):
         if interpreter.current_env.exists(singular):
             return interpreter.current_env.get(singular), singular, None
 
-    # Try fuzzy substring matching
+    # Try fuzzy substring matching as fallback
     lower_id = identifier.lower()
     matches = []
     for name in interpreter.current_env.bindings.keys():
@@ -866,7 +879,24 @@ def _get_command(interpreter, out, identifier: str, prop_name: str = None):
         # Display it
         if isinstance(obj, RoshObject):
             obj_type = obj.name if hasattr(obj, 'name') and obj.name else "object"
-            out.print(f"<{obj_type}: {obj_name_found}>", style="cyan")
+            # Build key props string (color, size)
+            key_props = []
+            if obj.has('color'):
+                key_props.append(str(obj.get('color')))
+            if obj.has('scale'):
+                scale = obj.get('scale')
+                if scale == 2:
+                    key_props.append('big')
+                elif scale == 3:
+                    key_props.append('huge')
+                elif scale == 0.5:
+                    key_props.append('small')
+                elif scale == 0.25:
+                    key_props.append('tiny')
+                elif scale != 1:
+                    key_props.append(f'scale={scale}')
+            props_str = f" ({', '.join(key_props)})" if key_props else ""
+            out.print(f"<{obj_type}: {obj_name_found}>{props_str}", style="cyan")
         else:
             out.print(f"{rosh_to_python(obj)}", style="cyan")
         return
@@ -924,38 +954,224 @@ def _singularize(word: str) -> list:
     return candidates
 
 
-def _get_all_command(interpreter, out, type_name: str):
-    """Get all instances of a type.
+def _find_all_matching(interpreter, obj_ref: str):
+    """Find all objects matching a reference with optional modifiers.
 
-    Supports plural-to-singular: 'get all bananas' finds banana instances.
+    Args:
+        interpreter: The interpreter instance
+        obj_ref: Reference string like "blue balls", "big red cubes", "balls"
+
+    Returns:
+        tuple: (matching_objects, description, total_of_type, error_message)
+        - matching_objects: list of matching RoshObject instances
+        - description: human-readable description of what was searched (e.g., "blue ball")
+        - total_of_type: total count of that type (for context)
+        - error_message: error string if failed, None if success
     """
-    from .values import RoshObject
+    # Known modifiers
+    colors = {'red', 'green', 'blue', 'yellow', 'orange', 'purple', 'pink',
+              'cyan', 'white', 'black', 'gray', 'grey', 'brown'}
+    size_words = {'big': 2, 'large': 2, 'huge': 3, 'small': 0.5, 'tiny': 0.25}
 
-    # Try singular forms
+    # Parse reference into modifiers and type
+    ref_words = obj_ref.lower().split()
+    filter_color = None
+    filter_size = None
+    type_name = None
+
+    for word in ref_words:
+        if word in colors:
+            filter_color = word
+        elif word in size_words:
+            filter_size = word
+        else:
+            # Last non-modifier word is the type
+            type_name = word
+
+    if not type_name:
+        return [], None, 0, f"No type specified in '{obj_ref}'"
+
+    # Try singular forms of the type
     actual_type = None
     for candidate in _singularize(type_name):
         if candidate in interpreter.instances and len(interpreter.instances[candidate]) > 0:
             actual_type = candidate
-            if candidate != type_name:
-                out.warning(f"guessed: {type_name} → {candidate}")
             break
 
     if not actual_type:
-        out.error(f"No instances of '{type_name}' found.")
-        # Suggest available types
-        if interpreter.instances:
-            types = list(interpreter.instances.keys())
-            out.dim(f"Available types: {', '.join(types)}")
+        types = list(interpreter.instances.keys()) if interpreter.instances else []
+        return [], None, 0, f"No instances of '{type_name}' found. Available: {', '.join(types) if types else 'none'}"
+
+    # Get all instances and filter by modifiers
+    all_instances = interpreter.instances[actual_type]
+    matching = []
+
+    for inst in all_instances:
+        # Check color filter
+        if filter_color:
+            if inst.has('color'):
+                obj_color = str(inst.get('color')).lower()
+                if obj_color != filter_color:
+                    continue
+            else:
+                continue  # No color property, skip
+
+        # Check size filter
+        if filter_size:
+            obj_size_word = None
+            if inst.has('scale'):
+                scale = inst.get('scale')
+                if isinstance(scale, (int, float)):
+                    if scale >= 3:
+                        obj_size_word = 'huge'
+                    elif scale >= 2:
+                        obj_size_word = 'big'
+                    elif scale <= 0.25:
+                        obj_size_word = 'tiny'
+                    elif scale <= 0.5:
+                        obj_size_word = 'small'
+            if obj_size_word != filter_size:
+                continue
+
+        matching.append(inst)
+
+    # Build description
+    desc_parts = []
+    if filter_color:
+        desc_parts.append(filter_color)
+    if filter_size:
+        desc_parts.append(filter_size)
+    desc_parts.append(actual_type)
+    desc = ' '.join(desc_parts)
+
+    return matching, desc, len(all_instances), None
+
+
+def _format_obj_props(inst) -> str:
+    """Format key properties (color, size) for display."""
+    props = []
+    if inst.has('color'):
+        props.append(str(inst.get('color')))
+    if inst.has('scale'):
+        scale = inst.get('scale')
+        if scale == 2:
+            props.append('big')
+        elif scale == 3:
+            props.append('huge')
+        elif scale == 0.5:
+            props.append('small')
+        elif scale == 0.25:
+            props.append('tiny')
+    return f" ({', '.join(props)})" if props else ""
+
+
+def _get_all_command(interpreter, out, obj_ref: str):
+    """Get all instances matching a reference with optional modifiers."""
+    matching, desc, total, error = _find_all_matching(interpreter, obj_ref)
+
+    if error:
+        out.error(error)
         return
 
-    instances = interpreter.instances[actual_type]
-    out.print(f"All {actual_type} ({len(instances)}):", style="bold")
-    for inst in instances:
+    if not matching:
+        out.warning(f"No {desc} found (0 of {total} match)")
+        return
+
+    MAX_DISPLAY = 10
+    out.print(f"All {desc} ({len(matching)}):", style="bold")
+    for inst in matching[:MAX_DISPLAY]:
         inst_id = inst.id if hasattr(inst, 'id') and inst.id else inst.uuid[:8]
-        out.print(f"  {inst_id}", style="cyan")
+        out.print(f"  {inst_id}{_format_obj_props(inst)}", style="cyan")
+    if len(matching) > MAX_DISPLAY:
+        out.dim(f"  ...and {len(matching) - MAX_DISPLAY} more")
 
     # Push list to stack
-    interpreter.data_stack.append(instances)
+    interpreter.data_stack.append(matching)
+
+
+def _delete_all_command(interpreter, out, obj_ref: str) -> tuple:
+    """Delete all instances matching a reference. Returns (count, desc) for confirmation."""
+    matching, desc, total, error = _find_all_matching(interpreter, obj_ref)
+
+    if error:
+        out.error(error)
+        return 0, None
+
+    if not matching:
+        out.warning(f"No {desc} found (0 of {total} match)")
+        return 0, None
+
+    # Return info for confirmation - actual deletion happens after confirm
+    return matching, desc
+
+
+def _execute_delete_all(interpreter, out, matching: list, desc: str):
+    """Execute the deletion after confirmation."""
+    deleted = 0
+    for inst in matching:
+        inst_id = inst.id if hasattr(inst, 'id') and inst.id else inst.uuid[:8]
+
+        # Remove from environment (check both current_env and bindings)
+        if inst_id in interpreter.current_env.bindings:
+            # Detach from tracking structures
+            interpreter._detach_object_instance(inst)
+            del interpreter.current_env.bindings[inst_id]
+            deleted += 1
+
+    out.success(f"Deleted {deleted} {desc}(s)")
+    return deleted
+
+
+def _hide_all_command(interpreter, out, obj_ref: str) -> tuple:
+    """Hide all instances matching a reference. Returns (matching, desc) for confirmation."""
+    matching, desc, total, error = _find_all_matching(interpreter, obj_ref)
+
+    if error:
+        out.error(error)
+        return [], None
+
+    if not matching:
+        out.warning(f"No {desc} found (0 of {total} match)")
+        return [], None
+
+    return matching, desc
+
+
+def _execute_hide_all(interpreter, out, matching: list, desc: str):
+    """Execute hiding after confirmation."""
+    hidden = 0
+    for inst in matching:
+        if hasattr(inst, 'set'):
+            inst.set('visible', False)
+            hidden += 1
+    out.success(f"Hid {hidden} {desc}(s)")
+    return hidden
+
+
+def _show_all_command(interpreter, out, obj_ref: str) -> tuple:
+    """Show all instances matching a reference. Returns (matching, desc) for confirmation."""
+    matching, desc, total, error = _find_all_matching(interpreter, obj_ref)
+
+    if error:
+        out.error(error)
+        return [], None
+
+    if not matching:
+        out.warning(f"No {desc} found (0 of {total} match)")
+        return [], None
+
+    return matching, desc
+
+
+def _execute_show_all(interpreter, out, matching: list, desc: str):
+    """Execute showing after confirmation."""
+    shown = 0
+    for inst in matching:
+        if hasattr(inst, 'set'):
+            inst.set('visible', True)
+            shown += 1
+    out.success(f"Showed {shown} {desc}(s)")
+    return shown
 
 
 def run_file(filepath: str, toml_output: bool = False, toon_output: bool = False, test_inputs: list = None):
@@ -1272,9 +1488,9 @@ def run_repl(interpreter: Interpreter = None):
         while twin_message_queue:
             msg = twin_message_queue.pop(0)
             if msg['type'] == 'USER_JOINED':
-                out.print(f"\n[twin] User {msg['user_id']} joined (total: {msg['user_count']})", style="cyan")
+                out.print(f"\n[twin] User {msg.get('user_id', '?')} joined (total: {msg.get('user_count', '?')})", style="cyan")
             elif msg['type'] == 'USER_LEFT':
-                out.dim(f"\n[twin] User {msg['user_id']} left (total: {msg['user_count']})")
+                out.dim(f"\n[twin] User {msg.get('user_id', '?')} left (total: {msg.get('user_count', '?')})")
             elif msg['type'] == 'OBJECT_CREATED':
                 twin_world_state['objects'][msg['id']] = msg['data']
                 if msg['by'] != twin_user_id:
@@ -1285,7 +1501,7 @@ def run_repl(interpreter: Interpreter = None):
                 if msg['by'] != twin_user_id:
                     out.dim(f"\n[twin] - {msg['id']} deleted by {msg['by']}")
             elif msg['type'] == 'CHAT':
-                out.print(f"\n[twin] [{msg['user_id']}] {msg['message']}", style="cyan")
+                out.print(f"\n[twin] [{msg.get('by', msg.get('user_id', '?'))}] {msg['message']}", style="cyan")
             elif msg['type'] == 'ERROR':
                 out.error(f"[twin] {msg.get('message', 'Unknown error')}")
             elif msg['type'] == 'WORLD_RESET':
@@ -1878,6 +2094,100 @@ def run_repl(interpreter: Interpreter = None):
             # Display any pending twin messages before processing commands
             twin_display_messages()
 
+            # Handle move command for twin world objects (objects that exist remotely but not locally)
+            cmd = line.strip()
+            if cmd.lower().startswith('move ') and (twin_ws or twin_sock):
+                # Parse: move <object_ref> <direction> [by] <amount>
+                # object_ref can be multi-word like "red ball" or "ball-1"
+                match = re.match(r'^move\s+(.+?)\s+(up|down|left|right|forward|back|backward)\s+(?:by\s+)?(\d+(?:\.\d+)?)$', cmd, re.IGNORECASE)
+                if match:
+                    obj_ref, direction, amount_str = match.groups()
+                    amount = float(amount_str)
+
+                    # Fuzzy match object reference against twin world objects
+                    obj_name = None
+                    objects = twin_world_state.get('objects', {})
+
+                    # First try exact match
+                    if obj_ref in objects:
+                        obj_name = obj_ref
+                    else:
+                        # Try fuzzy matching: "red ball" -> find ball with color red
+                        ref_words = obj_ref.lower().split()
+                        best_match = None
+                        best_score = 0
+
+                        for name, data in objects.items():
+                            score = 0
+                            obj_type = data.get('type', '').lower()
+                            obj_color = data.get('color', '').lower()
+                            name_lower = name.lower()
+
+                            # Check each word in reference
+                            for word in ref_words:
+                                if word == obj_type or word == obj_type + 's':  # "ball" or "balls"
+                                    score += 10
+                                if word == obj_color:
+                                    score += 5
+                                if word in name_lower:
+                                    score += 3
+
+                            if score > best_score:
+                                best_score = score
+                                best_match = name
+
+                        if best_match and best_score > 0:
+                            obj_name = best_match
+                            out.dim(f"[matched '{obj_ref}' → '{obj_name}']")
+
+                    if not obj_name:
+                        out.error(f"No object matching '{obj_ref}' found in world")
+                        continue
+
+                    # Check if object exists in twin world but not locally
+                    local_exists = interpreter and interpreter.current_env.exists(obj_name)
+                    remote_exists = obj_name in objects
+
+                    if remote_exists and not local_exists:
+                        # Get current position from twin state
+                        obj_data = twin_world_state['objects'][obj_name]
+                        old_x = obj_data.get('x', 0)
+                        old_y = obj_data.get('y', 0)
+                        old_z = obj_data.get('z', 0)
+
+                        # Calculate new position
+                        direction = direction.lower()
+                        new_x, new_y, new_z = old_x, old_y, old_z
+                        if direction == 'right':
+                            new_x = old_x + amount
+                        elif direction == 'left':
+                            new_x = old_x - amount
+                        elif direction == 'up':
+                            new_y = old_y - amount
+                        elif direction == 'down':
+                            new_y = old_y + amount
+                        elif direction == 'forward':
+                            new_z = old_z - amount
+                        elif direction in ('back', 'backward'):
+                            new_z = old_z + amount
+
+                        # Broadcast the raw command (for semantic interpretation by other clients)
+                        import json
+                        twin_ws.send(json.dumps({
+                            "type": "MOVE",
+                            "id": obj_name,
+                            "x": new_x, "y": new_y, "z": new_z,
+                            "command": cmd  # Include raw command for other clients
+                        }))
+
+                        # Update local twin state
+                        twin_world_state['objects'][obj_name]['x'] = new_x
+                        twin_world_state['objects'][obj_name]['y'] = new_y
+                        twin_world_state['objects'][obj_name]['z'] = new_z
+
+                        out.success(f"Moved '{obj_name}' {direction} by {amount}")
+                        continue
+
             # Handle alias command: alias <name> <expansion>
             if line.strip() == 'alias' or line.strip().startswith('alias '):
                 parts = line.strip().split(None, 2)  # Split into: ['alias', name, expansion]
@@ -2331,37 +2641,80 @@ def run_repl(interpreter: Interpreter = None):
                 continue
 
             # look <obj> / examine <obj> / inspect <obj> / x <obj> - show object properties
+            # Supports multi-word references like "look red ball"
             if len(parts) >= 2 and parts[0].lower() in ('look', 'l', 'examine', 'ex', 'inspect', 'x'):
-                obj_name = parts[1]
-                _examine_object(interpreter, out, obj_name)
+                obj_ref = ' '.join(parts[1:])  # Join all words after command
+                _examine_object(interpreter, out, obj_ref)
                 continue
 
             # show <obj> / unhide <obj> - make object visible
+            # show all <type> - show all matching objects with confirmation
+            # Supports multi-word references: show red ball, show all blue balls
             if len(parts) >= 2 and parts[0].lower() in ('show', 'unhide'):
-                obj_name = parts[1]
-                if interpreter and interpreter.current_env.exists(obj_name):
-                    obj = interpreter.current_env.get(obj_name)
-                    if hasattr(obj, 'set'):
-                        obj.set('visible', True)
-                        out.success(f"{obj_name} visible")
-                    else:
-                        out.warning(f"Cannot set visibility on '{obj_name}'")
+                # Check for "show all <type>"
+                if parts[1].lower() == 'all' and len(parts) >= 3:
+                    obj_ref = ' '.join(parts[2:])
+                    matching, desc = _show_all_command(interpreter, out, obj_ref)
+                    if matching:
+                        out.print(f"Show {len(matching)} {desc}(s)? (yes/no)", style="yellow")
+                        interpreter.pending_operation = {
+                            'type': 'bulk_show',
+                            'matching': matching,
+                            'desc': desc
+                        }
+                    continue
+
+                obj_ref = ' '.join(parts[1:])  # Join all words after command
+                obj, obj_name, _ = _resolve_object_name(interpreter, obj_ref)
+                if obj and hasattr(obj, 'set'):
+                    obj.set('visible', True)
+                    out.success(f"Showed '{obj_name}'")
+                elif obj:
+                    out.warning(f"Cannot set visibility on '{obj_name}'")
                 else:
-                    out.warning(f"Object '{obj_name}' not found")
+                    out.warning(f"Object '{obj_ref}' not found")
                 continue
 
             # hide <obj> - hide object
+            # hide all <type> - hide all matching objects with confirmation
+            # Supports multi-word references: hide red ball, hide all blue balls
             if len(parts) >= 2 and parts[0].lower() == 'hide':
-                obj_name = parts[1]
-                if interpreter and interpreter.current_env.exists(obj_name):
-                    obj = interpreter.current_env.get(obj_name)
-                    if hasattr(obj, 'set'):
-                        obj.set('visible', False)
-                        out.success(f"{obj_name} hidden")
-                    else:
-                        out.warning(f"Cannot set visibility on '{obj_name}'")
+                # Check for "hide all <type>"
+                if parts[1].lower() == 'all' and len(parts) >= 3:
+                    obj_ref = ' '.join(parts[2:])
+                    matching, desc = _hide_all_command(interpreter, out, obj_ref)
+                    if matching:
+                        out.print(f"Hide {len(matching)} {desc}(s)? (yes/no)", style="yellow")
+                        interpreter.pending_operation = {
+                            'type': 'bulk_hide',
+                            'matching': matching,
+                            'desc': desc
+                        }
+                    continue
+
+                obj_ref = ' '.join(parts[1:])  # Join all words after command
+                obj, obj_name, _ = _resolve_object_name(interpreter, obj_ref)
+                if obj and hasattr(obj, 'set'):
+                    obj.set('visible', False)
+                    out.success(f"Hid '{obj_name}'")
+                elif obj:
+                    out.warning(f"Cannot set visibility on '{obj_name}'")
                 else:
-                    out.warning(f"Object '{obj_name}' not found")
+                    out.warning(f"Object '{obj_ref}' not found")
+                continue
+
+            # delete all <type> - delete all matching objects with confirmation
+            # Supports modifiers: delete all blue balls, delete all big red cubes
+            if len(parts) >= 3 and parts[0].lower() == 'delete' and parts[1].lower() == 'all':
+                obj_ref = ' '.join(parts[2:])
+                matching, desc = _delete_all_command(interpreter, out, obj_ref)
+                if matching:
+                    out.print(f"Delete {len(matching)} {desc}(s)? (yes/no)", style="yellow")
+                    interpreter.pending_operation = {
+                        'type': 'bulk_delete',
+                        'matching': matching,
+                        'desc': desc
+                    }
                 continue
 
             # meta <setting> [<value>] - runtime settings
@@ -2414,7 +2767,23 @@ def run_repl(interpreter: Interpreter = None):
                 # First check if there's a pending operation
                 if interpreter.pending_operation is not None:
                     op = interpreter.pending_operation
-                    # Execute as confirm command (bulk ops)
+                    op_type = op.get('type')
+
+                    # Handle CLI-level bulk operations directly
+                    if op_type == 'bulk_delete':
+                        _execute_delete_all(interpreter, out, op['matching'], op['desc'])
+                        interpreter.pending_operation = None
+                        continue
+                    elif op_type == 'bulk_hide':
+                        _execute_hide_all(interpreter, out, op['matching'], op['desc'])
+                        interpreter.pending_operation = None
+                        continue
+                    elif op_type == 'bulk_show':
+                        _execute_show_all(interpreter, out, op['matching'], op['desc'])
+                        interpreter.pending_operation = None
+                        continue
+
+                    # Execute as confirm command (parser-level bulk ops)
                     # Note: 'y' is CLI-only (conflicts with variable), so translate to 'yes'
                     confirm_cmd = 'yes' if stripped == 'y' else stripped
                     try:
@@ -2423,44 +2792,49 @@ def run_repl(interpreter: Interpreter = None):
                         out.error(str(e))
                     continue
 
-                # Otherwise, treat 'go' as buffer execution command
-                if stripped == 'go':
-                    if not buffer:
-                        out.dim("Nothing to run")
-                        continue
-
-                    # Count open blocks that need closing
-                    source_so_far = '\n'.join(buffer)
-                    open_blocks = 0
-                    for buf_line in buffer:
-                        buf_stripped = buf_line.strip().lower()
-                        # Only count block-opening keywords (not 'create <name>' one-liners)
-                        if any(buf_stripped.startswith(kw) for kw in ['create object ', 'if ', 'define function', 'when ', 'while ', 'for ', 'do ']):
-                            open_blocks += 1
-                        # 'end' closes a block
-                        if buf_stripped == 'end':
-                            open_blocks = max(0, open_blocks - 1)
-
-                    # Auto-close all open blocks
-                    if open_blocks > 0:
-                        out.dim(f"[auto-closing {open_blocks} block{'s' if open_blocks > 1 else ''}]")
-                        for _ in range(open_blocks):
-                            buffer.append('end')
-
-                    # Execute the complete buffer
-                    source = '\n'.join(buffer)
-                    buffer = []
-                    try:
-                        _before = snapshot_object_states()
-                        interpreter = run_source(source, "<repl>", interpreter)
-                        broadcast_object_changes(_before)
-                    except RoshError as e:
-                        out.error(str(e))
+            # no/n/cancel - cancel pending bulk operation
+            if stripped in ('no', 'n', 'cancel') and interpreter.pending_operation is not None:
+                op = interpreter.pending_operation
+                op_type = op.get('type', '')
+                if op_type.startswith('bulk_'):
+                    out.dim("Cancelled")
+                    interpreter.pending_operation = None
                     continue
-                else:
-                    # confirm/yes without pending operation
-                    out.dim("No pending operation to confirm")
+
+            # Treat 'go' as buffer execution command
+            if stripped == 'go':
+                if not buffer:
+                    out.dim("Nothing to run")
                     continue
+
+                # Count open blocks that need closing
+                source_so_far = '\n'.join(buffer)
+                open_blocks = 0
+                for buf_line in buffer:
+                    buf_stripped = buf_line.strip().lower()
+                    # Only count block-opening keywords (not 'create <name>' one-liners)
+                    if any(buf_stripped.startswith(kw) for kw in ['create object ', 'if ', 'define function', 'when ', 'while ', 'for ', 'do ']):
+                        open_blocks += 1
+                    # 'end' closes a block
+                    if buf_stripped == 'end':
+                        open_blocks = max(0, open_blocks - 1)
+
+                # Auto-close all open blocks
+                if open_blocks > 0:
+                    out.dim(f"[auto-closing {open_blocks} block{'s' if open_blocks > 1 else ''}]")
+                    for _ in range(open_blocks):
+                        buffer.append('end')
+
+                # Execute the complete buffer
+                source = '\n'.join(buffer)
+                buffer = []
+                try:
+                    _before = snapshot_object_states()
+                    interpreter = run_source(source, "<repl>", interpreter)
+                    broadcast_object_changes(_before)
+                except RoshError as e:
+                    out.error(str(e))
+                continue
 
             # get <obj> or get <obj> <prop> - unified get command (#017)
             # Also: get all <type>, get <type> <n>, get blue sphere (deep search)
@@ -2468,9 +2842,10 @@ def run_repl(interpreter: Interpreter = None):
             is_bulk_get = (len(parts) >= 3 and parts[0].lower() == 'get' and parts[1].isdigit())
             if len(parts) >= 2 and parts[0].lower() == 'get' and not is_bulk_get:
                 # Handle "get all <type>" - list all instances
+                # Supports modifiers: "get all blue balls", "get all big red cubes"
                 if parts[1].lower() == 'all' and len(parts) >= 3:
-                    type_name = parts[2]
-                    _get_all_command(interpreter, out, type_name)
+                    obj_ref = ' '.join(parts[2:])  # Join all words after "all"
+                    _get_all_command(interpreter, out, obj_ref)
                     continue
 
                 identifier = parts[1]
