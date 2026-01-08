@@ -2323,6 +2323,107 @@ def run_repl(interpreter: Interpreter = None):
                 out.dim("Note: 'make' is a REPL convenience command, not part of the Rosh language.")
                 continue
 
+            # help set - explain the set command
+            if stripped == 'help set':
+                out.print("set - Set object properties", style="bold cyan")
+                out.print()
+                out.print("Usage:")
+                out.print("  set <obj> <prop> to <value>")
+                out.print("  set ball color to red")
+                out.print("  set cube x to 100")
+                out.print("  set sphere scale to 2")
+                out.print()
+                out.print("Common properties: x, y, z, color, scale, visible,")
+                out.dim("  rotation, opacity, speed, group")
+                continue
+
+            # help get - explain the get command
+            if stripped == 'help get':
+                out.print("get - Select/examine objects", style="bold cyan")
+                out.print()
+                out.print("Usage:")
+                out.print("  get <name>            - Select single object")
+                out.print("  get all cubes         - Select all of type")
+                out.print("  get all red balls     - With color modifier")
+                out.print("  get all big cubes     - With size modifier")
+                out.print()
+                out.dim("After selecting, use 'it' to reference the object.")
+                continue
+
+            # help delete - explain the delete command
+            if stripped in ('help delete', 'help destroy', 'help remove'):
+                out.print("delete - Remove objects", style="bold cyan")
+                out.print()
+                out.print("Usage:")
+                out.print("  delete <name>         - Delete single object")
+                out.print("  delete all cubes      - Delete all of type")
+                out.print("  delete all red balls  - With color modifier")
+                out.print()
+                out.dim("Bulk deletes require confirmation (type 'go' or 'yes').")
+                continue
+
+            # help move - explain the move command
+            if stripped == 'help move':
+                out.print("move - Move objects", style="bold cyan")
+                out.print()
+                out.print("Relative movement:")
+                out.print("  move <obj> up 5       - Move up by 5")
+                out.print("  move <obj> left 10    - Move left by 10")
+                out.print("  move <obj> forward 3  - Move forward by 3")
+                out.print()
+                out.print("Absolute position:")
+                out.print("  move <obj> to 0 10 0  - Move to x=0, y=10, z=0")
+                out.print()
+                out.dim("Directions: up, down, left, right, forward, back")
+                continue
+
+            # help hide/show - explain visibility commands
+            if stripped in ('help hide', 'help show'):
+                out.print("hide/show - Toggle visibility", style="bold cyan")
+                out.print()
+                out.print("Usage:")
+                out.print("  hide <name>           - Hide single object")
+                out.print("  show <name>           - Show single object")
+                out.print("  hide all cubes        - Hide all of type")
+                out.print("  show all red balls    - Show with modifier")
+                out.print()
+                out.dim("Bulk operations require confirmation.")
+                continue
+
+            # help list - explain the list command
+            if stripped in ('help list', 'help ls'):
+                out.print("list - List objects", style="bold cyan")
+                out.print()
+                out.print("Usage:")
+                out.print("  list                  - List all objects")
+                out.print("  list cubes            - List objects of type")
+                out.print("  list all              - Show all including hidden")
+                out.print("  list <scene>          - List objects in scene")
+                continue
+
+            # help look - explain the look command
+            if stripped in ('help look', 'help examine', 'help x'):
+                out.print("look - Examine objects", style="bold cyan")
+                out.print()
+                out.print("Usage:")
+                out.print("  look <name>           - Show object details")
+                out.print("  look                  - Examine current object")
+                out.print("  x <name>              - Short form")
+                out.print()
+                out.dim("Shows all properties and current values.")
+                continue
+
+            # help scenes - explain scene commands
+            if stripped in ('help scenes', 'help go', 'help scene'):
+                out.print("scenes - Scene management", style="bold cyan")
+                out.print()
+                out.print("Usage:")
+                out.print("  scenes                - List all scenes")
+                out.print("  go <scene>            - Go to scene")
+                out.print("  create scene <name>   - Create new scene")
+                out.print("  set <obj> scene to <name> - Move object to scene")
+                continue
+
             # Provide friendlier guidance for commands missing arguments
             # Exception: commands that are valid with no arguments
             if len(parts) == 1 and parts[0].lower() not in ('go', 'confirm', 'yes', 'y', 'undo', 'redo', 'oops', 'repeat', 'look', 'l', 'list', 'ls'):
