@@ -19,7 +19,8 @@ function createPhaserAdapter(phaserScene, options = {}) {
   const objects = {};
 
   // Supported primitive types for this engine (2D shapes)
-  const PRIMITIVE_TYPES = ['rectangle', 'rect', 'circle', 'ellipse', 'triangle', 'sprite', 'text', 'box', 'cube', 'ball'];
+  // Includes 3D type aliases (sphere->circle, square->rectangle) for cross-engine compatibility
+  const PRIMITIVE_TYPES = ['rectangle', 'rect', 'square', 'circle', 'ellipse', 'triangle', 'sprite', 'text', 'box', 'cube', 'ball', 'sphere'];
 
   // Scene registry for multi-scene support
   const scenes = new Set();
@@ -28,8 +29,9 @@ function createPhaserAdapter(phaserScene, options = {}) {
   // Type counters for auto-naming
   const typeCounters = {};
 
-  // Known object presets (passed from emitter or page)
-  const KNOWN_OBJECTS = options.knownObjects || {};
+  // Known object presets (use RoshObjects if available, else options, else empty)
+  const KNOWN_OBJECTS = options.knownObjects ||
+    (typeof RoshObjects !== 'undefined' ? RoshObjects.KNOWN_OBJECTS_2D : {});
 
   // Asset base path for sprites
   const assetPath = options.assetPath || '';
@@ -112,6 +114,7 @@ function createPhaserAdapter(phaserScene, options = {}) {
     switch (typeName) {
       case 'circle':
       case 'ball':
+      case 'sphere':  // 3D sphere -> 2D circle
         const radius = (preset2d && preset2d.scale ? preset2d.scale : 1) * size / 2;
         obj = phaserScene.add.circle(x, y, radius, colorHex);
         break;
@@ -130,6 +133,7 @@ function createPhaserAdapter(phaserScene, options = {}) {
         break;
       case 'rect':
       case 'rectangle':
+      case 'square':  // 3D square -> 2D rectangle
       case 'cube':
       case 'box':
       default:
@@ -264,9 +268,10 @@ function createPhaserAdapter(phaserScene, options = {}) {
       const y = options.y !== undefined ? options.y : gameHeight / 2 + (Math.random() - 0.5) * 200;
 
       // Check known objects preset
+      // KNOWN_OBJECTS can be flat (from RoshObjects) or nested (from emitter)
       const preset = KNOWN_OBJECTS[typeName];
-      const preset2d = preset ? preset['2d'] : null;
-      const description = preset ? preset.description : null;
+      const preset2d = preset ? (preset['2d'] || preset) : null;  // Support both formats
+      const description = preset ? (preset.description || null) : null;
       const isKnownType = PRIMITIVE_TYPES.includes(typeName) || !!preset;
 
       let obj;
@@ -283,7 +288,8 @@ function createPhaserAdapter(phaserScene, options = {}) {
           obj.setScale(scale * 0.5);  // Sprites often need scaling down
         } else {
           // Create shape placeholder while sprite loads
-          const presetColor = preset2d.color ? parseColor(preset2d.color) : colorHex;
+          // User/network color takes precedence over preset color
+          const presetColor = options.color ? colorHex : (preset2d.color ? parseColor(preset2d.color) : colorHex);
           obj = createShape(preset2d.shape || 'rectangle', x, y, size, presetColor, preset2d);
           obj.setAlpha(0.6);
 
@@ -311,7 +317,8 @@ function createPhaserAdapter(phaserScene, options = {}) {
         }
       } else if (preset2d) {
         // Use shape from preset
-        const presetColor = preset2d.color ? parseColor(preset2d.color) : colorHex;
+        // User/network color takes precedence over preset color
+        const presetColor = options.color ? colorHex : (preset2d.color ? parseColor(preset2d.color) : colorHex);
         obj = createShape(preset2d.shape || 'rectangle', x, y, size, presetColor, preset2d);
       } else {
         // Primitive shapes

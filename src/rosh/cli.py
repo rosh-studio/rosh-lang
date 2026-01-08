@@ -3049,6 +3049,11 @@ def generate_phaser_output(js_code: str, output_dir: str):
     if network_js.exists():
         shutil.copy(network_js, output_path / "rosh-network.js")
 
+    # Copy shared objects module for cross-engine sync
+    objects_js = static_dir / "rosh-objects.js"
+    if objects_js.exists():
+        shutil.copy(objects_js, output_path / "rosh-objects.js")
+
     # Create assets directory
     (output_path / "assets").mkdir(exist_ok=True)
 
