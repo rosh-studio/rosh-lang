@@ -10,11 +10,11 @@
  *   2. Create a RoshAdapter object with engine-specific methods
  *   3. Call RoshRuntime.init(adapter)
  *
- * Version: 0.2.8
+ * Version: 0.2.9
  * Spec: rosh-console.toml v0.2.5
  */
 
-const ROSH_VERSION = '0.2.8';
+const ROSH_VERSION = '0.2.9';
 const ROSH_BUILD_TIME = '__BUILD_TIME__';  // Replaced by Python at build time
 
 const RoshRuntime = (function() {
