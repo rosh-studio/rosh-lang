@@ -1838,8 +1838,18 @@ const RoshRuntime = (function() {
     }
 
     // Original behavior: get all <type>
-    const typeName = singularize(args.join(' '));
-    const objects = adapter.getObjectsByType(typeName);
+    const rawTypeName = args.join(' ');
+    // Try exact match first, then singularize
+    let objects = adapter.getObjectsByType(rawTypeName);
+    let typeName = rawTypeName;
+
+    if (objects.length === 0) {
+      const singularized = singularize(rawTypeName);
+      if (singularized !== rawTypeName) {
+        objects = adapter.getObjectsByType(singularized);
+        typeName = singularized;
+      }
+    }
 
     if (objects.length === 0) {
       log('No ' + typeName + ' objects found', 'err');
@@ -1923,7 +1933,7 @@ const RoshRuntime = (function() {
     // Parse args into modifiers and type
     let targetColor = null;
     let targetSize = null;
-    let targetType = null;
+    let targetTypeOriginal = null;
 
     for (const arg of args) {
       const lower = arg.toLowerCase();
@@ -1932,34 +1942,40 @@ const RoshRuntime = (function() {
       } else if (sizes[lower] !== undefined) {
         targetSize = lower;
       } else {
-        targetType = singularize(lower);
+        targetTypeOriginal = lower;  // Keep original, singularize later if needed
       }
     }
 
-    // Filter objects
-    const matching = allObjects.filter(obj => {
+    // Filter helper - matches objects with given type (and color/size modifiers)
+    const filterWithType = (type) => allObjects.filter(obj => {
       const objType = (obj.userData?.type || obj.name?.split('-')[0] || '').toLowerCase();
       const objColor = (obj.userData?.color || '').toLowerCase();
       const objScale = obj.userData?.scale || obj.scale?.x || 1;
 
-      // Type must match if specified
-      if (targetType && objType !== targetType) return false;
-
-      // Color must match if specified
+      if (type && objType !== type) return false;
       if (targetColor && objColor !== targetColor) return false;
-
-      // Size must match if specified
       if (targetSize) {
-        const targetScale = sizes[targetSize];
         if (targetSize === 'big' || targetSize === 'large' || targetSize === 'huge') {
           if (objScale < 1.5) return false;
         } else if (targetSize === 'small' || targetSize === 'tiny') {
           if (objScale > 0.75) return false;
         }
       }
-
       return true;
     });
+
+    // Try exact type match first
+    let matching = filterWithType(targetTypeOriginal);
+    let targetType = targetTypeOriginal;
+
+    // If no matches with exact type, try singularized
+    if (matching.length === 0 && targetTypeOriginal) {
+      const singularized = singularize(targetTypeOriginal);
+      if (singularized !== targetTypeOriginal) {
+        matching = filterWithType(singularized);
+        targetType = singularized;
+      }
+    }
 
     // Build description
     const descParts = [];
