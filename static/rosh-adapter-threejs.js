@@ -912,6 +912,57 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
     },
 
     // ========================================================================
+    // SPOTLIGHT SYSTEM (for demo dynamic lighting)
+    // ========================================================================
+
+    toggleSpotlight: function(visible, targetName) {
+      // Find or create the demo spotlight
+      let spot = scene.getObjectByName('_rosh_spotlight');
+      let spotHelper = scene.getObjectByName('_rosh_spotlight_helper');
+
+      if (!spot && visible) {
+        // Create spotlight above the scene
+        spot = new THREE.SpotLight(0xffffff, 2);
+        spot.name = '_rosh_spotlight';
+        spot.position.set(0, 8, 0);
+        spot.angle = Math.PI / 6;
+        spot.penumbra = 0.3;
+        spot.decay = 1;
+        spot.distance = 30;
+        spot.castShadow = true;
+        scene.add(spot);
+
+        // Create a target for the spotlight
+        const spotTarget = new THREE.Object3D();
+        spotTarget.name = '_rosh_spotlight_target';
+        spotTarget.position.set(0, 0, 0);
+        scene.add(spotTarget);
+        spot.target = spotTarget;
+
+        // Optional: add a visible cone helper
+        spotHelper = new THREE.SpotLightHelper(spot);
+        spotHelper.name = '_rosh_spotlight_helper';
+        scene.add(spotHelper);
+      }
+
+      if (spot) {
+        spot.visible = visible;
+        if (spotHelper) spotHelper.visible = visible;
+
+        // Target a specific object if provided
+        if (targetName && visible) {
+          const targetObj = findObject(targetName);
+          if (targetObj) {
+            spot.target.position.copy(targetObj.position);
+            spot.position.set(targetObj.position.x, targetObj.position.y + 8, targetObj.position.z);
+          }
+        }
+      }
+
+      return { success: true, visible: visible };
+    },
+
+    // ========================================================================
     // CLICK-TO-MOVE SYSTEM (ThreeJS-first)
     // ========================================================================
 

@@ -856,6 +856,30 @@ const RoshRuntime = (function() {
           break;
 
         // ====================================================================
+        // LIGHTING COMMANDS
+        // ====================================================================
+
+        case 'spotlight':
+        case 'spot':
+          if (adapter.toggleSpotlight) {
+            const arg = parts[1]?.toLowerCase();
+            if (arg === 'off' || arg === 'hide' || arg === 'false' || arg === '0') {
+              adapter.toggleSpotlight(false);
+              log('Spotlight hidden', 'ok');
+            } else if (arg === 'on' || arg === 'show' || arg === 'true' || arg === '1' || !arg) {
+              adapter.toggleSpotlight(true);
+              log('Spotlight visible', 'ok');
+            } else {
+              // Maybe it's an object to target
+              adapter.toggleSpotlight(true, arg);
+              log('Spotlight targeting: ' + arg, 'ok');
+            }
+          } else {
+            log('Spotlight not supported by this adapter', 'err');
+          }
+          break;
+
+        // ====================================================================
         // PROJECT TWIN - SHARED WORLDS
         // ====================================================================
 

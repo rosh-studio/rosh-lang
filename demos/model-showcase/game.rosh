@@ -1,0 +1,133 @@
+# Model Showcase Demo
+# All available 3D models arranged for demo recording
+# Run locally: rosh build game.rosh --target threejs --output dist/ --copy-assets
+
+meta
+    title "Model Showcase"
+    description "All available 3D models for demo recording"
+    use_shared_runtime true
+end
+
+# Row 1: Scottish Heritage models - z = -6
+create object lewis_king
+  set model to "lewis_chess_king.glb"
+  set x to -6
+  set y to 0
+  set z to -6
+  set scale to 2
+end
+
+create object lewis_queen
+  set model to "lewis_chess_queen.glb"
+  set x to -3
+  set y to 0
+  set z to -6
+  set scale to 2
+end
+
+create object cutty_cat
+  set model to "cutty_sark_cat.glb"
+  set x to 0
+  set y to 0
+  set z to -6
+  set scale to 2
+end
+
+create object helmet
+  set model to "spartan_bronze_helmet.glb"
+  set x to 3
+  set y to 0
+  set z to -6
+  set scale to 2
+end
+
+create object invereen
+  set model to "invereen_stone.glb"
+  set x to 6
+  set y to 0
+  set z to -6
+  set scale to 1.5
+end
+
+# Row 2: Architectural and Large - z = -2
+create object monument
+  set model to "joanna_baillie_monument.glb"
+  set x to -4
+  set y to 0
+  set z to -2
+  set scale to 1
+end
+
+create object linen
+  set model to "linen_bank.glb"
+  set x to 0
+  set y to 0
+  set z to -2
+  set scale to 0.5
+end
+
+create object castle
+  set model to "castle.glb"
+  set x to 4
+  set y to 0
+  set z to -2
+  set scale to 0.3
+end
+
+# Row 3: Natural and Props - z = 2
+create object tree
+  set model to "pine_tree.glb"
+  set x to -5
+  set y to 0
+  set z to 2
+  set scale to 1.5
+end
+
+create object apple
+  set model to "apple.glb"
+  set x to -2
+  set y to 0.5
+  set z to 2
+  set scale to 3
+end
+
+create object banana
+  set model to "banana.glb"
+  set x to 0
+  set y to 0.5
+  set z to 2
+  set scale to 3
+end
+
+create object ball
+  set model to "cheap_soccer_ball.glb"
+  set x to 2
+  set y to 0.5
+  set z to 2
+  set scale to 2
+end
+
+# Row 4: Game Props - z = 6
+create object crate
+  set model to "crate_box.glb"
+  set x to -4
+  set y to 0
+  set z to 6
+  set scale to 1.5
+end
+
+create object barrel
+  set model to "stylized_low_poly_wooden_barrell.glb"
+  set x to -1
+  set y to 0
+  set z to 6
+  set scale to 2
+end
+
+create object orc
+  set model to "orc_warrior.glb"
+  set x to 3
+  set y to 0
+  set z to 6
+  set scale to 1.5
+end
