@@ -354,6 +354,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
             sprite.userData._color = color;
             sprite.userData._roshId = objName;
             sprite.userData._description = description;
+            sprite.userData._scene = currentScene;  // Assign to current scene
             sprite.userData.fixed = false;
             sprite.scale.set(scale * 2, scale * 2, 1);
             sprite.position.set(pos.x, pos.y + scale, pos.z);
@@ -394,6 +395,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         mesh.userData._color = color;
         mesh.userData._roshId = objName;
         mesh.userData._description = description;
+        mesh.userData._scene = currentScene;  // Assign to current scene
         mesh.userData.fixed = false;
         mesh.scale.set(scale, scale * (preset?.scaleY || 1), scale);
         mesh.position.set(pos.x, pos.y + 0.5 * scale, pos.z);
@@ -423,6 +425,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         placeholder.userData._color = color;
         placeholder.userData._roshId = objName;
         placeholder.userData._description = description;
+        placeholder.userData._scene = currentScene;  // Assign to current scene
         placeholder.userData.fixed = false;
         placeholder.userData._isPlaceholder = true;
         placeholder.position.set(position.x, position.y + 0.5, position.z);
@@ -439,6 +442,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
             model.userData._color = color;
             model.userData._roshId = objName;
             model.userData._description = description;
+            model.userData._scene = currentScene;  // Assign to current scene
             model.userData.fixed = false;
 
             // Store credit as non-editable metadata
@@ -515,6 +519,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         placeholder.userData._color = color;
         placeholder.userData._roshId = objName;
         placeholder.userData._description = description;
+        placeholder.userData._scene = currentScene;  // Assign to current scene
         placeholder.userData.fixed = false;
         placeholder.position.set(position.x, position.y + 0.5, position.z);
         scene.add(placeholder);
@@ -560,6 +565,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       mesh.userData._color = color;
       mesh.userData._roshId = objName;
       mesh.userData._description = description;
+      mesh.userData._scene = currentScene;  // Assign to current scene
       mesh.userData.fixed = false;  // Console-created objects affected by physics
 
       // Apply scale from size modifier
