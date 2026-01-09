@@ -39,6 +39,11 @@ function createPhaserAdapter(phaserScene, options = {}) {
   // Default size in pixels
   const DEFAULT_SIZE = 50;
 
+  // Edit mode state
+  let editMode = false;
+  let selectedObject = null;
+  let selectedOriginalTint = null;
+
   // Color mappings - use RoshColors if available, otherwise fallback
   const COLOR_MAP = (typeof RoshColors !== 'undefined') ? RoshColors.COLOR_MAP : {
     red: 0xff0000, green: 0x00ff00, blue: 0x0000ff,
@@ -269,8 +274,31 @@ function createPhaserAdapter(phaserScene, options = {}) {
       // Position
       const gameWidth = phaserScene.sys.game.config.width;
       const gameHeight = phaserScene.sys.game.config.height;
-      const x = options.x !== undefined ? options.x : gameWidth / 2 + (Math.random() - 0.5) * 200;
-      const y = options.y !== undefined ? options.y : gameHeight / 2 + (Math.random() - 0.5) * 200;
+
+      // Convert 3D world coordinates to 2D screen coordinates if needed
+      // Three.js uses world units (typically -10 to 10), Phaser uses pixels
+      // Detect 3D coords: small values that look like world units, not pixels
+      let x, y;
+      if (options.x !== undefined) {
+        // If x is small (world units), convert to screen coords
+        // Three.js X maps to Phaser X, Three.js Z maps to Phaser Y
+        if (Math.abs(options.x) < 20 && options.z !== undefined) {
+          // 3D world coords detected - convert to 2D screen
+          // Map world X (-5..5) to screen X (0..width)
+          // Map world Z (-5..5) to screen Y (0..height)
+          x = ((options.x + 5) / 10) * gameWidth;
+          y = ((options.z + 5) / 10) * gameHeight;
+          console.log('[Adapter] Converted 3D coords (' + options.x + ', ' + options.z + ') to 2D (' + x.toFixed(0) + ', ' + y.toFixed(0) + ')');
+        } else {
+          // Already pixel coords or no z - use as-is
+          x = options.x;
+          y = options.y !== undefined ? options.y : gameHeight / 2;
+        }
+      } else {
+        // No position specified - center with random offset
+        x = gameWidth / 2 + (Math.random() - 0.5) * 200;
+        y = gameHeight / 2 + (Math.random() - 0.5) * 200;
+      }
 
       // Check known objects preset
       // KNOWN_OBJECTS can be flat (from RoshObjects) or nested (from emitter)
@@ -585,6 +613,202 @@ function createPhaserAdapter(phaserScene, options = {}) {
         console.error('Failed to load:', e);
         return false;
       }
+    },
+
+    // ========================================================================
+    // SELECTION (click-to-select)
+    // ========================================================================
+
+    getSelectedObject: function() {
+      return selectedObject ? selectedObject.name : null;
+    },
+
+    getSelectedObjectData: function() {
+      if (!selectedObject) return null;
+      return {
+        name: selectedObject.name,
+        type: getTypeName(selectedObject),
+        color: getColorName(selectedObject),
+        position: { x: selectedObject.x, y: selectedObject.y }
+      };
+    },
+
+    selectByName: function(name) {
+      const obj = findObject(name);
+      if (obj) {
+        // Deselect previous
+        if (selectedObject && selectedObject !== obj) {
+          if (selectedOriginalTint !== null && selectedObject.clearTint) {
+            selectedObject.clearTint();
+          }
+        }
+        // Select new
+        selectedObject = obj;
+        if (obj.setTint) {
+          selectedOriginalTint = obj.tintTopLeft || null;
+          obj.setTint(0x00ff00);  // Green highlight
+        }
+        return { name: obj.name, type: getTypeName(obj) };
+      }
+      return null;
+    },
+
+    deselect: function() {
+      if (selectedObject) {
+        if (selectedObject.clearTint) {
+          selectedObject.clearTint();
+        }
+        selectedObject = null;
+        selectedOriginalTint = null;
+      }
+      return { success: true };
+    },
+
+    // ========================================================================
+    // EDIT MODE (enables selection and object control)
+    // ========================================================================
+
+    enableEditMode: function() {
+      editMode = true;
+      // Set up click handler for selection
+      if (phaserScene.input && !phaserScene._roshEditClickHandler) {
+        phaserScene._roshEditClickHandler = phaserScene.input.on('pointerdown', (pointer) => {
+          if (!editMode) return;
+
+          // Find object under click
+          const hitObjects = [];
+          for (const [name, obj] of Object.entries(objects)) {
+            if (obj.getBounds && obj.visible) {
+              const bounds = obj.getBounds();
+              if (bounds.contains(pointer.x, pointer.y)) {
+                hitObjects.push(obj);
+              }
+            }
+          }
+
+          if (hitObjects.length > 0) {
+            // Select the first hit object
+            adapter.selectByName(hitObjects[0].name);
+            console.log('[Edit] Selected:', hitObjects[0].name);
+          } else {
+            // Click on empty space - deselect
+            adapter.deselect();
+          }
+        });
+
+        // Set up keyboard handler for moving selected object
+        if (!phaserScene._roshEditKeyHandler) {
+          phaserScene._roshEditKeyHandler = phaserScene.input.keyboard.on('keydown', (event) => {
+            if (!editMode || !selectedObject) return;
+
+            const step = event.shiftKey ? 50 : 10;
+            switch (event.code) {
+              case 'ArrowLeft':
+              case 'KeyA':
+                selectedObject.x -= step;
+                break;
+              case 'ArrowRight':
+              case 'KeyD':
+                selectedObject.x += step;
+                break;
+              case 'ArrowUp':
+              case 'KeyW':
+                selectedObject.y -= step;
+                break;
+              case 'ArrowDown':
+              case 'KeyS':
+                selectedObject.y += step;
+                break;
+            }
+          });
+        }
+      }
+      return { success: true, editMode: true };
+    },
+
+    disableEditMode: function() {
+      editMode = false;
+      adapter.deselect();
+      return { success: true, editMode: false };
+    },
+
+    isEditMode: function() {
+      return editMode;
+    },
+
+    // ========================================================================
+    // CAPABILITIES (pulse, spin, bounce) - via Phaser tweens
+    // ========================================================================
+
+    applyCapability: function(name, capability, value) {
+      const obj = findObject(name);
+      if (!obj) return { success: false, error: 'Object not found: ' + name };
+
+      // Stop any existing tween on this object for this capability
+      const tweenKey = '_tween_' + capability;
+      if (obj.getData && obj.getData(tweenKey)) {
+        obj.getData(tweenKey).stop();
+      }
+
+      // If value is falsy/off, just stop the tween
+      if (!value || value === 'off' || value === false || value === 0) {
+        if (obj.setData) obj.setData(tweenKey, null);
+        return { success: true, stopped: true };
+      }
+
+      // Parse value - can be number, boolean, or "on"
+      const intensity = (typeof value === 'number') ? value : 1;
+
+      let tween;
+      switch (capability) {
+        case 'pulse':
+          const pulseScale = 1 + (0.2 * intensity);  // 1.2x at intensity 1
+          tween = phaserScene.tweens.add({
+            targets: obj,
+            scaleX: obj.scaleX * pulseScale,
+            scaleY: obj.scaleY * pulseScale,
+            duration: 500 / intensity,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+          });
+          break;
+
+        case 'spin':
+          const spinSpeed = 360 * intensity;  // degrees per second
+          tween = phaserScene.tweens.add({
+            targets: obj,
+            angle: obj.angle + 360,
+            duration: 1000 / intensity,
+            repeat: -1,
+            ease: 'Linear'
+          });
+          break;
+
+        case 'bounce':
+          const bounceHeight = 20 * intensity;
+          const baseY = obj.y;
+          tween = phaserScene.tweens.add({
+            targets: obj,
+            y: baseY - bounceHeight,
+            duration: 400 / intensity,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeOut'
+          });
+          break;
+
+        default:
+          return { success: false, error: 'Unknown capability: ' + capability };
+      }
+
+      if (obj.setData) obj.setData(tweenKey, tween);
+      console.log('[Adapter] Applied ' + capability + ' to ' + name + ' (intensity: ' + intensity + ')');
+      return { success: true, capability, intensity };
+    },
+
+    stopCapability: function(name, capability) {
+      return this.applyCapability(name, capability, false);
     }
   };
 

@@ -185,6 +185,22 @@ const RoshNetwork = (function() {
   }
 
   /**
+   * Broadcast property update to connected clients
+   * @param {string} id - Object ID/name
+   * @param {string} prop - Property name (e.g., 'pulse', 'spin', 'color')
+   * @param {any} value - Property value
+   */
+  function broadcastUpdate(id, prop, value) {
+    if (!isConnected()) return false;
+    // Server expects changes as object: { prop: value }
+    const changes = {};
+    changes[prop] = value;
+    socket.send(JSON.stringify({ type: 'UPDATE', id, ...changes }));
+    console.log('[RoshNetwork] Sending UPDATE:', id, prop, value);
+    return true;
+  }
+
+  /**
    * Request list of users in current world
    */
   function listUsers() {
@@ -253,6 +269,28 @@ const RoshNetwork = (function() {
         }
         break;
 
+      case 'PROPERTY_UPDATED':
+      case 'OBJECT_UPDATED':
+        console.log('[RoshNetwork] Received UPDATE:', msg);
+        if (msg.by !== userId) {
+          // Server sends changes as object: { changes: { prop: value } }
+          const changes = msg.changes || {};
+          console.log('[RoshNetwork] Processing changes:', changes);
+          for (const [prop, val] of Object.entries(changes)) {
+            log('[' + msg.by.slice(0,6) + '] sent: set ' + msg.id + ' ' + prop + ' to ' + val, 'dim');
+            // Handle capability properties specially
+            if (adapter.applyCapability && ['pulse', 'spin', 'bounce'].includes(prop)) {
+              console.log('[RoshNetwork] Applying capability:', msg.id, prop, val);
+              adapter.applyCapability(msg.id, prop, val);
+            } else if (adapter.setProperty) {
+              adapter.setProperty(msg.id, prop, val);
+            }
+          }
+        } else {
+          console.log('[RoshNetwork] Ignoring own UPDATE');
+        }
+        break;
+
       case 'CHAT':
         log('[' + msg.by + ']: ' + msg.message, 'cyan');
         break;
@@ -314,6 +352,7 @@ const RoshNetwork = (function() {
     broadcastCreate,
     broadcastDelete,
     broadcastMove,
+    broadcastUpdate,
     listUsers
   };
 })();

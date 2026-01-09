@@ -3687,6 +3687,15 @@ def generate_threejs_output(js_code: str, output_dir: str, capabilities: dict | 
     template_dir = Path(__file__).parent / "emitters" / "templates"
     shutil.copy(template_dir / "threejs_index.html", output_path / "index.html")
 
+    # Copy shared modules for cross-engine support
+    static_dir = Path(__file__).parent.parent.parent / "static"
+    network_js = static_dir / "rosh-network.js"
+    if network_js.exists():
+        shutil.copy(network_js, output_path / "rosh-network.js")
+    objects_js = static_dir / "rosh-objects.js"
+    if objects_js.exists():
+        shutil.copy(objects_js, output_path / "rosh-objects.js")
+
     # Create assets directory
     (output_path / "assets").mkdir(exist_ok=True)
 

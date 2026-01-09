@@ -148,6 +148,38 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
     return '';
   }
 
+  // Convert 2D screen coordinates to 3D world coordinates if needed
+  // Phaser uses pixels (0-800+), Three.js uses world units (-5 to 5)
+  function convertPosition(options) {
+    // If z is provided, assume already 3D coords
+    if (options.z !== undefined) {
+      return {
+        x: options.x !== undefined ? options.x : (Math.random() - 0.5) * 4,
+        y: options.y !== undefined ? options.y : 0,
+        z: options.z
+      };
+    }
+
+    // If x/y are large values (pixels), convert to 3D world coords
+    // Assume screen is ~800x600, map to world -5..5
+    if (options.x !== undefined && Math.abs(options.x) > 20) {
+      // 2D screen coords detected - convert to 3D world
+      // Map screen X (0..800) to world X (-5..5)
+      // Map screen Y (0..600) to world Z (-5..5)
+      const worldX = (options.x / 400 - 1) * 5;  // 0->-5, 400->0, 800->5
+      const worldZ = (options.y / 300 - 1) * 5;  // 0->-5, 300->0, 600->5
+      console.log('[Adapter] Converted 2D coords (' + options.x + ', ' + options.y + ') to 3D (' + worldX.toFixed(2) + ', 0, ' + worldZ.toFixed(2) + ')');
+      return { x: worldX, y: 0, z: worldZ };
+    }
+
+    // Small values or no position - use as-is or random
+    return {
+      x: options.x !== undefined ? options.x : (Math.random() - 0.5) * 4,
+      y: options.y !== undefined ? options.y : 0,
+      z: (Math.random() - 0.5) * 4
+    };
+  }
+
   function findObject(name) {
     // Direct lookup
     if (objects[name]) return objects[name];
@@ -380,11 +412,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       // Check if this is a known object with a model
       if (preset && preset.model && gltfLoader) {
         // Load GLB model asynchronously
-        const position = {
-          x: options.x !== undefined ? options.x : (Math.random() - 0.5) * 4,
-          y: options.y !== undefined ? options.y : 0,
-          z: options.z !== undefined ? options.z : (Math.random() - 0.5) * 4
-        };
+        const position = convertPosition(options);
 
         // Create placeholder while model loads
         const placeholderGeom = new THREE.BoxGeometry(0.5, 0.5, 0.5);
@@ -476,11 +504,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
 
       // No 3D model - try sprite billboard first
       if (preset && preset.sprite) {
-        const position = {
-          x: options.x !== undefined ? options.x : (Math.random() - 0.5) * 4,
-          y: options.y !== undefined ? options.y : 0,
-          z: options.z !== undefined ? options.z : (Math.random() - 0.5) * 4
-        };
+        const position = convertPosition(options);
 
         // Create placeholder while sprite loads
         const placeholderGeom = new THREE.BoxGeometry(0.5, 0.5, 0.5);
@@ -542,15 +566,8 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       mesh.scale.set(scale, scale, scale);
 
       // Use provided position (from Twin) or random to avoid stacking
-      if (options.x !== undefined || options.y !== undefined || options.z !== undefined) {
-        mesh.position.set(options.x || 0, options.y || 0.5, options.z || 0);
-      } else {
-        mesh.position.set(
-          (Math.random() - 0.5) * 4,
-          0.5 * scale,  // Adjust Y so object sits on ground
-          (Math.random() - 0.5) * 4
-        );
-      }
+      const position = convertPosition(options);
+      mesh.position.set(position.x, position.y + 0.5 * scale, position.z);
 
       scene.add(mesh);
       objects[objName] = mesh;
@@ -987,6 +1004,83 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
 
     isEditMode: function() {
       return editMode;
+    },
+
+    // ========================================================================
+    // CAPABILITIES (pulse, spin, bounce) - via userData for animate loop
+    // ========================================================================
+
+    applyCapability: function(name, capability, value) {
+      const obj = findObject(name);
+      if (!obj) return { success: false, error: 'Object not found: ' + name };
+
+      // Parse value
+      const intensity = (typeof value === 'number') ? value : (value ? 1 : 0);
+
+      switch (capability) {
+        case 'pulse':
+          if (intensity > 0) {
+            obj.userData._pulse = { amplitude: 0.2 * intensity, freq: intensity };
+            // Initialize pulse state if capabilityState exists (from emitter)
+            if (typeof capabilityState !== 'undefined' && capabilityState.pulse) {
+              capabilityState.pulse.set(obj, {
+                amplitude: 0.2 * intensity,
+                frequency: intensity * Math.PI * 2,
+                elapsed: 0,
+                base: { x: obj.scale.x, y: obj.scale.y, z: obj.scale.z }
+              });
+            }
+          } else {
+            delete obj.userData._pulse;
+            if (typeof capabilityState !== 'undefined' && capabilityState.pulse) {
+              capabilityState.pulse.delete(obj);
+            }
+          }
+          break;
+
+        case 'spin':
+          if (intensity > 0) {
+            obj.userData._spin = [0, intensity, 0];  // Spin around Y axis
+            if (typeof capabilityState !== 'undefined' && capabilityState.spin) {
+              capabilityState.spin.set(obj, { x: 0, y: intensity, z: 0 });
+            }
+          } else {
+            delete obj.userData._spin;
+            if (typeof capabilityState !== 'undefined' && capabilityState.spin) {
+              capabilityState.spin.delete(obj);
+            }
+          }
+          break;
+
+        case 'bounce':
+          if (intensity > 0) {
+            obj.userData._bounce = { height: 0.5 * intensity, freq: intensity };
+            if (typeof capabilityState !== 'undefined' && capabilityState.bounce) {
+              capabilityState.bounce.set(obj, {
+                height: 0.5 * intensity,
+                frequency: intensity * Math.PI * 2,
+                elapsed: 0,
+                baseY: obj.position.y
+              });
+            }
+          } else {
+            delete obj.userData._bounce;
+            if (typeof capabilityState !== 'undefined' && capabilityState.bounce) {
+              capabilityState.bounce.delete(obj);
+            }
+          }
+          break;
+
+        default:
+          return { success: false, error: 'Unknown capability: ' + capability };
+      }
+
+      console.log('[Adapter] Applied ' + capability + ' to ' + name + ' (intensity: ' + intensity + ')');
+      return { success: true, capability, intensity };
+    },
+
+    stopCapability: function(name, capability) {
+      return this.applyCapability(name, capability, 0);
     },
 
     // ========================================================================

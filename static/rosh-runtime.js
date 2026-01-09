@@ -45,54 +45,26 @@ const RoshRuntime = (function() {
   let bulkCreateCount = 0;
   const BULK_LOG_LIMIT = 10;
 
-  // Project Twin - shared world state
-  let twinSocket = null;
-  let twinUserId = null;
-  let twinWorldId = null;
+  // Project Twin - shared world state (via RoshNetwork module)
   let isNetworkCommand = false;  // True when executing a command received from network
-  // Always use production WebSocket server for Project Twin
-  // Local Python HTTP servers don't support WebSockets, so always connect to rosh.cloud
-  const TWIN_SERVER = 'wss://rosh.cloud/ws/world/';
 
-  // Project Twin - broadcast helpers
+  // Project Twin - broadcast helpers (delegate to RoshNetwork)
   function twinBroadcastCreate(name, objType, x, y, z, color, size) {
-    if (twinSocket && twinSocket.readyState === WebSocket.OPEN) {
-      const msg = {
-        type: 'CREATE',
-        id: name,
-        object_type: objType,
-        x: x,
-        y: y,
-        z: z,
-        color: color,
-        size: size
-      };
-      console.log('[Twin SEND]', JSON.stringify(msg));
-      twinSocket.send(JSON.stringify(msg));
+    if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
+      RoshNetwork.broadcastCreate(name, { type: objType, x, y, z, color, size });
     }
   }
 
   function twinBroadcastDelete(name) {
-    if (twinSocket && twinSocket.readyState === WebSocket.OPEN) {
-      const msg = { type: 'DELETE', id: name };
-      console.log('[Twin SEND]', JSON.stringify(msg));
-      twinSocket.send(JSON.stringify(msg));
+    if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
+      RoshNetwork.broadcastDelete(name);
     }
   }
 
   function twinBroadcastMove(name, x, y, z, rawCommand) {
     if (isNetworkCommand) return;  // Don't re-broadcast received commands
-    if (twinSocket && twinSocket.readyState === WebSocket.OPEN) {
-      const msg = {
-        type: 'MOVE',
-        id: name,
-        x: x,
-        y: y,
-        z: z,
-        command: rawCommand || null
-      };
-      console.log('[Twin SEND]', JSON.stringify(msg));
-      twinSocket.send(JSON.stringify(msg));
+    if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
+      RoshNetwork.broadcastMove(name, { x, y, z });
     }
   }
 
@@ -889,175 +861,40 @@ const RoshRuntime = (function() {
 
         case 'connect':
         case 'twin':
-          {
-            const worldId = parts[1] || 'default';
-            if (twinSocket && twinSocket.readyState === WebSocket.OPEN) {
-              log('Already connected to world: ' + twinWorldId, 'warn');
-              log('Use "disconnect" first to leave current world', 'dim');
-              break;
-            }
-            log('Connecting to shared world: ' + worldId + '...', 'cyan');
-            try {
-              twinSocket = new WebSocket(TWIN_SERVER + worldId);
-              twinWorldId = worldId;
-              twinSocket.onopen = () => log('WebSocket connected', 'dim');
-              twinSocket.onerror = (e) => {
-                log('Connection failed - server may be offline', 'err');
-                log('You can still work offline. Use "save" to keep your work.', 'dim');
-              };
-              twinSocket.onclose = () => {
-                log('Disconnected from shared world', 'warn');
-                twinSocket = null;
-                twinUserId = null;
-                twinWorldId = null;
-              };
-              twinSocket.onmessage = (event) => {
-                try {
-                  const msg = JSON.parse(event.data);
-                  // RAW: Log every message before processing
-                  console.log('[Twin RAW]', JSON.stringify(msg));
-                  if (msg.type === 'CONNECTED') {
-                    twinUserId = msg.user_id;
-                    log('Connected to "' + worldId + '" as user ' + msg.user_id, 'ok');
-                    log('Objects you create will be shared with others!', 'cyan');
-                  } else if (msg.type === 'OBJECT_CREATED') {
-                    if (msg.by !== twinUserId) {
-                      const data = msg.data || {};
-                      // Build human-readable command description
-                      const sizeWord = data.size ? data.size + ' ' : '';
-                      const colorWord = data.color ? data.color + ' ' : '';
-                      const typeWord = data.type || 'object';
-                      const cmdDesc = 'create a ' + sizeWord + colorWord + typeWord;
-
-                      // Log clearly what was received
-                      log('[' + msg.by.slice(0,6) + '] sent: ' + cmdDesc, 'cyan');
-
-                      // Attempt to render
-                      if (adapter.createObject) {
-                        adapter.createObject(data.type || 'sphere', msg.id, {
-                          x: data.x, y: data.y, z: data.z,
-                          color: data.color,
-                          size: data.size
-                        });
-                      } else {
-                        log('  (cannot render - no adapter)', 'dim');
-                      }
-                    }
-                  } else if (msg.type === 'OBJECT_DELETED') {
-                    if (msg.by !== twinUserId) {
-                      log('[' + msg.by.slice(0,6) + '] sent: delete ' + msg.id, 'cyan');
-                      if (adapter.deleteObject) {
-                        adapter.deleteObject(msg.id);
-                      }
-                    }
-                  } else if (msg.type === 'OBJECT_MOVED') {
-                    if (msg.by !== twinUserId) {
-                      // If raw command provided, execute it locally (each engine interprets in own coords)
-                      if (msg.command) {
-                        log('[' + msg.by.slice(0,6) + '] sent: ' + msg.command, 'cyan');
-                        isNetworkCommand = true;
-                        try { execCommand(msg.command, false); } finally { isNetworkCommand = false; }
-                      } else {
-                        // Fallback to coordinate-based move (legacy)
-                        log('[' + msg.by.slice(0,6) + '] sent: move ' + msg.id + ' to (' + msg.x + ', ' + msg.y + ')', 'cyan');
-                        if (adapter.moveObject) {
-                          adapter.moveObject(msg.id, { x: msg.x, y: msg.y, z: msg.z });
-                        }
-                      }
-                    }
-                  } else if (msg.type === 'CHAT') {
-                    log('[' + msg.by + ']: ' + msg.message, 'cyan');
-                  } else if (msg.type === 'WORLD_STATE') {
-                    const objects = msg.objects || {};
-                    const count = Object.keys(objects).length;
-                    if (count > 0) {
-                      log('Loading ' + count + ' shared object(s) from world...', 'dim');
-                      for (const [id, data] of Object.entries(objects)) {
-                        // Build human-readable description
-                        const sizeWord = data.size ? data.size + ' ' : '';
-                        const colorWord = data.color ? data.color + ' ' : '';
-                        const typeWord = data.type || 'object';
-                        log('  - ' + id + ': ' + sizeWord + colorWord + typeWord, 'dim');
-
-                        if (adapter.createObject) {
-                          adapter.createObject(data.type || 'sphere', id, {
-                            x: data.x, y: data.y, z: data.z,
-                            color: data.color,
-                            size: data.size
-                          });
-                        }
-                      }
-                    } else {
-                      log('World is empty - you can create objects!', 'dim');
-                    }
-                  } else if (msg.type === 'USERS_LIST') {
-                    log('=== Users in "' + msg.world_id + '" (' + msg.count + ') ===', 'cyan');
-                    for (const user of msg.users) {
-                      const youTag = user.is_you ? ' (you)' : '';
-                      log('  ' + user.id + youTag, user.is_you ? 'ok' : 'dim');
-                    }
-                  } else if (msg.type === 'USER_JOINED') {
-                    log('[' + msg.user_id + '] joined (' + msg.user_count + ' users)', 'cyan');
-                  } else if (msg.type === 'USER_LEFT') {
-                    log('[' + msg.user_id + '] left (' + msg.user_count + ' users)', 'dim');
-                  }
-                } catch (e) {
-                  console.error('Twin message error:', e);
-                }
-              };
-            } catch (e) {
-              log('Failed to connect: ' + e.message, 'err');
-            }
+          if (typeof RoshNetwork !== 'undefined') {
+            RoshNetwork.connect(parts[1] || 'default');
+          } else {
+            log('RoshNetwork not loaded', 'err');
           }
           break;
 
         case 'disconnect':
-          if (twinSocket) {
-            twinSocket.close();
-            log('Disconnected from shared world: ' + twinWorldId, 'ok');
-            twinSocket = null;
-            twinUserId = null;
-            twinWorldId = null;
+          if (typeof RoshNetwork !== 'undefined') {
+            RoshNetwork.disconnect();
           } else {
-            log('Not connected to any shared world', 'dim');
+            log('Not connected', 'dim');
           }
           break;
 
         case 'clearworld':
         case 'resetworld':
-          if (!twinSocket || twinSocket.readyState !== WebSocket.OPEN) {
-            log('Not connected. Use "connect" first.', 'err');
-          } else {
-            twinSocket.send(JSON.stringify({ type: 'CLEAR_WORLD' }));
-            log('Sent clear world request...', 'dim');
-          }
+          log('Clear world not yet implemented in RoshNetwork', 'dim');
           break;
 
         case 'say':
-          {
-            const message = parts.slice(1).join(' ');
-            if (!twinSocket || twinSocket.readyState !== WebSocket.OPEN) {
-              log('Not connected. Use "connect" first.', 'err');
-              break;
-            }
-            if (!message) {
-              log('Usage: say <message>', 'dim');
-              break;
-            }
-            twinSocket.send(JSON.stringify({ type: 'CHAT', message }));
-            log('[you]: ' + message, 'ok');
+          if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
+            RoshNetwork.say(parts.slice(1).join(' '));
+          } else {
+            log('Not connected. Use "connect" first.', 'err');
           }
           break;
 
         case 'users':
         case 'who':
-          console.log('[DEBUG] users/who command hit, twinSocket:', twinSocket, 'readyState:', twinSocket?.readyState);
-          if (!twinSocket || twinSocket.readyState !== WebSocket.OPEN) {
-            log('Not connected. Use "connect" first.', 'err');
+          if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
+            RoshNetwork.listUsers();
           } else {
-            console.log('[DEBUG] Sending USERS message');
-            twinSocket.send(JSON.stringify({ type: 'USERS' }));
-            log('Requesting user list...', 'dim');
+            log('Not connected. Use "connect" first.', 'err');
           }
           break;
 
@@ -1643,13 +1480,46 @@ const RoshRuntime = (function() {
     // Get old value for undo
     const oldValue = adapter.getProperty ? adapter.getProperty(objName, prop) : null;
 
-    const result = adapter.setProperty(objName, prop, value);
+    // Check if this is a capability property (pulse, spin, bounce)
+    const capabilityProps = ['pulse', 'spin', 'bounce'];
+    const isCapability = capabilityProps.includes(prop.toLowerCase());
+
+    let result;
+    if (isCapability && adapter.applyCapability) {
+      // Parse value: "on", "off", or number
+      let capValue = value.toLowerCase() === 'on' ? 1 :
+                     value.toLowerCase() === 'off' ? 0 :
+                     parseFloat(value) || 1;
+      result = adapter.applyCapability(objName, prop.toLowerCase(), capValue);
+
+      // Broadcast to other clients
+      if (result.success && typeof RoshNetwork !== 'undefined') {
+        if (RoshNetwork.isConnected()) {
+          console.log('[Runtime] Broadcasting capability:', objName, prop, capValue);
+          RoshNetwork.broadcastUpdate(objName, prop.toLowerCase(), capValue);
+        } else {
+          console.log('[Runtime] Not connected - skipping broadcast');
+        }
+      }
+    } else {
+      result = adapter.setProperty(objName, prop, value);
+
+      // Broadcast regular property changes too
+      if (result.success && typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
+        RoshNetwork.broadcastUpdate(objName, prop, value);
+      }
+    }
+
     if (result.success) {
       log('Set ' + objName + '.' + prop + ' = ' + value, 'ok');
 
       pushUndo('set ' + objName + '.' + prop,
-        () => adapter.setProperty(objName, prop, oldValue),
-        () => adapter.setProperty(objName, prop, value)
+        () => isCapability && adapter.applyCapability ?
+              adapter.applyCapability(objName, prop, oldValue) :
+              adapter.setProperty(objName, prop, oldValue),
+        () => isCapability && adapter.applyCapability ?
+              adapter.applyCapability(objName, prop, value) :
+              adapter.setProperty(objName, prop, value)
       );
     } else {
       log(result.error || 'Failed to set property', 'err');
