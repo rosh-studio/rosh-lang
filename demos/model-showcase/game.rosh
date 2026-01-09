@@ -1,133 +1,178 @@
 # Model Showcase Demo
-# All available 3D models arranged for demo recording
-# Run locally: rosh build game.rosh --target threejs --output dist/ --copy-assets
+# All available 3D models plus an empty space for demo recording
+# Two scenes: "models" shows all models, "empty" is a blank canvas
 
 meta
     title "Model Showcase"
     description "All available 3D models for demo recording"
+    initial_scene "empty"
     use_shared_runtime true
 end
 
-# Row 1: Scottish Heritage models - z = -6
-create object lewis_king
-  set model to "lewis_chess_king.glb"
-  set x to -6
-  set y to 0
-  set z to -6
-  set scale to 2
+# =============================================================================
+# EMPTY SCENE - Blank canvas for creating objects
+# =============================================================================
+
+create object empty_title
+    set scene to "empty"
+    set text to "Demo Space"
+    set x to 50%
+    set y to 10%
+    set z to -8
+    set color to "white"
+    set font_size to 48
 end
 
-create object lewis_queen
-  set model to "lewis_chess_queen.glb"
-  set x to -3
-  set y to 0
-  set z to -6
-  set scale to 2
+create object empty_hint
+    set scene to "empty"
+    set text to "Type: go models  (to see all available models)"
+    set x to 50%
+    set y to 90%
+    set z to -8
+    set color to "gray"
+    set font_size to 18
 end
 
-create object cutty_cat
-  set model to "cutty_sark_cat.glb"
-  set x to 0
-  set y to 0
-  set z to -6
-  set scale to 2
+# =============================================================================
+# MODELS SCENE - All available 3D models
+# =============================================================================
+
+# Row 1: Scottish Heritage
+create object king1
+    set scene to "models"
+    set type to "lewis_chess_king"
+    set x to -6
+    set z to -6
+    set scale to 2
 end
 
-create object helmet
-  set model to "spartan_bronze_helmet.glb"
-  set x to 3
-  set y to 0
-  set z to -6
-  set scale to 2
+create object queen1
+    set scene to "models"
+    set type to "lewis_chess_queen"
+    set x to -3
+    set z to -6
+    set scale to 2
 end
 
-create object invereen
-  set model to "invereen_stone.glb"
-  set x to 6
-  set y to 0
-  set z to -6
-  set scale to 1.5
+create object cat1
+    set scene to "models"
+    set type to "cutty_sark_cat"
+    set x to 0
+    set z to -6
+    set scale to 2
 end
 
-# Row 2: Architectural and Large - z = -2
-create object monument
-  set model to "joanna_baillie_monument.glb"
-  set x to -4
-  set y to 0
-  set z to -2
-  set scale to 1
+create object stone1
+    set scene to "models"
+    set type to "invereen_stone"
+    set x to 3
+    set z to -6
+    set scale to 1.5
 end
 
-create object linen
-  set model to "linen_bank.glb"
-  set x to 0
-  set y to 0
-  set z to -2
-  set scale to 0.5
+# Row 2: Architecture
+create object monument1
+    set scene to "models"
+    set type to "joanna_baillie_monument"
+    set x to -4
+    set z to -2
+    set scale to 0.8
 end
 
-create object castle
-  set model to "castle.glb"
-  set x to 4
-  set y to 0
-  set z to -2
-  set scale to 0.3
+create object bank1
+    set scene to "models"
+    set type to "linen_bank"
+    set x to 0
+    set z to -2
+    set scale to 0.4
 end
 
-# Row 3: Natural and Props - z = 2
-create object tree
-  set model to "pine_tree.glb"
-  set x to -5
-  set y to 0
-  set z to 2
-  set scale to 1.5
+create object castle1
+    set scene to "models"
+    set type to "castle"
+    set x to 4
+    set z to -2
+    set scale to 0.3
 end
 
-create object apple
-  set model to "apple.glb"
-  set x to -2
-  set y to 0.5
-  set z to 2
-  set scale to 3
+# Row 3: Natural
+create object tree1
+    set scene to "models"
+    set type to "tree"
+    set x to -5
+    set z to 2
+    set scale to 1.5
 end
 
-create object banana
-  set model to "banana.glb"
-  set x to 0
-  set y to 0.5
-  set z to 2
-  set scale to 3
+create object apple1
+    set scene to "models"
+    set type to "apple"
+    set x to -2
+    set y to 0.5
+    set z to 2
+    set scale to 3
 end
 
-create object ball
-  set model to "cheap_soccer_ball.glb"
-  set x to 2
-  set y to 0.5
-  set z to 2
-  set scale to 2
+create object banana1
+    set scene to "models"
+    set type to "banana"
+    set x to 0
+    set y to 0.5
+    set z to 2
+    set scale to 3
 end
 
-# Row 4: Game Props - z = 6
-create object crate
-  set model to "crate_box.glb"
-  set x to -4
-  set y to 0
-  set z to 6
-  set scale to 1.5
+create object ball1
+    set scene to "models"
+    set type to "football"
+    set x to 2
+    set y to 0.5
+    set z to 2
+    set scale to 2
 end
 
-create object barrel
-  set model to "stylized_low_poly_wooden_barrell.glb"
-  set x to -1
-  set y to 0
-  set z to 6
-  set scale to 2
+# Row 4: Game Props
+create object crate1
+    set scene to "models"
+    set type to "crate"
+    set x to -4
+    set z to 6
+    set scale to 1.5
 end
 
-create object orc
-  set model to "orc_warrior.glb"
-  set x to 3
-  set y to 0
-  set z to 6
-  set scale to 1.5
+create object barrel1
+    set scene to "models"
+    set type to "barrel"
+    set x to -1
+    set z to 6
+    set scale to 2
+end
+
+create object orc1
+    set scene to "models"
+    set type to "orc"
+    set x to 3
+    set z to 6
+    set scale to 1.5
+end
+
+# Scene label
+create object models_title
+    set scene to "models"
+    set text to "Available 3D Models"
+    set x to 50%
+    set y to 5%
+    set z to -10
+    set color to "white"
+    set font_size to 36
+end
+
+create object models_hint
+    set scene to "models"
+    set text to "Type: go empty  (for blank demo space)"
+    set x to 50%
+    set y to 95%
+    set z to -10
+    set color to "gray"
+    set font_size to 18
 end

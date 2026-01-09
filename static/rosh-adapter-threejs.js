@@ -918,17 +918,16 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
     toggleSpotlight: function(visible, targetName) {
       // Find or create the demo spotlight
       let spot = scene.getObjectByName('_rosh_spotlight');
-      let spotHelper = scene.getObjectByName('_rosh_spotlight_helper');
 
       if (!spot && visible) {
-        // Create spotlight above the scene
-        spot = new THREE.SpotLight(0xffffff, 2);
+        // Create spotlight above the scene - bright and focused
+        spot = new THREE.SpotLight(0xffffff, 3);
         spot.name = '_rosh_spotlight';
-        spot.position.set(0, 8, 0);
-        spot.angle = Math.PI / 6;
-        spot.penumbra = 0.3;
-        spot.decay = 1;
-        spot.distance = 30;
+        spot.position.set(0, 10, 0);
+        spot.angle = Math.PI / 8;  // Narrower cone for dramatic effect
+        spot.penumbra = 0.5;       // Soft edges
+        spot.decay = 1.5;
+        spot.distance = 25;
         spot.castShadow = true;
         scene.add(spot);
 
@@ -939,22 +938,20 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         scene.add(spotTarget);
         spot.target = spotTarget;
 
-        // Optional: add a visible cone helper
-        spotHelper = new THREE.SpotLightHelper(spot);
-        spotHelper.name = '_rosh_spotlight_helper';
-        scene.add(spotHelper);
+        // NO helper wireframe - just actual light
       }
 
       if (spot) {
         spot.visible = visible;
-        if (spotHelper) spotHelper.visible = visible;
 
         // Target a specific object if provided
         if (targetName && visible) {
           const targetObj = findObject(targetName);
           if (targetObj) {
             spot.target.position.copy(targetObj.position);
-            spot.position.set(targetObj.position.x, targetObj.position.y + 8, targetObj.position.z);
+            spot.position.set(targetObj.position.x, targetObj.position.y + 10, targetObj.position.z);
+            // Update the spotlight to point at target
+            if (spot.target) spot.target.updateMatrixWorld();
           }
         }
       }
