@@ -455,8 +455,10 @@ const RoshRuntime = (function() {
   function singularize(word) {
     const w = word.toLowerCase();
     // Words that end in 's' but aren't plural
-    const exceptions = ['torus', 'bus', 'plus', 'radius', 'canvas', 'axis'];
+    const exceptions = ['torus', 'bus', 'plus', 'radius', 'canvas', 'axis', 'lewis', 'chris', 'paris', 'harris', 'morris', 'dennis', 'texas', 'kansas', 'christmas'];
     if (exceptions.includes(w)) return w;
+    // Words ending in 'is' are usually not plural (basis, thesis, lewis)
+    if (w.endsWith('is')) return w;
     if (w.endsWith('ies')) return w.slice(0, -3) + 'y';
     if (w.endsWith('es') && !w.endsWith('ses')) return w.slice(0, -2);
     if (w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
@@ -1251,27 +1253,45 @@ const RoshRuntime = (function() {
     if (!adapter.getObjects) return;
 
     const objects = adapter.getObjects();
-    const typeName = args[0] ? singularize(args[0]) : null;
+    const searchTerm = args[0] ? args[0].toLowerCase() : null;
 
     // Filter by visibility (only show objects in current scene)
     // Also hide objects starting with _ (hidden/internal objects)
     let filtered = objects.filter(o => o.visible !== false && !o.name.startsWith('_'));
 
     // Filter by type if specified
-    if (typeName) {
-      filtered = filtered.filter(o =>
-        o.type === typeName ||
-        o.name === typeName ||
-        o.name.startsWith(typeName + '-')
-      );
+    if (searchTerm) {
+      // Helper to check if object matches a term
+      const matchesTerm = (o, term) => {
+        const name = (o.name || '').toLowerCase();
+        const type = (o.type || '').toLowerCase();
+        return name === term ||
+               type === term ||
+               name.includes(term) ||
+               type.includes(term) ||
+               name.startsWith(term + '-');
+      };
+
+      // First try exact/contains match with original term
+      let matches = filtered.filter(o => matchesTerm(o, searchTerm));
+
+      // If no matches, try singularized version
+      if (matches.length === 0) {
+        const singular = singularize(searchTerm);
+        if (singular !== searchTerm) {
+          matches = filtered.filter(o => matchesTerm(o, singular));
+        }
+      }
+
+      filtered = matches;
     }
 
     if (filtered.length === 0) {
-      log(typeName ? 'No ' + typeName + ' objects found' : 'No objects', 'dim');
+      log(searchTerm ? 'No ' + searchTerm + ' objects found' : 'No objects', 'dim');
       return;
     }
 
-    log('Objects' + (typeName ? ' (' + typeName + ')' : '') + ':', 'cyan');
+    log('Objects' + (searchTerm ? ' (' + searchTerm + ')' : '') + ':', 'cyan');
     for (const obj of filtered) {
       const info = obj.type ? obj.name + ' [' + obj.type + ']' : obj.name;
       log('  ' + info, 'ok');

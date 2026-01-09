@@ -323,7 +323,7 @@ def _list_scenes(interpreter, out):
     out.dim(f"\nUse 'go <scene>' to navigate, 'list <scene>' to see objects.")
 
 
-def _list_objects(interpreter, out, max_display=10, scene_filter=None, group_by_scene=False):
+def _list_objects(interpreter, out, max_display=10, scene_filter=None, group_by_scene=False, search_term=None):
     """List all objects in the current environment (Universal REPL command)"""
     from .values import RoshObject, rosh_to_python
 
@@ -338,6 +338,43 @@ def _list_objects(interpreter, out, max_display=10, scene_filter=None, group_by_
 
     if not objects:
         out.dim("No objects defined. Use 'create object <name>' to create one.")
+        return
+
+    # Filter by search term (name/type substring match)
+    if search_term:
+        term = search_term.lower()
+
+        def matches_term(name, obj, t):
+            """Check if object matches search term"""
+            obj_type = (obj.name if hasattr(obj, 'name') and obj.name else "").lower()
+            return t in name.lower() or t in obj_type
+
+        # First try exact match with original term
+        filtered = [(n, o) for n, o in objects if matches_term(n, o, term)]
+
+        # If no matches, try singularized version
+        if not filtered:
+            singular = _singularize(term)
+            if singular and singular[0] != term:  # _singularize returns list of candidates
+                for s in singular:
+                    filtered = [(n, o) for n, o in objects if matches_term(n, o, s)]
+                    if filtered:
+                        break
+
+        if not filtered:
+            out.dim(f"No '{search_term}' objects found")
+            return
+
+        objects = filtered
+        out.print(f"Objects matching '{search_term}' ({len(objects)}):", style="bold cyan")
+
+        # Show filtered list
+        display_list = objects if max_display is None else objects[:max_display]
+        for name, obj in display_list:
+            obj_type = obj.name if hasattr(obj, 'name') and obj.name else "object"
+            out.print(f"  {name} [{obj_type}]", style="green")
+        if max_display and len(objects) > max_display:
+            out.dim(f"  ...and {len(objects) - max_display} more")
         return
 
     # Filter by scene if requested
@@ -2444,10 +2481,10 @@ def run_repl(interpreter: Interpreter = None):
                 _list_scenes(interpreter, out)
                 continue
 
-            # list <scene> - show objects in specific scene
+            # list <term> - search objects by name/type (substring match)
             if stripped.startswith('list ') and stripped.split()[1] not in ('all', 'objects'):
-                scene_name = stripped.split(None, 1)[1]
-                _list_objects(interpreter, out, scene_filter=scene_name)
+                search_term = stripped.split(None, 1)[1]
+                _list_objects(interpreter, out, search_term=search_term)
                 continue
 
             # list / ls / objects (no args) - show all objects

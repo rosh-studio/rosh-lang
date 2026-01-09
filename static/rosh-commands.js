@@ -302,8 +302,10 @@ const RoshCommands = (function() {
   function singularize(word) {
     const w = word.toLowerCase();
     // Exceptions that end in 's' but aren't plural
-    const exceptions = ['torus', 'bus', 'plus', 'radius', 'canvas', 'axis'];
+    const exceptions = ['torus', 'bus', 'plus', 'radius', 'canvas', 'axis', 'lewis', 'chris', 'paris', 'harris', 'morris', 'dennis', 'texas', 'kansas', 'christmas'];
     if (exceptions.includes(w)) return w;
+    // Words ending in 'is' are usually not plural (basis, thesis, lewis)
+    if (w.endsWith('is')) return w;
     if (w.endsWith('ies')) return w.slice(0, -3) + 'y';
     if (w.endsWith('es') && !w.endsWith('ses')) return w.slice(0, -2);
     if (w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
