@@ -1838,8 +1838,12 @@ def run_repl(interpreter: Interpreter = None):
                 continue
 
             # === Project Twin: connect/disconnect commands ===
-            if line.strip().startswith('connect'):
-                parts = line.strip().split()
+            # 'twin <world>' is an alias for 'connect <world>'
+            stripped = line.strip()
+            if stripped.startswith('connect') or (stripped.startswith('twin ') and len(stripped.split()) > 1):
+                parts = stripped.split()
+                # For 'twin world', parts[0] is 'twin', parts[1] is world
+                # For 'connect world', parts[0] is 'connect', parts[1] is world
                 world = parts[1] if len(parts) > 1 else 'default'
                 if twin_ws is not None or twin_sock is not None:
                     out.warning(f"Already connected to '{twin_world_id}'. Use 'disconnect' first.")
