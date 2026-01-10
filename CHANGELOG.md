@@ -1271,8 +1271,8 @@ print "Health: {player.health} / {player.max_health}"
 ### v0.3.0 - Unified World Control
 - Message spec formalization (COMMAND type with cmd + outcome)
 - Clients apply authoritative outcomes (not re-execute)
-- Undo/redo sync across twins
 - State sync on late join
+- Note: Undo/redo remains client-specific by design (each user undoes their own commands)
 
 ### v0.4.0+ (Partner-driven)
 - Unity emitter (VR/AR projects)

@@ -9,4 +9,4 @@ Test Categories:
 - Smoke tests: Critical security and user-facing flows
 """
 
-__version__ = '0.2.10'
+__version__ = '0.2.11'

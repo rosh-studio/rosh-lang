@@ -10,7 +10,7 @@
  *   2. Create a RoshAdapter object with engine-specific methods
  *   3. Call RoshRuntime.init(adapter)
  *
- * Version: 0.2.10
+ * Version: 0.2.11
  * Spec: rosh-console.toml v0.2.5
  *
  * === PARITY FEATURES ===
@@ -23,7 +23,7 @@
  * @parity undo_redo - Undo/redo stack for reversible operations
  */
 
-const ROSH_VERSION = '0.2.10';
+const ROSH_VERSION = '0.2.11';
 const ROSH_BUILD_TIME = '__BUILD_TIME__';  // Replaced by Python at build time
 
 const RoshRuntime = (function() {
