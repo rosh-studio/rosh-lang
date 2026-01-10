@@ -1,9 +1,19 @@
 # Rosh Specification v0.3.0
 #
-# SINGLE SOURCE OF TRUTH for commands, aliases, and corrections.
-# Python and JS runtimes MUST read from this file.
+# SINGLE SOURCE OF TRUTH for:
+#   - Language commands (create, delete, set, etc.)
+#   - REPL commands (twin, connect, clear, etc.)
+#   - Colors (name -> hex mapping)
+#   - Sizes (name -> scale factor)
+#   - Object types (cube, sphere, etc.)
+#   - Network protocol messages
+#   - Object properties
 #
-# DO NOT define commands elsewhere. Add them here.
+# Python and JS runtimes MUST read from this file.
+# DO NOT define these elsewhere. Add them here.
+#
+# RULE: If it affects meaning or must be consistent across
+#       Python and JS, it belongs in this spec.
 
 [meta]
 version = "0.3.0"
@@ -210,3 +220,225 @@ colour = "color"
 colours = "colors"
 centre = "center"
 grey = "gray"
+
+# =============================================================================
+# REPL COMMANDS
+# =============================================================================
+# Commands available in interactive REPL (not Rosh language commands).
+# Both Python CLI and JS runtime must implement these identically.
+
+[repl.twin]
+aliases = ["connect"]
+description = "Connect to shared world or show status"
+args = "optional"  # "twin" alone = status, "twin world" = connect
+
+[repl.disconnect]
+aliases = []
+description = "Leave current shared world"
+args = "none"
+
+[repl.clear]
+aliases = ["cls"]
+description = "Clear console output"
+args = "none"
+
+[repl.clearworld]
+aliases = ["reset"]
+description = "Delete all objects in world"
+args = "none"
+
+[repl.say]
+aliases = ["chat"]
+description = "Send chat message to shared world"
+args = "required"
+
+[repl.users]
+aliases = ["who"]
+description = "List users in shared world"
+args = "none"
+
+[repl.save]
+aliases = []
+description = "Save current world state"
+args = "optional"
+
+[repl.load]
+aliases = []
+description = "Load world state from file"
+args = "required"
+
+[repl.ground]
+aliases = ["floor"]
+description = "Toggle ground plane visibility"
+args = "optional"
+
+[repl.gravity]
+aliases = []
+description = "Toggle gravity simulation"
+args = "optional"
+
+[repl.keyboard]
+aliases = ["keys", "control"]
+description = "Enable keyboard control of object"
+args = "required"
+
+[repl.select]
+aliases = ["sel"]
+description = "Select object for editing"
+args = "required"
+
+[repl.deselect]
+aliases = ["desel"]
+description = "Deselect current object"
+args = "none"
+
+# =============================================================================
+# COLORS
+# =============================================================================
+# Canonical color names and hex values.
+# Both Python and JS MUST use these exact values.
+
+[colors]
+red = 0xff0000
+green = 0x00ff00
+blue = 0x0000ff
+yellow = 0xffff00
+cyan = 0x00ffff
+magenta = 0xff00ff
+white = 0xffffff
+black = 0x000000
+orange = 0xff8800
+purple = 0x8800ff
+pink = 0xff69b4
+gray = 0x888888
+grey = 0x888888      # Alias for gray
+gold = 0xffd700
+silver = 0xc0c0c0
+brown = 0x8b4513
+navy = 0x000080
+teal = 0x008080
+lime = 0x32cd32
+coral = 0xff7f50
+
+# =============================================================================
+# SIZES
+# =============================================================================
+# Size modifiers and their scale factors.
+# Both Python and JS MUST use these exact values.
+
+[sizes]
+tiny = 0.25
+small = 0.5
+medium = 1.0
+big = 2.0
+large = 2.0          # Alias for big
+huge = 4.0
+giant = 6.0
+massive = 8.0
+
+# =============================================================================
+# OBJECT TYPES
+# =============================================================================
+# Valid 3D object types.
+# Emitters map these to engine-specific primitives.
+
+[object_types]
+primitives = [
+    "cube",
+    "sphere",
+    "cylinder",
+    "cone",
+    "torus",
+    "plane",
+    "capsule",
+]
+
+sprites = [
+    "sprite",
+    "image",
+]
+
+special = [
+    "light",
+    "camera",
+    "text",
+    "group",
+]
+
+# Type aliases (normalized to canonical form)
+[object_types.aliases]
+box = "cube"
+ball = "sphere"
+ring = "torus"
+donut = "torus"
+tube = "cylinder"
+pill = "capsule"
+quad = "plane"
+flat = "plane"
+
+# =============================================================================
+# OBJECT PROPERTIES
+# =============================================================================
+# Properties that can be set on objects.
+# Both Python IR and JS runtime must support these.
+
+[properties.transform]
+# Spatial properties
+position = { type = "vec3", default = [0, 0, 0] }
+rotation = { type = "vec3", default = [0, 0, 0] }
+scale = { type = "vec3", default = [1, 1, 1] }
+
+[properties.appearance]
+color = { type = "color", default = 0xffffff }
+opacity = { type = "float", default = 1.0, min = 0.0, max = 1.0 }
+visible = { type = "bool", default = true }
+
+[properties.physics]
+velocity = { type = "vec3", default = [0, 0, 0] }
+gravity = { type = "bool", default = false }
+solid = { type = "bool", default = true }
+
+[properties.animation]
+spin = { type = "bool", default = false }
+pulse = { type = "bool", default = false }
+bounce = { type = "bool", default = false }
+
+# =============================================================================
+# NETWORK PROTOCOL
+# =============================================================================
+# Message types for World Center communication (Spec 0.3).
+# Clients send REQUEST_*, server responds with CONFIRMED_* or REJECTED.
+
+[protocol.client_messages]
+# Requests that modify world state (require server confirmation)
+REQUEST_CREATE = { fields = ["request_id", "id", "object_type", "x", "y", "z", "color", "size"] }
+REQUEST_MOVE = { fields = ["request_id", "id", "x", "y", "z"] }
+REQUEST_UPDATE = { fields = ["request_id", "id", "...changes"] }
+REQUEST_DELETE = { fields = ["request_id", "id"] }
+
+# Direct messages (no confirmation needed)
+CHAT = { fields = ["message"] }
+PING = { fields = [] }
+USERS = { fields = [] }
+
+[protocol.server_messages]
+# Confirmations (broadcast to ALL clients including requester)
+CONFIRMED_CREATE = { fields = ["request_id", "seq", "id", "uuid", "data", "by"] }
+CONFIRMED_MOVE = { fields = ["request_id", "seq", "id", "x", "y", "z", "by"] }
+CONFIRMED_UPDATE = { fields = ["request_id", "seq", "id", "changes", "by"] }
+CONFIRMED_DELETE = { fields = ["request_id", "seq", "id", "by"] }
+
+# Rejections (sent only to requester)
+REJECTED = { fields = ["request_id", "reason", "message"] }
+
+# Connection lifecycle
+CONNECTED = { fields = ["world_id", "user_id", "user_count", "state"] }
+USER_JOINED = { fields = ["user_id", "user_count"] }
+USER_LEFT = { fields = ["user_id", "user_count"] }
+WORLD_STATE = { fields = ["objects"] }
+USERS_LIST = { fields = ["world_id", "users", "count"] }
+
+# Legacy messages (backwards compatibility)
+[protocol.legacy]
+deprecated = ["CREATE", "MOVE", "UPDATE", "DELETE", "OBJECT_CREATED", "OBJECT_MOVED", "OBJECT_UPDATED", "OBJECT_DELETED"]
+note = "Use REQUEST_*/CONFIRMED_* protocol instead"

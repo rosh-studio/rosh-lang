@@ -219,6 +219,60 @@ def get_commands_by_layer(layer: str) -> Dict[str, CommandSpec]:
     return _get_loader().get_commands_by_layer(layer)
 
 
+def get_colors() -> Dict[str, int]:
+    """Get all colors from spec."""
+    loader = _get_loader()
+    for data in loader._cache.values():
+        if "colors" in data:
+            return data["colors"]
+    return {}
+
+
+def get_sizes() -> Dict[str, float]:
+    """Get all sizes from spec."""
+    loader = _get_loader()
+    for data in loader._cache.values():
+        if "sizes" in data:
+            return data["sizes"]
+    return {}
+
+
+def get_object_types() -> Dict[str, Any]:
+    """Get object types from spec."""
+    loader = _get_loader()
+    for data in loader._cache.values():
+        if "object_types" in data:
+            return data["object_types"]
+    return {}
+
+
+def get_repl_commands() -> Dict[str, Any]:
+    """Get REPL commands from spec."""
+    loader = _get_loader()
+    for data in loader._cache.values():
+        if "repl" in data:
+            return data["repl"]
+    return {}
+
+
+def get_protocol() -> Dict[str, Any]:
+    """Get network protocol messages from spec."""
+    loader = _get_loader()
+    for data in loader._cache.values():
+        if "protocol" in data:
+            return data["protocol"]
+    return {}
+
+
+def get_properties() -> Dict[str, Any]:
+    """Get object properties from spec."""
+    loader = _get_loader()
+    for data in loader._cache.values():
+        if "properties" in data:
+            return data["properties"]
+    return {}
+
+
 # =============================================================================
 # CLI for testing
 # =============================================================================
