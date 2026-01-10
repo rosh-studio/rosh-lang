@@ -6,6 +6,40 @@
 
 ---
 
+## [0.2.11] - 2026-01-10 - Scene Polish & Fuzzy Matching
+
+### Added
+- **Smart Fuzzy Matching Improvements**
+  - Unknown commands now suggest "Did you mean: X?" instead of auto-correcting to distant matches
+  - Only auto-correct when Levenshtein distance ≤ 2
+  - Skip object name correction for commands like `connect`, `goto`, `scene` where args aren't object names
+  - Fixes "connect t" being incorrectly autocorrected to "cat"
+
+- **Twin Sync Improvements**
+  - `hide` and `show` now broadcast visibility changes via `twinBroadcastProperty`
+  - Clone broadcasts CREATE to other clients
+  - Server broadcasts UPDATE without requiring object in server state
+  - Spotlight sync now passes through server correctly
+
+- **JS/Python Parity**
+  - 12 functions now tracked with @parity version tags
+  - `check-parity.sh` script validates alignment
+  - do_hide, do_show, do_delete, do_clone, do_move, do_set all tagged
+
+- **Local Development**
+  - Added `pyproject.toml` for uv package management
+  - SQLite fallback when no DATABASE_URL
+  - Auto-detect localhost for WebSocket URL
+  - Test user creation for local testing
+
+### Fixed
+- **Scene handling in Phaser** - `getAllObjects` now includes `userData` with scene info
+- **Clone confirmation removed** - Clone doesn't modify source, so no confirmation needed
+- **"yes" autocorrection** - Added 'yes', 'no', 'cancel' to KNOWN_COMMANDS
+- **Confirmation check order** - Pending confirmation now checked before fuzzy correction
+
+---
+
 ## [Unreleased]
 
 ### Breaking Changes
@@ -1216,54 +1250,40 @@ print "Health: {player.health} / {player.max_health}"
 
 | Version | Date | Milestone | Key Features |
 |---------|------|-----------|--------------|
-| v0.1.7 | 2025-12-14 | Sprite System | Sprite/image support, asset preloading, 6300+ free assets, smart copying |
-| v0.1.6 | 2025-12-14 | Input + Events in Phaser | Player auto-controls, object inheritance, keyboard input, smart defaults |
-| v0.1.5 | 2025-12-14 | Phaser Transpiler MVP | JavaScript/Phaser transpiler, browser deployment, zero-install games |
-| v0.0.9 | 2025-12-14 | TOON Format | TOON encoder/decoder, 40% token savings, round-trip serialization |
-| v0.0.8 | 2025-12-14 | Infrastructure | TOML support, test mode, metadata system, AI tickets (In Progress) |
+| v0.2.11 | 2026-01-10 | Scene Polish & Fuzzy Matching | Smart fuzzy matching, twin sync, JS/Python parity |
+| v0.2.10 | 2026-01-09 | Spec 0.3 & Networking Parity | TOML spec, 34 adapter parity tests, scene-scoped commands |
+| v0.2.9 | 2026-01-08 | Parser & CLI Enhancements | Bulk operations, natural language, help system |
+| v0.2.8 | 2026-01-07 | Sprite Animations | Phaser animations, shared runtime |
+| v0.2.0 | 2025-12-22 | Spec-First Architecture | TOML specs, console parity, namespace isolation |
+| v0.1.7 | 2025-12-14 | Sprite System | Sprite/image support, asset preloading, 6300+ free assets |
+| v0.1.6 | 2025-12-14 | Input + Events | Player auto-controls, object inheritance, keyboard input |
+| v0.1.5 | 2025-12-14 | Phaser Transpiler MVP | JavaScript/Phaser, browser deployment, zero-install |
+| v0.0.9 | 2025-12-14 | TOON Format | TOON encoder/decoder, 40% token savings |
 | v0.0.7 | 2025-12-14 | Event System | when/trigger syntax, event loop, reactive programming |
-| v0.0.6 | 2025-12-13 | Quality of Life | String interpolation, input command, else if, NOT in compounds |
-| v0.0.5 | 2024-12-12 | String Operations | List iteration, string methods, function return assignment, stack viewing |
-| v0.0.4 | 2024-11-30 | Collections & Control Flow | For loops, lists, break/continue, object cloning |
-| v0.0.3 | 2024-11-15 | Inheritance & Enhancement | Inheritance, while loops, math functions, random |
-| v0.0.2 | 2024-11-01 | AI Integration | prompt, prompt exec, eval, file I/O |
+| v0.0.6 | 2025-12-13 | Quality of Life | String interpolation, input command, else if |
+| v0.0.5 | 2024-12-12 | String Operations | List iteration, string methods |
 | v0.0.1 | 2024-10-15 | Core Interpreter | Lexer, parser, objects, functions, REPL |
 
 ---
 
 ## Upcoming
 
-### v0.2.0 (Proposed - 2025)
-- **In-game REPL** (live coding inside games) - ORIGINAL VISION
-  - JavaScript prototype (1-2 days)
-  - WebSocket server (1 week)
-  - Multiplayer collaborative worlds
-  - Voice integration path
+### v0.3.0 - Unified World Control
+- Message spec formalization (COMMAND type with cmd + outcome)
+- Clients apply authoritative outcomes (not re-execute)
+- Undo/redo sync across twins
+- State sync on late join
 
-### v0.1.8 (Planned - 2025)
-- Audio & animation for Phaser
-- Game state management (pause/resume/restart)
-- Background music & sound effects
-- Sprite animation (sprite sheets)
-
-### v0.1.9 (Planned - 2025)
-- Multiple scenes/levels in Phaser
-- Scene transitions
-- Level progression
-
-### v0.3.0+ (2026)
-- Second transpiler: Godot 2D (GDScript)
-- Third transpiler: Godot 3D
-- Fourth transpiler: Minecraft (Java mods)
-- Fifth transpiler: Unity (C#)
+### v0.4.0+ (Partner-driven)
+- Unity emitter (VR/AR projects)
+- Godot parity
+- Production shared world server
 
 ### Future Features (Deferred)
 - Error handling (try/catch)
 - Dictionary/map data structures
-- List comprehensions
 - Lambda functions
 - Package system with manifests
-- Multi-user MUD support
 - WebSocket server (for in-game REPL)
 - rosh.cloud deployment
 
