@@ -1818,6 +1818,7 @@ class Interpreter:
             set meta.game.title to "X" creates meta.game if needed
         """
         # Helper to perform the actual property set
+        # @parity do_set v1
         def do_set(obj_value: RoshObject, resolved_name: str = None) -> None:
             if not isinstance(obj_value, RoshObject):
                 raise RoshTypeError(f"Cannot set property of non-object: {type(obj_value).__name__}")
@@ -3647,6 +3648,7 @@ Focus on the specific syntax or concept they need to correct."""
         source_name = node.source
 
         # Helper to perform the clone from a resolved source
+        # @parity do_clone v1
         def do_clone(resolved_source: str) -> None:
             self._do_clone_object(resolved_source, node.target, node.source)
 
@@ -3781,6 +3783,7 @@ Focus on the specific syntax or concept they need to correct."""
         obj_name = node.name
 
         # Helper to perform the actual delete (includes undo setup)
+        # @parity do_delete v1
         def do_delete(resolved_name: str) -> None:
             env = self._find_env_for_binding(resolved_name) or self.current_env
             binding = env.bindings.get(resolved_name)
@@ -3870,6 +3873,7 @@ Focus on the specific syntax or concept they need to correct."""
         obj_name = node.name
 
         # Helper to perform the actual hide
+        # @parity do_hide v1
         def do_hide(resolved_name: str) -> None:
             obj = self.current_env.get(resolved_name)
             if not isinstance(obj, RoshObject):
@@ -3919,6 +3923,7 @@ Focus on the specific syntax or concept they need to correct."""
         obj_name = node.name
 
         # Helper to perform the actual show
+        # @parity do_show v1
         def do_show(resolved_name: str) -> None:
             obj = self.current_env.get(resolved_name)
             if not isinstance(obj, RoshObject):
@@ -4032,6 +4037,7 @@ Focus on the specific syntax or concept they need to correct."""
         target_z = self.eval_expression(node.z) if node.z else None
 
         # Helper to perform the actual move
+        # @parity do_move v1
         def do_move(resolved_name: str) -> None:
             obj = self.current_env.get(resolved_name)
             if not isinstance(obj, RoshObject):
