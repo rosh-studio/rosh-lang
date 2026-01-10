@@ -430,6 +430,7 @@ const RoshRuntime = (function() {
   function fuzzyCorrectCommand(cmd) {
     const parts = cmd.trim().split(/\s+/);
     const corrections = [];
+    let suggestion = null;  // For "did you mean?" when command is unknown
 
     // Try to correct the first word (command)
     if (parts.length > 0) {
@@ -437,16 +438,30 @@ const RoshRuntime = (function() {
       if (!KNOWN_COMMANDS.includes(first)) {
         const match = fuzzyMatch(first, KNOWN_COMMANDS);
         if (match && match !== first) {
-          corrections.push(first + ' → ' + match);
-          parts[0] = match;
+          // Only auto-correct if it's a close match (distance 1-2)
+          // For very different words, suggest instead
+          const dist = levenshtein(first, match);
+          if (dist <= 2) {
+            corrections.push(first + ' → ' + match);
+            parts[0] = match;
+          } else {
+            suggestion = match;  // Will show "did you mean?"
+          }
         }
       }
     }
 
+    // Commands where arguments are NOT object names (don't autocorrect)
+    const noObjectArgCmds = ['connect', 'disconnect', 'goto', 'scene', 'go', 'say', 'twin', 'help'];
+    const cmdLower = parts[0]?.toLowerCase();
+
     // Try to correct object names (if adapter provides object list)
     // Skip for CREATE/MAKE commands - don't correct type names to object names
-    const isCreateCmd = ['create', 'make'].includes(parts[0]?.toLowerCase());
-    if (adapter && adapter.getObjectNames && parts.length > 1 && !isCreateCmd) {
+    // Skip for commands where arguments aren't object names
+    const isCreateCmd = ['create', 'make'].includes(cmdLower);
+    const skipObjectCorrection = noObjectArgCmds.includes(cmdLower);
+
+    if (adapter && adapter.getObjectNames && parts.length > 1 && !isCreateCmd && !skipObjectCorrection) {
       const objectNames = adapter.getObjectNames();
       const skipWords = ['to', 'the', 'a', 'an', 'is', 'are', 'color', 'size', 'x', 'y', 'z'];
       for (let i = 1; i < parts.length; i++) {
@@ -462,7 +477,7 @@ const RoshRuntime = (function() {
       }
     }
 
-    return { cmd: parts.join(' '), corrections };
+    return { cmd: parts.join(' '), corrections, suggestion };
   }
 
   // ==========================================================================
@@ -586,6 +601,7 @@ const RoshRuntime = (function() {
     // Apply fuzzy matching
     const fuzzyResult = fuzzyCorrectCommand(cmd);
     const originalCmd = cmd;
+    const commandSuggestion = fuzzyResult.suggestion;  // For "did you mean?" on unknown commands
     cmd = fuzzyResult.cmd;
     if (fuzzyResult.corrections.length > 0) {
       log('[corrected: ' + fuzzyResult.corrections.join(', ') + ']', 'dim');
@@ -986,10 +1002,19 @@ const RoshRuntime = (function() {
             const handled = adapter.handleCustomCommand(cmd, parts);
             if (!handled) {
               log('Unknown command: ' + parts[0], 'err');
-              log('Type "help" for available commands', 'dim');
+              if (commandSuggestion) {
+                log('Did you mean: ' + commandSuggestion + '?', 'dim');
+              } else {
+                log('Type "help" for available commands', 'dim');
+              }
             }
           } else {
             log('Unknown command: ' + parts[0], 'err');
+            if (commandSuggestion) {
+              log('Did you mean: ' + commandSuggestion + '?', 'dim');
+            } else {
+              log('Type "help" for available commands', 'dim');
+            }
           }
       }
     } catch (err) {
