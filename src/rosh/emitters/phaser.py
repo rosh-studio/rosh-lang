@@ -13,26 +13,27 @@ Usage:
 
 See: rosh-dev/proposals/ROSH-IR-SPECIFICATION.md
 
-SPEC COMPLIANCE AUDIT (2026-01-10):
-====================================
-Status: MOSTLY COMPLIANT - needs cleanup
+SPEC COMPLIANCE AUDIT (2026-01-10, updated 2026-01-10):
+========================================================
+Status: COMPLIANT for networking parity
 
-Rogue code found (should use spec values):
+NETWORKING PARITY: VERIFIED
+- toggleSpotlight: Stub implemented (2D has no spotlights - expected)
+- All adapter callbacks match rosh-network.js interface
+- window.selectedObject exported for parity with ThreeJS
+
+EXPECTED 2D/3D DIFFERENCES (not bugs):
+- Spotlight: 2D stub returns no-op (no spotlights in 2D games)
+- Gravity/Physics: Phaser uses its own physics engine, not adapter
+- Click-to-move: 3D feature using raycasting, not applicable to 2D
+- Selection highlight: Uses setTint() (2D) vs emissive (3D) - platform-specific
+- Metadata: Uses getData() (Phaser API) vs userData (Three.js API)
+
+REMAINING CLEANUP (low priority):
 - Lines 61-62: Hardcoded color palette for random colors
 - Lines 1474-1475: Inline color map in REPL create
-- Lines 1784, 1871: More inline color maps
-- Lines 1872: Inline size map {tiny:20, small:30...}
 - Lines 3054-3066: CSS_COLORS dict duplicates spec
-
-TODO:
-1. Generate code that imports from rosh-colors.js (already bundled)
-2. Create rosh-sizes.js module and use it
-3. Remove all hardcoded color/size definitions
-4. Use spec/v0.3.0/rosh-spec.toml as source of truth
-
-Runtime JS files (static/) are mostly compliant:
-- rosh-colors.js: Centralized colors (needs sync with spec)
-- rosh-adapter-phaser.js: Uses RoshColors, has fallback
+- Consider generating code that imports from rosh-colors.js
 """
 
 import re
