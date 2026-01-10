@@ -48,7 +48,25 @@ const RoshRuntime = (function() {
   let undoGroup = 0;
 
   let lastUserCommand = null;   // For :repeat
-  let pendingOp = null;         // For confirmation dialogs
+  let pendingCrossScene = null;         // For confirmation dialogs
+
+  // @parity execute_pending_cross_scene v1
+  function executePendingCrossScene() {
+    if (pendingCrossScene) {
+      pendingCrossScene.execute();
+      pendingCrossScene = null;
+      return true;
+    }
+    return false;
+  }
+
+  // @parity cancel_pending_cross_scene v1
+  function cancelPendingCrossScene() {
+    if (pendingCrossScene) {
+      log('Cancelled pending operation', 'dim');
+      pendingCrossScene = null;
+    }
+  }
 
   let bulkCreateMode = false;
   let bulkCreateCount = 0;
@@ -259,6 +277,7 @@ const RoshRuntime = (function() {
   // UNDO/REDO
   // ==========================================================================
 
+  // @parity push_undo v1
   function pushUndo(description, undoFn, redoFn) {
     if (typeof undoFn !== 'function') return;
     undoStack.push({
@@ -271,6 +290,7 @@ const RoshRuntime = (function() {
     redoStack.length = 0;
   }
 
+  // @parity perform_undo v1
   function performUndo(count = 1) {
     if (!undoStack.length) {
       log('Nothing to undo', 'err');
@@ -301,6 +321,7 @@ const RoshRuntime = (function() {
     }
   }
 
+  // @parity perform_redo v1
   function performRedo(count = 1) {
     if (!redoStack.length) {
       log('Nothing to redo', 'err');
@@ -569,16 +590,16 @@ const RoshRuntime = (function() {
 
     try {
       // Handle confirmation for pending operations
-      if ((parts[0] === 'go' || parts[0] === 'confirm' || parts[0] === 'yes') && pendingOp) {
-        pendingOp.execute();
-        pendingOp = null;
+      // @parity scene_aware_search - matches Python REPL go/yes handling
+      if ((parts[0] === 'go' || parts[0] === 'confirm' || parts[0] === 'yes') && pendingCrossScene) {
+        executePendingCrossScene();
         return;
       }
 
       // Cancel pending op on other commands
-      if (pendingOp && !['go', 'confirm', 'yes'].includes(parts[0])) {
-        log('Cancelled pending operation', 'dim');
-        pendingOp = null;
+      // @parity scene_aware_search - matches Python "any command cancels pending"
+      if (pendingCrossScene && !['go', 'confirm', 'yes'].includes(parts[0])) {
+        cancelPendingCrossScene();
       }
 
       // Route commands
@@ -1449,7 +1470,7 @@ const RoshRuntime = (function() {
       return;
     }
 
-    // Helper to perform the actual delete
+    // @parity do_delete v1
     function doDelete(resolvedName) {
       // Get object state for undo
       const obj = adapter.getObject ? adapter.getObject(resolvedName) : null;
@@ -1500,7 +1521,7 @@ const RoshRuntime = (function() {
       return;
     }
 
-    // Helper to perform the actual clone
+    // @parity do_clone v1
     function doClone(resolvedName) {
       const result = adapter.cloneObject(resolvedName);
       if (result.success) {
@@ -1566,7 +1587,7 @@ const RoshRuntime = (function() {
       return;
     }
 
-    // Helper to perform the actual set
+    // @parity do_set v1
     function doSet(resolvedName) {
       // Get old value for undo
       const oldValue = adapter.getProperty ? adapter.getProperty(resolvedName, prop) : null;
@@ -1868,7 +1889,7 @@ const RoshRuntime = (function() {
       return;
     }
 
-    // Helper to perform the actual hide
+    // @parity do_hide v1
     function doHide(resolvedName) {
       const result = adapter.setVisible(resolvedName, false);
       if (result.success) {
@@ -1908,7 +1929,7 @@ const RoshRuntime = (function() {
       return;
     }
 
-    // Helper to perform the actual show
+    // @parity do_show v1
     function doShow(resolvedName) {
       const result = adapter.setVisible(resolvedName, true);
       if (result.success) {
@@ -2007,7 +2028,7 @@ const RoshRuntime = (function() {
     }
 
     // Set up pending operation with confirmation
-    pendingOp = {
+    pendingCrossScene = {
       desc: 'delete ' + objects.length + ' ' + desc,
       execute: () => {
         let deleted = 0;
@@ -2037,7 +2058,7 @@ const RoshRuntime = (function() {
     }
 
     // Set up pending operation with confirmation
-    pendingOp = {
+    pendingCrossScene = {
       desc: 'hide ' + objects.length + ' ' + desc,
       execute: () => {
         let hidden = 0;
@@ -2064,7 +2085,7 @@ const RoshRuntime = (function() {
     }
 
     // Set up pending operation with confirmation
-    pendingOp = {
+    pendingCrossScene = {
       desc: 'show ' + objects.length + ' ' + desc,
       execute: () => {
         let shown = 0;
@@ -2083,7 +2104,7 @@ const RoshRuntime = (function() {
   }
 
   // Fuzzy match object reference (e.g., "red ball" -> "ball-1" with color red)
-  // @parity scene_aware_search - Search current scene first, ask before acting on other scenes
+  // @parity fuzzy_find_with_confirmation v1 - Search current scene first, ask before acting on other scenes
   function fuzzyMatchObject(objRef, options = {}) {
     if (!adapter.getAllObjects) return objRef;
 
@@ -2164,7 +2185,7 @@ const RoshRuntime = (function() {
         log('  Found "' + otherMatch.name + '" in scene "' + otherMatch.scene + '"', 'dim');
         log('  Type "go" or "yes" to ' + options.operation + ' it, or any other command to cancel', 'dim');
 
-        pendingOp = {
+        pendingCrossScene = {
           desc: options.operation + ' ' + otherMatch.name + ' from scene "' + otherMatch.scene + '"',
           execute: () => options.onConfirm(otherMatch.name)
         };
@@ -2188,7 +2209,7 @@ const RoshRuntime = (function() {
     if (toMatch) {
       const [, objRef, x, y, z] = toMatch;
 
-      // Helper to perform the actual move
+      // @parity do_move v1
       function doMove(resolvedName) {
         const oldPos = adapter.getPosition ? adapter.getPosition(resolvedName) : null;
 

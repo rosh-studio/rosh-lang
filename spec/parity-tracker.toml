@@ -1,0 +1,312 @@
+# Parity Tracker - JS/Python Function Alignment
+#
+# This file tracks which functions must stay in sync between:
+#   - static/rosh-runtime.js (JS runtime)
+#   - src/rosh/interpreter.py (Python interpreter)
+#
+# Naming convention: same names, just case differs
+#   JS:  camelCase    (fuzzyFindObject)
+#   Py:  snake_case   (fuzzy_find_object)
+#
+# Version tags: Each paired function has @parity <group> v<N>
+#   - When you modify one, bump the version
+#   - Run: ./scripts/check-parity.sh to find mismatches
+#
+# STATUS KEY:
+#   synced   = Same logic, same version
+#   drift    = Logic differs, needs review
+#   js_only  = No Python equivalent (acceptable)
+#   py_only  = No JS equivalent (acceptable)
+
+[meta]
+last_audit = "2025-01-10"
+js_file = "static/rosh-runtime.js"
+py_file = "src/rosh/interpreter.py"
+
+# =============================================================================
+# FUZZY MATCHING
+# =============================================================================
+
+[fuzzy_find_object]
+description = "Find object by fuzzy name match, optionally scene-scoped"
+js_name = "fuzzyFindObject"
+py_name = "fuzzy_find_object"
+js_line = "TBD"
+py_line = "276"
+version = 1
+status = "needs_rename"  # JS currently "fuzzyMatchObject"
+
+[fuzzy_find_with_confirmation]
+description = "Scene-aware fuzzy find with cross-scene confirmation"
+js_name = "fuzzyFindWithConfirmation"
+py_name = "fuzzy_find_with_confirmation"
+js_line = "TBD"
+py_line = "391"
+version = 1
+status = "needs_rename"  # JS currently embedded in fuzzyMatchObject
+
+[find_best_match]
+description = "Inner helper to find best match from object list"
+js_name = "findBestMatch"
+py_name = "find_best_match"
+js_line = "2111"
+py_line = "428"
+version = 1
+status = "synced"
+
+# =============================================================================
+# PENDING OPERATIONS
+# =============================================================================
+
+[pending_cross_scene]
+description = "State for pending cross-scene confirmation"
+js_name = "pendingCrossScene"
+py_name = "pending_cross_scene"
+js_line = "TBD"
+py_line = "103"
+version = 1
+status = "needs_rename"  # JS currently "pendingOp"
+
+[execute_pending_cross_scene]
+description = "Execute confirmed cross-scene operation"
+js_name = "executePendingCrossScene"
+py_name = "execute_pending_cross_scene"
+js_line = "TBD"
+py_line = "498"
+version = 1
+status = "needs_rename"
+
+[cancel_pending_cross_scene]
+description = "Cancel pending cross-scene operation"
+js_name = "cancelPendingCrossScene"
+py_name = "cancel_pending_cross_scene"
+js_line = "TBD"
+py_line = "510"
+version = 1
+status = "needs_rename"
+
+# =============================================================================
+# UNDO/REDO
+# =============================================================================
+
+[push_undo]
+description = "Push operation onto undo stack"
+js_name = "pushUndo"
+py_name = "push_undo"
+js_line = "262"
+py_line = "135"
+version = 1
+status = "synced"
+
+[perform_undo]
+description = "Execute undo operation(s)"
+js_name = "performUndo"
+py_name = "perform_undo"
+js_line = "274"
+py_line = "150"
+version = 1
+status = "synced"
+
+[perform_redo]
+description = "Execute redo operation(s)"
+js_name = "performRedo"
+py_name = "perform_redo"
+js_line = "304"
+py_line = "198"
+version = 1
+status = "synced"
+
+# =============================================================================
+# COMMAND HELPERS (do_* functions)
+# These are the inner functions that do actual work after parsing
+# =============================================================================
+
+[do_delete]
+description = "Execute delete after name resolution"
+js_name = "doDelete"
+py_name = "do_delete"
+js_line = "1453"
+py_line = "3790"
+version = 1
+status = "synced"
+
+[do_clone]
+description = "Execute clone after name resolution"
+js_name = "doClone"
+py_name = "do_clone"
+js_line = "1504"
+py_line = "3646"
+version = 1
+status = "needs_rename"  # Py currently "do_clone_from"
+
+[do_set]
+description = "Execute set after name resolution"
+js_name = "doSet"
+py_name = "do_set"
+js_line = "1570"
+py_line = "1817"
+version = 1
+status = "needs_rename"  # Py currently "do_property_set"
+
+[do_get]
+description = "Execute get after name resolution"
+js_name = "doGet"
+py_name = "do_get"
+js_line = "TBD"
+py_line = "2015"
+version = 1
+status = "needs_add"  # JS doesn't have this extracted yet
+
+[do_hide]
+description = "Execute hide after name resolution"
+js_name = "doHide"
+py_name = "do_hide"
+js_line = "1872"
+py_line = "3879"
+version = 1
+status = "synced"
+
+[do_show]
+description = "Execute show after name resolution"
+js_name = "doShow"
+py_name = "do_show"
+js_line = "1912"
+py_line = "3928"
+version = 1
+status = "synced"
+
+[do_move]
+description = "Execute move after name resolution"
+js_name = "doMove"
+py_name = "do_move"
+js_line = "2192"
+py_line = "4041"
+version = 1
+status = "synced"
+
+[do_look]
+description = "Execute look/examine after name resolution"
+js_name = "doLook"
+py_name = "do_look"
+js_line = "TBD"
+py_line = "4424"
+version = 1
+status = "needs_add"  # JS doesn't have this extracted yet
+
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
+
+[levenshtein]
+description = "Calculate Levenshtein edit distance"
+js_name = "levenshtein"
+py_name = "levenshtein"
+js_line = "328"
+py_line = "N/A"
+version = 1
+status = "js_only"  # Python uses difflib
+
+[parse_color]
+description = "Parse color string to hex value"
+js_name = "parseColor"
+py_name = "parse_color"
+js_line = "456"
+py_line = "N/A"
+version = 1
+status = "js_only"  # Python handles in parser
+
+[singularize]
+description = "Convert plural to singular (balls -> ball)"
+js_name = "singularize"
+py_name = "singularize"
+js_line = "443"
+py_line = "N/A"
+version = 1
+status = "needs_add"  # Python has _find_type_with_plural but different approach
+
+# =============================================================================
+# COMMAND HANDLERS (handle* in JS, eval_* in Python)
+# These have different architectures but should produce same results
+# =============================================================================
+
+[handle_create]
+description = "Process create command"
+js_name = "handleCreate"
+py_name = "eval_create_object"
+js_line = "1224"
+py_line = "1100"
+version = 1
+status = "architecture_differs"
+note = "JS parses+executes, Python evaluates AST. Behavior should match."
+
+[handle_delete]
+description = "Process delete command"
+js_name = "handleDelete"
+py_name = "eval_delete_object"
+js_line = "1401"
+py_line = "3751"
+version = 1
+status = "architecture_differs"
+
+[handle_clone]
+description = "Process clone command"
+js_name = "handleClone"
+py_name = "eval_clone_object"
+js_line = "1495"
+py_line = "3638"
+version = 1
+status = "architecture_differs"
+
+[handle_set]
+description = "Process set command"
+js_name = "handleSet"
+py_name = "eval_property_set"
+js_line = "1541"
+py_line = "1810"
+version = 1
+status = "architecture_differs"
+
+[handle_get]
+description = "Process get command"
+js_name = "handleGet"
+py_name = "eval_get"
+js_line = "1632"
+py_line = "1969"
+version = 1
+status = "architecture_differs"
+
+[handle_move]
+description = "Process move command"
+js_name = "handleMove"
+py_name = "eval_move_object"
+js_line = "2183"
+py_line = "4031"
+version = 1
+status = "architecture_differs"
+
+[handle_hide]
+description = "Process hide command"
+js_name = "handleHide"
+py_name = "eval_hide_object"
+js_line = "1855"
+py_line = "3874"
+version = 1
+status = "architecture_differs"
+
+[handle_show]
+description = "Process show command"
+js_name = "handleShow"
+py_name = "eval_show_object"
+js_line = "1895"
+py_line = "3923"
+version = 1
+status = "architecture_differs"
+
+[handle_look]
+description = "Process look/examine command"
+js_name = "handleLook"
+py_name = "eval_look"
+js_line = "2263"
+py_line = "4417"
+version = 1
+status = "architecture_differs"

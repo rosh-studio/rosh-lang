@@ -132,6 +132,7 @@ class Interpreter:
         """Start a new undo group. All subsequent push_undo calls share this group."""
         self._undo_group += 1
 
+    # @parity push_undo v1
     def push_undo(self, description: str, inverse: Callable[[], None], redo: Optional[Callable[[], None]] = None):
         """Push an undo entry onto the stack."""
         if not self._undo_enabled or not callable(inverse):
@@ -147,6 +148,7 @@ class Interpreter:
             self.undo_stack.pop(0)
         self.redo_stack.clear()
 
+    # @parity perform_undo v1
     def perform_undo(self, count: int = 1):
         """Execute one or more undo operations (by group)."""
         if not self.undo_stack:
@@ -195,6 +197,7 @@ class Interpreter:
         for idx, entry in enumerate(reversed(self.undo_stack[-limit:]), 1):
             self.color_out.dim(f"  #{idx} {entry['description']}")
 
+    # @parity perform_redo v1
     def perform_redo(self, count: int = 1):
         """Reapply one or more actions."""
         if not self.redo_stack:
@@ -388,11 +391,10 @@ class Interpreter:
 
         return None
 
+    # @parity fuzzy_find_with_confirmation v1
     def _fuzzy_find_with_confirmation(self, obj_ref: str, operation: str,
                                        callback: Callable[[str], Any]) -> Optional[str]:
         """Scene-aware fuzzy find that asks for confirmation when crossing scenes.
-
-        @parity scene_aware_search - matches JS fuzzyMatchObject with options.onConfirm
 
         If object is found in current scene, returns the name and caller can proceed.
         If object is found in another scene, sets up pending_cross_scene and returns None.
@@ -495,6 +497,7 @@ class Interpreter:
 
         return None  # Not found anywhere
 
+    # @parity execute_pending_cross_scene v1
     def execute_pending_cross_scene(self) -> bool:
         """Execute pending cross-scene operation. Returns True if there was one."""
         if self.pending_cross_scene:
@@ -507,6 +510,7 @@ class Interpreter:
             return True
         return False
 
+    # @parity cancel_pending_cross_scene v1
     def cancel_pending_cross_scene(self):
         """Cancel any pending cross-scene operation."""
         if self.pending_cross_scene:
@@ -1814,7 +1818,7 @@ class Interpreter:
             set meta.game.title to "X" creates meta.game if needed
         """
         # Helper to perform the actual property set
-        def do_property_set(obj_value: RoshObject, resolved_name: str = None) -> None:
+        def do_set(obj_value: RoshObject, resolved_name: str = None) -> None:
             if not isinstance(obj_value, RoshObject):
                 raise RoshTypeError(f"Cannot set property of non-object: {type(obj_value).__name__}")
 
@@ -1852,7 +1856,7 @@ class Interpreter:
                 # Try exact match first
                 if self.current_env.exists(obj_name):
                     obj_value = self.current_env.get(obj_name)
-                    do_property_set(obj_value, obj_name)
+                    do_set(obj_value, obj_name)
                     return
 
                 # Use scene-aware fuzzy matching with confirmation for REPL mode
@@ -1860,7 +1864,7 @@ class Interpreter:
                 if self.interactive:
                     def set_on_resolved(resolved_name: str) -> None:
                         obj_value = self.current_env.get(resolved_name)
-                        do_property_set(obj_value, resolved_name)
+                        do_set(obj_value, resolved_name)
 
                     resolved = self._fuzzy_find_with_confirmation(obj_name, 'set', set_on_resolved)
                     if resolved is not None:
@@ -1873,7 +1877,7 @@ class Interpreter:
                     matched = self._fuzzy_find_object(obj_name)
                     if matched:
                         obj_value = self.current_env.get(matched)
-                        do_property_set(obj_value, matched)
+                        do_set(obj_value, matched)
                         return
 
                 raise RoshRuntimeError(f"Object not found: {node.object.name}")
@@ -1881,17 +1885,17 @@ class Interpreter:
             elif isinstance(node.object, PropertyAccess):
                 # Use special handling for meta paths (auto-create intermediates)
                 obj_value = self._get_or_create_nested(node.object)
-                do_property_set(obj_value)
+                do_set(obj_value)
             else:
                 raise RoshRuntimeError(f"Cannot set property on: {type(node.object).__name__}")
         else:
             # Base object provided (for object initialization)
             if isinstance(node.object, Identifier):
                 # This is the base object
-                do_property_set(base_obj)
+                do_set(base_obj)
             elif isinstance(node.object, PropertyAccess):
                 obj_value = self._get_or_create_nested(node.object)
-                do_property_set(obj_value)
+                do_set(obj_value)
             else:
                 raise RoshRuntimeError(f"Cannot set property on: {type(node.object).__name__}")
 
@@ -3643,20 +3647,20 @@ Focus on the specific syntax or concept they need to correct."""
         source_name = node.source
 
         # Helper to perform the clone from a resolved source
-        def do_clone_from(resolved_source: str) -> None:
+        def do_clone(resolved_source: str) -> None:
             self._do_clone_object(resolved_source, node.target, node.source)
 
         # Try exact match first
         if self.current_env.exists(source_name):
-            do_clone_from(source_name)
+            do_clone(source_name)
             return
 
         # Use scene-aware fuzzy matching with confirmation for REPL mode
         # @parity scene_aware_search
         if self.interactive:
-            resolved = self._fuzzy_find_with_confirmation(source_name, 'clone', do_clone_from)
+            resolved = self._fuzzy_find_with_confirmation(source_name, 'clone', do_clone)
             if resolved is not None:
-                do_clone_from(resolved)
+                do_clone(resolved)
                 return
             elif self.pending_cross_scene is not None:
                 return  # Confirmation pending
@@ -3665,7 +3669,7 @@ Focus on the specific syntax or concept they need to correct."""
             # Script mode: use regular fuzzy matching
             matched = self._fuzzy_find_object(source_name)
             if matched:
-                do_clone_from(matched)
+                do_clone(matched)
                 return
 
         # Not found - check if this is a known object we can create
