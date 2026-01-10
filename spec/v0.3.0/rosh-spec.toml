@@ -1,0 +1,212 @@
+# Rosh Specification v0.3.0
+#
+# SINGLE SOURCE OF TRUTH for commands, aliases, and corrections.
+# Python and JS runtimes MUST read from this file.
+#
+# DO NOT define commands elsewhere. Add them here.
+
+[meta]
+version = "0.3.0"
+ir_version = "0.3.0"
+
+# =============================================================================
+# COMMANDS
+# =============================================================================
+# Each command defines:
+#   aliases   - Alternative names (all valid, no correction message)
+#   typos     - Common misspellings (corrected with warning)
+#   args      - Argument style: "none", "single", "array", "joined", "cmd_array"
+#   layer     - Runtime layer: "core", "3d"
+#   needs_arg - Whether argument is required (default: true)
+
+# --- Core Layer ---
+
+[commands.help]
+aliases = []
+typos = ["hlep", "hepl"]
+args = "array"
+layer = "core"
+needs_arg = false
+
+[commands.version]
+aliases = ["ver"]
+typos = ["verison"]
+args = "none"
+layer = "core"
+needs_arg = false
+
+[commands.undo]
+aliases = ["oops"]
+typos = ["unod", "udno"]
+args = "none"
+layer = "core"
+needs_arg = false
+
+[commands.redo]
+aliases = []
+typos = ["reod"]
+args = "none"
+layer = "core"
+needs_arg = false
+
+[commands.credits]
+aliases = []
+typos = []
+args = "none"
+layer = "core"
+needs_arg = false
+
+[commands.meta]
+aliases = []
+typos = []
+args = "array"
+layer = "core"
+needs_arg = true
+
+# --- 3D Layer ---
+
+[commands.list]
+aliases = ["ls", "objects"]
+typos = ["lst", "lis"]
+args = "array"
+layer = "3d"
+needs_arg = false
+
+[commands.look]
+aliases = ["l", "examine", "inspect", "x", "ex", "dump", "properties", "props"]
+typos = ["lok", "lool"]
+args = "joined"
+layer = "3d"
+needs_arg = false
+
+[commands.create]
+aliases = []
+typos = ["creat", "crate", "craete"]
+args = "cmd_array"
+layer = "3d"
+needs_arg = true
+
+[commands.delete]
+aliases = ["remove"]
+typos = ["delte", "deleet"]
+args = "array"
+layer = "3d"
+needs_arg = true
+
+[commands.clone]
+aliases = ["copy", "duplicate"]
+typos = ["cloen"]
+args = "joined"
+layer = "3d"
+needs_arg = true
+
+[commands.set]
+aliases = []
+typos = ["ste"]
+args = "cmd_array"
+layer = "3d"
+needs_arg = true
+
+[commands.get]
+aliases = []
+typos = ["gte"]
+args = "array"
+layer = "3d"
+needs_arg = true
+
+[commands.hide]
+aliases = []
+typos = ["hdie"]
+args = "single"
+layer = "3d"
+needs_arg = true
+
+[commands.show]
+aliases = []
+typos = ["shwo"]
+args = "single"
+layer = "3d"
+needs_arg = true
+
+[commands.make]
+aliases = []
+typos = ["mak", "maek"]
+args = "cmd_array"
+layer = "3d"
+needs_arg = true
+
+[commands.move]
+aliases = []
+typos = ["mov", "mvoe"]
+args = "cmd_array"
+layer = "3d"
+needs_arg = true
+
+[commands.count]
+aliases = []
+typos = ["coutn"]
+args = "single"
+layer = "3d"
+needs_arg = false
+
+# =============================================================================
+# RESERVED WORDS
+# =============================================================================
+# These cannot be used as variable/object names
+
+[reserved]
+words = [
+    # Language keywords
+    "create", "set", "get", "delete", "if", "then", "else", "while", "for",
+    "when", "on", "end", "return", "break", "continue", "true", "false", "null",
+    # Scene management
+    "scene", "level",
+    # System object
+    "rsh",
+]
+
+# =============================================================================
+# VOICE CORRECTIONS
+# =============================================================================
+# Speech-to-text error corrections
+
+[voice.colors]
+read = "red"
+reed = "red"
+blew = "blue"
+gren = "green"
+yello = "yellow"
+whit = "white"
+gry = "gray"
+grey = "gray"
+
+[voice.numbers]
+zero = "0"
+one = "1"
+won = "1"
+two = "2"
+three = "3"
+four = "4"
+five = "5"
+six = "6"
+seven = "7"
+eight = "8"
+ate = "8"
+nine = "9"
+ten = "10"
+
+[voice.product]
+raush = "rosh"
+rush = "rosh"
+rawsh = "rosh"
+
+# =============================================================================
+# SPELLINGS
+# =============================================================================
+# British to American normalization
+
+[spellings]
+colour = "color"
+colours = "colors"
+centre = "center"
+grey = "gray"

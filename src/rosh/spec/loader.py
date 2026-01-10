@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 # Spec version
-SPEC_VERSION = "0.2.0"
+SPEC_VERSION = "0.3.0"
 
 # Default spec directory
 SPEC_DIR = Path(__file__).parent.parent.parent.parent / "spec" / f"v{SPEC_VERSION}"
@@ -65,8 +65,8 @@ class SpecLoader:
         self._cache: Dict[str, Dict] = {}
         self._commands: Dict[str, CommandSpec] = {}
 
-    def load(self, spec_name: str) -> Dict:
-        """Load a spec file by name (e.g., 'cli' → 'rosh-cli.toml')."""
+    def load(self, spec_name: str = "spec") -> Dict:
+        """Load a spec file by name (e.g., 'spec' → 'rosh-spec.toml', 'cli' → 'rosh-cli.toml')."""
         if spec_name in self._cache:
             return self._cache[spec_name]
 
@@ -92,18 +92,18 @@ class SpecLoader:
             if not isinstance(cmd_data, dict):
                 continue
 
-            # Extract main fields
+            # Extract main fields (support both v0.2.0 and v0.3.0 formats)
             spec = CommandSpec(
-                canonical=cmd_data.get("canonical", name),
+                canonical=cmd_data.get("canonical", name),  # v0.3.0: name is canonical
                 aliases=cmd_data.get("aliases", []),
                 typos=cmd_data.get("typos", []),
                 syntax=cmd_data.get("syntax", ""),
-                arg_style=cmd_data.get("arg_style", "array"),
+                arg_style=cmd_data.get("arg_style") or cmd_data.get("args", "array"),  # v0.3.0: "args"
                 layer=cmd_data.get("layer", "3d"),
                 description=cmd_data.get("description", ""),
             )
 
-            # Extract nested sections
+            # Extract nested sections (v0.2.0 format)
             for key in ["behavior", "examples", "inference", "modifiers", "spellings"]:
                 if key in cmd_data:
                     setattr(spec, key, cmd_data[key])
@@ -187,11 +187,15 @@ def _get_loader() -> SpecLoader:
     global _loader
     if _loader is None:
         _loader = SpecLoader()
-        # Load CLI spec by default
+        # Load main spec by default (v0.3.0: rosh-spec.toml)
         try:
-            _loader.load("cli")
+            _loader.load("spec")
         except FileNotFoundError:
-            pass
+            # Fall back to v0.2.0 CLI spec
+            try:
+                _loader.load("cli")
+            except FileNotFoundError:
+                pass
     return _loader
 
 
