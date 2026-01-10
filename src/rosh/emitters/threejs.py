@@ -13,6 +13,26 @@ Usage:
 
 See: rosh-dev/proposals/ROSH-IR-SPECIFICATION.md
 See: rosh-dev/proposals/IR-VERSIONING-POLICY.md
+
+SPEC COMPLIANCE AUDIT (2026-01-10):
+====================================
+Status: MOSTLY COMPLIANT - needs cleanup
+
+Rogue code found (should use spec values):
+- Lines 60-64: CSS_COLORS dict duplicates spec colors
+- Lines 69-70: Hardcoded color palette for random colors
+- Line 2603: TWIN_COLORS inline definition
+- Various: Hardcoded scene colors (0x1a1a2e, 0x333333, etc.)
+
+TODO:
+1. Generate code that imports from rosh-colors.js
+2. Create rosh-sizes.js module and use it
+3. Remove CSS_COLORS dict, use spec instead
+4. Use spec/v0.3.0/rosh-spec.toml as source of truth
+
+Runtime JS files (static/) are mostly compliant:
+- rosh-colors.js: Centralized colors (needs sync with spec)
+- rosh-adapter-threejs.js: Uses RoshColors, has fallback SIZE_MAP
 """
 
 # =============================================================================

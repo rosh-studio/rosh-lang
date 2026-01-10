@@ -12,6 +12,26 @@ Usage:
     py_code = emitter.emit()
 
 See: rosh-dev/proposals/ROSH-IR-SPECIFICATION.md
+
+⚠️  OUT OF SYNC - SPEC 0.3 (2026-01-10)
+========================================
+Status: NOT COMPLIANT - needs significant work
+
+This emitter is behind Phaser/ThreeJS and missing Spec 0.3 features:
+- No rosh_network.py equivalent (no multiplayer/Project Twin)
+- No REQUEST/CONFIRMED protocol support
+- Colors/sizes hardcoded, not from spec
+- No REPL support in generated code
+- Missing object types, properties from spec
+
+TO BRING INTO SYNC:
+1. Create rosh_network.py for multiplayer (match JS protocol)
+2. Import colors/sizes from spec (or generate constants)
+3. Implement REPL commands from spec
+4. Add spec compliance tests for Pygame output
+5. Test with rosh.cloud World Center (WebSocket from Python)
+
+Priority: LOW - Pygame demos work for local testing
 """
 
 from typing import Dict, Any, Set, List

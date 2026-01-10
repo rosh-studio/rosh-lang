@@ -13,6 +13,26 @@ Usage:
 
 See: rosh-dev/proposals/ROSH-IR-SPECIFICATION.md
 See: rosh-dev/proposals/GODOT-EMITTER-PROPOSAL.md
+
+⚠️  OUT OF SYNC - SPEC 0.3 (2026-01-10)
+========================================
+Status: NOT COMPLIANT - needs significant work
+
+This emitter is behind Phaser/ThreeJS and missing Spec 0.3 features:
+- No rosh-network.js equivalent (no multiplayer/Project Twin)
+- No REQUEST/CONFIRMED protocol support
+- Colors/sizes hardcoded, not from spec
+- No REPL support
+- Missing object types, properties from spec
+
+TO BRING INTO SYNC:
+1. Create rosh_network.gd for multiplayer (match JS protocol)
+2. Create rosh_colors.gd / rosh_sizes.gd from spec
+3. Implement REPL commands from spec
+4. Add spec compliance tests for Godot output
+5. Test with rosh.cloud World Center
+
+Priority: LOW - Godot demos work for local testing
 """
 
 from typing import Dict, Any, Set, List

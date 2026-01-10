@@ -12,6 +12,27 @@ Usage:
     js_code = emitter.emit()
 
 See: rosh-dev/proposals/ROSH-IR-SPECIFICATION.md
+
+SPEC COMPLIANCE AUDIT (2026-01-10):
+====================================
+Status: MOSTLY COMPLIANT - needs cleanup
+
+Rogue code found (should use spec values):
+- Lines 61-62: Hardcoded color palette for random colors
+- Lines 1474-1475: Inline color map in REPL create
+- Lines 1784, 1871: More inline color maps
+- Lines 1872: Inline size map {tiny:20, small:30...}
+- Lines 3054-3066: CSS_COLORS dict duplicates spec
+
+TODO:
+1. Generate code that imports from rosh-colors.js (already bundled)
+2. Create rosh-sizes.js module and use it
+3. Remove all hardcoded color/size definitions
+4. Use spec/v0.3.0/rosh-spec.toml as source of truth
+
+Runtime JS files (static/) are mostly compliant:
+- rosh-colors.js: Centralized colors (needs sync with spec)
+- rosh-adapter-phaser.js: Uses RoshColors, has fallback
 """
 
 import re
