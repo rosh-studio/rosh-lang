@@ -442,3 +442,36 @@ USERS_LIST = { fields = ["world_id", "users", "count"] }
 [protocol.legacy]
 deprecated = ["CREATE", "MOVE", "UPDATE", "DELETE", "OBJECT_CREATED", "OBJECT_MOVED", "OBJECT_UPDATED", "OBJECT_DELETED"]
 note = "Use REQUEST_*/CONFIRMED_* protocol instead"
+
+# =============================================================================
+# RUNTIME FEATURES
+# =============================================================================
+# Features that MUST be implemented in BOTH Python and JS runtimes.
+# Used by parity tests to verify consistency.
+# Format: feature_name = { commands = [...], description = "..." }
+
+[runtime_features]
+
+[runtime_features.fuzzy_matching]
+commands = ["set", "get", "clone", "delete", "move", "look", "hide", "show"]
+description = "Object names resolved via fuzzy matching when exact match not found"
+js_location = "rosh-runtime.js:fuzzyMatchObject()"
+py_location = "interpreter.py:_fuzzy_find_object()"
+
+[runtime_features.scene_aware_search]
+commands = ["get"]
+description = "Search current scene first, expand to all scenes if no match (with notification)"
+js_location = "rosh-adapter-threejs.js:deepSearch(), rosh-runtime.js:fuzzyFindObjects()"
+py_location = "interpreter.py:_fuzzy_find_object()"
+
+[runtime_features.typo_correction]
+commands = ["*"]
+description = "Common typos corrected with [corrected: X -> Y] message"
+js_location = "rosh-runtime.js:fuzzyCorrectCommand()"
+py_location = "parser.py:autocorrect_voice()"
+
+[runtime_features.undo_redo]
+commands = ["undo", "redo"]
+description = "Undo/redo stack for reversible operations"
+js_location = "rosh-runtime.js:pushUndo(), handleUndo()"
+py_location = "interpreter.py:push_undo(), eval_undo()"

@@ -1,5 +1,14 @@
 """
 Rosh Interpreter - executes the AST
+
+=== PARITY FEATURES ===
+Features that MUST match JS runtime. See spec/v0.3.0/rosh-spec.toml
+Update this list when adding features. Run: pytest tests/test_runtime_parity.py
+
+@parity fuzzy_matching - Object names resolved via fuzzy matching
+@parity scene_aware_search - Search current scene first, expand if needed
+@parity typo_correction - Common typos corrected with notification
+@parity undo_redo - Undo/redo stack for reversible operations
 """
 
 import sys
@@ -254,7 +263,13 @@ class Interpreter:
             env = env.parent
         return None
 
-    def _fuzzy_find_object(self, obj_ref: str) -> Optional[str]:
+    def _get_current_scene(self) -> Optional[str]:
+        """Get the current scene name, or None if not set."""
+        if self.current_env.exists('current-scene'):
+            return self.current_env.get('current-scene')
+        return None
+
+    def _fuzzy_find_object(self, obj_ref: str, scene_only: bool = True) -> Optional[str]:
         """Find an object by fuzzy matching. Returns actual object name or None.
 
         Matching strategies:
@@ -262,16 +277,45 @@ class Interpreter:
         2. Normalized match: "box01" -> "box-1", "ball1" -> "ball-1"
         3. Type+color match: "red ball" -> ball with color red
         4. Partial match: "ball" -> first ball found
+
+        If scene_only is True, first searches current scene, then expands if nothing found.
         """
+        from .values import rosh_to_python
+
         # 1. Exact match
         if self.current_env.exists(obj_ref):
             return obj_ref
 
-        # Get all objects
-        all_objects = []
+        # Get current scene for filtering
+        current_scene = self._get_current_scene()
+
+        # Get all objects, separated by scene
+        current_scene_objects = []
+        other_scene_objects = []
         for name, binding in self.current_env.bindings.items():
             if isinstance(binding.get('value'), RoshObject):
-                all_objects.append((name, binding['value']))
+                obj = binding['value']
+                obj_scene = None
+                if obj.has('scene'):
+                    obj_scene = rosh_to_python(obj.get('scene'))
+
+                if current_scene and scene_only:
+                    if obj_scene == current_scene or (not obj_scene and not current_scene):
+                        current_scene_objects.append((name, obj))
+                    else:
+                        other_scene_objects.append((name, obj))
+                else:
+                    current_scene_objects.append((name, obj))
+
+        # Try current scene first
+        all_objects = current_scene_objects
+        expanded_search = False
+
+        if not all_objects and other_scene_objects:
+            all_objects = other_scene_objects
+            expanded_search = True
+            if current_scene:
+                self.color_out.dim(f"[searching all scenes - none found in '{current_scene}']")
 
         if not all_objects:
             return None
@@ -1643,7 +1687,15 @@ class Interpreter:
         if base_obj is None:
             # Get the base object from the environment
             if isinstance(node.object, Identifier):
-                obj_value = self.current_env.get(node.object.name)
+                obj_name = node.object.name
+                # Use fuzzy matching if exact name doesn't exist
+                if not self.current_env.exists(obj_name):
+                    matched = self._fuzzy_find_object(obj_name)
+                    if matched:
+                        obj_name = matched
+                    else:
+                        raise RoshRuntimeError(f"Object not found: {node.object.name}")
+                obj_value = self.current_env.get(obj_name)
             elif isinstance(node.object, PropertyAccess):
                 # Use special handling for meta paths (auto-create intermediates)
                 obj_value = self._get_or_create_nested(node.object)

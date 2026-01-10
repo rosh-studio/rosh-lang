@@ -1,13 +1,46 @@
 # Scottish Heritage Gallery
 # A cross-platform virtual exhibition showcasing Scottish national treasures
-# Build: 2026-01-07-v2 (cache bust)
+# Two scenes: "models" shows all exhibits, "empty" is a blank canvas for cloning
+# Build: 2026-01-10-v3
+
+meta
+    title "Scottish Heritage Gallery"
+    description "Virtual exhibition of Scottish national treasures"
+    initial_scene "models"
+    use_shared_runtime true
+end
 
 # =============================================================================
-# EXHIBITS - Line left to right using x coordinates
+# EMPTY SCENE - Blank canvas for cloning objects
+# =============================================================================
+
+create object empty_title
+    set scene to "empty"
+    set text to "Empty Gallery"
+    set x to 50%
+    set y to 10%
+    set z to -8
+    set color to "white"
+    set font_size to 48
+end
+
+create object empty_hint
+    set scene to "empty"
+    set text to "Type: go models  (to see exhibits) | clone <name>  (to add objects)"
+    set x to 50%
+    set y to 90%
+    set z to -8
+    set color to "gray"
+    set font_size to 24
+end
+
+# =============================================================================
+# MODELS SCENE - All exhibits
 # =============================================================================
 
 # Lewis Chess King (far left)
 create object chess_king
+    set scene to "models"
     set type to "lewis_chess_king"
     set x to -15
     set y to 2
@@ -18,6 +51,7 @@ create object chess_king
 end
 
 create object label_king
+    set scene to "models"
     set type to "text"
     set text to "Lewis Chess King"
     set x to -15
@@ -27,6 +61,7 @@ end
 
 # Lewis Chess Queen (center-left)
 create object chess_queen
+    set scene to "models"
     set type to "lewis_chess_queen"
     set x to -5
     set y to 2
@@ -37,6 +72,7 @@ create object chess_queen
 end
 
 create object label_queen
+    set scene to "models"
     set type to "text"
     set text to "Lewis Chess Queen"
     set x to -5
@@ -46,6 +82,7 @@ end
 
 # Cutty Sark Cat (center-right)
 create object cat
+    set scene to "models"
     set type to "cutty_sark_cat"
     set x to 5
     set y to 2
@@ -56,6 +93,7 @@ create object cat
 end
 
 create object label_cat
+    set scene to "models"
     set type to "text"
     set text to "Cutty Sark Cat"
     set x to 5
@@ -65,6 +103,7 @@ end
 
 # Invereen Stone (far right)
 create object stone
+    set scene to "models"
     set type to "invereen_stone"
     set x to 15
     set y to 2
@@ -75,6 +114,7 @@ create object stone
 end
 
 create object label_stone
+    set scene to "models"
     set type to "text"
     set text to "Invereen Stone"
     set x to 15
@@ -86,6 +126,6 @@ end
 # WELCOME MESSAGE
 # =============================================================================
 
-print "Welcome to the Scottish Heritage Gallery (v2)"
-print "Use look <object> to learn more"
-print "Use list to see all objects"
+print "Welcome to the Scottish Heritage Gallery (v3)"
+print "Scenes: models (exhibits) | empty (blank canvas)"
+print "Type: go <scene> | look <object> | clone <object>"

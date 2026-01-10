@@ -295,11 +295,17 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         else targetType = term; // Assume unknown terms are type names
       }
 
+      // Track if we found matches in current scene vs all scenes
+      let foundInCurrentScene = false;
+      const currentSceneMatches = [];
+      const otherSceneMatches = [];
+
       scene.traverse(o => {
         if (!o.isMesh && !o.isSprite) return;
 
         const objType = getTypeName(o);
         const objColor = getColorName(o);
+        const objScene = o.userData?._scene;
 
         // Type match
         if (targetType && objType !== targetType && !o.name.startsWith(targetType)) return;
@@ -317,10 +323,23 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
           }
         }
 
-        results.push({ name: o.name, object: o, type: objType, color: objColor });
+        const match = { name: o.name, object: o, type: objType, color: objColor };
+
+        // Sort into current scene vs other scenes
+        if (objScene === currentScene || (!objScene && !currentScene)) {
+          currentSceneMatches.push(match);
+        } else {
+          otherSceneMatches.push(match);
+        }
       });
 
-      return { success: true, objects: results };
+      // Prefer current scene matches; if none, use all and flag expansion
+      if (currentSceneMatches.length > 0) {
+        return { success: true, objects: currentSceneMatches, expandedSearch: false };
+      } else if (otherSceneMatches.length > 0) {
+        return { success: true, objects: otherSceneMatches, expandedSearch: true, currentScene: currentScene };
+      }
+      return { success: true, objects: [], expandedSearch: false };
     },
 
     // Object creation

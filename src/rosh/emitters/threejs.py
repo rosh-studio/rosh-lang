@@ -2510,7 +2510,7 @@ class ThreeJSEmitter(BaseEmitter):
         self.dedent()
         self.write("}")
         self.write("// Fall through to original for non-capability properties")
-        self.write("originalSetProperty(objName, prop, value);")
+        self.write("return originalSetProperty(objName, prop, value);")
         self.dedent()
         self.write("};")
         self.write_blank()

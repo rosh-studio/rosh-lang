@@ -1323,6 +1323,8 @@ def run_repl(interpreter: Interpreter = None):
     """
     out = get_color_output()
 
+    # Build time: Currently shows session start time. Could be changed to show
+    # e.g. latest source file modification time for the rosh package.
     from datetime import datetime
     build_time = datetime.now().strftime('%H:%M:%S')
     out.print(f"🤖 rosh v{__version__} | {build_time}", style="bold cyan")

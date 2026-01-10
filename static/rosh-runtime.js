@@ -12,6 +12,15 @@
  *
  * Version: 0.2.9
  * Spec: rosh-console.toml v0.2.5
+ *
+ * === PARITY FEATURES ===
+ * Features that MUST match Python interpreter. See spec/v0.3.0/rosh-spec.toml
+ * Update this list when adding features. Run: pytest tests/test_runtime_parity.py
+ *
+ * @parity fuzzy_matching - Object names resolved via fuzzy matching
+ * @parity scene_aware_search - Search current scene first, expand if needed
+ * @parity typo_correction - Common typos corrected with notification
+ * @parity undo_redo - Undo/redo stack for reversible operations
  */
 
 const ROSH_VERSION = '0.2.9';
@@ -360,16 +369,23 @@ const RoshRuntime = (function() {
    * Find objects by fuzzy substring matching
    * Returns array of matching objects (name, object)
    */
-  function fuzzyFindObjects(searchName) {
+  function fuzzyFindObjects(searchName, sceneOnly = false) {
     if (!adapter.getAllObjects) return [];
 
     const allObjects = adapter.getAllObjects();
     const lowerSearch = searchName.toLowerCase();
     const matches = [];
+    const currentScene = adapter.getCurrentScene ? adapter.getCurrentScene() : null;
 
     for (const obj of allObjects) {
       const objName = obj.name || (obj.userData && obj.userData._name) || '';
       if (!objName || objName.startsWith('_')) continue;  // Skip hidden objects
+
+      // If sceneOnly, filter to current scene
+      if (sceneOnly && currentScene) {
+        const objScene = obj.userData?._scene || obj.object?.userData?._scene;
+        if (objScene && objScene !== currentScene) continue;
+      }
 
       const lowerObjName = objName.toLowerCase();
 
@@ -1433,6 +1449,9 @@ const RoshRuntime = (function() {
       return;
     }
 
+    // Resolve object name with fuzzy matching
+    name = fuzzyMatchObject(name);
+
     // Get object state for undo
     const obj = adapter.getObject ? adapter.getObject(name) : null;
 
@@ -1464,11 +1483,14 @@ const RoshRuntime = (function() {
 
   function handleClone(args) {
     if (!adapter.cloneObject) return;
-    const name = args[0];
+    let name = args[0];
     if (!name) {
       log('Usage: clone <name>', 'err');
       return;
     }
+
+    // Resolve object name with fuzzy matching (reports to user if fuzzy match used)
+    name = fuzzyMatchObject(name);
 
     const result = adapter.cloneObject(name);
     if (result.success) {
@@ -1522,6 +1544,9 @@ const RoshRuntime = (function() {
       return;
     }
 
+    // Resolve object name with fuzzy matching (reports to user if fuzzy match used)
+    objName = fuzzyMatchObject(objName);
+
     // Get old value for undo
     const oldValue = adapter.getProperty ? adapter.getProperty(objName, prop) : null;
 
@@ -1538,7 +1563,7 @@ const RoshRuntime = (function() {
       result = adapter.applyCapability(objName, prop.toLowerCase(), capValue);
 
       // Broadcast to other clients
-      if (result.success && typeof RoshNetwork !== 'undefined') {
+      if (result && result.success && typeof RoshNetwork !== 'undefined') {
         if (RoshNetwork.isConnected()) {
           console.log('[Runtime] Broadcasting capability:', objName, prop, capValue);
           RoshNetwork.broadcastUpdate(objName, prop.toLowerCase(), capValue);
@@ -1550,12 +1575,12 @@ const RoshRuntime = (function() {
       result = adapter.setProperty(objName, prop, value);
 
       // Broadcast regular property changes too
-      if (result.success && typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
+      if (result && result.success && typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
         RoshNetwork.broadcastUpdate(objName, prop, value);
       }
     }
 
-    if (result.success) {
+    if (result && result.success) {
       log('Set ' + objName + '.' + prop + ' = ' + value, 'ok');
 
       pushUndo('set ' + objName + '.' + prop,
@@ -1567,7 +1592,7 @@ const RoshRuntime = (function() {
               adapter.setProperty(objName, prop, value)
       );
     } else {
-      log(result.error || 'Failed to set property', 'err');
+      log((result && result.error) || 'Object not found: ' + objName, 'err');
     }
   }
 
@@ -1589,13 +1614,19 @@ const RoshRuntime = (function() {
     if (adapter.deepSearch) {
       const result = adapter.deepSearch(args);
       if (result.success && result.objects.length > 0) {
+        // Show message if search expanded beyond current scene
+        if (result.expandedSearch) {
+          log('[searching all scenes - none found in "' + (result.currentScene || 'current') + '"]', 'dim');
+        }
+
         if (result.objects.length === 1) {
           currentObject = result.objects[0].object;
           currentObjectName = result.objects[0].name;
           log('Selected: ' + currentObjectName, 'ok');
         } else {
           currentSelection = result.objects;
-          log('Found ' + result.objects.length + ' matches:', 'ok');
+          const suffix = result.expandedSearch ? ' (all scenes)' : '';
+          log('Found ' + result.objects.length + ' matches' + suffix + ':', 'ok');
           for (const o of result.objects.slice(0, 5)) {
             log('  ' + o.name, 'dim');
           }
@@ -1611,21 +1642,33 @@ const RoshRuntime = (function() {
     // Simple name lookup first
     let obj = adapter.getObject(name);
 
-    // If not found, try fuzzy matching (same as look command)
+    // If not found, try fuzzy matching - first in current scene, then all scenes
     if (!obj && adapter.getAllObjects) {
-      const matches = fuzzyFindObjects(name);
+      // First try current scene only
+      let matches = fuzzyFindObjects(name, true);
+      let expandedSearch = false;
+
+      // If no matches in current scene, expand to all scenes
+      if (matches.length === 0) {
+        matches = fuzzyFindObjects(name, false);
+        if (matches.length > 0) {
+          expandedSearch = true;
+          const currentScene = adapter.getCurrentScene ? adapter.getCurrentScene() : 'unknown';
+          log('[searching all scenes - none found in "' + currentScene + '"]', 'dim');
+        }
+      }
+
       if (matches.length === 1) {
         log('[resolved: "' + name + '" -> "' + matches[0].name + '"]', 'dim');
         obj = adapter.getObject(matches[0].name);
       } else if (matches.length > 1) {
-        log('Multiple matches for "' + name + '":', 'cyan');
+        log('Found ' + matches.length + ' matches' + (expandedSearch ? ' (all scenes)' : '') + ':', 'cyan');
         for (const m of matches.slice(0, 8)) {
           log('  ' + m.name, 'dim');
         }
         if (matches.length > 8) {
           log('  ... and ' + (matches.length - 8) + ' more', 'dim');
         }
-        log('Which one did you mean?', 'dim');
         return;
       }
     }
