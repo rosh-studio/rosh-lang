@@ -2923,7 +2923,13 @@ def run_repl(interpreter: Interpreter = None):
 
             # go/confirm/yes/y - confirm pending bulk operation OR auto-close blocks
             if stripped in ('go', 'confirm', 'yes', 'y'):
-                # First check if there's a pending operation
+                # First check if there's a pending cross-scene operation
+                # @parity scene_aware_search - matches JS pendingOp mechanism
+                if interpreter.pending_cross_scene is not None:
+                    interpreter.execute_pending_cross_scene()
+                    continue
+
+                # Then check if there's a pending bulk operation
                 if interpreter.pending_operation is not None:
                     op = interpreter.pending_operation
                     op_type = op.get('type')
@@ -2951,14 +2957,23 @@ def run_repl(interpreter: Interpreter = None):
                         out.error(str(e))
                     continue
 
-            # no/n/cancel - cancel pending bulk operation
-            if stripped in ('no', 'n', 'cancel') and interpreter.pending_operation is not None:
-                op = interpreter.pending_operation
-                op_type = op.get('type', '')
-                if op_type.startswith('bulk_'):
-                    out.dim("Cancelled")
-                    interpreter.pending_operation = None
+            # no/n/cancel - cancel pending bulk operation or cross-scene confirmation
+            if stripped in ('no', 'n', 'cancel'):
+                if interpreter.pending_cross_scene is not None:
+                    interpreter.cancel_pending_cross_scene()
                     continue
+                if interpreter.pending_operation is not None:
+                    op = interpreter.pending_operation
+                    op_type = op.get('type', '')
+                    if op_type.startswith('bulk_'):
+                        out.dim("Cancelled")
+                        interpreter.pending_operation = None
+                        continue
+
+            # Cancel pending cross-scene operation if any other command is entered
+            # @parity scene_aware_search - matches JS "any command cancels pending"
+            if interpreter.pending_cross_scene is not None:
+                interpreter.cancel_pending_cross_scene()
 
             # Treat 'go' as buffer execution command
             if stripped == 'go':
