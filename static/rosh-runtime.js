@@ -383,7 +383,8 @@ const RoshRuntime = (function() {
     'help', 'save', 'load', 'undo', 'redo', 'count', 'move', 'make',
     'clear', 'repeat', ':repeat', ':r', 'go', 'goto', 'scene', 'scenes',
     'rooms', 'credits', 'camera', 'capabilities',
-    'connect', 'disconnect', 'twin', 'say', 'users', 'who'
+    'connect', 'disconnect', 'twin', 'say', 'users', 'who',
+    'yes', 'no', 'cancel'  // Confirmation commands
   ];
 
   /**
@@ -562,6 +563,19 @@ const RoshRuntime = (function() {
     // Increment undo group for each user command
     if (isUserCommand) undoGroup++;
 
+    // Check for pending confirmation BEFORE fuzzy correction
+    // This prevents "yes" from being corrected to "set"
+    const rawParts = cmd.trim().toLowerCase().split(/\s+/);
+    if (pendingCrossScene) {
+      if (['go', 'confirm', 'yes'].includes(rawParts[0])) {
+        log('> ' + cmd, 'cmd');
+        executePendingCrossScene();
+        return;
+      } else {
+        cancelPendingCrossScene();
+      }
+    }
+
     // Apply fuzzy matching
     const fuzzyResult = fuzzyCorrectCommand(cmd);
     const originalCmd = cmd;
@@ -589,18 +603,6 @@ const RoshRuntime = (function() {
     const parts = cmd.trim().toLowerCase().split(/\s+/);
 
     try {
-      // Handle confirmation for pending operations
-      // @parity scene_aware_search - matches Python REPL go/yes handling
-      if ((parts[0] === 'go' || parts[0] === 'confirm' || parts[0] === 'yes') && pendingCrossScene) {
-        executePendingCrossScene();
-        return;
-      }
-
-      // Cancel pending op on other commands
-      // @parity scene_aware_search - matches Python "any command cancels pending"
-      if (pendingCrossScene && !['go', 'confirm', 'yes'].includes(parts[0])) {
-        cancelPendingCrossScene();
-      }
 
       // Route commands
       switch (parts[0]) {
@@ -1547,15 +1549,9 @@ const RoshRuntime = (function() {
       }
     }
 
-    // Resolve object name with fuzzy matching (scene-aware with confirmation)
-    const resolved = fuzzyMatchObject(name, {
-      operation: 'clone',
-      onConfirm: doClone
-    });
-
-    // If null, confirmation is pending - don't proceed
-    if (resolved === null) return;
-
+    // Resolve object name with fuzzy matching (scene-aware)
+    // Clone doesn't need confirmation - it doesn't modify the source object
+    const resolved = fuzzyMatchObject(name);
     doClone(resolved);
   }
 

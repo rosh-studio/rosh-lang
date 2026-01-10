@@ -206,11 +206,21 @@ function createPhaserAdapter(phaserScene, options = {}) {
 
     // Get all objects (for query syntax)
     getAllObjects: function() {
-      return Object.entries(objects).map(([name, obj]) => ({
-        name,
-        object: obj,
-        type: getTypeName(obj)
-      }));
+      return Object.entries(objects).map(([name, obj]) => {
+        // Include scene data in userData format for compatibility with rosh-runtime.js
+        const scene = obj.getData ? obj.getData('_scene') : null;
+        return {
+          name,
+          object: obj,
+          type: getTypeName(obj),
+          userData: {
+            _scene: scene,
+            _type: getTypeName(obj),
+            _name: name,
+            color: getColorName(obj)
+          }
+        };
+      });
     },
 
     // Deep search

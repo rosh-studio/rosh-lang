@@ -3655,22 +3655,12 @@ Focus on the specific syntax or concept they need to correct."""
             do_clone(source_name)
             return
 
-        # Use scene-aware fuzzy matching with confirmation for REPL mode
-        # @parity scene_aware_search
-        if self.interactive:
-            resolved = self._fuzzy_find_with_confirmation(source_name, 'clone', do_clone)
-            if resolved is not None:
-                do_clone(resolved)
-                return
-            elif self.pending_cross_scene is not None:
-                return  # Confirmation pending
-            # Fall through to check known objects
-        else:
-            # Script mode: use regular fuzzy matching
-            matched = self._fuzzy_find_object(source_name)
-            if matched:
-                do_clone(matched)
-                return
+        # Clone doesn't need confirmation - it doesn't modify the source object
+        # Just use fuzzy matching without confirmation (same for REPL and script)
+        matched = self._fuzzy_find_object(source_name)
+        if matched:
+            do_clone(matched)
+            return
 
         # Not found - check if this is a known object we can create
         from .data import get_known_objects_text
