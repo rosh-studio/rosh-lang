@@ -459,10 +459,10 @@ js_location = "rosh-runtime.js:fuzzyMatchObject()"
 py_location = "interpreter.py:_fuzzy_find_object()"
 
 [runtime_features.scene_aware_search]
-commands = ["get"]
-description = "Search current scene first, expand to all scenes if no match (with notification)"
-js_location = "rosh-adapter-threejs.js:deepSearch(), rosh-runtime.js:fuzzyFindObjects()"
-py_location = "interpreter.py:_fuzzy_find_object()"
+commands = ["set", "get", "clone", "delete", "move", "hide", "show"]
+description = "Search current scene first. For destructive ops, ask confirmation before acting on other scenes"
+js_location = "rosh-runtime.js:fuzzyMatchObject() with options.onConfirm"
+py_location = "interpreter.py:_fuzzy_find_object() with confirmation"
 
 [runtime_features.typo_correction]
 commands = ["*"]

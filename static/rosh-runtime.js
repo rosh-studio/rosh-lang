@@ -1449,36 +1449,47 @@ const RoshRuntime = (function() {
       return;
     }
 
-    // Resolve object name with fuzzy matching
-    name = fuzzyMatchObject(name);
+    // Helper to perform the actual delete
+    function doDelete(resolvedName) {
+      // Get object state for undo
+      const obj = adapter.getObject ? adapter.getObject(resolvedName) : null;
 
-    // Get object state for undo
-    const obj = adapter.getObject ? adapter.getObject(name) : null;
+      const result = adapter.deleteObject(resolvedName);
+      if (result.success) {
+        log('Deleted ' + resolvedName, 'ok');
+        if (currentObjectName === resolvedName) {
+          currentObject = null;
+          currentObjectName = null;
+        }
+        // Deselect if we deleted the selected object
+        if (adapter.getSelectedObject && adapter.getSelectedObject() === resolvedName && adapter.deselect) {
+          adapter.deselect();
+        }
 
-    const result = adapter.deleteObject(name);
-    if (result.success) {
-      log('Deleted ' + name, 'ok');
-      if (currentObjectName === name) {
-        currentObject = null;
-        currentObjectName = null;
+        // Broadcast to shared world if connected
+        twinBroadcastDelete(resolvedName);
+
+        if (obj) {
+          pushUndo('delete ' + resolvedName,
+            () => adapter.restoreObject(resolvedName, obj),
+            () => adapter.deleteObject(resolvedName)
+          );
+        }
+      } else {
+        log(result.error || 'Object not found: ' + resolvedName, 'err');
       }
-      // Deselect if we deleted the selected object
-      if (adapter.getSelectedObject && adapter.getSelectedObject() === name && adapter.deselect) {
-        adapter.deselect();
-      }
-
-      // Broadcast to shared world if connected
-      twinBroadcastDelete(name);
-
-      if (obj) {
-        pushUndo('delete ' + name,
-          () => adapter.restoreObject(name, obj),
-          () => adapter.deleteObject(name)
-        );
-      }
-    } else {
-      log(result.error || 'Object not found: ' + name, 'err');
     }
+
+    // Resolve object name with fuzzy matching (scene-aware with confirmation)
+    const resolved = fuzzyMatchObject(name, {
+      operation: 'delete',
+      onConfirm: doDelete
+    });
+
+    // If null, confirmation is pending - don't proceed
+    if (resolved === null) return;
+
+    doDelete(resolved);
   }
 
   function handleClone(args) {
@@ -1489,31 +1500,42 @@ const RoshRuntime = (function() {
       return;
     }
 
-    // Resolve object name with fuzzy matching (reports to user if fuzzy match used)
-    name = fuzzyMatchObject(name);
+    // Helper to perform the actual clone
+    function doClone(resolvedName) {
+      const result = adapter.cloneObject(resolvedName);
+      if (result.success) {
+        log('Cloned ' + resolvedName + ' → ' + result.name, 'ok');
+        currentObject = result.object;
+        currentObjectName = result.name;
 
-    const result = adapter.cloneObject(name);
-    if (result.success) {
-      log('Cloned ' + name + ' → ' + result.name, 'ok');
-      currentObject = result.object;
-      currentObjectName = result.name;
+        // Broadcast clone to twins with raw command
+        const obj = result.object;
+        const typeName = obj.userData?._type || 'cube';
+        const color = obj.material?.color ? obj.material.color.getHex() : 0x00ff00;
+        const x = obj.position?.x || 0;
+        const y = obj.position?.y || 0;
+        const z = obj.position?.z || 0;
+        twinBroadcastCreate(result.name, typeName, x, y, z, color, 1, 'clone ' + resolvedName);
 
-      // Broadcast clone to twins with raw command
-      const obj = result.object;
-      const typeName = obj.userData?._type || 'cube';
-      const color = obj.material?.color ? obj.material.color.getHex() : 0x00ff00;
-      const x = obj.position?.x || 0;
-      const y = obj.position?.y || 0;
-      const z = obj.position?.z || 0;
-      twinBroadcastCreate(result.name, typeName, x, y, z, color, 1, 'clone ' + name);
-
-      pushUndo('clone ' + name,
-        () => adapter.deleteObject(result.name),
-        () => adapter.cloneObject(name)
-      );
-    } else {
-      log(result.error || 'Failed to clone ' + name, 'err');
+        pushUndo('clone ' + resolvedName,
+          () => adapter.deleteObject(result.name),
+          () => adapter.cloneObject(resolvedName)
+        );
+      } else {
+        log(result.error || 'Failed to clone ' + resolvedName, 'err');
+      }
     }
+
+    // Resolve object name with fuzzy matching (scene-aware with confirmation)
+    const resolved = fuzzyMatchObject(name, {
+      operation: 'clone',
+      onConfirm: doClone
+    });
+
+    // If null, confirmation is pending - don't proceed
+    if (resolved === null) return;
+
+    doClone(resolved);
   }
 
   function handleSet(cmd, args) {
@@ -1544,56 +1566,67 @@ const RoshRuntime = (function() {
       return;
     }
 
-    // Resolve object name with fuzzy matching (reports to user if fuzzy match used)
-    objName = fuzzyMatchObject(objName);
+    // Helper to perform the actual set
+    function doSet(resolvedName) {
+      // Get old value for undo
+      const oldValue = adapter.getProperty ? adapter.getProperty(resolvedName, prop) : null;
 
-    // Get old value for undo
-    const oldValue = adapter.getProperty ? adapter.getProperty(objName, prop) : null;
+      // Check if this is a capability property (pulse, spin, bounce)
+      const capabilityProps = ['pulse', 'spin', 'bounce'];
+      const isCapability = capabilityProps.includes(prop.toLowerCase());
 
-    // Check if this is a capability property (pulse, spin, bounce)
-    const capabilityProps = ['pulse', 'spin', 'bounce'];
-    const isCapability = capabilityProps.includes(prop.toLowerCase());
+      let result;
+      if (isCapability && adapter.applyCapability) {
+        // Parse value: "on", "off", or number
+        let capValue = value.toLowerCase() === 'on' ? 1 :
+                       value.toLowerCase() === 'off' ? 0 :
+                       parseFloat(value) || 1;
+        result = adapter.applyCapability(resolvedName, prop.toLowerCase(), capValue);
 
-    let result;
-    if (isCapability && adapter.applyCapability) {
-      // Parse value: "on", "off", or number
-      let capValue = value.toLowerCase() === 'on' ? 1 :
-                     value.toLowerCase() === 'off' ? 0 :
-                     parseFloat(value) || 1;
-      result = adapter.applyCapability(objName, prop.toLowerCase(), capValue);
+        // Broadcast to other clients
+        if (result && result.success && typeof RoshNetwork !== 'undefined') {
+          if (RoshNetwork.isConnected()) {
+            console.log('[Runtime] Broadcasting capability:', resolvedName, prop, capValue);
+            RoshNetwork.broadcastUpdate(resolvedName, prop.toLowerCase(), capValue);
+          } else {
+            console.log('[Runtime] Not connected - skipping broadcast');
+          }
+        }
+      } else {
+        result = adapter.setProperty(resolvedName, prop, value);
 
-      // Broadcast to other clients
-      if (result && result.success && typeof RoshNetwork !== 'undefined') {
-        if (RoshNetwork.isConnected()) {
-          console.log('[Runtime] Broadcasting capability:', objName, prop, capValue);
-          RoshNetwork.broadcastUpdate(objName, prop.toLowerCase(), capValue);
-        } else {
-          console.log('[Runtime] Not connected - skipping broadcast');
+        // Broadcast regular property changes too
+        if (result && result.success && typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
+          RoshNetwork.broadcastUpdate(resolvedName, prop, value);
         }
       }
-    } else {
-      result = adapter.setProperty(objName, prop, value);
 
-      // Broadcast regular property changes too
-      if (result && result.success && typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
-        RoshNetwork.broadcastUpdate(objName, prop, value);
+      if (result && result.success) {
+        log('Set ' + resolvedName + '.' + prop + ' = ' + value, 'ok');
+
+        pushUndo('set ' + resolvedName + '.' + prop,
+          () => isCapability && adapter.applyCapability ?
+                adapter.applyCapability(resolvedName, prop, oldValue) :
+                adapter.setProperty(resolvedName, prop, oldValue),
+          () => isCapability && adapter.applyCapability ?
+                adapter.applyCapability(resolvedName, prop, value) :
+                adapter.setProperty(resolvedName, prop, value)
+        );
+      } else {
+        log((result && result.error) || 'Object not found: ' + resolvedName, 'err');
       }
     }
 
-    if (result && result.success) {
-      log('Set ' + objName + '.' + prop + ' = ' + value, 'ok');
+    // Resolve object name with fuzzy matching (scene-aware with confirmation)
+    const resolved = fuzzyMatchObject(objName, {
+      operation: 'set property on',
+      onConfirm: doSet
+    });
 
-      pushUndo('set ' + objName + '.' + prop,
-        () => isCapability && adapter.applyCapability ?
-              adapter.applyCapability(objName, prop, oldValue) :
-              adapter.setProperty(objName, prop, oldValue),
-        () => isCapability && adapter.applyCapability ?
-              adapter.applyCapability(objName, prop, value) :
-              adapter.setProperty(objName, prop, value)
-      );
-    } else {
-      log((result && result.error) || 'Object not found: ' + objName, 'err');
-    }
+    // If null, confirmation is pending - don't proceed
+    if (resolved === null) return;
+
+    doSet(resolved);
   }
 
   function handleGet(args) {
@@ -1828,25 +1861,35 @@ const RoshRuntime = (function() {
       return;
     }
 
-    const names = args.length ? args : (currentObjectName ? [currentObjectName] : []);
+    let name = args.join(' ') || currentObjectName;
 
-    if (names.length === 0) {
+    if (!name) {
       log('Usage: hide <name> or select an object first', 'err');
       return;
     }
 
-    for (const name of names) {
-      const result = adapter.setVisible(name, false);
+    // Helper to perform the actual hide
+    function doHide(resolvedName) {
+      const result = adapter.setVisible(resolvedName, false);
       if (result.success) {
-        log('Hid ' + name, 'ok');
-        pushUndo('hide ' + name,
-          () => adapter.setVisible(name, true),
-          () => adapter.setVisible(name, false)
+        log('Hid ' + resolvedName, 'ok');
+        pushUndo('hide ' + resolvedName,
+          () => adapter.setVisible(resolvedName, true),
+          () => adapter.setVisible(resolvedName, false)
         );
       } else {
-        log(result.error || 'Failed to hide ' + name, 'err');
+        log(result.error || 'Failed to hide ' + resolvedName, 'err');
       }
     }
+
+    // Resolve with scene-aware confirmation
+    const resolved = fuzzyMatchObject(name, {
+      operation: 'hide',
+      onConfirm: doHide
+    });
+
+    if (resolved === null) return;
+    doHide(resolved);
   }
 
   function handleShow(args) {
@@ -1858,25 +1901,35 @@ const RoshRuntime = (function() {
       return;
     }
 
-    const names = args.length ? args : (currentObjectName ? [currentObjectName] : []);
+    let name = args.join(' ') || currentObjectName;
 
-    if (names.length === 0) {
+    if (!name) {
       log('Usage: show <name> or select an object first', 'err');
       return;
     }
 
-    for (const name of names) {
-      const result = adapter.setVisible(name, true);
+    // Helper to perform the actual show
+    function doShow(resolvedName) {
+      const result = adapter.setVisible(resolvedName, true);
       if (result.success) {
-        log('Showed ' + name, 'ok');
-        pushUndo('show ' + name,
-          () => adapter.setVisible(name, false),
-          () => adapter.setVisible(name, true)
+        log('Showed ' + resolvedName, 'ok');
+        pushUndo('show ' + resolvedName,
+          () => adapter.setVisible(resolvedName, false),
+          () => adapter.setVisible(resolvedName, true)
         );
       } else {
-        log(result.error || 'Failed to show ' + name, 'err');
+        log(result.error || 'Failed to show ' + resolvedName, 'err');
       }
     }
+
+    // Resolve with scene-aware confirmation
+    const resolved = fuzzyMatchObject(name, {
+      operation: 'show',
+      onConfirm: doShow
+    });
+
+    if (resolved === null) return;
+    doShow(resolved);
   }
 
   // Bulk operations helper: find objects matching type and modifiers
@@ -2030,49 +2083,101 @@ const RoshRuntime = (function() {
   }
 
   // Fuzzy match object reference (e.g., "red ball" -> "ball-1" with color red)
-  function fuzzyMatchObject(objRef) {
+  // @parity scene_aware_search - Search current scene first, ask before acting on other scenes
+  function fuzzyMatchObject(objRef, options = {}) {
     if (!adapter.getAllObjects) return objRef;
 
     const allObjects = adapter.getAllObjects();
     const refWords = objRef.toLowerCase().split(/\s+/);
+    const currentScene = adapter.getCurrentScene ? adapter.getCurrentScene() : null;
 
-    // First try exact match
-    for (const obj of allObjects) {
-      const name = obj.name || (obj.userData && obj.userData._name) || '';
-      if (name.toLowerCase() === objRef.toLowerCase()) return name;
-    }
-
-    // Fuzzy match by type and color
-    let bestMatch = null;
-    let bestScore = 0;
+    // Separate objects by scene
+    const currentSceneObjects = [];
+    const otherSceneObjects = [];
 
     for (const obj of allObjects) {
       const name = obj.name || (obj.userData && obj.userData._name) || '';
       if (!name || name.startsWith('_')) continue;
 
-      const objType = (obj.userData && obj.userData._type) || '';
-      const objColor = (obj.userData && obj.userData.color) || '';
-      const nameLower = name.toLowerCase();
-
-      let score = 0;
-      for (const word of refWords) {
-        if (word === objType.toLowerCase() || word === objType.toLowerCase() + 's') score += 10;
-        if (word === objColor.toLowerCase()) score += 5;
-        if (nameLower.includes(word)) score += 3;
-      }
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = name;
+      const objScene = obj.userData?._scene || obj.object?.userData?._scene;
+      if (currentScene && objScene && objScene !== currentScene) {
+        otherSceneObjects.push({ obj, name, scene: objScene });
+      } else {
+        currentSceneObjects.push({ obj, name, scene: objScene || currentScene });
       }
     }
 
-    if (bestMatch && bestScore > 0) {
-      log('[matched: "' + objRef + '" → "' + bestMatch + '"]', 'dim');
-      return bestMatch;
+    // Helper to find best match in a list
+    function findBestMatch(objectList) {
+      // First try exact match
+      for (const item of objectList) {
+        if (item.name.toLowerCase() === objRef.toLowerCase()) {
+          return { name: item.name, scene: item.scene, exact: true };
+        }
+      }
+
+      // Fuzzy match by type and color
+      let bestMatch = null;
+      let bestScore = 0;
+      let bestScene = null;
+
+      for (const item of objectList) {
+        const objType = (item.obj.userData && item.obj.userData._type) || '';
+        const objColor = (item.obj.userData && item.obj.userData.color) || '';
+        const nameLower = item.name.toLowerCase();
+
+        let score = 0;
+        for (const word of refWords) {
+          if (word === objType.toLowerCase() || word === objType.toLowerCase() + 's') score += 10;
+          if (word === objColor.toLowerCase()) score += 5;
+          if (nameLower.includes(word)) score += 3;
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = item.name;
+          bestScene = item.scene;
+        }
+      }
+
+      if (bestMatch && bestScore > 0) {
+        return { name: bestMatch, scene: bestScene, score: bestScore };
+      }
+      return null;
     }
 
-    return objRef;  // Return original if no match
+    // Search current scene first
+    const currentMatch = findBestMatch(currentSceneObjects);
+    if (currentMatch) {
+      if (!currentMatch.exact) {
+        log('[matched: "' + objRef + '" → "' + currentMatch.name + '"]', 'dim');
+      }
+      return currentMatch.name;
+    }
+
+    // Not found in current scene - check other scenes
+    const otherMatch = findBestMatch(otherSceneObjects);
+    if (otherMatch) {
+      // If operation and callback provided, set up confirmation
+      if (options.operation && options.onConfirm) {
+        log('⚠ "' + objRef + '" not found in "' + (currentScene || 'current') + '"', 'warn');
+        log('  Found "' + otherMatch.name + '" in scene "' + otherMatch.scene + '"', 'dim');
+        log('  Type "go" or "yes" to ' + options.operation + ' it, or any other command to cancel', 'dim');
+
+        pendingOp = {
+          desc: options.operation + ' ' + otherMatch.name + ' from scene "' + otherMatch.scene + '"',
+          execute: () => options.onConfirm(otherMatch.name)
+        };
+        return null;  // Signal caller to abort - confirmation pending
+      }
+
+      // No confirmation needed (e.g., read-only operations) - just warn and return
+      log('[not in "' + (currentScene || 'current') + '" - found in "' + otherMatch.scene + '"]', 'warn');
+      log('[matched: "' + objRef + '" → "' + otherMatch.name + '"]', 'dim');
+      return otherMatch.name;
+    }
+
+    return objRef;  // Return original if no match anywhere
   }
 
   function handleMove(cmd, args) {
@@ -2082,21 +2187,33 @@ const RoshRuntime = (function() {
     const toMatch = cmd.match(/^move\s+(.+?)\s+to\s+(-?\d+\.?\d*)\s+(-?\d+\.?\d*)\s*(-?\d+\.?\d*)?$/i);
     if (toMatch) {
       const [, objRef, x, y, z] = toMatch;
-      const name = fuzzyMatchObject(objRef);
-      const oldPos = adapter.getPosition ? adapter.getPosition(name) : null;
 
-      const result = adapter.moveObject(name, { x: parseFloat(x), y: parseFloat(y), z: z ? parseFloat(z) : undefined });
-      if (result.success) {
-        log('Moved ' + name + ' to ' + x + ', ' + y + (z ? ', ' + z : ''), 'ok');
-        // Broadcast move to network with raw command
-        twinBroadcastMove(name, parseFloat(x), parseFloat(y), z ? parseFloat(z) : 0, cmd);
-        if (oldPos) {
-          pushUndo('move ' + name,
-            () => adapter.moveObject(name, oldPos),
-            () => adapter.moveObject(name, { x: parseFloat(x), y: parseFloat(y), z: z ? parseFloat(z) : undefined })
-          );
+      // Helper to perform the actual move
+      function doMove(resolvedName) {
+        const oldPos = adapter.getPosition ? adapter.getPosition(resolvedName) : null;
+
+        const result = adapter.moveObject(resolvedName, { x: parseFloat(x), y: parseFloat(y), z: z ? parseFloat(z) : undefined });
+        if (result.success) {
+          log('Moved ' + resolvedName + ' to ' + x + ', ' + y + (z ? ', ' + z : ''), 'ok');
+          // Broadcast move to network with raw command
+          twinBroadcastMove(resolvedName, parseFloat(x), parseFloat(y), z ? parseFloat(z) : 0, cmd);
+          if (oldPos) {
+            pushUndo('move ' + resolvedName,
+              () => adapter.moveObject(resolvedName, oldPos),
+              () => adapter.moveObject(resolvedName, { x: parseFloat(x), y: parseFloat(y), z: z ? parseFloat(z) : undefined })
+            );
+          }
         }
       }
+
+      // Resolve with scene-aware confirmation
+      const resolved = fuzzyMatchObject(objRef, {
+        operation: 'move',
+        onConfirm: doMove
+      });
+
+      if (resolved === null) return;
+      doMove(resolved);
       return;
     }
 
@@ -2104,27 +2221,39 @@ const RoshRuntime = (function() {
     const relMatch = cmd.match(/^move\s+(.+?)\s+(forward|back|backward|left|right|up|down)\s+(-?\d+\.?\d*)$/i);
     if (relMatch) {
       const [, objRef, dir, amt] = relMatch;
-      const name = fuzzyMatchObject(objRef);
       const amount = parseFloat(amt);
-      const oldPos = adapter.getPosition ? adapter.getPosition(name) : null;
 
-      const result = adapter.moveObjectRelative(name, dir.toLowerCase(), amount);
-      if (result.success) {
-        log('Moved ' + name + ' ' + dir + ' ' + amt, 'ok');
-        // Broadcast new position to network with raw command
-        const newPos = adapter.getPosition ? adapter.getPosition(name) : null;
-        if (newPos) {
-          twinBroadcastMove(name, newPos.x, newPos.y, newPos.z || 0, cmd);
+      // Helper to perform the actual relative move
+      function doRelMove(resolvedName) {
+        const oldPos = adapter.getPosition ? adapter.getPosition(resolvedName) : null;
+
+        const result = adapter.moveObjectRelative(resolvedName, dir.toLowerCase(), amount);
+        if (result.success) {
+          log('Moved ' + resolvedName + ' ' + dir + ' ' + amt, 'ok');
+          // Broadcast new position to network with raw command
+          const newPos = adapter.getPosition ? adapter.getPosition(resolvedName) : null;
+          if (newPos) {
+            twinBroadcastMove(resolvedName, newPos.x, newPos.y, newPos.z || 0, cmd);
+          }
+          if (oldPos) {
+            pushUndo('move ' + resolvedName + ' ' + dir,
+              () => adapter.moveObject(resolvedName, oldPos),
+              () => adapter.moveObjectRelative(resolvedName, dir.toLowerCase(), amount)
+            );
+          }
+        } else {
+          log('Failed to move ' + resolvedName + ': ' + (result.error || 'object not found'), 'err');
         }
-        if (oldPos) {
-          pushUndo('move ' + name + ' ' + dir,
-            () => adapter.moveObject(name, oldPos),
-            () => adapter.moveObjectRelative(name, dir.toLowerCase(), amount)
-          );
-        }
-      } else {
-        log('Failed to move ' + name + ': ' + (result.error || 'object not found'), 'err');
       }
+
+      // Resolve with scene-aware confirmation
+      const resolved = fuzzyMatchObject(objRef, {
+        operation: 'move',
+        onConfirm: doRelMove
+      });
+
+      if (resolved === null) return;
+      doRelMove(resolved);
       return;
     }
 
