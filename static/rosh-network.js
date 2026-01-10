@@ -1,13 +1,15 @@
 /**
  * Rosh Network Module - Project Twin Multiplayer
  *
- * Provides shared world functionality for any Rosh target (Three.js, Phaser, etc.)
+ * Implements REQUEST/CONFIRMED protocol (Spec 0.3):
+ * - Clients send REQUEST_* messages
+ * - Server validates and broadcasts CONFIRMED_* to ALL clients
+ * - Clients apply changes ONLY on CONFIRMED (not on send)
  *
  * Usage:
  *   const network = RoshNetwork.init({ adapter, log, serverUrl });
  *   network.connect('worldName');
- *   network.say('hello');
- *   network.disconnect();
+ *   network.requestCreate('ball', { type: 'sphere', color: 'red' });
  */
 
 const RoshNetwork = (function() {
@@ -24,12 +26,18 @@ const RoshNetwork = (function() {
   let adapter = null;
   let log = console.log;
 
+  // Pending requests (for tracking)
+  const pendingRequests = new Map();  // request_id -> { type, id, data, callback }
+
+  /**
+   * Generate a unique request ID
+   */
+  function generateRequestId() {
+    return 'req_' + Math.random().toString(36).substr(2, 9);
+  }
+
   /**
    * Initialize the network module
-   * @param {Object} options
-   * @param {Object} options.adapter - Object with createObject, deleteObject, moveObject methods
-   * @param {Function} options.log - Logging function (message, style)
-   * @param {string} options.serverUrl - WebSocket server URL (optional)
    */
   function init(options = {}) {
     adapter = options.adapter || {};
@@ -58,7 +66,6 @@ const RoshNetwork = (function() {
 
   /**
    * Connect to a shared world
-   * @param {string} world - World name/ID (default: 'default')
    */
   function connect(world = 'default') {
     if (isConnected()) {
@@ -87,6 +94,7 @@ const RoshNetwork = (function() {
         socket = null;
         userId = null;
         worldId = null;
+        pendingRequests.clear();
       };
 
       socket.onmessage = (event) => {
@@ -115,6 +123,7 @@ const RoshNetwork = (function() {
       socket = null;
       userId = null;
       worldId = null;
+      pendingRequests.clear();
       return true;
     } else {
       log('Not connected to any shared world', 'dim');
@@ -124,7 +133,6 @@ const RoshNetwork = (function() {
 
   /**
    * Send a chat message
-   * @param {string} message - Message to send
    */
   function say(message) {
     if (!isConnected()) {
@@ -140,14 +148,109 @@ const RoshNetwork = (function() {
     return true;
   }
 
+  // ========================================
+  // REQUEST/CONFIRMED Protocol (Spec 0.3)
+  // ========================================
+
   /**
-   * Broadcast object creation to connected clients
+   * Request to create an object (waits for CONFIRMED before applying)
    * @param {string} id - Object ID/name
    * @param {Object} data - Object data (type, x, y, z, color, size)
+   * @param {string} rawCommand - Raw command for logging
+   * @returns {string|false} request_id or false if not connected
    */
+  function requestCreate(id, data, rawCommand) {
+    if (!isConnected()) return false;
+
+    const request_id = generateRequestId();
+    const msg = {
+      type: 'REQUEST_CREATE',
+      request_id: request_id,
+      id: id,
+      object_type: data.type || 'cube',
+      x: data.x,
+      y: data.y,
+      z: data.z || 0,
+      color: data.color,
+      size: data.size,
+      cmd: rawCommand || null
+    };
+
+    pendingRequests.set(request_id, { type: 'create', id, data });
+    console.log('[RoshNetwork] Sending REQUEST_CREATE:', msg);
+    socket.send(JSON.stringify(msg));
+    return request_id;
+  }
+
+  /**
+   * Request to move an object
+   */
+  function requestMove(id, position) {
+    if (!isConnected()) return false;
+
+    const request_id = generateRequestId();
+    const msg = {
+      type: 'REQUEST_MOVE',
+      request_id: request_id,
+      id: id,
+      x: position.x,
+      y: position.y,
+      z: position.z
+    };
+
+    pendingRequests.set(request_id, { type: 'move', id, position });
+    socket.send(JSON.stringify(msg));
+    return request_id;
+  }
+
+  /**
+   * Request to update object properties
+   */
+  function requestUpdate(id, prop, value) {
+    if (!isConnected()) return false;
+
+    const request_id = generateRequestId();
+    const changes = {};
+    changes[prop] = value;
+
+    const msg = {
+      type: 'REQUEST_UPDATE',
+      request_id: request_id,
+      id: id,
+      ...changes
+    };
+
+    pendingRequests.set(request_id, { type: 'update', id, changes });
+    console.log('[RoshNetwork] Sending REQUEST_UPDATE:', msg);
+    socket.send(JSON.stringify(msg));
+    return request_id;
+  }
+
+  /**
+   * Request to delete an object
+   */
+  function requestDelete(id) {
+    if (!isConnected()) return false;
+
+    const request_id = generateRequestId();
+    const msg = {
+      type: 'REQUEST_DELETE',
+      request_id: request_id,
+      id: id
+    };
+
+    pendingRequests.set(request_id, { type: 'delete', id });
+    socket.send(JSON.stringify(msg));
+    return request_id;
+  }
+
+  // ========================================
+  // Legacy broadcast methods (backwards compatibility)
+  // These use the old protocol - prefer request* methods
+  // ========================================
+
   function broadcastCreate(id, data, rawCommand) {
     if (!isConnected()) return false;
-    // Use flat format matching Three.js: object_type at top level
     const msg = {
       type: 'CREATE',
       id: id,
@@ -157,47 +260,38 @@ const RoshNetwork = (function() {
       z: data.z || 0,
       color: data.color,
       size: data.size,
-      cmd: rawCommand || null  // Include raw command for logging
+      cmd: rawCommand || null
     };
-    console.log('[RoshNetwork] Sending CREATE:', msg);
+    console.log('[RoshNetwork] Sending CREATE (legacy):', msg);
     socket.send(JSON.stringify(msg));
     return true;
   }
 
-  /**
-   * Broadcast object deletion to connected clients
-   * @param {string} id - Object ID/name
-   */
   function broadcastDelete(id) {
     if (!isConnected()) return false;
     socket.send(JSON.stringify({ type: 'DELETE', id }));
     return true;
   }
 
-  /**
-   * Broadcast object move to connected clients
-   * @param {string} id - Object ID/name
-   * @param {Object} position - {x, y, z}
-   */
   function broadcastMove(id, position) {
     if (!isConnected()) return false;
     socket.send(JSON.stringify({ type: 'MOVE', id, ...position }));
     return true;
   }
 
-  /**
-   * Broadcast property update to connected clients
-   * @param {string} id - Object ID/name
-   * @param {string} prop - Property name (e.g., 'pulse', 'spin', 'color')
-   * @param {any} value - Property value
-   */
   function broadcastUpdate(id, prop, value) {
     if (!isConnected()) return false;
-    // Server expects changes as object: { prop: value }
     const changes = {};
     changes[prop] = value;
     socket.send(JSON.stringify({ type: 'UPDATE', id, ...changes }));
-    console.log('[RoshNetwork] Sending UPDATE:', id, prop, value);
+    console.log('[RoshNetwork] Sending UPDATE (legacy):', id, prop, value);
+    return true;
+  }
+
+  function broadcastCommand(cmd) {
+    if (!isConnected()) return false;
+    socket.send(JSON.stringify({ type: 'COMMAND', cmd }));
+    console.log('[RoshNetwork] Broadcasting command:', cmd);
     return true;
   }
 
@@ -218,6 +312,7 @@ const RoshNetwork = (function() {
    */
   function handleMessage(msg) {
     console.log('[RoshNetwork] Received:', msg.type, msg);
+
     switch (msg.type) {
       case 'CONNECTED':
         userId = msg.user_id;
@@ -225,24 +320,33 @@ const RoshNetwork = (function() {
         log('Objects you create will be shared with others!', 'cyan');
         break;
 
-      case 'OBJECT_CREATED':
-        if (msg.by !== userId) {
+      // ========================================
+      // CONFIRMED messages (Spec 0.3)
+      // Apply to ALL clients including requester
+      // ========================================
+
+      case 'CONFIRMED_CREATE':
+        {
           const data = msg.data || {};
-          // Server may use object_type or type - handle both
           const objType = data.object_type || data.type || 'cube';
+          const isOwnRequest = pendingRequests.has(msg.request_id);
 
-          // Log the raw command if present, otherwise build description
-          const rawCmd = data.cmd;
-          if (rawCmd) {
-            log('[' + msg.by.slice(0,6) + '] ' + rawCmd + ' → ' + msg.id, 'cyan');
+          // Remove from pending
+          pendingRequests.delete(msg.request_id);
+
+          // Log
+          if (isOwnRequest) {
+            log('Created ' + msg.id + ' (seq=' + msg.seq + ')', 'ok');
           } else {
-            const sizeWord = data.size ? data.size + ' ' : '';
-            const colorWord = data.color ? data.color + ' ' : '';
-            log('[' + msg.by.slice(0,6) + '] create ' + msg.id + ' (' + sizeWord + colorWord + objType + ')', 'cyan');
+            const rawCmd = data.cmd;
+            if (rawCmd) {
+              log('[' + msg.by.slice(0,6) + '] ' + rawCmd + ' → ' + msg.id, 'cyan');
+            } else {
+              log('[' + msg.by.slice(0,6) + '] created ' + msg.id, 'cyan');
+            }
           }
-          console.log('[RoshNetwork] Creating object:', msg.id, objType, 'at', data.x, data.y, data.z);
 
-          // Attempt to render with EXACT name and position
+          // Apply to scene (ALL clients)
           if (adapter.createObject) {
             adapter.createObject(objType, msg.id, {
               x: data.x,
@@ -251,8 +355,100 @@ const RoshNetwork = (function() {
               color: data.color,
               size: data.size
             });
+          }
+        }
+        break;
+
+      case 'CONFIRMED_MOVE':
+        {
+          const isOwnRequest = pendingRequests.has(msg.request_id);
+          pendingRequests.delete(msg.request_id);
+
+          if (!isOwnRequest) {
+            log('[' + msg.by.slice(0,6) + '] moved ' + msg.id, 'dim');
+          }
+
+          if (adapter.moveObject) {
+            adapter.moveObject(msg.id, { x: msg.x, y: msg.y, z: msg.z });
+          }
+        }
+        break;
+
+      case 'CONFIRMED_UPDATE':
+        {
+          const isOwnRequest = pendingRequests.has(msg.request_id);
+          pendingRequests.delete(msg.request_id);
+
+          const changes = msg.changes || {};
+
+          if (!isOwnRequest) {
+            for (const [prop, val] of Object.entries(changes)) {
+              log('[' + msg.by.slice(0,6) + '] set ' + msg.id + ' ' + prop + ' to ' + val, 'dim');
+            }
+          }
+
+          // Apply changes
+          for (const [prop, val] of Object.entries(changes)) {
+            if (adapter.applyCapability && ['pulse', 'spin', 'bounce'].includes(prop)) {
+              adapter.applyCapability(msg.id, prop, val);
+            } else if (adapter.setProperty) {
+              adapter.setProperty(msg.id, prop, val);
+            }
+          }
+        }
+        break;
+
+      case 'CONFIRMED_DELETE':
+        {
+          const isOwnRequest = pendingRequests.has(msg.request_id);
+          pendingRequests.delete(msg.request_id);
+
+          if (isOwnRequest) {
+            log('Deleted ' + msg.id, 'ok');
           } else {
-            log('  (cannot render - no adapter)', 'dim');
+            log('[' + msg.by.slice(0,6) + '] deleted ' + msg.id, 'cyan');
+          }
+
+          if (adapter.deleteObject) {
+            adapter.deleteObject(msg.id);
+          }
+        }
+        break;
+
+      case 'REJECTED':
+        {
+          pendingRequests.delete(msg.request_id);
+          log('Request rejected: ' + msg.message, 'err');
+          console.log('[RoshNetwork] REJECTED:', msg);
+        }
+        break;
+
+      // ========================================
+      // Legacy message types (backwards compatibility)
+      // ========================================
+
+      case 'OBJECT_CREATED':
+        if (msg.by !== userId) {
+          const data = msg.data || {};
+          const objType = data.object_type || data.type || 'cube';
+
+          const rawCmd = data.cmd;
+          if (rawCmd) {
+            log('[' + msg.by.slice(0,6) + '] ' + rawCmd + ' → ' + msg.id, 'cyan');
+          } else {
+            const sizeWord = data.size ? data.size + ' ' : '';
+            const colorWord = data.color ? data.color + ' ' : '';
+            log('[' + msg.by.slice(0,6) + '] create ' + msg.id + ' (' + sizeWord + colorWord + objType + ')', 'cyan');
+          }
+
+          if (adapter.createObject) {
+            adapter.createObject(objType, msg.id, {
+              x: data.x,
+              y: data.y,
+              z: data.z,
+              color: data.color,
+              size: data.size
+            });
           }
         }
         break;
@@ -262,8 +458,6 @@ const RoshNetwork = (function() {
           log('[' + msg.by.slice(0,6) + '] sent: delete ' + msg.id, 'cyan');
           if (adapter.deleteObject) {
             adapter.deleteObject(msg.id);
-          } else {
-            log('  (cannot render - no adapter)', 'dim');
           }
         }
         break;
@@ -279,9 +473,7 @@ const RoshNetwork = (function() {
 
       case 'PROPERTY_UPDATED':
       case 'OBJECT_UPDATED':
-        console.log('[RoshNetwork] Received UPDATE:', msg);
         if (msg.by !== userId) {
-          // Handle special _spotlight pseudo-object
           if (msg.id === '_spotlight') {
             const changes = msg.changes || {};
             if (adapter.toggleSpotlight) {
@@ -296,21 +488,15 @@ const RoshNetwork = (function() {
             }
             break;
           }
-          // Server sends changes as object: { changes: { prop: value } }
           const changes = msg.changes || {};
-          console.log('[RoshNetwork] Processing changes:', changes);
           for (const [prop, val] of Object.entries(changes)) {
             log('[' + msg.by.slice(0,6) + '] sent: set ' + msg.id + ' ' + prop + ' to ' + val, 'dim');
-            // Handle capability properties specially
             if (adapter.applyCapability && ['pulse', 'spin', 'bounce'].includes(prop)) {
-              console.log('[RoshNetwork] Applying capability:', msg.id, prop, val);
               adapter.applyCapability(msg.id, prop, val);
             } else if (adapter.setProperty) {
               adapter.setProperty(msg.id, prop, val);
             }
           }
-        } else {
-          console.log('[RoshNetwork] Ignoring own UPDATE');
         }
         break;
 
@@ -324,7 +510,6 @@ const RoshNetwork = (function() {
         if (count > 0) {
           log('Loading ' + count + ' shared object(s) from world...', 'dim');
           for (const [id, data] of Object.entries(objects)) {
-            // Build human-readable description
             const sizeWord = data.size ? data.size + ' ' : '';
             const colorWord = data.color ? data.color + ' ' : '';
             const typeWord = data.type || 'object';
@@ -360,12 +545,10 @@ const RoshNetwork = (function() {
         break;
 
       case 'COMMAND':
-        // Execute command received from another twin
         if (msg.by !== userId && msg.cmd) {
           console.log('[RoshNetwork] Executing remote command:', msg.cmd);
-          // Call runtime's execCommand with isNetworkCommand flag
           if (typeof window !== 'undefined' && window.RoshRuntime && window.RoshRuntime.execCommand) {
-            window.RoshRuntime.execCommand(msg.cmd, false);  // false = not a user command, don't re-broadcast
+            window.RoshRuntime.execCommand(msg.cmd, false);
           }
         }
         break;
@@ -376,17 +559,6 @@ const RoshNetwork = (function() {
   }
 
   // Public API
-  /**
-   * Broadcast a raw command to all twins
-   * @param {string} cmd - The command string to broadcast
-   */
-  function broadcastCommand(cmd) {
-    if (!isConnected()) return false;
-    socket.send(JSON.stringify({ type: 'COMMAND', cmd }));
-    console.log('[RoshNetwork] Broadcasting command:', cmd);
-    return true;
-  }
-
   return {
     init,
     connect,
@@ -394,12 +566,18 @@ const RoshNetwork = (function() {
     say,
     isConnected,
     getConnectionInfo,
+    listUsers,
+    // New REQUEST/CONFIRMED protocol (Spec 0.3)
+    requestCreate,
+    requestMove,
+    requestUpdate,
+    requestDelete,
+    // Legacy broadcast methods (backwards compatibility)
     broadcastCreate,
     broadcastDelete,
     broadcastMove,
     broadcastUpdate,
-    broadcastCommand,
-    listUsers
+    broadcastCommand
   };
 })();
 

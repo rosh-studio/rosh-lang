@@ -4300,7 +4300,7 @@ def main():
 
     # Check if using subcommand (peek at args)
     import sys
-    using_subcommand = len(sys.argv) > 1 and sys.argv[1] in ('build', 'test')
+    using_subcommand = len(sys.argv) > 1 and sys.argv[1] in ('build', 'test', 'serve')
 
     if using_subcommand:
         # Add subparsers for commands
@@ -4334,6 +4334,13 @@ def main():
         test_parser.add_argument('--level', choices=['core', 'standard', 'full'],
                                  default='standard',
                                  help='Compliance level to check (default: standard)')
+
+        # Serve subcommand - local World Center for testing
+        serve_parser = subparsers.add_parser('serve', help='Start local World Center server (for testing)')
+        serve_parser.add_argument('--port', type=int, default=8765,
+                                  help='WebSocket port (default: 8765)')
+        serve_parser.add_argument('--host', default='0.0.0.0',
+                                  help='Host address (default: 0.0.0.0)')
 
         # Note: Project Twin is now integrated into the REPL via 'connect <world>' command
     else:
@@ -4446,6 +4453,12 @@ def main():
             filter_pattern=args.filter,
             level=args.level
         )
+        return
+
+    # Handle serve subcommand
+    if hasattr(args, 'subcommand') and args.subcommand == 'serve':
+        from rosh.serve import run_server
+        sys.exit(run_server(port=args.port, host=args.host))
         return
 
     if args.command:
