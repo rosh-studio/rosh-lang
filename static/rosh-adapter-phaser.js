@@ -809,6 +809,19 @@ function createPhaserAdapter(phaserScene, options = {}) {
 
     stopCapability: function(name, capability) {
       return this.applyCapability(name, capability, false);
+    },
+
+    // ========================================================================
+    // SPOTLIGHT (2D stub for network parity with Three.js)
+    // ========================================================================
+
+    toggleSpotlight: function(visible, targetName) {
+      // 2D games don't have spotlights, but we implement the interface
+      // for network parity so spotlight commands from 3D twins are handled
+      console.log('[Adapter] Spotlight ' + (visible ? 'on' : 'off') +
+                  (targetName ? ' targeting ' + targetName : '') +
+                  ' (no-op in 2D)');
+      return { success: true, note: 'Spotlight not available in 2D mode' };
     }
   };
 
