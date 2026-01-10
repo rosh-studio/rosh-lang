@@ -145,7 +145,7 @@ const RoshNetwork = (function() {
    * @param {string} id - Object ID/name
    * @param {Object} data - Object data (type, x, y, z, color, size)
    */
-  function broadcastCreate(id, data) {
+  function broadcastCreate(id, data, rawCommand) {
     if (!isConnected()) return false;
     // Use flat format matching Three.js: object_type at top level
     const msg = {
@@ -156,7 +156,8 @@ const RoshNetwork = (function() {
       y: data.y,
       z: data.z || 0,
       color: data.color,
-      size: data.size
+      size: data.size,
+      cmd: rawCommand || null  // Include raw command for logging
     };
     console.log('[RoshNetwork] Sending CREATE:', msg);
     socket.send(JSON.stringify(msg));
@@ -227,19 +228,26 @@ const RoshNetwork = (function() {
       case 'OBJECT_CREATED':
         if (msg.by !== userId) {
           const data = msg.data || {};
-          // Build human-readable command description
-          const sizeWord = data.size ? data.size + ' ' : '';
-          const colorWord = data.color ? data.color + ' ' : '';
-          const typeWord = data.type || 'object';
-          const cmdDesc = 'create a ' + sizeWord + colorWord + typeWord;
+          // Server may use object_type or type - handle both
+          const objType = data.object_type || data.type || 'cube';
 
-          // Log clearly what was received
-          log('[' + msg.by.slice(0,6) + '] sent: ' + cmdDesc, 'cyan');
+          // Log the raw command if present, otherwise build description
+          const rawCmd = data.cmd;
+          if (rawCmd) {
+            log('[' + msg.by.slice(0,6) + '] ' + rawCmd + ' → ' + msg.id, 'cyan');
+          } else {
+            const sizeWord = data.size ? data.size + ' ' : '';
+            const colorWord = data.color ? data.color + ' ' : '';
+            log('[' + msg.by.slice(0,6) + '] create ' + msg.id + ' (' + sizeWord + colorWord + objType + ')', 'cyan');
+          }
+          console.log('[RoshNetwork] Creating object:', msg.id, objType, 'at', data.x, data.y, data.z);
 
-          // Attempt to render
+          // Attempt to render with EXACT name and position
           if (adapter.createObject) {
-            adapter.createObject(data.type || 'sphere', msg.id, {
-              x: data.x, y: data.y, z: data.z,
+            adapter.createObject(objType, msg.id, {
+              x: data.x,
+              y: data.y,
+              z: data.z,
               color: data.color,
               size: data.size
             });
@@ -273,6 +281,21 @@ const RoshNetwork = (function() {
       case 'OBJECT_UPDATED':
         console.log('[RoshNetwork] Received UPDATE:', msg);
         if (msg.by !== userId) {
+          // Handle special _spotlight pseudo-object
+          if (msg.id === '_spotlight') {
+            const changes = msg.changes || {};
+            if (adapter.toggleSpotlight) {
+              if ('visible' in changes) {
+                adapter.toggleSpotlight(changes.visible);
+                log('[' + msg.by.slice(0,6) + '] spotlight ' + (changes.visible ? 'on' : 'off'), 'dim');
+              }
+              if ('target' in changes) {
+                adapter.toggleSpotlight(true, changes.target);
+                log('[' + msg.by.slice(0,6) + '] spotlight targeting ' + changes.target, 'dim');
+              }
+            }
+            break;
+          }
           // Server sends changes as object: { changes: { prop: value } }
           const changes = msg.changes || {};
           console.log('[RoshNetwork] Processing changes:', changes);
@@ -336,12 +359,34 @@ const RoshNetwork = (function() {
         log('[' + msg.user_id + '] left (' + msg.user_count + ' users)', 'dim');
         break;
 
+      case 'COMMAND':
+        // Execute command received from another twin
+        if (msg.by !== userId && msg.cmd) {
+          console.log('[RoshNetwork] Executing remote command:', msg.cmd);
+          // Call runtime's execCommand with isNetworkCommand flag
+          if (typeof window !== 'undefined' && window.RoshRuntime && window.RoshRuntime.execCommand) {
+            window.RoshRuntime.execCommand(msg.cmd, false);  // false = not a user command, don't re-broadcast
+          }
+        }
+        break;
+
       default:
         console.log('Unknown message type:', msg.type);
     }
   }
 
   // Public API
+  /**
+   * Broadcast a raw command to all twins
+   * @param {string} cmd - The command string to broadcast
+   */
+  function broadcastCommand(cmd) {
+    if (!isConnected()) return false;
+    socket.send(JSON.stringify({ type: 'COMMAND', cmd }));
+    console.log('[RoshNetwork] Broadcasting command:', cmd);
+    return true;
+  }
+
   return {
     init,
     connect,
@@ -353,6 +398,7 @@ const RoshNetwork = (function() {
     broadcastDelete,
     broadcastMove,
     broadcastUpdate,
+    broadcastCommand,
     listUsers
   };
 })();

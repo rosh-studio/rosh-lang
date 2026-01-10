@@ -624,6 +624,8 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
 
       clone.name = newName;
       clone.userData._roshId = newName;
+      clone.userData._scene = currentScene;  // Clone goes to CURRENT scene, not source scene
+      clone.visible = true;  // Make visible immediately (source might be hidden in different scene)
 
       // Offset position
       clone.position.x += 1;
@@ -927,13 +929,13 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
 
       if (!spot && visible) {
         // Create spotlight above the scene - bright and focused
-        spot = new THREE.SpotLight(0xffffff, 3);
+        spot = new THREE.SpotLight(0xffffff, 5);
         spot.name = '_rosh_spotlight';
         spot.position.set(0, 10, 0);
-        spot.angle = Math.PI / 8;  // Narrower cone for dramatic effect
-        spot.penumbra = 0.5;       // Soft edges
-        spot.decay = 1.5;
-        spot.distance = 25;
+        spot.angle = Math.PI / 6;  // Cone angle
+        spot.penumbra = 0.3;       // Soft edges
+        spot.decay = 1.0;
+        spot.distance = 30;
         spot.castShadow = true;
         scene.add(spot);
 
@@ -943,9 +945,23 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         spotTarget.position.set(0, 0, 0);
         scene.add(spotTarget);
         spot.target = spotTarget;
-
-        // NO helper wireframe - just actual light
       }
+
+      // Dim/restore other lights for dramatic spotlight effect
+      scene.traverse((obj) => {
+        if (obj.isLight && obj.name !== '_rosh_spotlight') {
+          if (!obj.userData._originalIntensity) {
+            obj.userData._originalIntensity = obj.intensity;
+          }
+          if (visible) {
+            // Dim other lights when spotlight is on
+            obj.intensity = obj.userData._originalIntensity * 0.15;
+          } else {
+            // Restore original intensity
+            obj.intensity = obj.userData._originalIntensity;
+          }
+        }
+      });
 
       if (spot) {
         spot.visible = visible;

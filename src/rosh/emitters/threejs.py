@@ -2459,7 +2459,9 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const roshAdapter = createThreeJSAdapter(scene, camera, renderer, {")
         self.indent()
         self.write("knownObjects: KNOWN_OBJECTS,")
-        self.write(f"defaultScene: '{self.ir.metadata.extra.get('scene', 'default')}'")
+        # Use initial_scene from meta block, fallback to 'default'
+        initial_scene = self.ir.metadata.initial_scene or 'default'
+        self.write(f"defaultScene: '{initial_scene}'")
         self.dedent()
         self.write("});")
         self.write_blank()
@@ -3855,6 +3857,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("clone.name = name + '-' + n;")
         self.write("clone.position.x += 2;")
         self.write("clone.userData._twin = true;")
+        self.write("clone.userData._scene = currentScene;")  # Clone goes to current scene, not source scene
+        self.write("clone.visible = true;")  # Make visible immediately (source might be hidden)
         self.write("scene.add(clone);")
         self.write("gameObjects[clone.name] = clone;")
         self.write("pushUndo('create ' + clone.name, () => { scene.remove(clone); delete gameObjects[clone.name]; }, () => { scene.add(clone); gameObjects[clone.name] = clone; });")

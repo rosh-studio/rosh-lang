@@ -49,9 +49,9 @@ const RoshRuntime = (function() {
   let isNetworkCommand = false;  // True when executing a command received from network
 
   // Project Twin - broadcast helpers (delegate to RoshNetwork)
-  function twinBroadcastCreate(name, objType, x, y, z, color, size) {
+  function twinBroadcastCreate(name, objType, x, y, z, color, size, rawCommand) {
     if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
-      RoshNetwork.broadcastCreate(name, { type: objType, x, y, z, color, size });
+      RoshNetwork.broadcastCreate(name, { type: objType, x, y, z, color, size }, rawCommand);
     }
   }
 
@@ -866,13 +866,25 @@ const RoshRuntime = (function() {
             if (arg === 'off' || arg === 'hide' || arg === 'false' || arg === '0') {
               adapter.toggleSpotlight(false);
               log('Spotlight hidden', 'ok');
+              // Broadcast spotlight off to twins
+              if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
+                RoshNetwork.broadcastUpdate('_spotlight', 'visible', false);
+              }
             } else if (arg === 'on' || arg === 'show' || arg === 'true' || arg === '1' || !arg) {
               adapter.toggleSpotlight(true);
               log('Spotlight visible', 'ok');
+              // Broadcast spotlight on to twins
+              if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
+                RoshNetwork.broadcastUpdate('_spotlight', 'visible', true);
+              }
             } else {
-              // Maybe it's an object to target
+              // Target a specific object
               adapter.toggleSpotlight(true, arg);
               log('Spotlight targeting: ' + arg, 'ok');
+              // Broadcast spotlight target to twins
+              if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
+                RoshNetwork.broadcastUpdate('_spotlight', 'target', arg);
+              }
             }
           } else {
             log('Spotlight not supported by this adapter', 'err');
@@ -1277,14 +1289,14 @@ const RoshRuntime = (function() {
         }
       }
 
-      // Broadcast to shared world if connected
+      // Broadcast to shared world if connected (include raw command)
       const obj = result.object;
       const x = obj?.position?.x || 0;
       const y = obj?.position?.y || 0;
       const z = obj?.position?.z || 0;
       const color = result.color || null;
       const size = result.size || 1;
-      twinBroadcastCreate(result.name, typeName, x, y, z, color, size);
+      twinBroadcastCreate(result.name, typeName, x, y, z, color, size, cmd);
 
       pushUndo('create ' + result.name,
         () => adapter.deleteObject(result.name),
@@ -1463,6 +1475,15 @@ const RoshRuntime = (function() {
       log('Cloned ' + name + ' → ' + result.name, 'ok');
       currentObject = result.object;
       currentObjectName = result.name;
+
+      // Broadcast clone to twins with raw command
+      const obj = result.object;
+      const typeName = obj.userData?._type || 'cube';
+      const color = obj.material?.color ? obj.material.color.getHex() : 0x00ff00;
+      const x = obj.position?.x || 0;
+      const y = obj.position?.y || 0;
+      const z = obj.position?.z || 0;
+      twinBroadcastCreate(result.name, typeName, x, y, z, color, 1, 'clone ' + name);
 
       pushUndo('clone ' + name,
         () => adapter.deleteObject(result.name),
@@ -2157,6 +2178,7 @@ const RoshRuntime = (function() {
     },
 
     exec: execCommand,
+    execCommand: execCommand,  // Alias for network module
     log: log,
     toggleConsole: toggleConsole,
     pushUndo: pushUndo,
