@@ -15,8 +15,11 @@
 const RoshNetwork = (function() {
   'use strict';
 
-  // Default server URL
-  const DEFAULT_SERVER = 'wss://rosh.cloud/ws/world/';
+  // Default server URL - auto-detect localhost
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const DEFAULT_SERVER = isLocalhost
+    ? 'ws://' + window.location.host + '/ws/world/'
+    : 'wss://rosh.cloud/ws/world/';
 
   // Module state
   let socket = null;

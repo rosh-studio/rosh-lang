@@ -95,6 +95,13 @@ const RoshRuntime = (function() {
     }
   }
 
+  function twinBroadcastProperty(name, prop, value) {
+    if (isNetworkCommand) return;  // Don't re-broadcast received commands
+    if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
+      RoshNetwork.broadcastUpdate(name, prop, value);
+    }
+  }
+
   // DOM elements
   let outputEl = null;
   let inputEl = null;
@@ -1890,6 +1897,7 @@ const RoshRuntime = (function() {
       const result = adapter.setVisible(resolvedName, false);
       if (result.success) {
         log('Hid ' + resolvedName, 'ok');
+        twinBroadcastProperty(resolvedName, 'visible', false);
         pushUndo('hide ' + resolvedName,
           () => adapter.setVisible(resolvedName, true),
           () => adapter.setVisible(resolvedName, false)
@@ -1930,6 +1938,7 @@ const RoshRuntime = (function() {
       const result = adapter.setVisible(resolvedName, true);
       if (result.success) {
         log('Showed ' + resolvedName, 'ok');
+        twinBroadcastProperty(resolvedName, 'visible', true);
         pushUndo('show ' + resolvedName,
           () => adapter.setVisible(resolvedName, false),
           () => adapter.setVisible(resolvedName, true)
