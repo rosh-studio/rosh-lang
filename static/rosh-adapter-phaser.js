@@ -644,6 +644,7 @@ function createPhaserAdapter(phaserScene, options = {}) {
         }
         // Select new
         selectedObject = obj;
+        window.selectedObject = obj;  // Export globally for parity with ThreeJS
         if (obj.setTint) {
           selectedOriginalTint = obj.tintTopLeft || null;
           obj.setTint(0x00ff00);  // Green highlight
@@ -659,6 +660,7 @@ function createPhaserAdapter(phaserScene, options = {}) {
           selectedObject.clearTint();
         }
         selectedObject = null;
+        window.selectedObject = null;  // Export globally for parity with ThreeJS
         selectedOriginalTint = null;
       }
       return { success: true };

@@ -149,7 +149,7 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
   }
 
   // Convert 2D screen coordinates to 3D world coordinates if needed
-  // Phaser uses pixels (0-800+), Three.js uses world units (-5 to 5)
+  // Phaser uses pixels (0-screenWidth), Three.js uses world units (-5 to 5)
   function convertPosition(options) {
     // If z is provided, assume already 3D coords
     if (options.z !== undefined) {
@@ -161,14 +161,19 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
     }
 
     // If x/y are large values (pixels), convert to 3D world coords
-    // Assume screen is ~800x600, map to world -5..5
+    // Detect actual screen size from renderer, fallback to 800x600
     if (options.x !== undefined && Math.abs(options.x) > 20) {
       // 2D screen coords detected - convert to 3D world
-      // Map screen X (0..800) to world X (-5..5)
-      // Map screen Y (0..600) to world Z (-5..5)
-      const worldX = (options.x / 400 - 1) * 5;  // 0->-5, 400->0, 800->5
-      const worldZ = (options.y / 300 - 1) * 5;  // 0->-5, 300->0, 600->5
-      console.log('[Adapter] Converted 2D coords (' + options.x + ', ' + options.y + ') to 3D (' + worldX.toFixed(2) + ', 0, ' + worldZ.toFixed(2) + ')');
+      // Get actual screen dimensions from renderer canvas
+      const screenWidth = (renderer && renderer.domElement) ? renderer.domElement.width : 800;
+      const screenHeight = (renderer && renderer.domElement) ? renderer.domElement.height : 600;
+      const halfWidth = screenWidth / 2;
+      const halfHeight = screenHeight / 2;
+      // Map screen X (0..screenWidth) to world X (-5..5)
+      // Map screen Y (0..screenHeight) to world Z (-5..5)
+      const worldX = (options.x / halfWidth - 1) * 5;
+      const worldZ = ((options.y || 0) / halfHeight - 1) * 5;
+      console.log('[Adapter] Converted 2D coords (' + options.x + ', ' + options.y + ') to 3D (' + worldX.toFixed(2) + ', 0, ' + worldZ.toFixed(2) + ') [screen: ' + screenWidth + 'x' + screenHeight + ']');
       return { x: worldX, y: 0, z: worldZ };
     }
 
@@ -323,8 +328,8 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       const objName = (typeof name === 'string' ? name : options.name) || generateName(typeName);
       const modifiers = options.modifiers || [];
 
-      // Size modifiers
-      const SIZE_MAP = { tiny: 0.25, small: 0.5, big: 2, large: 2, huge: 4 };
+      // Size modifiers (must match spec and Phaser adapter)
+      const SIZE_MAP = { tiny: 0.25, small: 0.5, medium: 1, big: 2, large: 2, huge: 4 };
 
       // Check options.color first (from Project Twin), then modifiers, then default
       const color = options.color || modifiers.find(m => COLOR_MAP[m]) || 'gray';

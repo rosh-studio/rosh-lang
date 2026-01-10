@@ -446,7 +446,7 @@ const RoshRuntime = (function() {
     const colorMap = {
       red: 0xff0000, green: 0x00ff00, blue: 0x0000ff,
       yellow: 0xffff00, cyan: 0x00ffff, magenta: 0xff00ff,
-      white: 0xffffff, black: 0x000000, orange: 0xff8800,
+      white: 0xffffff, black: 0x111111, orange: 0xff8800,  // black is 0x111111 for visibility
       purple: 0x8800ff, pink: 0xff88ff, gray: 0x888888,
       grey: 0x888888, gold: 0xffd700, silver: 0xc0c0c0
     };
