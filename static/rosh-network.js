@@ -74,7 +74,11 @@ const RoshNetwork = (function() {
       return false;
     }
 
-    log('Connecting to shared world: ' + world + '...', 'cyan');
+    // Extract server name for display
+    const serverDisplay = serverUrl.includes('localhost') ? 'localhost' :
+                          serverUrl.includes('rosh.cloud') ? 'rosh.cloud' :
+                          serverUrl.replace(/^wss?:\/\//, '').split('/')[0];
+    log('Connecting to ' + world + ' on ' + serverDisplay + '...', 'cyan');
 
     try {
       socket = new WebSocket(serverUrl + world);
@@ -316,7 +320,10 @@ const RoshNetwork = (function() {
     switch (msg.type) {
       case 'CONNECTED':
         userId = msg.user_id;
-        log('Connected to "' + worldId + '" as user ' + msg.user_id, 'ok');
+        const connServerDisplay = serverUrl.includes('localhost') ? 'localhost' :
+                                  serverUrl.includes('rosh.cloud') ? 'rosh.cloud' :
+                                  serverUrl.replace(/^wss?:\/\//, '').split('/')[0];
+        log('Connected to ' + worldId + ' on ' + connServerDisplay + ' as user ' + msg.user_id, 'ok');
         log('Objects you create will be shared with others!', 'cyan');
         break;
 

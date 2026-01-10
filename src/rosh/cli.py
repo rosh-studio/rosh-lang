@@ -1376,11 +1376,23 @@ def run_repl(interpreter: Interpreter = None):
     twin_stop_event = None
     twin_message_queue = []  # Messages from server to display
     twin_use_tcp = False  # True if using TCP, False if WebSocket
+    twin_server_display = ""  # Friendly server name for display
     TWIN_WS_SERVER = "wss://rosh.cloud/ws/world/"
     # TCP settings can be overridden via environment
     # For Railway: ROSH_TCP_HOST=viaduct.proxy.rlwy.net ROSH_TCP_PORT=12345
     TWIN_TCP_HOST = os.environ.get("ROSH_TCP_HOST", "localhost")
     TWIN_TCP_PORT = int(os.environ.get("ROSH_TCP_PORT", "4000"))
+
+    def get_server_display(url: str) -> str:
+        """Extract friendly server name from URL."""
+        if "localhost" in url or "127.0.0.1" in url:
+            return "localhost"
+        if "rosh.cloud" in url:
+            return "rosh.cloud"
+        # Extract hostname from URL
+        import re
+        match = re.search(r'://([^:/]+)', url)
+        return match.group(1) if match else url
 
     def twin_send_tcp(payload: str):
         """Send a length-prefixed frame over TCP."""
@@ -1886,7 +1898,8 @@ def run_repl(interpreter: Interpreter = None):
                                 twin_sock = sock
                                 twin_world_id = world_name
                                 twin_use_tcp = True
-                                out.success(f"Connected to world '{world_name}' as {twin_user_id} [TCP]")
+                                twin_server_display = f"{TWIN_TCP_HOST}:{TWIN_TCP_PORT}"
+                                out.success(f"Connected to {world_name} on {twin_server_display} as {twin_user_id}")
 
                                 # Server sends USERS and STATE automatically after JOIN
                                 # Consume USERS message
@@ -1953,12 +1966,13 @@ def run_repl(interpreter: Interpreter = None):
                             twin_ws = websocket.create_connection(uri)
                             twin_world_id = world_name
                             twin_use_tcp = False
+                            twin_server_display = get_server_display(uri)
 
                             initial = json.loads(twin_ws.recv())
                             if initial['type'] == 'CONNECTED':
                                 twin_user_id = initial['user_id']
                                 twin_world_state.update(initial['state'])
-                                out.success(f"Connected to world '{world_name}' as {twin_user_id} [WebSocket]")
+                                out.success(f"Connected to {world_name} on {twin_server_display} as {twin_user_id}")
                                 out.dim(f"Users online: {initial['user_count']}")
                                 if initial['state']['objects']:
                                     out.print(f"Objects in world: {len(initial['state']['objects'])}", style="cyan")
@@ -2000,12 +2014,13 @@ def run_repl(interpreter: Interpreter = None):
                         twin_ws = websocket.create_connection(uri)
                         twin_world_id = world_name
                         twin_use_tcp = False
+                        twin_server_display = get_server_display(uri)
 
                         initial = json.loads(twin_ws.recv())
                         if initial['type'] == 'CONNECTED':
                             twin_user_id = initial['user_id']
                             twin_world_state.update(initial['state'])
-                            out.success(f"Connected to world '{world_name}' as {twin_user_id} [WebSocket]")
+                            out.success(f"Connected to {world_name} on {twin_server_display} as {twin_user_id}")
                             out.dim(f"Users online: {initial['user_count']}")
                             if initial['state']['objects']:
                                 out.print(f"Objects in world: {len(initial['state']['objects'])}", style="cyan")
@@ -2075,8 +2090,7 @@ def run_repl(interpreter: Interpreter = None):
                 if twin_ws is None and twin_sock is None:
                     out.dim("Not connected. Use 'connect <world>' to join a shared world.")
                 else:
-                    conn_type = "TCP" if twin_use_tcp else "WebSocket"
-                    out.print(f"Connected to: {twin_world_id} [{conn_type}]", style="cyan")
+                    out.print(f"Connected to: {twin_world_id} on {twin_server_display}", style="cyan")
                     out.print(f"Your ID: {twin_user_id}", style="dim")
                     if twin_world_state['objects']:
                         out.print(f"Objects ({len(twin_world_state['objects'])}):", style="cyan")
