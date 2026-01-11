@@ -437,6 +437,21 @@ const RoshNetwork = (function() {
       // Legacy message types (backwards compatibility)
       // ========================================
 
+      case 'UPDATE':
+        // Direct UPDATE from Python client (properties at top level, not in 'changes')
+        if (msg.by !== userId) {
+          const knownProps = ['x', 'y', 'z', 'visible', 'color', 'size', 'text', 'scale'];
+          for (const prop of knownProps) {
+            if (prop in msg && msg.id) {
+              log('[' + (msg.by || 'remote').slice(0,6) + '] set ' + msg.id + ' ' + prop + ' to ' + msg[prop], 'dim');
+              if (adapter.setProperty) {
+                adapter.setProperty(msg.id, prop, msg[prop]);
+              }
+            }
+          }
+        }
+        break;
+
       case 'OBJECT_CREATED':
         if (msg.by !== userId) {
           const data = msg.data || {};

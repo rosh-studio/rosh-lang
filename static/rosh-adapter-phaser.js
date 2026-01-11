@@ -466,6 +466,14 @@ function createPhaserAdapter(phaserScene, options = {}) {
           obj.setData('_scene', value);
           scenes.add(value);
           break;
+        case 'text':
+          // Update displayed text for Phaser text objects
+          if (typeof obj.setText === 'function') {
+            obj.setText(String(value));
+          } else {
+            obj.text = String(value);
+          }
+          break;
         default:
           if (obj.setData) obj.setData(prop, value);
       }
@@ -556,7 +564,12 @@ function createPhaserAdapter(phaserScene, options = {}) {
 
       currentScene = sceneName;
 
-      // Update visibility
+      // Update Phaser scene's currentScene property for static visibility
+      if (phaserScene && phaserScene.currentScene !== undefined) {
+        phaserScene.currentScene = sceneName;
+      }
+
+      // Update visibility for dynamically registered objects (have _scene data)
       for (const [name, obj] of Object.entries(objects)) {
         if (obj.getData) {
           const objScene = obj.getData('_scene');
@@ -564,6 +577,11 @@ function createPhaserAdapter(phaserScene, options = {}) {
             obj.visible = (objScene === currentScene);
           }
         }
+      }
+
+      // Call updateSceneVisibility() for static objects (emitter-generated method)
+      if (phaserScene && typeof phaserScene.updateSceneVisibility === 'function') {
+        phaserScene.updateSceneVisibility();
       }
 
       return { success: true, scene: currentScene };

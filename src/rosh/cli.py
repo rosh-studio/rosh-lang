@@ -2827,6 +2827,7 @@ def run_repl(interpreter: Interpreter = None):
                 obj, obj_name, _ = _resolve_object_name(interpreter, obj_ref)
                 if obj and hasattr(obj, 'set'):
                     obj.set('visible', True)
+                    twin_broadcast_update(obj_name, visible=True)
                     out.success(f"Showed '{obj_name}'")
                 elif obj:
                     out.warning(f"Cannot set visibility on '{obj_name}'")
@@ -2855,6 +2856,7 @@ def run_repl(interpreter: Interpreter = None):
                 obj, obj_name, _ = _resolve_object_name(interpreter, obj_ref)
                 if obj and hasattr(obj, 'set'):
                     obj.set('visible', False)
+                    twin_broadcast_update(obj_name, visible=False)
                     out.success(f"Hid '{obj_name}'")
                 elif obj:
                     out.warning(f"Cannot set visibility on '{obj_name}'")
@@ -2941,10 +2943,18 @@ def run_repl(interpreter: Interpreter = None):
                         continue
                     elif op_type == 'bulk_hide':
                         _execute_hide_all(interpreter, out, op['matching'], op['desc'])
+                        # Broadcast visibility changes for each hidden object
+                        for inst in op['matching']:
+                            if hasattr(inst, 'name'):
+                                twin_broadcast_update(inst.name, visible=False)
                         interpreter.pending_operation = None
                         continue
                     elif op_type == 'bulk_show':
                         _execute_show_all(interpreter, out, op['matching'], op['desc'])
+                        # Broadcast visibility changes for each shown object
+                        for inst in op['matching']:
+                            if hasattr(inst, 'name'):
+                                twin_broadcast_update(inst.name, visible=True)
                         interpreter.pending_operation = None
                         continue
 

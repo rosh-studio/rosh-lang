@@ -1361,10 +1361,11 @@ const RoshRuntime = (function() {
       }
 
       // Broadcast to shared world if connected (include raw command)
+      // Support both Three.js (obj.position.x) and Phaser (obj.x) formats
       const obj = result.object;
-      const x = obj?.position?.x || 0;
-      const y = obj?.position?.y || 0;
-      const z = obj?.position?.z || 0;
+      const x = obj?.position?.x ?? obj?.x ?? 0;
+      const y = obj?.position?.y ?? obj?.y ?? 0;
+      const z = obj?.position?.z ?? obj?.z ?? 0;
       const color = result.color || null;
       const size = result.size || 1;
       twinBroadcastCreate(result.name, typeName, x, y, z, color, size, cmd);
@@ -1564,12 +1565,13 @@ const RoshRuntime = (function() {
         currentObjectName = result.name;
 
         // Broadcast clone to twins with raw command
+        // Support both Three.js and Phaser position formats
         const obj = result.object;
-        const typeName = obj.userData?._type || 'cube';
-        const color = obj.material?.color ? obj.material.color.getHex() : 0x00ff00;
-        const x = obj.position?.x || 0;
-        const y = obj.position?.y || 0;
-        const z = obj.position?.z || 0;
+        const typeName = obj.userData?._type || obj.getData?.('_type') || 'cube';
+        const color = obj.material?.color ? obj.material.color.getHex() : (obj.getData?.('_color') || 0x00ff00);
+        const x = obj.position?.x ?? obj?.x ?? 0;
+        const y = obj.position?.y ?? obj?.y ?? 0;
+        const z = obj.position?.z ?? obj?.z ?? 0;
         twinBroadcastCreate(result.name, typeName, x, y, z, color, 1, 'clone ' + resolvedName);
 
         pushUndo('clone ' + resolvedName,

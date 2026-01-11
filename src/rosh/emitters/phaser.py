@@ -545,56 +545,56 @@ class PhaserEmitter(BaseEmitter):
         self.write_blank()
 
     def _emit_helper_methods(self):
-        """Emit helper methods for event system."""
-        if not (self.ir.events or self.player_objects):
-            return
+        """Emit helper methods for event system, scenes, and other features."""
+        # Event system helpers (only if events or player objects exist)
+        if self.ir.events or self.player_objects:
+            # registerEvent
+            self.write("registerEvent(name, handler) {")
+            self.indent()
+            self.write("if (!this.eventHandlers[name]) {")
+            self.indent()
+            self.write("this.eventHandlers[name] = [];")
+            self.dedent()
+            self.write("}")
+            self.write("this.eventHandlers[name].push(handler);")
+            self.dedent()
+            self.write("}")
+            self.write_blank()
 
-        # registerEvent
-        self.write("registerEvent(name, handler) {")
-        self.indent()
-        self.write("if (!this.eventHandlers[name]) {")
-        self.indent()
-        self.write("this.eventHandlers[name] = [];")
-        self.dedent()
-        self.write("}")
-        self.write("this.eventHandlers[name].push(handler);")
-        self.dedent()
-        self.write("}")
-        self.write_blank()
+            # triggerEvent
+            self.write("triggerEvent(name, ...args) {")
+            self.indent()
+            self.write("if (this.eventHandlers[name]) {")
+            self.indent()
+            self.write("for (const handler of this.eventHandlers[name]) {")
+            self.indent()
+            self.write("handler.call(this, ...args);")
+            self.dedent()
+            self.write("}")
+            self.dedent()
+            self.write("}")
+            self.dedent()
+            self.write("}")
+            self.write_blank()
 
-        # triggerEvent
-        self.write("triggerEvent(name, ...args) {")
-        self.indent()
-        self.write("if (this.eventHandlers[name]) {")
-        self.indent()
-        self.write("for (const handler of this.eventHandlers[name]) {")
-        self.indent()
-        self.write("handler.call(this, ...args);")
-        self.dedent()
-        self.write("}")
-        self.dedent()
-        self.write("}")
-        self.dedent()
-        self.write("}")
-        self.write_blank()
+            # handlePlayerInput (if needed)
+            if self.player_objects:
+                self._emit_player_input_method()
 
-        # handlePlayerInput (if needed)
-        if self.player_objects:
-            self._emit_player_input_method()
+            # setupTouchControls (if needed)
+            if self.needs_touch_controls:
+                self._emit_touch_controls_method()
 
-        # setupTouchControls (if needed)
-        if self.needs_touch_controls:
-            self._emit_touch_controls_method()
-
-        # checkCollision (if needed)
-        if self.collision_events:
-            self._emit_collision_helper()
+            # checkCollision (if needed)
+            if self.collision_events:
+                self._emit_collision_helper()
 
         # _collides helper (if 'collides with' operator used)
         if self.uses_collides:
             self._emit_collides_helper()
 
         # updateSceneVisibility (if using scenes/levels)
+        # NOTE: This must be emitted regardless of events/players
         if self.uses_scenes:
             self._emit_scene_visibility_helper()
 
@@ -2389,6 +2389,10 @@ class PhaserEmitter(BaseEmitter):
                     self.write(f"this.{obj.name}.{safe_prop} = '{escaped_val}';")
                 else:
                     self.write(f"this.{obj.name}.{safe_prop} = {val};")
+
+        # Set scene data for scene-based visibility (used by adapter for scene registration)
+        if obj.scene is not None:
+            self.write(f"this.{obj.name}.setData('_scene', '{obj.scene}');")
 
         self.write_blank()
 
