@@ -23,25 +23,84 @@ Rosh is designed to be:
 
 ## Installation
 
-> ⚠️ **Private Preview**  
-> Until the open-source release, only collaborators with repository access can install Rosh from source.
+> ⚠️ **Private Preview**
+> Until the open-source release, only collaborators with repository access can install Rosh.
+
+### Prerequisites
+
+Install [uv](https://docs.astral.sh/uv/) (fast Python package manager):
 
 ```bash
-# Install uv (modern Python package manager)
 curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-# Clone and install Rosh
-git clone https://github.com/rdubar/rosh.git
-cd rosh
-uv tool install .
+---
 
-# Run it!
+### Option A: Evaluators & Users (Recommended)
+
+**Just want to run Rosh? This is the quickest path.**
+
+```bash
+# Install directly from GitHub (requires collaborator access)
+uv tool install git+ssh://git@github.com/roshcloud/rosh-lang.git
+
+# Add to your PATH (one-time setup)
+uv tool update-shell
+
+# Restart your terminal, then run:
+rosh --version
 rosh examples/hello.rosh
 ```
 
-**Upgrade:** `cd rosh && git pull && uv tool install --reinstall .`
+**Update to latest version:**
+```bash
+uv tool upgrade rosh-lang
+```
 
-**Developers:** See [QUICK-START.md](QUICK-START.md) for `uv sync` setup or [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for details.
+**Uninstall:**
+```bash
+uv tool uninstall rosh-lang
+```
+
+---
+
+### Option B: Developers
+
+**Want to modify Rosh or contribute? Clone the repo.**
+
+```bash
+# Clone the repository
+git clone git@github.com:roshcloud/rosh-lang.git
+cd rosh-lang
+
+# Install in development mode
+uv sync
+
+# Run via uv
+uv run rosh --version
+uv run rosh examples/hello.rosh
+
+# Or install as tool from local source
+uv tool install . --reinstall
+```
+
+**Update (developers):**
+```bash
+cd rosh-lang && git pull && uv sync
+```
+
+See [QUICK-START.md](QUICK-START.md) for full setup or [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for details.
+
+---
+
+### Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| `Permission denied (publickey)` | You need SSH key configured for GitHub. See [GitHub SSH setup](https://docs.github.com/en/authentication/connecting-to-github-with-ssh) |
+| `Repository not found` | You need to be added as a collaborator. Contact roger@rosh.cloud |
+| `rosh: command not found` | Run `uv tool update-shell` and restart your terminal |
+| `uv: command not found` | Install uv first (see Prerequisites above) |
 
 ## ⚠️ Security Note
 
