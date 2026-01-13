@@ -2,24 +2,48 @@
 
 **Current version:** See `CHANGELOG.md` for release history.
 
-> 🤖 **Rosh** - Programming that sounds like talking to a person!
+> 🤖 **Rosh** - a universal control layer for virtual worlds
 
 [![License: MIT (planned)](https://img.shields.io/badge/license-MIT--planned-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
-> **Availability:** Rosh is currently a closed-source, invite-only project while we stabilize the core language and tooling.  
-> We intend to release it publicly under the MIT license once the v1 toolchain is production-ready.
+> **Status:** Invite-only preview. Ready for evaluation and light multi-user testing.
+> Not for production use. MIT license planned for v1.0 release.
+
+---
+
+## For Academic Evaluators
+
+Rosh is suitable for:
+- **Research prototyping** - Rapidly build interactive environments for user studies
+- **Student workshops** - Accessible entry point for game/simulation concepts
+- **Pilot projects** - Test voice-controlled or natural language interfaces
+- **Cross-platform experiments** - Same code runs on web (Phaser/Three.js) and desktop (Pygame)
+
+**What works reliably:**
+- Voice input and natural language commands
+- 2D/3D scene creation and manipulation
+- Multi-user shared worlds (light testing)
+- AI integration for code generation and error recovery
+
+**What doesn't work yet:**
+- Production-scale deployment
+- Untrusted user input (no sandboxing)
+- Complex game logic beyond prototypes
+
+**Academic license:** Free for research and teaching. Contact roger@rosh.cloud.
+
+---
 
 ## Overview
 
 Rosh is designed to be:
-- **Spoken-friendly**: Optimized for dictation with minimal punctuation
+- **Spoken-friendly**: Optimised for dictation with minimal punctuation
 - **Case-insensitive**: `CREATE OBJECT Hero` = `create object hero` (string literals preserve case)
-- **Stack-based**: Powerful compositional semantics
-- **Format-flexible**: JSON, TOML, and TOON support for state serialization
+- **Cross-platform**: Write once, run on Phaser (web), Three.js (3D web), or Pygame (desktop)
 - **AI-native**: First-class `prompt` primitive for AI integration
 - **Event-driven**: Reactive programming with `when/trigger` for game logic
-- **MUD-focused**: Built-in primitives for interactive worlds & storytelling
+- **Auditable**: Full command history and state inspection
 
 ## Installation
 
@@ -102,15 +126,22 @@ See [QUICK-START.md](QUICK-START.md) for full setup or [docs/DEVELOPMENT.md](doc
 | `rosh: command not found` | Run `uv tool update-shell` and restart your terminal |
 | `uv: command not found` | Install uv first (see Prerequisites above) |
 
-## ⚠️ Security Note
+## ⚠️ Maturity & Security
 
-**Rosh is for single-user, local development.** Not ready for production or multi-user use:
+**Ready for:** Evaluation, research, workshops, light multi-user testing.
+**Not ready for:** Production deployment, untrusted users, public-facing systems.
 
-- **Remote imports are trust-based** - No hash/signature verification yet. Only import from sources you trust.
-- **Full filesystem access** - Code runs with your user permissions
-- **AI code requires confirmation** - But runs unrestricted after approval
+| Capability | Status |
+|------------|--------|
+| Local development | Stable |
+| Multi-user shared worlds | Works for small groups (2-10 users) |
+| Voice commands | Works in modern browsers |
+| Production deployment | Not yet - no auth, no sandboxing |
+| Untrusted code execution | Not safe - no isolation |
 
-See [docs/EVAL-SAFETY.md](docs/EVAL-SAFETY.md) for why this is safe for single-user.
+**Trust model:** All collaborators are trusted. Remote imports are trust-based (no signature verification). Code runs with user permissions.
+
+See [docs/EVAL-SAFETY.md](docs/EVAL-SAFETY.md) for details.
 
 ## Quick Start
 
