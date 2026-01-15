@@ -16,7 +16,8 @@
 #   Godot (desktop)   → rosh-portal/static/dist/*-godot/     (local testing only)
 #
 # AFTER RUNNING:
-#   Commit and push to deploy via Railway
+#   1. Run ./scripts/minify-handcrafted.sh for hand-crafted demos
+#   2. Commit and push to deploy via Railway
 #
 # =============================================================================
 
@@ -42,35 +43,40 @@ echo "📦 Building rosh-intro (Phaser)..."
 uv run rosh build demos/rosh-intro/game.rosh \
     --target phaser \
     --output "$ROSH_PORTAL/demos/rosh-intro-phaser/" \
-    --copy-assets
+    --copy-assets \
+    --minify
 
 echo ""
 echo "📦 Building space-shooter (Phaser)..."
 uv run rosh build demos/space-shooter/game.rosh \
     --target phaser \
     --output "$ROSH_PORTAL/demos/space-shooter-phaser/" \
-    --copy-assets
+    --copy-assets \
+    --minify
 
 echo ""
 echo "📦 Building block-pusher (Phaser)..."
 uv run rosh build demos/block-pusher/game.rosh \
     --target phaser \
     --output "$ROSH_PORTAL/demos/block-pusher-phaser/" \
-    --copy-assets
+    --copy-assets \
+    --minify
 
 echo ""
 echo "📦 Building animation-test (Phaser)..."
 uv run rosh build demos/animation-test/game.rosh \
     --target phaser \
     --output "$ROSH_PORTAL/demos/animation-test-phaser/" \
-    --copy-assets
+    --copy-assets \
+    --minify
 
 echo ""
 echo "📦 Building scottish-gallery (Phaser)..."
 uv run rosh build demos/scottish-gallery/gallery.rosh \
     --target phaser \
     --output "$ROSH_PORTAL/demos/scottish-gallery-phaser/" \
-    --copy-assets
+    --copy-assets \
+    --minify
 
 # =============================================================================
 # THREE.JS BUILDS (Browser 3D - for web upload)
@@ -84,7 +90,8 @@ echo "📦 Building rosh-intro (Three.js)..."
 uv run rosh build demos/rosh-intro/game.rosh \
     --target threejs \
     --output "$ROSH_PORTAL/demos/rosh-intro-threejs/" \
-    --copy-assets
+    --copy-assets \
+    --minify
 mkdir -p "$ROSH_PORTAL/demos/rosh-intro-threejs/assets"
 cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/rosh-intro-threejs/assets/"
 
@@ -93,7 +100,8 @@ echo "📦 Building space-shooter (Three.js)..."
 uv run rosh build demos/space-shooter/game.rosh \
     --target threejs \
     --output "$ROSH_PORTAL/demos/space-shooter-threejs/" \
-    --copy-assets
+    --copy-assets \
+    --minify
 mkdir -p "$ROSH_PORTAL/demos/space-shooter-threejs/assets"
 cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/space-shooter-threejs/assets/"
 
@@ -102,7 +110,8 @@ echo "📦 Building block-pusher (Three.js)..."
 uv run rosh build demos/block-pusher/game.rosh \
     --target threejs \
     --output "$ROSH_PORTAL/demos/block-pusher-threejs/" \
-    --copy-assets
+    --copy-assets \
+    --minify
 mkdir -p "$ROSH_PORTAL/demos/block-pusher-threejs/assets"
 cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/block-pusher-threejs/assets/"
 
@@ -111,7 +120,8 @@ echo "📦 Building virtual-gallery (Three.js)..."
 uv run rosh build demos/virtual-gallery/game.rosh \
     --target threejs \
     --output "$ROSH_PORTAL/demos/virtual-gallery-threejs/" \
-    --copy-assets
+    --copy-assets \
+    --minify
 mkdir -p "$ROSH_PORTAL/demos/virtual-gallery-threejs/assets"
 cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/virtual-gallery-threejs/assets/"
 
@@ -120,7 +130,8 @@ echo "📦 Building scottish-gallery (Three.js)..."
 uv run rosh build demos/scottish-gallery/gallery.rosh \
     --target threejs \
     --output "$ROSH_PORTAL/demos/scottish-gallery-threejs/" \
-    --copy-assets
+    --copy-assets \
+    --minify
 mkdir -p "$ROSH_PORTAL/demos/scottish-gallery-threejs/assets"
 cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/scottish-gallery-threejs/assets/"
 
@@ -129,7 +140,8 @@ echo "📦 Building virtual-gallery-simple (Three.js)..."
 uv run rosh build demos/virtual-gallery-simple/game.rosh \
     --target threejs \
     --output "$ROSH_PORTAL/demos/virtual-gallery-simple-threejs/" \
-    --copy-assets
+    --copy-assets \
+    --minify
 mkdir -p "$ROSH_PORTAL/demos/virtual-gallery-simple-threejs/assets"
 cp -r "$ROSH_LANG/assets/3d_glb" "$ROSH_PORTAL/demos/virtual-gallery-simple-threejs/assets/"
 

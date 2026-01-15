@@ -4,11 +4,11 @@
 
 > 🤖 **Rosh** - a universal control layer for virtual worlds
 
-[![License: MIT (planned)](https://img.shields.io/badge/license-MIT--planned-yellow.svg)](LICENSE)
+[![License: Academic](https://img.shields.io/badge/license-Academic-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
 > **Status:** Invite-only preview. Ready for evaluation and light multi-user testing.
-> Not for production use. MIT license planned for v1.0 release.
+> Free academic licenses available. Not for production use.
 
 ---
 
@@ -31,7 +31,7 @@ Rosh is suitable for:
 - Untrusted user input (no sandboxing)
 - Complex game logic beyond prototypes
 
-**Academic license:** Free for research and teaching. Contact roger@rosh.cloud.
+**Academic license:** Free for research and teaching. Contact info@rosh.cloud.
 
 ---
 
@@ -438,12 +438,36 @@ when update then
 end
 ```
 
+### Current Status (v0.2.11 - January 2026)
+
+**Completed:**
+- ✅ Demo video (intro with voice control)
+- ✅ Voice input → console commands
+- ✅ Multi-target transpilation (Phaser, Pygame, Three.js, Godot)
+- ✅ Project Twin multiplayer sync
+- ✅ Minified demo builds
+
+**Live Demos:**
+| Demo | Type | Description |
+|------|------|-------------|
+| rosh-intro | Transpiled | Interactive intro with voice |
+| space-shooter | Transpiled | 2D arcade game |
+| scottish-gallery | Transpiled | Virtual museum gallery |
+| rosh-airspace | Hand-crafted | Live Scotland flight tracking |
+| rosh-world | Hand-crafted | Shared creative space |
+| scottish-museum | Hand-crafted | Museum pilot demo |
+
 ### What's Next
 
-**v0.2.0 - Voice Demo** (Planned)
-- Voice input → AI → playable game
-- AI-generated sprites (DALL-E integration)
-- Demo video
+**Near-term:**
+- Academic feedback (Glasgow Life, GCU)
+- Backfill hand-crafted demos to transpiler (airspace, world, museum)
+- Public GitHub release with academic license
+
+**Planned Features:**
+- Array/pool syntax for bulk objects (`create 4 explosions`)
+- Sandboxed code execution
+- Authentication for multiplayer
 
 **Key Documents:**
 - `ROSH-MANUAL.rosh` - THE comprehensive Rosh manual (start here!)
@@ -451,11 +475,9 @@ end
 - `QUICK-START.md` - Fast installation and basic usage
 - `docs/ARCHITECTURE.md` - System architecture and design decisions
 - `docs/DEVELOPMENT.md` - Development setup and workflow
-- `docs/CONTRIBUTING.md` - Contribution guidelines
+- `CONTRIBUTING.md` - Contribution guidelines
+- `SECURITY.md` - Security policy and limitations
 - `docs/AI_SETUP.md` - AI integration guide
-- `docs/EVAL-SAFETY.md` - Understanding eval in single-user vs multi-user
-
-**Strategic planning:** Roadmap will be published alongside the open-source release.
 
 ## Directory Structure
 
@@ -465,7 +487,7 @@ rosh-lang/
 ├── README.md           # This file (quick start)
 ├── CHANGELOG.md        # Version history and release notes
 ├── QUICK-START.md      # Fast installation guide
-├── LICENSE             # MIT License
+├── LICENSE             # Rosh License (Academic/Evaluation/Commercial)
 ├── src/rosh/           # Python interpreter implementation
 │   ├── lexer.py        # Tokenization
 │   ├── parser.py       # AST generation
@@ -540,16 +562,27 @@ touch scratch/my-test.rosh
 
 ## License
 
-Rosh is released under the [MIT License](LICENSE).
+Rosh uses a tiered licensing model. See [LICENSE](LICENSE) for full details.
 
-**What this means:**
-- ✅ Free for commercial use
-- ✅ No usage fees ever
-- ✅ Modify and distribute freely
-- ✅ Private use allowed
-- ✅ Patent grant included
+| Use Case | License | Cost |
+|----------|---------|------|
+| Academic (research, teaching) | Academic License | Free |
+| Evaluation (90 days) | Evaluation License | Free |
+| Consultancy clients | Perpetual License | Included in engagement |
+| Commercial | Contact us | TBD |
+
+**Academic License** - Free for universities and research institutions:
+- Use in research and teaching
+- Modify for academic purposes
+- Publish findings that reference Rosh
+- Include in course materials and student projects
+
+To request an academic license, contact: info@rosh.cloud
+
+**Open Source Roadmap:**
+We plan to release core components under MIT or similar permissive license once the language stabilizes.
 
 **Trademark Notice:**
-"Rosh" and the Rosh logo are trademarks of the Rosh Project. You can use the name to refer to this project, but not in ways that suggest official endorsement without permission. Similar to how Python, Rust, and other open-source projects protect their brands.
+"Rosh" and the Rosh logo are trademarks of Rosh Studio. You can use the name to refer to this project, but not in ways that suggest official endorsement without permission.
 
-Type `license` in the REPL to view the full license and trademark information, or see [LICENSE](LICENSE) for details.
+Type `license` in the REPL to view the full license, or see [LICENSE](LICENSE) for details.

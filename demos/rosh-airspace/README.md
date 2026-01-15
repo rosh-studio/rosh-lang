@@ -2,24 +2,25 @@
 
 Real-time airspace visualization over Scotland using public ADS-B data.
 
-**Purpose:** Demonstration for potential Spire partnership — showing how Rosh can make aviation data explorable via voice and console commands.
+**Purpose:** Demonstration showing how Rosh can make aviation data explorable via voice and console commands.
 
 ## Data Source
 
 - **Live data:** [OpenSky Network](https://opensky-network.org/) public API
 - **Coverage:** Scotland bounding box (54.5°N to 60.5°N, 8°W to 0.5°W)
 - **Update interval:** 10 seconds
+- **Fallback:** Sample data when API is rate-limited
 
 ## Running the Demo
 
 ```bash
 # From rosh-lang directory
-cd demos/airspace-spire/threejs
+cd demos/rosh-airspace/threejs
 python3 -m http.server 8080
 # Open http://localhost:8080
 ```
 
-Or use any local server (Live Server extension, etc.)
+Or view the live demo at: https://rosh.cloud/demos/rosh-airspace/
 
 ## Commands
 
@@ -41,6 +42,7 @@ Or use any local server (Live Server extension, etc.)
 - **Drag:** Pan the map
 - **Scroll:** Zoom in/out
 - **Click:** Select a flight
+- **Voice:** Click mic button or Ctrl+Space
 
 ## Flight Colors
 
@@ -55,20 +57,18 @@ Or use any local server (Live Server extension, etc.)
 | Teal | Other UK flights |
 | Gray | Unknown |
 
-## Phase 2: Spire Integration
+## Data Adapter
 
-The data adapter (`fetchFlights()`) is designed for drop-in replacement:
+The data adapter (`fetchFlights()`) is designed for drop-in replacement with other aviation data sources:
 
-1. Replace OpenSky endpoint with Spire API
-2. Map Spire response format to internal flight structure
+1. Replace OpenSky endpoint with alternative API
+2. Map response format to internal flight structure
 3. No changes to visualization or commands
-
-See `/rosh-corporate/proposals/ROSH-SPIRE-PROPOSAL.md` for full proposal.
 
 ## Files
 
 ```
-airspace-spire/
+rosh-airspace/
 ├── threejs/
 │   ├── index.html    # Demo page
 │   └── game.js       # Visualization + commands

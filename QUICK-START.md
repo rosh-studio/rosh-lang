@@ -16,7 +16,7 @@ Get up and running with Rosh in 2 minutes!
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone and install Rosh
-git clone https://github.com/rdubar/rosh.git
+git clone https://github.com/roshcloud/rosh-lang.git
 cd rosh
 uv tool install .
 ```
@@ -123,7 +123,7 @@ If you're developing Rosh (not just using it), use the editable install instead:
 
 ```bash
 # Clone repo
-git clone https://github.com/rdubar/rosh.git
+git clone https://github.com/roshcloud/rosh-lang.git
 cd rosh
 
 # Install dependencies (creates .venv)
@@ -194,6 +194,6 @@ uv pip list --outdated
 
 ## Need Help?
 
-- GitHub: https://github.com/rdubar/rosh
-- Issues: https://github.com/rdubar/rosh/issues
+- GitHub: https://github.com/roshcloud/rosh-lang
+- Issues: https://github.com/roshcloud/rosh-lang/issues
 - Docs: See `docs/` directory

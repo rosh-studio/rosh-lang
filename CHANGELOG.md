@@ -116,8 +116,10 @@
 - Fresh REPL shows "No objects defined" instead of implicit meta
 
 ### Next Steps
-- Record 60-second demo video ("Actual footage. Not faked.")
-- Outreach to contacts (Gregor Hofer, Soluis, etc.)
+- ~~Record 60-second demo video~~ ✓ Done (14-Jan-2026)
+- Academic evaluation: Glasgow Life (James Gibson), GCU (Daniel Livingstone - meeting 19-Jan)
+- Backfill hand-crafted demos (rosh-airspace, rosh-world, scottish-museum) to transpiler
+- Public GitHub release with academic license
 
 ---
 
