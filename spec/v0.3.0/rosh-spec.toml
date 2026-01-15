@@ -475,3 +475,323 @@ commands = ["undo", "redo"]
 description = "Undo/redo stack for reversible operations"
 js_location = "rosh-runtime.js:pushUndo(), handleUndo()"
 py_location = "interpreter.py:push_undo(), eval_undo()"
+
+# =============================================================================
+# SEMANTIC PACKAGES (v0.3.0)
+# =============================================================================
+# Auditable packages that define Rosh primitives.
+# Each package is independently certifiable.
+# AI code generation MUST only use primitives from these packages.
+
+[packages.meta]
+version = "0.3.0"
+description = "Semantic packages for auditable AI code generation"
+
+# =============================================================================
+# PACKAGE: rosh-lights
+# =============================================================================
+# Light objects and illumination primitives.
+# Enables: museum spotlights, ambient lighting, directional sun
+
+[packages.lights]
+version = "0.3.0"
+status = "draft"
+description = "Light objects and illumination"
+
+[packages.lights.types]
+ambient = { properties = ["color", "intensity"] }
+directional = { properties = ["color", "intensity", "position", "cast_shadow", "shadow_map_size", "shadow_camera"] }
+spot = { properties = ["color", "intensity", "position", "target", "angle", "penumbra", "cast_shadow"] }
+hemisphere = { properties = ["sky_color", "ground_color", "intensity"] }
+point = { properties = ["color", "intensity", "position", "distance", "decay"] }
+
+[packages.lights.properties]
+color = { type = "color", default = 0xffffff }
+intensity = { type = "float", default = 1.0, min = 0.0 }
+position = { type = "vec3", default = [0, 10, 0] }
+target = { type = "string", default = "" }  # Object name or vec3
+angle = { type = "float", default = 60, min = 0, max = 180 }  # Degrees
+penumbra = { type = "float", default = 0.0, min = 0.0, max = 1.0 }
+cast_shadow = { type = "bool", default = false }
+shadow_map_size = { type = "vec2", default = [1024, 1024] }
+sky_color = { type = "color", default = 0x87ceeb }
+ground_color = { type = "color", default = 0x3d5c3d }
+
+[packages.lights.syntax]
+create = "create light <name> [as <type>]"
+example = """
+create light sun as directional
+    set color to white
+    set intensity to 1.0
+    set position to "50 100 50"
+    set cast_shadow to true
+end
+"""
+
+# =============================================================================
+# PACKAGE: rosh-scene
+# =============================================================================
+# Scene environment configuration.
+# Enables: background color, fog, renderer settings
+
+[packages.scene]
+version = "0.3.0"
+status = "draft"
+description = "Scene environment configuration"
+
+[packages.scene.properties]
+background = { type = "color", default = 0x000000 }
+fog_color = { type = "color", default = 0x000000 }
+fog_near = { type = "float", default = 10.0 }
+fog_far = { type = "float", default = 100.0 }
+fog_enabled = { type = "bool", default = false }
+
+[packages.scene.renderer]
+antialias = { type = "bool", default = true }
+shadows = { type = "bool", default = false }
+shadow_type = { type = "enum", values = ["basic", "pcf", "pcf_soft"], default = "pcf_soft" }
+pixel_ratio = { type = "float", default = 1.0, max = 2.0 }
+
+[packages.scene.syntax]
+meta_block = """
+meta
+    title "Scene Name"
+    background "#0a0a0a"
+    fog "#0a0a0a" 15 50
+end
+"""
+
+# =============================================================================
+# PACKAGE: rosh-camera
+# =============================================================================
+# Camera configuration and control modes.
+# Enables: fly camera, orbit controls, static viewpoints
+
+[packages.camera]
+version = "0.3.0"
+status = "draft"
+description = "Camera configuration and controls"
+
+[packages.camera.types]
+perspective = { properties = ["fov", "near", "far", "position", "target"] }
+orthographic = { properties = ["zoom", "near", "far", "position", "target"] }
+
+[packages.camera.controls]
+static = { description = "Fixed camera, no user control" }
+orbit = { properties = ["enable_rotate", "enable_pan", "enable_zoom", "min_distance", "max_distance"] }
+fly = { properties = ["speed", "key_bindings", "pointer_lock"] }
+
+[packages.camera.properties]
+position = { type = "vec3", default = [0, 5, 10] }
+target = { type = "vec3", default = [0, 0, 0] }
+fov = { type = "float", default = 50, min = 10, max = 120 }
+near = { type = "float", default = 0.1 }
+far = { type = "float", default = 1000 }
+zoom = { type = "float", default = 1.0 }
+speed = { type = "float", default = 10.0 }
+enable_rotate = { type = "bool", default = true }
+enable_pan = { type = "bool", default = true }
+enable_zoom = { type = "bool", default = true }
+min_distance = { type = "float", default = 1.0 }
+max_distance = { type = "float", default = 100.0 }
+
+[packages.camera.syntax]
+config_block = """
+config camera
+    set position to "0 2 8"
+    set target to "0 1 0"
+    set fov to 50
+    set controls to "orbit"
+end
+"""
+
+# =============================================================================
+# PACKAGE: rosh-models
+# =============================================================================
+# GLB/GLTF model loading and configuration.
+# Enables: museum artifacts, custom 3D models
+
+[packages.models]
+version = "0.3.0"
+status = "draft"
+description = "GLB/GLTF model loading"
+
+[packages.models.properties]
+model = { type = "string", description = "Model identifier or path" }
+base_scale = { type = "float", default = 1.0, description = "Normalize model to 1 unit" }
+world_scale = { type = "float", default = 1.0, description = "Display scale" }
+y_offset = { type = "float", default = 0.0, description = "Vertical adjustment" }
+
+[packages.models.metadata]
+# Artifact/model metadata for info panels
+name = { type = "string" }
+origin = { type = "string" }
+description = { type = "string" }
+source = { type = "string", description = "Attribution/credit" }
+
+[packages.models.materials]
+roughness = { type = "float", default = 0.5, min = 0.0, max = 1.0 }
+metalness = { type = "float", default = 0.0, min = 0.0, max = 1.0 }
+receive_shadow = { type = "bool", default = true }
+cast_shadow = { type = "bool", default = true }
+
+[packages.models.syntax]
+create_model = """
+create object lewis_king
+    set type to "lewis_chess_king"
+    set position to "-4 1.25 -2"
+    set base_scale to 1.0
+    set world_scale to 1.2
+    set name to "Lewis Chess King"
+    set origin to "Isle of Lewis, c. 1150 AD"
+end
+"""
+
+# =============================================================================
+# PACKAGE: rosh-data
+# =============================================================================
+# External data binding and API integration.
+# Enables: live flight data, REST APIs, dynamic updates
+
+[packages.data]
+version = "0.3.0"
+status = "draft"
+description = "External data binding and REST APIs"
+
+[packages.data.datasource]
+type = { type = "enum", values = ["rest_api", "websocket", "static"] }
+url = { type = "string" }
+method = { type = "enum", values = ["GET", "POST"], default = "GET" }
+refresh_interval = { type = "int", default = 0, description = "Milliseconds, 0 = no refresh" }
+fallback = { type = "string", description = "Fallback strategy or data" }
+
+[packages.data.params]
+# URL parameters (key = value)
+description = "Query parameters appended to URL"
+
+[packages.data.binding]
+# Bind API response to objects
+source = { type = "string", description = "Data path in response" }
+template = { type = "string", description = "Template for created objects" }
+key = { type = "string", description = "Unique identifier field" }
+
+[packages.data.mapping]
+# Field mapping from API to object properties
+description = "Map API fields to object properties"
+example = "callsign from \"[1]\" trim"
+
+[packages.data.transform]
+# Position/rotation transforms from data
+position = { description = "x, y, z expressions using data fields" }
+rotation = { description = "x, y, z expressions using data fields" }
+
+[packages.data.syntax]
+config_datasource = """
+config datasource opensky
+    type "rest_api"
+    url "https://opensky-network.org/api/states/all"
+    params
+        lamin 54.5
+        lomin -8.0
+    end
+    refresh_interval 10000
+    fallback "sample_data"
+end
+"""
+bind_data = """
+bind opensky.states to flights
+    using template flight_marker
+    key "icao24"
+    map
+        callsign from "[1]" trim
+        latitude from "[6]"
+        longitude from "[5]"
+        altitude from "[7]"
+    end
+end
+"""
+
+# =============================================================================
+# PACKAGE: rosh-positions
+# =============================================================================
+# Semantic positioning system.
+# Enables: center, corners, relative positioning, geographic coords
+
+[packages.positions]
+version = "0.3.0"
+status = "draft"
+description = "Semantic positioning primitives"
+
+[packages.positions.keywords]
+center = { coords = [0.5, 0, 0.5], description = "Center of scene" }
+top_left = { coords = [0, 0, 0], description = "Top-left corner" }
+top_right = { coords = [1, 0, 0], description = "Top-right corner" }
+bottom_left = { coords = [0, 0, 1], description = "Bottom-left corner" }
+bottom_right = { coords = [1, 0, 1], description = "Bottom-right corner" }
+front = { description = "In front of camera" }
+behind = { description = "Behind target object" }
+above = { description = "Above target object" }
+below = { description = "Below target object" }
+left_of = { description = "Left of target object" }
+right_of = { description = "Right of target object" }
+
+[packages.positions.geographic]
+lat = { type = "float", description = "Latitude in degrees" }
+lon = { type = "float", description = "Longitude in degrees" }
+center_lat = { type = "float", description = "Map center latitude" }
+center_lon = { type = "float", description = "Map center longitude" }
+scale = { type = "float", description = "Degrees to world units" }
+
+[packages.positions.syntax]
+semantic = "position player at center"
+relative = "position enemy above player"
+geographic = """
+config map
+    center_lat 57.5
+    center_lon -4.25
+    scale 20
+end
+"""
+
+# =============================================================================
+# PACKAGE: rosh-motion
+# =============================================================================
+# Movement behaviours and animation.
+# Enables: spin, bob, follow, camera controls
+
+[packages.motion]
+version = "0.3.0"
+status = "draft"
+description = "Movement behaviours and animation"
+
+[packages.motion.behaviours]
+spin = { properties = ["axis", "speed"], description = "Continuous rotation" }
+bob = { properties = ["axis", "amplitude", "speed"], description = "Oscillation" }
+pulse = { properties = ["min_scale", "max_scale", "speed"], description = "Scale oscillation" }
+follow = { properties = ["target", "offset", "smooth"], description = "Follow target" }
+orbit_around = { properties = ["target", "radius", "speed"], description = "Orbit target" }
+
+[packages.motion.properties]
+axis = { type = "enum", values = ["x", "y", "z"], default = "y" }
+speed = { type = "float", default = 1.0 }
+amplitude = { type = "float", default = 0.5 }
+min_scale = { type = "float", default = 0.8 }
+max_scale = { type = "float", default = 1.2 }
+smooth = { type = "float", default = 0.1, description = "Lerp factor" }
+
+[packages.motion.syntax]
+behaviour = """
+set player.spin to true
+set player.spin_speed to 2.0
+"""
+controls = """
+config controls
+    type "fly"
+    speed 20
+    bindings
+        W = move_forward
+        S = move_backward
+        Space = move_up
+    end
+end
+"""
