@@ -100,14 +100,46 @@ class IRTransformer:
         """
         # Pre-pass: extract metadata from AST Metadata nodes
         ast_meta = {}
+        scene_meta = {}  # v0.3.0 rosh-scene package
+        camera_meta = {}  # v0.3.0 rosh-camera package
         for stmt in program.statements:
-            if isinstance(stmt, Metadata) and stmt.scope is None:
-                # Core metadata (no scope) - extract field values
-                for key, value_expr in stmt.fields.items():
-                    if isinstance(value_expr, Literal):
-                        ast_meta[key] = value_expr.value
-                    elif isinstance(value_expr, Identifier):
-                        ast_meta[key] = value_expr.name
+            if isinstance(stmt, Metadata):
+                if stmt.scope is None:
+                    # Core metadata (no scope) - extract field values
+                    for key, value_expr in stmt.fields.items():
+                        if isinstance(value_expr, Literal):
+                            ast_meta[key] = value_expr.value
+                        elif isinstance(value_expr, Identifier):
+                            ast_meta[key] = value_expr.name
+                elif stmt.scope == 'scene':
+                    # Scene configuration (v0.3.0 rosh-scene package)
+                    for key, value_expr in stmt.fields.items():
+                        if isinstance(value_expr, Literal):
+                            scene_meta[key] = value_expr.value
+                        elif isinstance(value_expr, Identifier):
+                            scene_meta[key] = value_expr.name
+                        elif isinstance(value_expr, ListLiteral):
+                            # Handle list values like fog parameters
+                            scene_meta[key] = [
+                                e.value if isinstance(e, Literal) else str(e)
+                                for e in value_expr.elements
+                            ]
+                elif stmt.scope == 'camera':
+                    # Camera configuration (v0.3.0 rosh-camera package)
+                    for key, value_expr in stmt.fields.items():
+                        if isinstance(value_expr, Literal):
+                            camera_meta[key] = value_expr.value
+                        elif isinstance(value_expr, Identifier):
+                            camera_meta[key] = value_expr.name
+                        elif isinstance(value_expr, ListLiteral):
+                            camera_meta[key] = [
+                                e.value if isinstance(e, Literal) else str(e)
+                                for e in value_expr.elements
+                            ]
+                elif stmt.scope == 'data':
+                    # Datasource configuration (v0.3.0 rosh-data package)
+                    # Store for later processing after extra_meta is created
+                    pass  # Handled in second pass below
 
         # Merge AST metadata with config meta (AST takes precedence)
         merged_meta = {**self.meta, **ast_meta}
@@ -115,6 +147,32 @@ class IRTransformer:
         # Pass through extra metadata fields (like use_shared_runtime)
         known_meta_keys = {'title', 'version', 'initial_scene', 'canvas_width', 'canvas_height'}
         extra_meta = {k: v for k, v in merged_meta.items() if k not in known_meta_keys}
+
+        # Merge scene metadata (v0.3.0 rosh-scene package)
+        extra_meta.update(scene_meta)
+
+        # Store camera config as nested dict (v0.3.0 rosh-camera package)
+        if camera_meta:
+            extra_meta['camera'] = camera_meta
+
+        # Process datasource configs (v0.3.0 rosh-data package)
+        datasources = []
+        for stmt in program.statements:
+            if isinstance(stmt, Metadata) and stmt.scope == 'data':
+                data_config = {}
+                for key, value_expr in stmt.fields.items():
+                    if isinstance(value_expr, Literal):
+                        data_config[key] = value_expr.value
+                    elif isinstance(value_expr, Identifier):
+                        data_config[key] = value_expr.name
+                    elif isinstance(value_expr, ListLiteral):
+                        data_config[key] = [
+                            e.value if isinstance(e, Literal) else str(e)
+                            for e in value_expr.elements
+                        ]
+                datasources.append(data_config)
+        if datasources:
+            extra_meta['datasources'] = datasources
 
         ir_program = IR_Program(
             metadata=IR_Metadata(
@@ -328,6 +386,8 @@ class IRTransformer:
             parent_type = node.parents[0].lower()
             if parent_type in ('player', 'enemy', 'item'):
                 obj_type = "sprite"  # Assumed for game entities
+            elif parent_type == 'light':
+                obj_type = "light"  # v0.3.0 semantic package: rosh-lights
 
         # Start with inherited properties
         properties: Dict[str, IR_Value] = {}

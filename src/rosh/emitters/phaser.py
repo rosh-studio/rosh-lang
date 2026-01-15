@@ -34,6 +34,21 @@ REMAINING CLEANUP (low priority):
 - Lines 1474-1475: Inline color map in REPL create
 - Lines 3054-3066: CSS_COLORS dict duplicates spec
 - Consider generating code that imports from rosh-colors.js
+
+v0.3.0 SEMANTIC PACKAGES - 2D/3D COMPATIBILITY
+==============================================
+The following packages are fully supported (2D equivalents):
+- rosh-scene: background color from meta.scene (used)
+
+The following packages have stubs (properties stored but not rendered):
+- rosh-lights: Light objects created as data-only (3D-only rendering)
+- rosh-camera: Camera properties stored but ignored (2D has fixed view)
+- rosh-models: GLB/GLTF models not supported (2D uses sprites)
+- rosh-data: REST datasources not yet implemented
+
+Properties from 3D-only packages are preserved in IR and sync to 3D
+clients via network. This allows Phaser/CLI to control lights, camera,
+etc. in connected Three.js worlds.
 """
 
 import re
@@ -1098,7 +1113,8 @@ class PhaserEmitter(BaseEmitter):
         """Emit Phaser game configuration and initialization."""
         width = self.ir.metadata.canvas_width
         height = self.ir.metadata.canvas_height
-        bg_color = self.meta.get('canvas', {}).get('background', '#1a1a2e')
+        # Background color: check rosh-scene metadata first, then canvas config
+        bg_color = self.ir.metadata.extra.get('background') or self.meta.get('canvas', {}).get('background', '#1a1a2e')
 
         self.write("const config = {")
         self.indent()
@@ -2229,6 +2245,22 @@ class PhaserEmitter(BaseEmitter):
             self.write(f"// Hidden data object: {name}")
             self.write(f"this.{name} = {{ }};")
             # Set properties
+            for prop_name, prop_value in obj.properties.items():
+                safe_prop = self._safe_property_name(prop_name)
+                val = self.get_value(prop_value)
+                if isinstance(val, bool):
+                    self.write(f"this.{name}.{safe_prop} = {'true' if val else 'false'};")
+                elif isinstance(val, str):
+                    self.write(f"this.{name}.{safe_prop} = '{val}';")
+                else:
+                    self.write(f"this.{name}.{safe_prop} = {val};")
+            return
+
+        # Skip light objects in 2D (v0.3.0 rosh-lights: 3D-only rendering)
+        # Light properties are stored in IR and sync to 3D clients via network
+        if obj.type == 'light':
+            self.write(f"// Light: {name} (3D-only, properties stored for network sync)")
+            self.write(f"this.{name} = {{ type: 'light' }};")
             for prop_name, prop_value in obj.properties.items():
                 safe_prop = self._safe_property_name(prop_name)
                 val = self.get_value(prop_value)

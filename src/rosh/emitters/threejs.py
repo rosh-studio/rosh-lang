@@ -373,7 +373,18 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const gameObjects = {};  // Registry for console-created objects")
         self.write("window._objects = {};  // Global object registry for query syntax")
         self.write("window._selection = [];  // Current selection for bulk operations")
-        self.write("scene.background = new THREE.Color(0x1a1a2e);")
+
+        # Scene environment (v0.3.0 rosh-scene package)
+        background_color = self.ir.metadata.extra.get('background', '#1a1a2e')
+        if isinstance(background_color, str):
+            if background_color.startswith('#'):
+                bg_hex = int(background_color[1:], 16)
+            else:
+                from ..ir import color_to_hex
+                bg_hex = color_to_hex(background_color)
+        else:
+            bg_hex = background_color
+        self.write(f"scene.background = new THREE.Color(0x{bg_hex:06x});")
         self.write_blank()
 
         self.write_comment("Camera - looking at arcade screen")
@@ -386,6 +397,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const renderer = new THREE.WebGLRenderer({ antialias: true });")
         self.write("renderer.setSize(window.innerWidth, window.innerHeight);")
         self.write("renderer.setPixelRatio(window.devicePixelRatio);")
+        self.write("renderer.shadowMap.enabled = true;")
+        self.write("renderer.shadowMap.type = THREE.PCFSoftShadowMap;")
         self.write("document.body.appendChild(renderer.domElement);")
         self.write_blank()
 
@@ -837,7 +850,46 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const gameObjects = {};  // Registry for console-created objects")
         self.write("window._objects = {};  // Global object registry for query syntax")
         self.write("window._selection = [];  // Current selection for bulk operations")
-        self.write("scene.background = new THREE.Color(0x1a1a2e);")
+
+        # Scene environment (v0.3.0 rosh-scene package)
+        background_color = self.ir.metadata.extra.get('background', '#1a1a2e')
+        if isinstance(background_color, str):
+            if background_color.startswith('#'):
+                bg_hex = int(background_color[1:], 16)
+            else:
+                from ..ir import color_to_hex
+                bg_hex = color_to_hex(background_color)
+        else:
+            bg_hex = background_color
+        self.write(f"scene.background = new THREE.Color(0x{bg_hex:06x});")
+
+        # Fog configuration (v0.3.0 rosh-scene package)
+        # Supports both dict format: fog = { color: "#hex", near: 10, far: 100 }
+        # And separate properties: fog_color, fog_near, fog_far
+        fog_config = self.ir.metadata.extra.get('fog')
+        fog_color_prop = self.ir.metadata.extra.get('fog_color')
+
+        if fog_config and isinstance(fog_config, dict):
+            fog_color = fog_config.get('color', '#1a1a2e')
+            fog_near = fog_config.get('near', 10)
+            fog_far = fog_config.get('far', 100)
+        elif fog_color_prop:
+            fog_color = fog_color_prop
+            fog_near = self.ir.metadata.extra.get('fog_near', 10)
+            fog_far = self.ir.metadata.extra.get('fog_far', 100)
+        else:
+            fog_color = None
+
+        if fog_color:
+            if isinstance(fog_color, str):
+                if fog_color.startswith('#'):
+                    fog_hex = int(fog_color[1:], 16)
+                else:
+                    from ..ir import color_to_hex
+                    fog_hex = color_to_hex(fog_color)
+            else:
+                fog_hex = fog_color
+            self.write(f"scene.fog = new THREE.Fog(0x{fog_hex:06x}, {fog_near}, {fog_far});")
         self.write_blank()
 
         # Runtime configuration for REPL settings
@@ -850,11 +902,41 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("// _config.confirm: require confirmation for bulk ops >= 10 (default true)")
         self.write_blank()
 
-        # Camera
+        # Camera (v0.3.0 rosh-camera package)
         self.write_comment("Camera")
-        self.write(f"const camera = new THREE.PerspectiveCamera(50, {width} / {height}, 0.1, 1000);")
-        self.write("camera.position.set(0, 5, 50);")
-        self.write("camera.lookAt(0, 0, 0);")
+        camera_config = self.ir.metadata.extra.get('camera', {})
+        cam_fov = camera_config.get('fov', 50)
+        cam_near = camera_config.get('near', 0.1)
+        cam_far = camera_config.get('far', 1000)
+        self.write(f"const camera = new THREE.PerspectiveCamera({cam_fov}, {width} / {height}, {cam_near}, {cam_far});")
+
+        # Camera position
+        cam_pos = camera_config.get('position', '0 5 50')
+        if isinstance(cam_pos, str):
+            pos_parts = cam_pos.split()
+            if len(pos_parts) >= 3:
+                cam_x, cam_y, cam_z = float(pos_parts[0]), float(pos_parts[1]), float(pos_parts[2])
+            else:
+                cam_x, cam_y, cam_z = 0, 5, 50
+        elif isinstance(cam_pos, list) and len(cam_pos) >= 3:
+            cam_x, cam_y, cam_z = float(cam_pos[0]), float(cam_pos[1]), float(cam_pos[2])
+        else:
+            cam_x, cam_y, cam_z = 0, 5, 50
+        self.write(f"camera.position.set({cam_x}, {cam_y}, {cam_z});")
+
+        # Camera target (lookAt)
+        cam_target = camera_config.get('target', '0 0 0')
+        if isinstance(cam_target, str):
+            target_parts = cam_target.split()
+            if len(target_parts) >= 3:
+                tgt_x, tgt_y, tgt_z = float(target_parts[0]), float(target_parts[1]), float(target_parts[2])
+            else:
+                tgt_x, tgt_y, tgt_z = 0, 0, 0
+        elif isinstance(cam_target, list) and len(cam_target) >= 3:
+            tgt_x, tgt_y, tgt_z = float(cam_target[0]), float(cam_target[1]), float(cam_target[2])
+        else:
+            tgt_x, tgt_y, tgt_z = 0, 0, 0
+        self.write(f"camera.lookAt({tgt_x}, {tgt_y}, {tgt_z});")
         self.write_blank()
 
         # Renderer
@@ -862,6 +944,8 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const renderer = new THREE.WebGLRenderer({ antialias: true });")
         self.write("renderer.setSize(window.innerWidth, window.innerHeight);")
         self.write("renderer.setPixelRatio(window.devicePixelRatio);")
+        self.write("renderer.shadowMap.enabled = true;")
+        self.write("renderer.shadowMap.type = THREE.PCFSoftShadowMap;")
         self.write("document.body.appendChild(renderer.domElement);")
         self.write_blank()
 
@@ -885,11 +969,38 @@ class ThreeJSEmitter(BaseEmitter):
             self.write("}")
             self.write_blank()
 
-        # OrbitControls
-        self.write_comment("OrbitControls")
-        self.write("const controls = new THREE.OrbitControls(camera, renderer.domElement);")
-        self.write("controls.enableDamping = true;")
-        self.write("controls.dampingFactor = 0.05;")
+        # Camera Controls (v0.3.0 rosh-camera package)
+        camera_config = self.ir.metadata.extra.get('camera', {})
+        controls_type = camera_config.get('controls', 'orbit')
+
+        if controls_type == 'static':
+            self.write_comment("Static camera (no controls)")
+            self.write("const controls = null;  // Static camera")
+        else:
+            # Default to orbit controls
+            self.write_comment("OrbitControls")
+            self.write("const controls = new THREE.OrbitControls(camera, renderer.domElement);")
+            self.write("controls.enableDamping = true;")
+            self.write("controls.dampingFactor = 0.05;")
+
+            # Configurable orbit restrictions
+            enable_rotate = camera_config.get('enable_rotate', True)
+            enable_pan = camera_config.get('enable_pan', True)
+            enable_zoom = camera_config.get('enable_zoom', True)
+            if not enable_rotate:
+                self.write("controls.enableRotate = false;")
+            if not enable_pan:
+                self.write("controls.enablePan = false;")
+            if not enable_zoom:
+                self.write("controls.enableZoom = false;")
+
+            # Distance limits
+            min_distance = camera_config.get('min_distance')
+            max_distance = camera_config.get('max_distance')
+            if min_distance is not None:
+                self.write(f"controls.minDistance = {min_distance};")
+            if max_distance is not None:
+                self.write(f"controls.maxDistance = {max_distance};")
         self.write_blank()
 
         # GLTFLoader for 3D models
@@ -1122,25 +1233,61 @@ class ThreeJSEmitter(BaseEmitter):
             self.write_blank()
             return
 
-        # Get position (normalized 0-1 in IR, convert to 3D world coords)
-        x = self._get_prop_value(obj, 'x', 0.5)
-        y = self._get_prop_value(obj, 'y', 0.5)
-        z = self._get_prop_value(obj, 'z', 0)
+        # Light objects (v0.3.0 rosh-lights package)
+        if obj.type == 'light':
+            self._emit_light_object(obj)
+            return
 
-        # Convert normalized coords to 3D world
-        # Values in 0-1 range are normalized, outside that range are world coords
-        # x: 0-1 maps to roughly -8 to 8, else used directly
-        # y: 0-1 maps to roughly 8 to 0 (inverted, above ground), else used directly
-        # z: used directly as world coordinate (not normalized)
-        if 0 <= x <= 1:
-            world_x = (x - 0.5) * 16
+        # Get position with semantic coordinate conversion
+        # Priority: world_x/y/z (raw) > x/y/z with type detection
+        # Percentages: 0% = floor/left, 100% = ceiling/right
+        # Numbers without %: world coordinates (pass through)
+
+        # Default bounds (can be overridden via meta.bounds in future)
+        bounds_left = -8
+        bounds_right = 8
+        bounds_floor = 0
+        bounds_ceiling = 10
+
+        # X coordinate
+        if 'world_x' in obj.properties:
+            world_x = self._get_prop_value(obj, 'world_x', 0)
+        elif 'x' in obj.properties:
+            prop = obj.properties['x']
+            prop_type = getattr(prop, 'type', None)
+            val = self._get_prop_value(obj, 'x', 0.5)
+            if prop_type == 'percentage':
+                # IR stores percentages normalized (0-1), so 50% = 0.5
+                # 0% = left, 100% = right
+                world_x = bounds_left + val * (bounds_right - bounds_left)
+            else:
+                # Raw number = world coordinate
+                world_x = val
         else:
-            world_x = x  # World coordinate
-        if 0 <= y <= 1:
-            world_y = (0.5 - y) * 8 + 2  # Center at y=2 (above ground)
+            world_x = 0  # Default center
+
+        # Y coordinate - semantic: 0% = floor, 100% = ceiling
+        if 'world_y' in obj.properties:
+            world_y = self._get_prop_value(obj, 'world_y', 0)
+        elif 'y' in obj.properties:
+            prop = obj.properties['y']
+            prop_type = getattr(prop, 'type', None)
+            val = self._get_prop_value(obj, 'y', 0.5)
+            if prop_type == 'percentage':
+                # IR stores percentages normalized (0-1), so 50% = 0.5
+                # 0% = floor, 100% = ceiling (intuitive!)
+                world_y = bounds_floor + val * (bounds_ceiling - bounds_floor)
+            else:
+                # Raw number = world coordinate
+                world_y = val
         else:
-            world_y = y  # World coordinate
-        world_z = z  # Z is passed through directly as world coordinate
+            world_y = bounds_floor + 0.5 * (bounds_ceiling - bounds_floor)  # Default middle
+
+        # Z coordinate (depth/layering, pass through)
+        if 'world_z' in obj.properties:
+            world_z = self._get_prop_value(obj, 'world_z', 0)
+        else:
+            world_z = self._get_prop_value(obj, 'z', 0)
 
         # Get shape type - check both 'shape' and 'type' properties
         shape = 'box'
@@ -1235,6 +1382,61 @@ class ThreeJSEmitter(BaseEmitter):
 
         self.write(f"{name}.userData._rosh_kind = '{object_kind}';")
 
+        # Apply rotation (v0.3.0 semantic layer)
+        if 'rotation' in obj.properties:
+            rot_val = self.get_value(obj.properties['rotation'])
+            if isinstance(rot_val, str):
+                parts = rot_val.split()
+                if len(parts) >= 3:
+                    try:
+                        rx, ry, rz = float(parts[0]), float(parts[1]), float(parts[2])
+                        # Convert degrees to radians
+                        self.write(f"{name}.rotation.set({rx} * Math.PI / 180, {ry} * Math.PI / 180, {rz} * Math.PI / 180);")
+                    except ValueError:
+                        pass
+        elif shape == 'plane':
+            # Default: planes are horizontal (floor-like) unless rotation specified
+            self.write(f"{name}.rotation.x = -Math.PI / 2;")
+
+        # Apply scale (v0.3.0 semantic layer)
+        if 'scale' in obj.properties:
+            scale_val = self.get_value(obj.properties['scale'])
+            if isinstance(scale_val, str):
+                parts = scale_val.split()
+                if len(parts) >= 3:
+                    try:
+                        sx, sy, sz = float(parts[0]), float(parts[1]), float(parts[2])
+                        self.write(f"{name}.scale.set({sx}, {sy}, {sz});")
+                    except ValueError:
+                        pass
+                elif len(parts) == 1:
+                    try:
+                        s = float(parts[0])
+                        self.write(f"{name}.scale.set({s}, {s}, {s});")
+                    except ValueError:
+                        pass
+            elif isinstance(scale_val, (int, float)):
+                self.write(f"{name}.scale.set({scale_val}, {scale_val}, {scale_val});")
+
+        # Apply shadow properties (v0.3.0 semantic layer)
+        if 'cast_shadow' in obj.properties:
+            cast_shadow = self.get_value(obj.properties['cast_shadow'])
+            if cast_shadow:
+                self.write(f"{name}.castShadow = true;")
+        receive_shadow_prop = obj.properties.get('receive_shadow') or obj.properties.get('receive_shadows')
+        if receive_shadow_prop:
+            receive_shadow = self.get_value(receive_shadow_prop)
+            if receive_shadow:
+                self.write(f"{name}.receiveShadow = true;")
+
+        # Apply material properties (v0.3.0 semantic layer)
+        if 'metalness' in obj.properties:
+            metalness = self._get_prop_value(obj, 'metalness', 0.0)
+            self.write(f"{name}.material.metalness = {metalness};")
+        if 'roughness' in obj.properties:
+            roughness = self._get_prop_value(obj, 'roughness', 0.5)
+            self.write(f"{name}.material.roughness = {roughness};")
+
         # Store type for known object model loading at runtime
         if 'type' in obj.properties:
             type_val = self.get_value(obj.properties['type'])
@@ -1247,6 +1449,30 @@ class ThreeJSEmitter(BaseEmitter):
                 if type_val in known_objects and 'model' in known_objects[type_val]:
                     self.model_assets.add(known_objects[type_val]['model'])
 
+        # Direct model path (v0.3.0 rosh-models package)
+        if 'model' in obj.properties:
+            model_path = self.get_value(obj.properties['model'])
+            if isinstance(model_path, str):
+                self.write(f"{name}.userData._model = '{model_path}';")
+                self.write(f"{name}.userData._needsModelLoad = true;")
+                self.model_assets.add(model_path)
+
+        # Model scale properties (v0.3.0 rosh-models package)
+        if 'base_scale' in obj.properties:
+            base_scale = self.get_value(obj.properties['base_scale'])
+            self.write(f"{name}.userData._baseScale = {base_scale};")
+        if 'world_scale' in obj.properties:
+            world_scale = self.get_value(obj.properties['world_scale'])
+            self.write(f"{name}.userData._worldScale = {world_scale};")
+
+        # Model metadata (v0.3.0 rosh-models package)
+        for meta_prop in ['origin', 'source', 'credit', 'credit_url']:
+            if meta_prop in obj.properties:
+                meta_val = self.get_value(obj.properties[meta_prop])
+                if isinstance(meta_val, str):
+                    escaped = meta_val.replace("\\", "\\\\").replace("'", "\\'")
+                    self.write(f"{name}.userData.{meta_prop} = '{escaped}';")
+
         # Apply initial visible property if set to false
         if 'visible' in obj.properties:
             vis_val = self.get_value(obj.properties['visible'])
@@ -1254,7 +1480,9 @@ class ThreeJSEmitter(BaseEmitter):
                 self.write(f"{name}.visible = false;")
 
         # Custom properties in userData
-        known = {'x', 'y', 'z', 'width', 'height', 'depth', 'color', 'shape', 'radius', 'text', 'sprite', 'visible', 'saveable', 'type', 'fixed'}
+        # Include model properties (v0.3.0 rosh-models) to avoid duplication
+        known = {'x', 'y', 'z', 'width', 'height', 'depth', 'color', 'shape', 'radius', 'text', 'sprite', 'visible', 'saveable', 'type', 'fixed',
+                 'model', 'base_scale', 'world_scale', 'origin', 'source', 'credit', 'credit_url'}
         # Capability properties need special handling - stored as _name with array values
         capability_props = {'spin', 'orbit', 'bounce', 'pulse'}
         for prop_name, prop_value in obj.properties.items():
@@ -1473,6 +1701,136 @@ class ThreeJSEmitter(BaseEmitter):
         self.write(f"{name}._font = 'Inter';")
         self.write(f"scene.add({name});")
         self.write(f"{name}.userData.font_size = {font_size};")
+
+    def _emit_light_object(self, obj: IR_Object):
+        """Emit a Three.js light object (v0.3.0 rosh-lights package).
+
+        Supports light types: ambient, directional, spot, hemisphere, point
+        """
+        name = obj.name
+
+        # Get light type from properties (default: ambient)
+        light_type = 'ambient'
+        if 'type' in obj.properties:
+            type_val = obj.properties['type']
+            light_type = type_val.value if hasattr(type_val, 'value') else str(type_val)
+            light_type = light_type.lower()
+
+        # Get common properties
+        color = self._get_color(obj)
+        intensity = self._get_prop_value(obj, 'intensity', 1.0)
+
+        # Get position for positional lights
+        x = self._get_prop_value(obj, 'x', 0)
+        y = self._get_prop_value(obj, 'y', 10)
+        z = self._get_prop_value(obj, 'z', 0)
+
+        self.write_comment(f"Light: {name} ({light_type})")
+
+        if light_type == 'ambient':
+            self.write(f"const {name} = new THREE.AmbientLight(0x{color:06x}, {intensity});")
+
+        elif light_type == 'directional':
+            self.write(f"const {name} = new THREE.DirectionalLight(0x{color:06x}, {intensity});")
+            self.write(f"{name}.position.set({x:.2f}, {y:.2f}, {z:.2f});")
+
+            # Shadow configuration
+            if 'cast_shadow' in obj.properties:
+                cast_shadow = self.get_value(obj.properties['cast_shadow'])
+                if cast_shadow:
+                    self.write(f"{name}.castShadow = true;")
+                    # Shadow map size
+                    if 'shadow_map_size' in obj.properties:
+                        map_size = self.get_value(obj.properties['shadow_map_size'])
+                        if isinstance(map_size, list) and len(map_size) >= 2:
+                            self.write(f"{name}.shadow.mapSize.width = {map_size[0]};")
+                            self.write(f"{name}.shadow.mapSize.height = {map_size[1]};")
+                    else:
+                        self.write(f"{name}.shadow.mapSize.width = 1024;")
+                        self.write(f"{name}.shadow.mapSize.height = 1024;")
+
+        elif light_type == 'spot':
+            self.write(f"const {name} = new THREE.SpotLight(0x{color:06x}, {intensity});")
+            self.write(f"{name}.position.set({x:.2f}, {y:.2f}, {z:.2f});")
+
+            # Angle and penumbra
+            if 'angle' in obj.properties:
+                angle = self._get_prop_value(obj, 'angle', 45)
+                # Convert degrees to radians
+                self.write(f"{name}.angle = {angle} * Math.PI / 180;")
+            if 'penumbra' in obj.properties:
+                penumbra = self._get_prop_value(obj, 'penumbra', 0.1)
+                self.write(f"{name}.penumbra = {penumbra};")
+
+            # Target - spotlights need their target added to scene
+            if 'target' in obj.properties:
+                target_val = self.get_value(obj.properties['target'])
+                if isinstance(target_val, str):
+                    # Target is an object name - set after scene is populated
+                    self.write(f"// Spotlight target will be set to '{target_val}' object")
+                    self.write(f"{name}.userData._targetName = '{target_val}';")
+            # Default: spotlight target at origin (must be added to scene)
+            self.write(f"scene.add({name}.target);")
+
+            # Shadow configuration
+            if 'cast_shadow' in obj.properties:
+                cast_shadow = self.get_value(obj.properties['cast_shadow'])
+                if cast_shadow:
+                    self.write(f"{name}.castShadow = true;")
+                    self.write(f"{name}.shadow.mapSize.width = 1024;")
+                    self.write(f"{name}.shadow.mapSize.height = 1024;")
+                    self.write(f"{name}.shadow.camera.near = 0.5;")
+                    self.write(f"{name}.shadow.camera.far = 50;")
+
+        elif light_type == 'hemisphere':
+            # Hemisphere light has sky and ground colors
+            sky_color = color
+            ground_color = 0x444444  # Default ground color
+            if 'sky_color' in obj.properties:
+                sky_color = self._get_color_from_prop(obj, 'sky_color')
+            if 'ground_color' in obj.properties:
+                ground_color = self._get_color_from_prop(obj, 'ground_color')
+            self.write(f"const {name} = new THREE.HemisphereLight(0x{sky_color:06x}, 0x{ground_color:06x}, {intensity});")
+
+        elif light_type == 'point':
+            self.write(f"const {name} = new THREE.PointLight(0x{color:06x}, {intensity});")
+            self.write(f"{name}.position.set({x:.2f}, {y:.2f}, {z:.2f});")
+
+            # Distance and decay for point lights
+            if 'distance' in obj.properties:
+                distance = self._get_prop_value(obj, 'distance', 0)
+                self.write(f"{name}.distance = {distance};")
+            if 'decay' in obj.properties:
+                decay = self._get_prop_value(obj, 'decay', 2)
+                self.write(f"{name}.decay = {decay};")
+
+        else:
+            # Unknown light type - fall back to ambient
+            self.write(f"// Unknown light type '{light_type}', using ambient")
+            self.write(f"const {name} = new THREE.AmbientLight(0x{color:06x}, {intensity});")
+
+        # Add to scene
+        self.write(f"{name}.name = '{name}';")
+        self.write(f"scene.add({name});")
+
+        # Register for Rosh tracking
+        self.write(f"{name}.userData._rosh_kind = 'light';")
+        self.write(f"{name}.userData._lightType = '{light_type}';")
+        self.write(f"window._objects['{name}'] = {name};")
+        self.write(f"gameObjects['{name}'] = {name};")
+        self.write_blank()
+
+    def _get_color_from_prop(self, obj: IR_Object, prop_name: str) -> int:
+        """Get color value from a specific property name."""
+        if prop_name in obj.properties:
+            prop = obj.properties[prop_name]
+            val = self.get_value(prop)
+            if isinstance(val, int):
+                return val
+            elif isinstance(val, str):
+                from ..ir import color_to_hex
+                return color_to_hex(val)
+        return 0xffffff  # Default white
 
     def _emit_textured_plane(self, name: str, image: str, x: float, y: float, z: float, w: float, h: float):
         """Emit a textured plane for 2D sprites."""
@@ -2339,15 +2697,17 @@ class ThreeJSEmitter(BaseEmitter):
         self._emit_known_objects()
         self.write_blank()
 
-        # Load models for objects with known types
-        self.write("// Load 3D models for pre-placed objects with known types")
+        # Load models for objects with known types or direct model paths (v0.3.0 rosh-models)
+        self.write("// Load 3D models for pre-placed objects")
         self.write("scene.traverse(obj => {")
         self.indent()
-        self.write("if (obj.userData && obj.userData._needsModelLoad && obj.userData._type) {")
+        self.write("if (obj.userData && obj.userData._needsModelLoad) {")
         self.indent()
         self.write("const typeName = obj.userData._type;")
-        self.write("const preset = KNOWN_OBJECTS[typeName];")
-        self.write("if (preset && preset.model && _config.useModels) {")
+        self.write("const preset = typeName ? KNOWN_OBJECTS[typeName] : null;")
+        self.write("// Support direct model path (rosh-models) or known object preset")
+        self.write("const modelPath = obj.userData._model || (preset && preset.model);")
+        self.write("if (modelPath && _config.useModels) {")
         self.indent()
         self.write("const pos = obj.position.clone();")
         self.write("const size = obj.userData.size || 1;")
@@ -2358,11 +2718,14 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const objScene = obj.userData._scene;")
         self.write("const objName = obj.name;")
         self.write("const objUuid = obj.userData._rosh_uuid;")
-        self.write("gltfLoader.load(preset.model, (gltf) => {")
+        self.write("// Model scale properties (v0.3.0 rosh-models)")
+        self.write("const baseScale = obj.userData._baseScale || 1;")
+        self.write("const worldScale = obj.userData._worldScale || _config.modelScale || 2;")
+        self.write("gltfLoader.load(modelPath, (gltf) => {")
         self.indent()
         self.write("const model = gltf.scene;")
         self.write("model.name = objName;")
-        self.write("model.userData._type = typeName;")
+        self.write("if (typeName) model.userData._type = typeName;")
         self.write("model.userData._rosh_kind = 'model';")
         self.write("model.userData._rosh_uuid = objUuid;  // Copy UUID for edit mode selection")
         self.write("if (objScene) model.userData._scene = objScene;")
@@ -2375,8 +2738,9 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("const modelSize = box.getSize(new THREE.Vector3());")
         self.write("const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z);")
         self.write("const normalizeScale = 1 / maxDim;")
-        self.write("const gs = _config.modelScale || 2;")
-        self.write("model.scale.set(normalizeScale * size * gs, normalizeScale * size * gs, normalizeScale * size * gs);")
+        self.write("// Apply base scale (normalize), world scale (global), and size (per-object)")
+        self.write("const finalScale = normalizeScale * baseScale * worldScale * size;")
+        self.write("model.scale.set(finalScale, finalScale, finalScale);")
         self.write("// Center the model based on its bounding box (fixes models with offset origins)")
         self.write("const scaledBox = new THREE.Box3().setFromObject(model);")
         self.write("const center = scaledBox.getCenter(new THREE.Vector3());")
@@ -2410,8 +2774,64 @@ class ThreeJSEmitter(BaseEmitter):
         self.write("});")
         self.write_blank()
 
+        # Datasource setup (v0.3.0 rosh-data package)
+        self._emit_datasources()
+
         self.write("animate();")
         self.write_blank()
+
+    def _emit_datasources(self):
+        """Emit data fetching setup for configured datasources (v0.3.0 rosh-data package)."""
+        datasources = self.ir.metadata.extra.get('datasources', [])
+        if not datasources:
+            return
+
+        self.write_comment("Data Sources (rosh-data)")
+        for i, ds in enumerate(datasources):
+            ds_name = ds.get('name', f'datasource_{i}')
+            ds_type = ds.get('type', 'rest_api')
+            url = ds.get('url', '')
+            refresh = ds.get('refresh_interval', 0)
+            fallback = ds.get('fallback', 'sample_data')
+
+            if ds_type == 'rest_api' and url:
+                self.write(f"// Datasource: {ds_name}")
+                self.write(f"const {ds_name}_config = {{")
+                self.indent()
+                self.write(f"url: '{url}',")
+                self.write(f"refreshInterval: {refresh},")
+                self.write(f"fallback: '{fallback}',")
+                self.write(f"lastFetch: 0,")
+                self.write(f"data: null")
+                self.dedent()
+                self.write("};")
+
+                # Generate fetch function
+                self.write(f"async function fetch_{ds_name}() {{")
+                self.indent()
+                self.write("try {")
+                self.indent()
+                self.write(f"const response = await fetch({ds_name}_config.url);")
+                self.write("if (!response.ok) throw new Error('Fetch failed');")
+                self.write(f"{ds_name}_config.data = await response.json();")
+                self.write(f"{ds_name}_config.lastFetch = Date.now();")
+                self.write(f"console.log('[rosh-data] {ds_name} updated');")
+                self.dedent()
+                self.write("} catch (err) {")
+                self.indent()
+                self.write(f"console.warn('[rosh-data] {ds_name} fetch error:', err.message);")
+                self.dedent()
+                self.write("}")
+                self.dedent()
+                self.write("}")
+
+                # Auto-refresh if configured
+                if refresh > 0:
+                    self.write(f"// Auto-refresh every {refresh}ms")
+                    self.write(f"setInterval(fetch_{ds_name}, {refresh});")
+                    self.write(f"fetch_{ds_name}();  // Initial fetch")
+
+                self.write_blank()
 
     def _emit_resize_handler(self):
         """Emit window resize handler."""

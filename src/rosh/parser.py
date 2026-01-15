@@ -470,6 +470,51 @@ class Parser:
 
         type_token = self.current_token()
 
+        # Handle light creation: create light <name> [as <type>] ... end
+        if type_token.type == TokenType.LIGHT:
+            self.advance()
+            name_token = self.expect_identifier_for("light")
+            name = name_token.value
+
+            # Check for 'as <type>' syntax: create light sun as directional
+            light_type = None
+            if self.current_token().type == TokenType.AS:
+                self.advance()
+                light_type_token = self.expect_identifier_for("light type")
+                light_type = light_type_token.value.lower()
+
+            self.skip_newlines()
+
+            body = []
+
+            # If light type was specified via 'as', add it as a property
+            if light_type:
+                body.append(SetProperty(
+                    target=Identifier(name='type', line=line),
+                    value=Literal(value=light_type, type_name='string', line=line),
+                    line=line
+                ))
+
+            # Parse body statements
+            while self.current_token().type not in (TokenType.END, TokenType.EOF):
+                stmt = self.parse_statement()
+                if stmt:
+                    body.append(stmt)
+                self.skip_newlines()
+
+            self.expect(TokenType.END)
+            self.skip_newlines()
+
+            hidden = name.startswith('_')
+            # Use CreateObject with a marker that this is a light
+            return CreateObject(
+                name=name,
+                body=body,
+                parents=['light'],  # Mark as light via parent
+                hidden=hidden,
+                line=line
+            )
+
         # Handle object creation: create object <name> ... end
         if type_token.type == TokenType.OBJECT:
             self.advance()

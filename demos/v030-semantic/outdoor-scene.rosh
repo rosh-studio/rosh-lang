@@ -1,0 +1,163 @@
+# =============================================================================
+# OUTDOOR SCENE - Semantic Package Demo
+# =============================================================================
+#
+# A simple outdoor scene with sky lighting.
+# Demonstrates: hemisphere lights, shadows, multiple objects
+#
+# Target: Three.js (3D browser)
+#
+# =============================================================================
+
+meta.scene
+    background "#87CEEB"
+    fog_color "#87CEEB"
+    fog_near 20
+    fog_far 80
+end
+
+meta.camera
+    position "10 8 15"
+    target "0 0 0"
+    fov 60
+    controls "orbit"
+end
+
+# -----------------------------------------------------------------------------
+# Lighting - Outdoor style
+# -----------------------------------------------------------------------------
+
+create light sky as hemisphere
+    set color to "#87CEEB"
+    set ground_color to "#3d6b1e"
+    set intensity to 0.6
+end
+
+create light sun as directional
+    set color to "#fffaf0"
+    set intensity to 1.5
+    set x to 30
+    set y to 50
+    set z to 20
+    set cast_shadow to true
+end
+
+# Subtle ambient fill
+create light fill as ambient
+    set color to "#404050"
+    set intensity to 0.2
+end
+
+# -----------------------------------------------------------------------------
+# Ground - COMMENTED OUT: needs semantic positioning (see proposal)
+# -----------------------------------------------------------------------------
+
+# create object ground
+#     set type to "plane"
+#     set color to "#3d6b1e"
+#     set scale to 100
+#     set y to 0
+#     set receive_shadows to true
+# end
+
+# -----------------------------------------------------------------------------
+# Trees (simple cones on cylinders)
+# -----------------------------------------------------------------------------
+
+create object tree1_trunk
+    set type to "cylinder"
+    set color to "#5d4037"
+    set x to -6
+    set y to 1.5
+    set z to -4
+    set scale to 0.5
+    set cast_shadow to true
+end
+
+create object tree1_leaves
+    set type to "cone"
+    set color to "#228b22"
+    set x to -6
+    set y to 4
+    set z to -4
+    set size to 2
+    set cast_shadow to true
+end
+
+create object tree2_trunk
+    set type to "cylinder"
+    set color to "#5d4037"
+    set x to 5
+    set y to 1.5
+    set z to -6
+    set scale to 0.5
+    set cast_shadow to true
+end
+
+create object tree2_leaves
+    set type to "cone"
+    set color to "#228b22"
+    set x to 5
+    set y to 4
+    set z to -6
+    set size to 2
+    set cast_shadow to true
+end
+
+# -----------------------------------------------------------------------------
+# House (simple box with roof)
+# -----------------------------------------------------------------------------
+
+create object house_base
+    set type to "cube"
+    set color to "#deb887"
+    set x to 0
+    set y to 1.5
+    set z to 0
+    set size to 3
+    set cast_shadow to true
+end
+
+create object house_roof
+    set type to "cone"
+    set color to "#8b4513"
+    set x to 0
+    set y to 4
+    set z to 0
+    set size to 2.5
+    set cast_shadow to true
+end
+
+# -----------------------------------------------------------------------------
+# Rocks
+# -----------------------------------------------------------------------------
+
+create object rock1
+    set type to "sphere"
+    set color to "#696969"
+    set x to 8
+    set y to 0.4
+    set z to 3
+    set size to 0.8
+    set cast_shadow to true
+end
+
+create object rock2
+    set type to "sphere"
+    set color to "#778899"
+    set x to 9
+    set y to 0.3
+    set z to 2
+    set size to 0.5
+    set cast_shadow to true
+end
+
+create object rock3
+    set type to "sphere"
+    set color to "#708090"
+    set x to -8
+    set y to 0.5
+    set z to 5
+    set size to 1.0
+    set cast_shadow to true
+end

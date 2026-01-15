@@ -1,0 +1,236 @@
+# =============================================================================
+# VIRTUAL GALLERY (Enhanced) - Semantic Package Version
+# =============================================================================
+#
+# Same gallery concept but using v0.3.0 semantic packages:
+# - rosh-lights for proper 3D lighting
+# - rosh-scene for atmosphere
+# - rosh-camera for view setup
+#
+# Compare with: demos/virtual-gallery-simple/game.rosh
+#
+# Target: Three.js (3D browser)
+#
+# =============================================================================
+
+meta
+    title "Virtual Gallery - Enhanced"
+    author "Rosh"
+    version "0.3.0"
+    description "Gallery demo with semantic lighting packages"
+end
+
+# -----------------------------------------------------------------------------
+# Scene Configuration (rosh-scene)
+# -----------------------------------------------------------------------------
+
+meta.scene
+    background "#0a0a1a"
+    fog_color "#0a0a1a"
+    fog_near 20
+    fog_far 60
+end
+
+# -----------------------------------------------------------------------------
+# Camera Configuration (rosh-camera)
+# -----------------------------------------------------------------------------
+
+meta.camera
+    position "0 3 15"
+    target "0 2 0"
+    fov 60
+    controls "orbit"
+end
+
+# -----------------------------------------------------------------------------
+# Lighting Setup (rosh-lights)
+# -----------------------------------------------------------------------------
+
+# Ambient for base visibility (higher so colors show)
+create light ambient as ambient
+    set color to "#404060"
+    set intensity to 0.8
+end
+
+# Main spotlight on central sculpture
+create light main_spot as spot
+    set color to "#4488ff"
+    set intensity to 3.0
+    set x to 0
+    set y to 10
+    set z to 5
+    set angle to 30
+    set penumbra to 0.5
+    set cast_shadow to true
+end
+
+# Warm accent light from left
+create light accent_left as spot
+    set color to "#ff6644"
+    set intensity to 2.0
+    set x to -8
+    set y to 8
+    set z to 0
+    set angle to 40
+    set penumbra to 0.6
+    set cast_shadow to true
+end
+
+# Cool accent light from right
+create light accent_right as spot
+    set color to "#44ff88"
+    set intensity to 2.0
+    set x to 8
+    set y to 8
+    set z to 0
+    set angle to 40
+    set penumbra to 0.6
+    set cast_shadow to true
+end
+
+# Subtle rim light from back
+create light rim as directional
+    set color to "#ffffff"
+    set intensity to 0.5
+    set x to 0
+    set y to 5
+    set z to -10
+end
+
+# -----------------------------------------------------------------------------
+# Floor - scaled cube like the working demo
+# -----------------------------------------------------------------------------
+
+create object floor
+    set type to "cube"
+    set x to 50%
+    set y to 85%
+    set z to 0
+    set color to "#2a2a3a"
+    set scale to "20 0.1 20"
+end
+
+# -----------------------------------------------------------------------------
+# Central Sculpture - Spinning sphere on pedestal
+# -----------------------------------------------------------------------------
+
+create object pedestal
+    set type to "cylinder"
+    set x to 50%
+    set y to 75%
+    set z to 0
+    set color to "#3a3a4a"
+    set scale to "1.5 2 1.5"
+    set cast_shadow to true
+end
+
+create object sculpture
+    set type to "sphere"
+    set x to 50%
+    set y to 55%
+    set z to 0
+    set color to "#4488ff"
+    set size to 1.5
+    set spin to "0 20 0"
+    set cast_shadow to true
+    set metalness to 0.8
+    set roughness to 0.1
+end
+
+# -----------------------------------------------------------------------------
+# Orbiting Elements - use percentage coords like working demo
+# -----------------------------------------------------------------------------
+
+create object orbiter1
+    set type to "sphere"
+    set x to 70%
+    set y to 50%
+    set z to 0
+    set color to "#ff4444"
+    set size to 0.4
+    set orbit to "3 30 3"
+    set cast_shadow to true
+    set metalness to 0.9
+    set roughness to 0.1
+end
+
+create object orbiter2
+    set type to "sphere"
+    set x to 30%
+    set y to 50%
+    set z to 0
+    set color to "#44ff44"
+    set size to 0.4
+    set orbit to "3 -25 3"
+    set cast_shadow to true
+    set metalness to 0.9
+    set roughness to 0.1
+end
+
+create object orbiter3
+    set type to "torus"
+    set x to 50%
+    set y to 50%
+    set z to 3
+    set color to "#ffff44"
+    set size to 0.5
+    set orbit to "3 40 3"
+    set spin to "20 0 10"
+    set cast_shadow to true
+    set metalness to 0.7
+    set roughness to 0.2
+end
+
+# -----------------------------------------------------------------------------
+# Corner Displays - use percentage coords
+# -----------------------------------------------------------------------------
+
+create object display_left
+    set type to "cube"
+    set x to 20%
+    set y to 60%
+    set z to -4
+    set color to "#8844ff"
+    set size to 1.2
+    set spin to "0 8 0"
+    set bounce to "0.3 0.8"
+    set cast_shadow to true
+    set metalness to 0.6
+    set roughness to 0.3
+end
+
+create object display_right
+    set type to "cone"
+    set x to 80%
+    set y to 60%
+    set z to -4
+    set color to "#ff8844"
+    set size to 1.2
+    set spin to "0 -8 0"
+    set bounce to "0.3 1.0"
+    set cast_shadow to true
+    set metalness to 0.6
+    set roughness to 0.3
+end
+
+# -----------------------------------------------------------------------------
+# Title text
+# -----------------------------------------------------------------------------
+
+create object title
+    set text to "Virtual Gallery"
+    set x to 50%
+    set y to 10%
+    set z to -8
+    set color to "#ffffff"
+    set font_size to 72
+end
+
+create object subtitle
+    set text to "Enhanced with Semantic Lighting"
+    set x to 50%
+    set y to 20%
+    set z to -8
+    set color to "#888888"
+    set font_size to 24
+end

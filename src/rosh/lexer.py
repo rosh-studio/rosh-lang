@@ -96,6 +96,10 @@ class TokenType(Enum):
     WITH = auto()
     ON = auto()  # play animation on <target>
 
+    # Semantic packages (v0.3.0)
+    LIGHT = auto()  # create light <name> as <type>
+    CONFIG = auto()  # config camera/controls/network
+
     # Sound/music system
     PLAY = auto()
     SOUND = auto()
@@ -385,6 +389,8 @@ class Lexer:
             'create': TokenType.CREATE,
             'make': TokenType.CREATE,  # Alias: "make a banana" = "create a banana"
             'object': TokenType.OBJECT,
+            'light': TokenType.LIGHT,
+            'config': TokenType.CONFIG,
             'number': TokenType.NUMBER_TYPE,
             'string': TokenType.STRING_TYPE,
             'set': TokenType.SET,

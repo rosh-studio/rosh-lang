@@ -63,6 +63,20 @@
   - `get meta` → `get config`
 
 ### Added
+- **v0.3.0 Semantic Packages** - Auditable layer for AI code generation
+  - `rosh-lights`: Light creation (`create light <name> as <type>`)
+    - Supports: ambient, directional, spot, hemisphere, point
+    - Full Three.js support; 2D emitters store properties (network sync)
+  - `rosh-scene`: Scene configuration via `meta.scene`
+    - `background "#hex"` - Background color (all emitters)
+    - `fog_color`, `fog_near`, `fog_far` - Fog settings (Three.js)
+  - `rosh-camera`: Camera configuration via `meta.camera`
+    - Position, target, fov, controls (orbit/fly/static)
+  - `rosh-models`: GLB/GLTF model loading with scale/metadata
+  - `rosh-data`: REST API datasource binding (Three.js)
+  - Cross-platform: 3D features gracefully ignored in 2D emitters
+  - Properties sync via network to connected 3D clients
+
 - **Build Flags: Minify + Obfuscate (JS targets)**
   - `rosh build ... --minify` for smaller Phaser/Three.js output
   - `rosh build ... --obfuscate` for basic JS source protection

@@ -32,6 +32,21 @@ TO BRING INTO SYNC:
 5. Test with rosh.cloud World Center (WebSocket from Python)
 
 Priority: LOW - Pygame demos work for local testing
+
+v0.3.0 SEMANTIC PACKAGES - 2D/3D COMPATIBILITY
+==============================================
+The following packages are fully supported (2D equivalents):
+- rosh-scene: background color from meta.scene (used)
+
+The following packages have stubs (properties stored but not rendered):
+- rosh-lights: Light objects skipped in draw loop (3D-only)
+- rosh-camera: Camera properties stored but ignored (2D has fixed view)
+- rosh-models: GLB/GLTF models not supported (2D uses sprites)
+- rosh-data: REST datasources not yet implemented
+
+Properties from 3D-only packages are preserved in IR and sync to 3D
+clients via network. This allows Pygame/CLI to control lights, camera,
+etc. in connected Three.js worlds.
 """
 
 from typing import Dict, Any, Set, List
@@ -554,7 +569,8 @@ class PygameEmitter(BaseEmitter):
         """Emit draw method."""
         self.write("def draw(self):")
         self.indent()
-        bg_color = self.meta.get('canvas', {}).get('background', '#1a1a2e')
+        # Background color: check rosh-scene metadata first, then canvas config
+        bg_color = self.ir.metadata.extra.get('background') or self.meta.get('canvas', {}).get('background', '#1a1a2e')
         rgb = self._hex_to_rgb(bg_color)
         self.write(f"self.screen.fill({rgb})")
         self.write_blank()
@@ -564,6 +580,8 @@ class PygameEmitter(BaseEmitter):
         for obj in self.ir.objects:
             if obj.hidden:
                 continue  # Skip hidden objects (game state, not rendered)
+            if obj.type == 'light':
+                continue  # Skip light objects in 2D (v0.3.0 rosh-lights: 3D-only rendering)
             if 'target' in obj.properties:
                 continue  # Skip HUD objects here
 
