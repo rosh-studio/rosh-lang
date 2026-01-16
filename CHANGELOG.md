@@ -6,6 +6,38 @@
 
 ---
 
+## [0.3.0] - 2026-01-16 - Semantic Layer & Portal Auth
+
+### Added
+- **GitHub OAuth Authentication**
+  - Sign in with GitHub on rosh.cloud
+  - Links to existing accounts by email
+  - Handles GitHub users without verified email
+  - HTTPS redirect_uri enforcement in production
+
+- **Username System**
+  - All users can set a username (3-20 chars, letters/numbers/underscores)
+  - Usernames displayed in shared world logs instead of random IDs
+  - GitHub handles transformed to valid usernames (hyphens → underscores)
+  - `rosh-network.js` tracks and displays user display names
+
+- **Rate Limiting**
+  - Account-based login rate limiting (10 attempts per hour)
+  - 1-hour lockout after too many failed attempts
+  - Automatic reset on successful login
+
+- **Portal Documentation**
+  - Language Basics guide: hello world, variables, property syntax
+  - Three equivalent property notations: `set ball color to red` = `set ball.color to red` = `set ball.color = red`
+  - Project structure with `main.rosh` auto-run
+  - Import and data storage features
+
+### Fixed
+- **OAuth transaction handling** - Added `db_rollback()` to prevent "transaction aborted" errors
+- **Existing email linking** - OAuth now links GitHub to existing accounts instead of failing
+
+---
+
 ## [0.2.11] - 2026-01-10 - Scene Polish & Fuzzy Matching
 
 ### Added
