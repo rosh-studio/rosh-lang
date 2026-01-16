@@ -24,10 +24,14 @@ const RoshNetwork = (function() {
   // Module state
   let socket = null;
   let userId = null;
+  let displayName = null;  // User's display name (username if logged in)
   let worldId = null;
   let serverUrl = DEFAULT_SERVER;
   let adapter = null;
   let log = console.log;
+
+  // Map of user_id -> display_name for all users in world
+  const userDisplayNames = new Map();
 
   // Pending requests (for tracking)
   const pendingRequests = new Map();  // request_id -> { type, id, data, callback }
@@ -37,6 +41,13 @@ const RoshNetwork = (function() {
    */
   function generateRequestId() {
     return 'req_' + Math.random().toString(36).substr(2, 9);
+  }
+
+  /**
+   * Get display name for a user_id (falls back to truncated user_id)
+   */
+  function getDisplayName(uid) {
+    return userDisplayNames.get(uid) || uid.slice(0, 6);
   }
 
   /**
@@ -63,7 +74,8 @@ const RoshNetwork = (function() {
     return {
       connected: isConnected(),
       worldId: worldId,
-      userId: userId
+      userId: userId,
+      displayName: displayName
     };
   }
 
@@ -100,8 +112,10 @@ const RoshNetwork = (function() {
         log('Disconnected from shared world', 'warn');
         socket = null;
         userId = null;
+        displayName = null;
         worldId = null;
         pendingRequests.clear();
+        userDisplayNames.clear();
       };
 
       socket.onmessage = (event) => {
@@ -323,10 +337,20 @@ const RoshNetwork = (function() {
     switch (msg.type) {
       case 'CONNECTED':
         userId = msg.user_id;
+        displayName = msg.display_name || msg.user_id;
+        userDisplayNames.set(userId, displayName);
+        // Also store any other users already in the world
+        if (msg.state && msg.state.users) {
+          for (const [uid, userData] of Object.entries(msg.state.users)) {
+            if (userData.display_name) {
+              userDisplayNames.set(uid, userData.display_name);
+            }
+          }
+        }
         const connServerDisplay = serverUrl.includes('localhost') ? 'localhost' :
                                   serverUrl.includes('rosh.cloud') ? 'rosh.cloud' :
                                   serverUrl.replace(/^wss?:\/\//, '').split('/')[0];
-        log('Connected to ' + worldId + ' on ' + connServerDisplay + ' as user ' + msg.user_id, 'ok');
+        log('Connected to ' + worldId + ' on ' + connServerDisplay + ' as ' + displayName, 'ok');
         log('Objects you create will be shared with others!', 'cyan');
         break;
 
@@ -350,9 +374,9 @@ const RoshNetwork = (function() {
           } else {
             const rawCmd = data.cmd;
             if (rawCmd) {
-              log('[' + msg.by.slice(0,6) + '] ' + rawCmd + ' → ' + msg.id, 'cyan');
+              log('[' + getDisplayName(msg.by) + '] ' + rawCmd + ' → ' + msg.id, 'cyan');
             } else {
-              log('[' + msg.by.slice(0,6) + '] created ' + msg.id, 'cyan');
+              log('[' + getDisplayName(msg.by) + '] created ' + msg.id, 'cyan');
             }
           }
 
@@ -375,7 +399,7 @@ const RoshNetwork = (function() {
           pendingRequests.delete(msg.request_id);
 
           if (!isOwnRequest) {
-            log('[' + msg.by.slice(0,6) + '] moved ' + msg.id, 'dim');
+            log('[' + getDisplayName(msg.by) + '] moved ' + msg.id, 'dim');
           }
 
           if (adapter.moveObject) {
@@ -393,7 +417,7 @@ const RoshNetwork = (function() {
 
           if (!isOwnRequest) {
             for (const [prop, val] of Object.entries(changes)) {
-              log('[' + msg.by.slice(0,6) + '] set ' + msg.id + ' ' + prop + ' to ' + val, 'dim');
+              log('[' + getDisplayName(msg.by) + '] set ' + msg.id + ' ' + prop + ' to ' + val, 'dim');
             }
           }
 
@@ -416,7 +440,7 @@ const RoshNetwork = (function() {
           if (isOwnRequest) {
             log('Deleted ' + msg.id, 'ok');
           } else {
-            log('[' + msg.by.slice(0,6) + '] deleted ' + msg.id, 'cyan');
+            log('[' + getDisplayName(msg.by) + '] deleted ' + msg.id, 'cyan');
           }
 
           if (adapter.deleteObject) {
@@ -459,11 +483,11 @@ const RoshNetwork = (function() {
 
           const rawCmd = data.cmd;
           if (rawCmd) {
-            log('[' + msg.by.slice(0,6) + '] ' + rawCmd + ' → ' + msg.id, 'cyan');
+            log('[' + getDisplayName(msg.by) + '] ' + rawCmd + ' → ' + msg.id, 'cyan');
           } else {
             const sizeWord = data.size ? data.size + ' ' : '';
             const colorWord = data.color ? data.color + ' ' : '';
-            log('[' + msg.by.slice(0,6) + '] create ' + msg.id + ' (' + sizeWord + colorWord + objType + ')', 'cyan');
+            log('[' + getDisplayName(msg.by) + '] create ' + msg.id + ' (' + sizeWord + colorWord + objType + ')', 'cyan');
           }
 
           if (adapter.createObject) {
@@ -480,7 +504,7 @@ const RoshNetwork = (function() {
 
       case 'OBJECT_DELETED':
         if (msg.by !== userId) {
-          log('[' + msg.by.slice(0,6) + '] sent: delete ' + msg.id, 'cyan');
+          log('[' + getDisplayName(msg.by) + '] sent: delete ' + msg.id, 'cyan');
           if (adapter.deleteObject) {
             adapter.deleteObject(msg.id);
           }
@@ -489,7 +513,7 @@ const RoshNetwork = (function() {
 
       case 'OBJECT_MOVED':
         if (msg.by !== userId) {
-          log('[' + msg.by.slice(0,6) + '] sent: move ' + msg.id + ' to (' + msg.x + ', ' + msg.y + ')', 'dim');
+          log('[' + getDisplayName(msg.by) + '] sent: move ' + msg.id + ' to (' + msg.x + ', ' + msg.y + ')', 'dim');
           if (adapter.moveObject) {
             adapter.moveObject(msg.id, { x: msg.x, y: msg.y, z: msg.z });
           }
@@ -504,18 +528,18 @@ const RoshNetwork = (function() {
             if (adapter.toggleSpotlight) {
               if ('visible' in changes) {
                 adapter.toggleSpotlight(changes.visible);
-                log('[' + msg.by.slice(0,6) + '] spotlight ' + (changes.visible ? 'on' : 'off'), 'dim');
+                log('[' + getDisplayName(msg.by) + '] spotlight ' + (changes.visible ? 'on' : 'off'), 'dim');
               }
               if ('target' in changes) {
                 adapter.toggleSpotlight(true, changes.target);
-                log('[' + msg.by.slice(0,6) + '] spotlight targeting ' + changes.target, 'dim');
+                log('[' + getDisplayName(msg.by) + '] spotlight targeting ' + changes.target, 'dim');
               }
             }
             break;
           }
           const changes = msg.changes || {};
           for (const [prop, val] of Object.entries(changes)) {
-            log('[' + msg.by.slice(0,6) + '] sent: set ' + msg.id + ' ' + prop + ' to ' + val, 'dim');
+            log('[' + getDisplayName(msg.by) + '] sent: set ' + msg.id + ' ' + prop + ' to ' + val, 'dim');
             if (adapter.applyCapability && ['pulse', 'spin', 'bounce'].includes(prop)) {
               adapter.applyCapability(msg.id, prop, val);
             } else if (adapter.setProperty) {
@@ -526,7 +550,7 @@ const RoshNetwork = (function() {
         break;
 
       case 'CHAT':
-        log('[' + msg.by + ']: ' + msg.message, 'cyan');
+        log('[' + getDisplayName(msg.by) + ']: ' + msg.message, 'cyan');
         break;
 
       case 'WORLD_STATE':
@@ -562,11 +586,15 @@ const RoshNetwork = (function() {
         break;
 
       case 'USER_JOINED':
-        log('[' + msg.user_id + '] joined (' + msg.user_count + ' users)', 'cyan');
+        if (msg.display_name) {
+          userDisplayNames.set(msg.user_id, msg.display_name);
+        }
+        log('[' + getDisplayName(msg.user_id) + '] joined (' + msg.user_count + ' users)', 'cyan');
         break;
 
       case 'USER_LEFT':
-        log('[' + msg.user_id + '] left (' + msg.user_count + ' users)', 'dim');
+        log('[' + getDisplayName(msg.user_id) + '] left (' + msg.user_count + ' users)', 'dim');
+        userDisplayNames.delete(msg.user_id);
         break;
 
       case 'COMMAND':
