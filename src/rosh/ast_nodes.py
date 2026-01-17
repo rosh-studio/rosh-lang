@@ -2,7 +2,7 @@
 AST node definitions for Rosh
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, List, Optional
 
 
@@ -280,27 +280,30 @@ class Load(ASTNode):
 
 @dataclass
 class LoadSettings(ASTNode):
-    """load "settings.json" - Load settings file at build time
+    """load "settings.json" or load "config.toml" - Load settings at build time
 
-    Build-time loading of JSON settings files. Creates objects from JSON
-    structure. Path must be relative to project root (no .. escapes).
+    Build-time loading of JSON or TOML settings files.
 
-    JSON structure maps to objects:
-    {
-        "_config": { "title": "Game" },
-        "player": { "x": 400, "y": 300 }
-    }
+    Two modes:
+    1. load "file.toml" - Creates objects from each top-level section
+    2. load "file.toml" as config - Stores entire data as named constant
 
-    Becomes equivalent to:
-        create _config
-            set title to "Game"
-        end
-        create player
-            set x to 400
-            set y to 300
-        end
+    Mode 1 (create objects):
+        [player]
+        x = 400
+        y = 300
+
+        Becomes: create player; set x to 400; set y to 300; end
+
+    Mode 2 (named constant):
+        load "gallery.toml" as gallery_config
+
+        Access via: gallery_config.artifacts[0].name
+
+    Path must be relative to project root (no .. escapes).
     """
-    filepath: str  # Relative path to JSON file
+    filepath: str  # Relative path to JSON/TOML file
+    alias: Optional[str] = None  # If set, store data as this named constant
     line: int = 0
 
 
@@ -776,3 +779,23 @@ class Metadata(ASTNode):
     def __post_init__(self):
         if self.fields is None:
             self.fields = {}
+
+
+@dataclass
+class ConfigBlock(ASTNode):
+    """config <target> ... end - Configuration block for camera, network, etc.
+
+    Targets:
+        - 'camera': Camera position, fov, near, far, target
+        - 'network': WebSocket server, protocol, default world
+
+    Example:
+        config camera
+            set position to "0 2 10"
+            set target to "0 1 0"
+            set fov to 50
+        end
+    """
+    target: str  # 'camera', 'network', etc.
+    body: List[ASTNode] = field(default_factory=list)
+    line: int = 0

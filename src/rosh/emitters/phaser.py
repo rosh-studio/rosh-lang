@@ -279,6 +279,7 @@ class PhaserEmitter(BaseEmitter):
     def emit(self) -> str:
         """Generate complete Phaser 3 JavaScript code."""
         self._emit_header()
+        self._emit_constants()  # Emit load "x.toml" as name constants
         self._emit_class_start()
         self._emit_constructor()
 
@@ -306,6 +307,18 @@ class PhaserEmitter(BaseEmitter):
         """Emit file header comment."""
         self.write_comment("Auto-generated from Rosh IR")
         self.write_comment("Emitter: Phaser 3 v0.2.0")
+        self.write_blank()
+
+    def _emit_constants(self):
+        """Emit constants from 'load "file.toml" as name' statements."""
+        if not self.ir.constants:
+            return
+
+        self.write_comment("Data Constants (loaded at build time)")
+        import json
+        for name, data in self.ir.constants.items():
+            json_str = json.dumps(data, indent=2)
+            self.write(f"const {name} = {json_str};")
         self.write_blank()
 
     def _emit_class_start(self):

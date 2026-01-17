@@ -329,6 +329,7 @@ class ThreeJSEmitter(BaseEmitter):
             return self._emit_arcade_mode()
 
         self._emit_header()
+        self._emit_constants()  # Emit load "x.toml" as name constants
         self._emit_scene_setup()
         self._emit_objects()
         self._emit_init_actions()  # Emit top-level set statements
@@ -1306,10 +1307,58 @@ class ThreeJSEmitter(BaseEmitter):
             if type_val in known_objects and 'shape' in known_objects[type_val]:
                 shape = known_objects[type_val]['shape']
 
-        # Get size
-        width = self._get_prop_value(obj, 'width', 0.05) * 16
-        height = self._get_prop_value(obj, 'height', 0.05) * 16
-        depth = self._get_prop_value(obj, 'depth', 0.05) * 16
+        # Parse position from "x y z" string if provided
+        if 'position' in obj.properties:
+            pos_val = obj.properties['position']
+            pos_str = pos_val.value if hasattr(pos_val, 'value') else str(pos_val)
+            try:
+                parts = pos_str.split()
+                if len(parts) >= 3:
+                    world_x, world_y, world_z = float(parts[0]), float(parts[1]), float(parts[2])
+                elif len(parts) == 2:
+                    world_x, world_y = float(parts[0]), float(parts[1])
+            except (ValueError, AttributeError):
+                pass  # Keep original values
+
+        # Parse rotation from "x y z" string (in degrees)
+        rotation_x, rotation_y, rotation_z = 0, 0, 0
+        if 'rotation' in obj.properties:
+            rot_val = obj.properties['rotation']
+            rot_str = rot_val.value if hasattr(rot_val, 'value') else str(rot_val)
+            try:
+                parts = str(rot_str).split()
+                if len(parts) >= 3:
+                    rotation_x = float(parts[0]) * 3.14159 / 180
+                    rotation_y = float(parts[1]) * 3.14159 / 180
+                    rotation_z = float(parts[2]) * 3.14159 / 180
+                elif len(parts) == 1:
+                    rotation_y = float(parts[0]) * 3.14159 / 180
+            except (ValueError, AttributeError):
+                pass
+
+        # Get size - check scale property first (as "w h" or "w h d" string)
+        width = 1.0
+        height = 1.0
+        depth = 1.0
+        if 'scale' in obj.properties:
+            scale_val = obj.properties['scale']
+            scale_str = scale_val.value if hasattr(scale_val, 'value') else str(scale_val)
+            try:
+                parts = str(scale_str).split()
+                if len(parts) >= 3:
+                    width, height, depth = float(parts[0]), float(parts[1]), float(parts[2])
+                elif len(parts) == 2:
+                    width, height = float(parts[0]), float(parts[1])
+                    depth = min(width, height)  # Default depth
+                elif len(parts) == 1:
+                    width = height = depth = float(parts[0])
+            except (ValueError, AttributeError):
+                pass
+        else:
+            # Fall back to individual width/height/depth properties
+            width = self._get_prop_value(obj, 'width', 0.05) * 16
+            height = self._get_prop_value(obj, 'height', 0.05) * 16
+            depth = self._get_prop_value(obj, 'depth', 0.05) * 16
         radius = self._get_prop_value(obj, 'radius', 0.5)
 
         # Get color
@@ -1540,6 +1589,18 @@ class ThreeJSEmitter(BaseEmitter):
             self.write(f"{name}.userData.fixed = true;  // Scene objects fixed by default")
         self.write_blank()
         self.color_index += 1
+
+    def _emit_constants(self):
+        """Emit constants from 'load "file.toml" as name' statements."""
+        if not self.ir.constants:
+            return
+
+        self.write_comment("Data Constants (loaded at build time)")
+        for name, data in self.ir.constants.items():
+            # Serialize as JSON - works for both JSON and TOML source data
+            json_str = json.dumps(data, indent=2)
+            self.write(f"const {name} = {json_str};")
+        self.write_blank()
 
     def _emit_init_actions(self):
         """Emit initialization actions (top-level set statements like set _config.phase to 1)."""

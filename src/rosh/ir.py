@@ -293,6 +293,7 @@ class IR_Program:
     init_actions: List[Any] = field(default_factory=list)  # Top-level statements
     metadata: IR_Metadata = field(default_factory=IR_Metadata)
     array_pools: Dict[str, List[str]] = field(default_factory=dict)  # array_name -> [obj_names]
+    constants: Dict[str, Any] = field(default_factory=dict)  # name -> data (from load "x.toml" as name)
 
     def get_object_by_name(self, name: str) -> Optional[IR_Object]:
         """Find object by name (case-insensitive)."""

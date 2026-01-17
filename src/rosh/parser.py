@@ -341,6 +341,8 @@ class Parser:
             return self.parse_play()
         elif token.type == TokenType.META:
             return self.parse_meta()
+        elif token.type == TokenType.CONFIG:
+            return self.parse_config()
         elif token.type == TokenType.DEFINE:
             return self.parse_define()
         elif token.type == TokenType.RETURN:
@@ -1537,17 +1539,27 @@ class Parser:
                 self.advance()
             return LoadGame(slot=slot, line=line)
 
-        # Check for JSON settings file (build-time loading)
+        # Check for JSON/TOML settings file (build-time loading)
         if self.current_token().type == TokenType.STRING:
             filepath = self.current_token().value
-            if filepath.endswith('.json'):
+            if filepath.endswith('.json') or filepath.endswith('.toml'):
                 # Validate path security - no directory escapes
                 if '..' in filepath:
                     self.error(f"Path cannot contain '..': {filepath}")
                 if filepath.startswith('/'):
                     self.error(f"Path must be relative, not absolute: {filepath}")
                 self.advance()
-                return LoadSettings(filepath=filepath, line=line)
+
+                # Check for 'as <alias>' to store as named constant
+                alias = None
+                if self.current_token().type == TokenType.AS:
+                    self.advance()  # consume 'as'
+                    if self.current_token().type != TokenType.IDENTIFIER:
+                        self.error("Expected identifier after 'as'")
+                    alias = self.current_token().value
+                    self.advance()
+
+                return LoadSettings(filepath=filepath, alias=alias, line=line)
 
         # Original file-based load - filepath is now optional
         filepath_expr = None
@@ -2121,6 +2133,55 @@ class Parser:
         return Metadata(
             scope=scope,
             fields=fields,
+            line=line
+        )
+
+    def parse_config(self):
+        """Parse: config <target> ... end
+
+        Examples:
+            config camera
+                set position to "0 2 10"
+                set target to "0 1 0"
+                set fov to 50
+            end
+
+            config network
+                set server to "wss://rosh.io/ws"
+                set protocol to "rosh-v1"
+            end
+        """
+        from .ast_nodes import ConfigBlock
+        line = self.current_token().line
+        self.expect(TokenType.CONFIG)
+
+        # Get the target (camera, network, etc.)
+        target_token = self.expect_identifier_for("config target")
+        target = target_token.value
+
+        self.skip_newlines()
+
+        # Parse body (set statements) until 'end'
+        body = []
+        while self.current_token().type not in (TokenType.END, TokenType.EOF):
+            # Skip newlines between statements
+            if self.current_token().type == TokenType.NEWLINE:
+                self.advance()
+                continue
+
+            # Parse statement (usually set statements)
+            stmt = self.parse_statement()
+            if stmt:
+                body.append(stmt)
+
+            self.skip_newlines()
+
+        self.expect(TokenType.END)
+        self.skip_newlines()
+
+        return ConfigBlock(
+            target=target,
+            body=body,
             line=line
         )
 

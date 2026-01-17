@@ -27,7 +27,8 @@ from .ast_nodes import (
     CloneObject, DeleteObject, ActivateObject, DeactivateObject, SpawnAt, MoveDirection,
     Increment, Decrement, Random, Length,
     ListLiteral, ListIndex, Append, Remove, Get, GotoScene, SaveGame, LoadGame,
-    Metadata, PlayAnimation, StopAnimation, SetGrid, SetAnimations, SetAnimationFrames
+    Metadata, PlayAnimation, StopAnimation, SetGrid, SetAnimations, SetAnimationFrames,
+    ConfigBlock
 )
 from .ir import (
     IR_Program, IR_Object, IR_Event, IR_Action, IR_Function,
@@ -140,6 +141,32 @@ class IRTransformer:
                     # Datasource configuration (v0.3.0 rosh-data package)
                     # Store for later processing after extra_meta is created
                     pass  # Handled in second pass below
+            elif isinstance(stmt, ConfigBlock):
+                # config camera/network/etc blocks
+                config_data = {}
+                for body_stmt in stmt.body:
+                    if isinstance(body_stmt, SetProperty):
+                        # Extract key from target (Identifier), value from expression
+                        if isinstance(body_stmt.target, Identifier):
+                            key = body_stmt.target.name
+                            value_expr = body_stmt.value
+                            if isinstance(value_expr, Literal):
+                                config_data[key] = value_expr.value
+                            elif isinstance(value_expr, Identifier):
+                                config_data[key] = value_expr.name
+                            elif isinstance(value_expr, ListLiteral):
+                                config_data[key] = [
+                                    e.value if isinstance(e, Literal) else str(e)
+                                    for e in value_expr.elements
+                                ]
+                # Route to appropriate config dict
+                if stmt.target == 'camera':
+                    camera_meta.update(config_data)
+                elif stmt.target == 'scene':
+                    scene_meta.update(config_data)
+                elif stmt.target == 'network':
+                    # Network config goes to extra_meta later
+                    ast_meta['network'] = config_data
 
         # Merge AST metadata with config meta (AST takes precedence)
         merged_meta = {**self.meta, **ast_meta}
@@ -204,11 +231,16 @@ class IRTransformer:
                     ir_program.objects.append(ir_obj)
                     self.objects[ir_obj.name] = ir_obj
             elif isinstance(stmt, LoadSettings):
-                # Load JSON settings file and create objects from it
-                loaded_objects = self.load_settings_file(stmt.filepath)
-                for ir_obj in loaded_objects:
-                    ir_program.objects.append(ir_obj)
-                    self.objects[ir_obj.name] = ir_obj
+                if stmt.alias:
+                    # load "file.toml" as name - store as named constant
+                    data = self.load_data_file(stmt.filepath)
+                    ir_program.constants[stmt.alias] = data
+                else:
+                    # load "file.json" - create objects from each section
+                    loaded_objects = self.load_settings_file(stmt.filepath)
+                    for ir_obj in loaded_objects:
+                        ir_program.objects.append(ir_obj)
+                        self.objects[ir_obj.name] = ir_obj
 
         # Second pass: collect events and functions
         for stmt in program.statements:
@@ -242,30 +274,66 @@ class IRTransformer:
     # =========================================================================
 
     def load_settings_file(self, filepath: str) -> List[IR_Object]:
-        """Load a JSON settings file and create IR_Objects from it.
+        """Load a JSON or TOML settings file and create IR_Objects from it.
 
         Args:
-            filepath: Relative path to JSON file (from project root)
+            filepath: Relative path to JSON/TOML file (from project root)
 
         Returns:
-            List of IR_Object created from JSON structure
+            List of IR_Object created from file structure
 
-        JSON structure maps to objects:
+        Structure maps to objects:
             {
                 "_meta": {"title": "Game Name"},  # Hidden (underscore prefix)
                 "player": {"x": 400, "color": "green"},  # Visible object
                 "_config": {"speed": 5}  # Hidden config object
             }
+
+        For TOML, [section] becomes object name, [[array]] becomes list.
         """
         full_path = os.path.join(self.project_root, filepath)
 
         if not os.path.exists(full_path):
             raise FileNotFoundError(f"Settings file not found: {filepath}")
 
-        with open(full_path, 'r') as f:
-            data = json.load(f)
+        if filepath.endswith('.toml'):
+            data = self._load_toml(full_path)
+        else:
+            with open(full_path, 'r') as f:
+                data = json.load(f)
 
         return self.json_to_objects(data)
+
+    def _load_toml(self, full_path: str) -> dict:
+        """Load a TOML file, using tomllib (3.11+) or tomli fallback."""
+        try:
+            import tomllib
+        except ImportError:
+            try:
+                import tomli as tomllib
+            except ImportError:
+                raise ImportError(
+                    "TOML support requires Python 3.11+ or 'pip install tomli'"
+                )
+
+        with open(full_path, 'rb') as f:
+            return tomllib.load(f)
+
+    def load_data_file(self, filepath: str) -> Any:
+        """Load a JSON or TOML file and return raw data.
+
+        Used by 'load "file.toml" as name' to store entire data structure.
+        """
+        full_path = os.path.join(self.project_root, filepath)
+
+        if not os.path.exists(full_path):
+            raise FileNotFoundError(f"Data file not found: {filepath}")
+
+        if filepath.endswith('.toml'):
+            return self._load_toml(full_path)
+        else:
+            with open(full_path, 'r') as f:
+                return json.load(f)
 
     def json_to_objects(self, data: dict) -> List[IR_Object]:
         """Convert JSON dictionary to list of IR_Objects.
