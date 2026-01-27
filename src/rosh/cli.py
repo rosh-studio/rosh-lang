@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Rosh CLI - Command-line interface for running Rosh programs
 
@@ -4345,7 +4346,7 @@ def main():
 
     # Check if using subcommand (peek at args)
     import sys
-    using_subcommand = len(sys.argv) > 1 and sys.argv[1] in ('build', 'test', 'serve')
+    using_subcommand = len(sys.argv) > 1 and sys.argv[1] in ('build', 'test', 'serve', 'local')
 
     if using_subcommand:
         # Add subparsers for commands
@@ -4386,6 +4387,13 @@ def main():
                                   help='WebSocket port (default: 8765)')
         serve_parser.add_argument('--host', default='0.0.0.0',
                                   help='Host address (default: 0.0.0.0)')
+
+        # Local subcommand - quick local server with auto port-kill
+        local_parser = subparsers.add_parser('local', help='Start local server (kills existing, easy connect)')
+        local_parser.add_argument('port', type=int, nargs='?', default=5001,
+                                  help='Port number (default: 5001)')
+        local_parser.add_argument('--host', default='localhost',
+                                  help='Host address (default: localhost)')
 
         # Note: Project Twin is now integrated into the REPL via 'connect <world>' command
     else:
@@ -4504,6 +4512,88 @@ def main():
     if hasattr(args, 'subcommand') and args.subcommand == 'serve':
         from rosh.serve import run_server
         sys.exit(run_server(port=args.port, host=args.host))
+        return
+
+    # Handle local subcommand - run full portal locally
+    if hasattr(args, 'subcommand') and args.subcommand == 'local':
+        import subprocess
+        import platform
+
+        port = args.port
+
+        # Find rosh-portal directory (relative to rosh-lang)
+        rosh_lang_dir = Path(__file__).parent.parent.parent.parent  # src/rosh/cli.py -> rosh-lang
+        portal_dir = rosh_lang_dir.parent / "rosh-portal"
+
+        if not portal_dir.exists():
+            # Try common locations
+            for candidate in [
+                Path.home() / "dev" / "rosh" / "rosh-portal",
+                Path.cwd().parent / "rosh-portal",
+                Path.cwd() / "rosh-portal",
+            ]:
+                if candidate.exists():
+                    portal_dir = candidate
+                    break
+
+        if not portal_dir.exists():
+            print(f"Error: Could not find rosh-portal directory")
+            print(f"Looked in: {portal_dir}")
+            sys.exit(1)
+
+        # Kill any existing process on the port
+        print(f"Checking port {port}...")
+        try:
+            if platform.system() == "Darwin" or platform.system() == "Linux":
+                result = subprocess.run(
+                    ["lsof", "-ti", f":{port}"],
+                    capture_output=True,
+                    text=True
+                )
+                if result.stdout.strip():
+                    pids = result.stdout.strip().split('\n')
+                    for pid in pids:
+                        if pid:
+                            subprocess.run(["kill", "-9", pid], capture_output=True)
+                            print(f"  Killed existing process (PID {pid})")
+        except Exception:
+            pass
+
+        print(f"""
+===============================================================
+  ROSH LOCAL PORTAL
+  http://localhost:{port}
+===============================================================
+
+  Featured demos:
+    http://localhost:{port}/demos/rosh-world/
+    http://localhost:{port}/demos/scottish-museum/
+    http://localhost:{port}/demos/rosh-airspace/
+
+  Demo list (requires login):
+    http://localhost:{port}/demos
+
+  WebSocket: ws://localhost:{port}/ws/world/<name>
+
+  Press Ctrl+C to stop
+===============================================================
+""")
+
+        # Run uvicorn with the portal
+        try:
+            subprocess.run(
+                ["uv", "run", "uvicorn", "main:app",
+                 "--host", "127.0.0.1",
+                 "--port", str(port),
+                 "--reload"],
+                cwd=portal_dir
+            )
+        except FileNotFoundError:
+            print("Error: 'uv' not found. Install with: curl -LsSf https://astral.sh/uv/install.sh | sh")
+            print(f"Or run manually: cd {portal_dir} && uvicorn main:app --port {port} --reload")
+            sys.exit(1)
+        except KeyboardInterrupt:
+            print("\nServer stopped")
         return
 
     if args.command:
