@@ -431,6 +431,8 @@ if (typeof Rosh3DRuntime !== 'undefined') {
                     this.cmdMove(cmd, parts.slice(1));
                 } else if (parts[0] === 'clone' || parts[0] === 'copy' || parts[0] === 'duplicate') {
                     this.cmdClone(parts.slice(1).join(' '));
+                } else if (parts[0] === 'prompt' || parts[0] === 'ai') {
+                    this.cmdPrompt(cmd.substring(cmd.indexOf(' ') + 1));
                 } else {
                     this.log('Unknown command: ' + parts[0] + ". Type 'help' for commands.", 'err');
                 }
@@ -456,6 +458,7 @@ if (typeof Rosh3DRuntime !== 'undefined') {
                 this.log('  undo [N]            - Undo last N changes');
                 this.log('  redo [N]            - Redo last N undos');
                 this.log('  :repeat             - Repeat last command');
+                this.log('  prompt <text>       - AI-powered creation');
                 this.log('  credits             - Show credits');
                 this.log("Type 'help <cmd>' for details", 'dim');
             } else {
@@ -876,6 +879,192 @@ if (typeof Rosh3DRuntime !== 'undefined') {
             }
         }
 
+        // =====================================================================
+        // AI PROMPT COMMAND
+        // =====================================================================
+        // Sends natural language to server, receives Rosh code, executes it
+        // This is the "AI proposes, Rosh validates, humans approve" pattern
+
+        async cmdPrompt(promptText) {
+            // Check if prompt is empty or too short
+            if (!promptText || !promptText.trim()) {
+                this.log('Usage: prompt <describe what you want>', 'cyan');
+                this.log('Examples:', 'dim');
+                this.log('  prompt create a big blue ball', 'dim');
+                this.log('  prompt add a red cube to the left', 'dim');
+                this.log('  prompt make the scene darker', 'dim');
+                return;
+            }
+
+            const words = promptText.trim().split(/\s+/);
+            if (words.length < 2) {
+                this.log('Please describe what you want to create or change.', 'err');
+                this.log('Example: prompt create a blue sphere', 'dim');
+                return;
+            }
+
+            // Show thinking indicator
+            this.log('Thinking...', 'dim');
+            const thinkingDiv = this.outputDiv.lastChild;
+
+            try {
+                // Minimal context - avoid adapter methods that might not exist
+                let context = { objectCount: 0 };
+                try {
+                    if (this.adapter && typeof this.adapter.getObjectNames === 'function') {
+                        const names = this.adapter.getObjectNames();
+                        context.objectCount = names.length;
+                        context.existingObjects = names.slice(0, 10);
+                    }
+                } catch (ctxErr) {
+                    // Context gathering failed - continue without it
+                }
+
+                // Call the AI endpoint
+                const response = await fetch('/api/ai/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: promptText,
+                        context: context
+                    })
+                });
+
+                // Remove thinking indicator
+                if (thinkingDiv && thinkingDiv.textContent === 'Thinking...') {
+                    thinkingDiv.remove();
+                }
+
+                if (!response.ok) {
+                    let errorMsg = 'Server returned ' + response.status;
+                    try {
+                        const error = await response.json();
+                        errorMsg = error.error || JSON.stringify(error);
+                    } catch (e) {
+                        errorMsg = await response.text() || errorMsg;
+                    }
+                    this.log('AI error: ' + errorMsg, 'err');
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (!data.code) {
+                    // Show the actual error from the server
+                    this.log(data.error || 'AI returned empty response', 'err');
+                    return;
+                }
+
+                // Check if response looks like Rosh code
+                const code = data.code;
+                const looksLikeCode = code.includes('create ') ||
+                                      code.includes('set ') ||
+                                      code.includes('delete ') ||
+                                      code.includes('move ');
+
+                if (!looksLikeCode) {
+                    // Just a text response - display it
+                    this.log(code, 'ok');
+                    return;
+                }
+
+                // Show the generated code
+                this.log('AI generated:', 'cyan');
+                const codeLines = code.split('\n');
+                for (const line of codeLines) {
+                    this.log('  ' + line, 'dim');
+                }
+
+                if (!data.valid) {
+                    this.log('Warning: ' + data.error, 'warn');
+                }
+
+                // Confirm before executing
+                this.log('Execute? Type "go" to run, or any other command to cancel.', 'cyan');
+                this.pendingOp = {
+                    description: 'AI: ' + promptText.substring(0, 30),
+                    execute: () => this.executeAiCode(code, promptText)
+                };
+                return;
+
+            } catch (err) {
+                // Remove thinking indicator on error
+                if (thinkingDiv && thinkingDiv.textContent === 'Thinking...') {
+                    thinkingDiv.remove();
+                }
+                // Provide helpful error messages
+                const errMsg = err.message || String(err);
+                if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
+                    this.log('Could not reach AI server.', 'err');
+                    this.log('Make sure the server is running: flask run', 'dim');
+                } else {
+                    this.log('AI request failed: ' + errMsg, 'err');
+                }
+            }
+        }
+
+        executeAiCode(code, originalPrompt) {
+            // Execute AI-generated Rosh code
+            // Handle "create object <name> ... end" blocks
+            const lines = code.split('\n');
+
+            // Parse the block to extract name, type, and properties
+            let objName = null;
+            let objType = 'cube';  // default type
+            const props = {};
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed === 'end') continue;
+
+                // Match "create object <name>"
+                const createMatch = trimmed.match(/^create\s+object\s+(\w+)$/i);
+                if (createMatch) {
+                    objName = createMatch[1];
+                    continue;
+                }
+
+                // Match "set <prop> to <value>"
+                const setMatch = trimmed.match(/^set\s+(\w+)\s+to\s+(.+)$/i);
+                if (setMatch) {
+                    const prop = setMatch[1].toLowerCase();
+                    let value = setMatch[2].trim();
+                    // Remove quotes from string values
+                    if ((value.startsWith('"') && value.endsWith('"')) ||
+                        (value.startsWith("'") && value.endsWith("'"))) {
+                        value = value.slice(1, -1);
+                    }
+                    if (prop === 'type') {
+                        objType = value;
+                    } else if (prop === 'color') {
+                        // Keep color as string for adapter's COLOR_MAP lookup
+                        props[prop] = value.toLowerCase();
+                    } else {
+                        props[prop] = this.parseValue(value);
+                    }
+                    continue;
+                }
+            }
+
+            if (!objName) {
+                this.log('Could not parse object name from AI code', 'err');
+                return;
+            }
+
+            // Create the object using the adapter
+            // Pass all properties including color in the options
+            try {
+                const obj = this.adapter.createObject(objType, objName, props);
+                if (obj) {
+                    this.log("Created '" + objName + "' (" + objType + ")", 'ok');
+                } else {
+                    this.log("Failed to create object", 'err');
+                }
+            } catch (err) {
+                this.log('Error: ' + (err.message || err), 'err');
+            }
+        }
+
         // Utilities
         inferProperty(valueStr) {
             const v = valueStr.toLowerCase().trim();
@@ -1004,6 +1193,33 @@ if (typeof Rosh3DRuntime !== 'undefined') {
         }
     }
 }
+
+// =============================================================================
+// Static init wrapper - creates singleton instance
+// =============================================================================
+// The emitter calls RoshRuntime.init(adapter) - this wraps the class
+RoshRuntime.init = function(adapter, options = {}) {
+    if (RoshRuntime._instance) {
+        console.warn('RoshRuntime already initialized');
+        return RoshRuntime._instance;
+    }
+    RoshRuntime._instance = new RoshRuntime(adapter, options);
+    RoshRuntime._instance.init();
+    return RoshRuntime._instance;
+};
+
+// Proxy static methods to the singleton instance
+RoshRuntime.log = function(msg, cls) {
+    if (RoshRuntime._instance) {
+        RoshRuntime._instance.log(msg, cls);
+    }
+};
+
+RoshRuntime.execCommand = function(cmd) {
+    if (RoshRuntime._instance) {
+        RoshRuntime._instance.execCommand(cmd);
+    }
+};
 
 // Export for module systems
 if (typeof module !== 'undefined' && module.exports) {
