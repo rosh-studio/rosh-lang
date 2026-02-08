@@ -1,2426 +1,1234 @@
 /**
- * Rosh Runtime - Shared REPL/Console for all emitters
+ * Rosh Runtime - Backward Compatibility Wrapper
  *
- * This runtime provides the core REPL functionality that works across
- * Three.js, Phaser, and other emitters. Engine-specific code is delegated
- * to adapter objects.
+ * =============================================================================
+ * DEPRECATED: Use rosh-core.js + rosh-3d.js directly
+ * =============================================================================
  *
- * Usage:
- *   1. Include this script
- *   2. Create a RoshAdapter object with engine-specific methods
- *   3. Call RoshRuntime.init(adapter)
+ * This file exists for backward compatibility with existing code that uses:
+ *   const runtime = new RoshRuntime(adapter, options);
  *
- * Version: 0.2.11
- * Spec: rosh-console.toml v0.2.5
+ * The actual implementation is now split into three layers:
+ *   1. rosh-core.js  - Base REPL infrastructure
+ *   2. rosh-3d.js    - 3D object commands (extends core)
+ *   3. *-adapter.js  - Engine-specific implementations
  *
- * === PARITY FEATURES ===
- * Features that MUST match Python interpreter. See spec/v0.3.0/rosh-spec.toml
- * Update this list when adding features. Run: pytest tests/test_runtime_parity.py
+ * New code should use:
+ *   const runtime = new Rosh3DRuntime(adapter, options);
  *
- * @parity fuzzy_matching - Object names resolved via fuzzy matching
- * @parity scene_aware_search - Search current scene first, expand if needed
- * @parity typo_correction - Common typos corrected with notification
- * @parity undo_redo - Undo/redo stack for reversible operations
+ * =============================================================================
+ * ⚠️  DO NOT MANUALLY ADD COMMANDS TO THIS FILE  ⚠️
+ * =============================================================================
+ * SOURCE OF TRUTH: Python cli.py
+ *
+ * This file MUST be GENERATED from Python (src/rosh/emitters/runtime_js.py).
+ * Manual sync causes bugs - e.g., `dump` command was missing until 2025-12-21.
+ *
+ * See: JS-RUNTIME-ARCHITECTURE.md → "MANDATORY: Before Any New Features"
+ *
+ * Key documents:
+ * - rosh-dev/proposals/IR-VERSIONING-POLICY.md
+ * - rosh-dev/proposals/JS-RUNTIME-ARCHITECTURE.md
+ *
+ * @version 0.1.1
+ * @implements IR 0.1.1
+ * @deprecated Use Rosh3DRuntime from rosh-3d.js instead
  */
 
-const ROSH_VERSION = '0.2.11';
-const ROSH_BUILD_TIME = '__BUILD_TIME__';  // Replaced by Python at build time
+const ROSH_RUNTIME_VERSION = "0.1.1";
+const IMPLEMENTS_IR_VERSION = "0.1.1";
 
-const RoshRuntime = (function() {
-  'use strict';
+// =============================================================================
+// Backward Compatibility
+// =============================================================================
+// RoshRuntime is now an alias for Rosh3DRuntime.
+// This requires rosh-core.js and rosh-3d.js to be loaded first.
+//
+// For standalone usage (when layers aren't loaded separately), this file
+// includes the full implementation inline below.
+// =============================================================================
 
-  // ==========================================================================
-  // STATE
-  // ==========================================================================
+// Check if layers are already loaded
+if (typeof Rosh3DRuntime !== 'undefined') {
+    // Layers are loaded - just create alias
+    var RoshRuntime = Rosh3DRuntime;
+} else if (typeof RoshCore !== 'undefined') {
+    // Only core is loaded - this shouldn't happen in normal usage
+    console.warn('Rosh: rosh-core.js loaded but rosh-3d.js missing');
+    var RoshRuntime = RoshCore;
+} else {
+    // Standalone mode - include full implementation
+    // This is the fallback for when layers aren't loaded separately
 
-  let adapter = null;           // Engine adapter (Three.js, Phaser, etc.)
-  let consoleVisible = false;
-  let currentObject = null;     // Currently selected object reference
-  let currentObjectName = null; // Name of currently selected object
-  let currentSelection = [];    // For multi-select (get all X)
-  let currentSelectionType = null;
+    // =============================================================================
+    // Inline Core Implementation (for standalone usage)
+    // =============================================================================
 
-  const cmdHistory = [];
-  let historyIdx = -1;
+    // Use var (not class) so RoshRuntime is hoisted to global scope
+    var RoshRuntime = class {
+        constructor(adapter, options = {}) {
+            this.adapter = adapter;
+            this.options = {
+                confirmThreshold: 10,
+                bulkLogLimit: 10,
+                maxUndoStack: 100,
+                ...options
+            };
 
-  const undoStack = [];
-  const redoStack = [];
-  let undoGroup = 0;
-
-  let lastUserCommand = null;   // For :repeat
-  let pendingCrossScene = null;         // For confirmation dialogs
-
-  // @parity execute_pending_cross_scene v1
-  function executePendingCrossScene() {
-    if (pendingCrossScene) {
-      pendingCrossScene.execute();
-      pendingCrossScene = null;
-      return true;
-    }
-    return false;
-  }
-
-  // @parity cancel_pending_cross_scene v1
-  function cancelPendingCrossScene() {
-    if (pendingCrossScene) {
-      log('Cancelled pending operation', 'dim');
-      pendingCrossScene = null;
-    }
-  }
-
-  let bulkCreateMode = false;
-  let bulkCreateCount = 0;
-  const BULK_LOG_LIMIT = 10;
-
-  // Project Twin - shared world state (via RoshNetwork module)
-  let isNetworkCommand = false;  // True when executing a command received from network
-
-  // Project Twin - broadcast helpers (delegate to RoshNetwork)
-  function twinBroadcastCreate(name, objType, x, y, z, color, size, rawCommand) {
-    if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
-      RoshNetwork.broadcastCreate(name, { type: objType, x, y, z, color, size }, rawCommand);
-    }
-  }
-
-  function twinBroadcastDelete(name) {
-    if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
-      RoshNetwork.broadcastDelete(name);
-    }
-  }
-
-  function twinBroadcastMove(name, x, y, z, rawCommand) {
-    if (isNetworkCommand) return;  // Don't re-broadcast received commands
-    if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
-      RoshNetwork.broadcastMove(name, { x, y, z });
-    }
-  }
-
-  function twinBroadcastProperty(name, prop, value) {
-    if (isNetworkCommand) return;  // Don't re-broadcast received commands
-    if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
-      RoshNetwork.broadcastUpdate(name, prop, value);
-    }
-  }
-
-  // DOM elements
-  let outputEl = null;
-  let inputEl = null;
-
-  // ==========================================================================
-  // CONSOLE UI
-  // ==========================================================================
-
-  function createConsoleUI() {
-    // CSS
-    const style = document.createElement('style');
-    style.textContent = `
-      #rosh-console { position: fixed; bottom: 0; left: 0; width: 100%; height: 250px;
-        background: rgba(0,0,0,0.95); color: #0f0; font-family: monospace; font-size: 14px;
-        border-top: 2px solid #0f0; display: none; flex-direction: column; z-index: 10000; }
-      #rosh-console.visible { display: flex; }
-      #rosh-output { flex: 1; overflow-y: auto; padding: 10px; }
-      #rosh-output .cmd { color: #ff0; }
-      #rosh-output .ok { color: #3f3; }
-      #rosh-output .err { color: #f33; }
-      #rosh-output .warn { color: #fa0; }
-      #rosh-output .dim { color: #888; }
-      #rosh-output .cyan { color: #0ff; }
-      #rosh-input-line { padding: 10px; border-top: 1px solid #0f0; display: flex; gap: 8px; align-items: center; }
-      #rosh-input-line input { flex: 1; background: #111; border: 1px solid #0f0;
-        color: #0f0; padding: 8px; font-family: inherit; }
-      #rosh-voice { width: 24px; height: 24px; cursor: pointer; opacity: 0.5; transition: all 0.2s; }
-      #rosh-voice:hover { opacity: 0.8; }
-      #rosh-voice.listening { opacity: 1; animation: rosh-pulse 1s infinite; }
-      @keyframes rosh-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.2); } }
-      /* Mobile console FAB - visible on touch devices */
-      #rosh-console-fab { position: fixed; bottom: 20px; right: 20px; width: 48px; height: 48px;
-        background: rgba(0,0,0,0.7); border: 2px solid #0f0; border-radius: 50%;
-        color: #0f0; font-family: monospace; font-size: 18px; font-weight: bold;
-        cursor: pointer; z-index: 9999; display: none; align-items: center; justify-content: center;
-        box-shadow: 0 2px 10px rgba(0,255,0,0.3); transition: all 0.2s; }
-      #rosh-console-fab:hover { background: rgba(0,50,0,0.9); transform: scale(1.1); }
-      #rosh-console-fab.console-open { bottom: 260px; }
-      @media (pointer: coarse) { #rosh-console-fab { display: flex; } }
-      @media (max-width: 768px) { #rosh-console-fab { display: flex; } }
-    `;
-    document.head.appendChild(style);
-
-    // HTML - engine name will be updated when init() is called
-    const consoleDiv = document.createElement('div');
-    consoleDiv.id = 'rosh-console';
-    consoleDiv.innerHTML = `
-      <div id="rosh-console-header" style="padding:8px;background:#111;border-bottom:1px solid #0f0">
-        <strong>ROSH CONSOLE</strong> <small style="color:#888">Press \` to toggle</small>
-      </div>
-      <div id="rosh-output"></div>
-      <div id="rosh-input-line">
-        <span style="color:#0f0">rosh></span>
-        <input type="text" id="rosh-input" placeholder="type or Ctrl+Space for voice" autocomplete="off">
-        <svg id="rosh-voice" viewBox="0 0 24 24" fill="#0f0" title="Click or Ctrl+Space to speak">
-          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-        </svg>
-      </div>
-    `;
-    document.body.appendChild(consoleDiv);
-
-    // Mobile FAB button
-    const fab = document.createElement('button');
-    fab.id = 'rosh-console-fab';
-    fab.innerHTML = '&gt;_';
-    fab.title = 'Open Console';
-    fab.addEventListener('click', toggleConsole);
-    document.body.appendChild(fab);
-
-    outputEl = document.getElementById('rosh-output');
-    inputEl = document.getElementById('rosh-input');
-
-    // Event handlers
-    document.addEventListener('keydown', handleGlobalKeydown);
-    inputEl.addEventListener('keydown', handleInputKeydown);
-
-    // Voice button
-    const voiceBtn = document.getElementById('rosh-voice');
-    if (voiceBtn) {
-      voiceBtn.addEventListener('click', toggleVoice);
-    }
-  }
-
-  function handleGlobalKeydown(e) {
-    if (e.key === '`' || e.key === '~') {
-      e.preventDefault();
-      toggleConsole();
-    }
-    // Ctrl+Space for voice anywhere
-    if (e.ctrlKey && e.code === 'Space') {
-      e.preventDefault();
-      toggleVoice();
-    }
-  }
-
-  function handleInputKeydown(e) {
-    if (e.key === 'Enter') {
-      const cmd = inputEl.value.trim();
-      if (cmd) {
-        cmdHistory.push(cmd);
-        historyIdx = cmdHistory.length;
-        execCommand(cmd);
-        inputEl.value = '';
-      }
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (historyIdx > 0) {
-        historyIdx--;
-        inputEl.value = cmdHistory[historyIdx] || '';
-      }
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (historyIdx < cmdHistory.length - 1) {
-        historyIdx++;
-        inputEl.value = cmdHistory[historyIdx] || '';
-      } else {
-        historyIdx = cmdHistory.length;
-        inputEl.value = '';
-      }
-    } else if (e.key === 'Escape') {
-      toggleConsole();
-    }
-  }
-
-  function toggleConsole() {
-    const el = document.getElementById('rosh-console');
-    if (!el) return;
-    consoleVisible = !consoleVisible;
-    el.classList.toggle('visible', consoleVisible);
-    if (consoleVisible && inputEl) inputEl.focus();
-
-    // Move FAB up when console is open
-    const fab = document.getElementById('rosh-console-fab');
-    if (fab) fab.classList.toggle('console-open', consoleVisible);
-
-    // Sync with global consoleVisible (for emitter's WASD handler)
-    if (typeof window !== 'undefined') {
-      window.consoleVisible = consoleVisible;
-    }
-  }
-
-  // ==========================================================================
-  // HEADER UPDATE
-  // ==========================================================================
-
-  function updateConsoleHeader(platform) {
-    const header = document.getElementById('rosh-console-header');
-    if (header) {
-      const engineLabel = platform ? ` <span style="color:#0ff">[${platform}]</span>` : '';
-      header.innerHTML = `<strong>ROSH CONSOLE</strong>${engineLabel} <small style="color:#888">Press \` to toggle</small>`;
-    }
-  }
-
-  // ==========================================================================
-  // LOGGING
-  // ==========================================================================
-
-  function log(msg, cls = '') {
-    // Queue messages if console not ready yet (early print statements)
-    if (!outputEl) {
-      if (!window._roshPendingLogs) window._roshPendingLogs = [];
-      window._roshPendingLogs.push({ msg, cls });
-      return;
-    }
-    const div = document.createElement('div');
-    div.className = cls;
-    div.textContent = msg;
-    outputEl.appendChild(div);
-    outputEl.scrollTop = outputEl.scrollHeight;
-  }
-
-  // Expose log for adapter (click-to-select feedback)
-  window.roshLog = log;
-
-  function clearOutput() {
-    if (outputEl) outputEl.innerHTML = '';
-  }
-
-  // ==========================================================================
-  // UNDO/REDO
-  // ==========================================================================
-
-  // @parity push_undo v1
-  function pushUndo(description, undoFn, redoFn) {
-    if (typeof undoFn !== 'function') return;
-    undoStack.push({
-      description: description || 'change',
-      undo: undoFn,
-      redo: typeof redoFn === 'function' ? redoFn : null,
-      group: undoGroup
-    });
-    if (undoStack.length > 100) undoStack.shift();
-    redoStack.length = 0;
-  }
-
-  // @parity perform_undo v1
-  function performUndo(count = 1) {
-    if (!undoStack.length) {
-      log('Nothing to undo', 'err');
-      return;
-    }
-    for (let step = 0; step < count; step++) {
-      if (!undoStack.length) break;
-      const targetGroup = undoStack[undoStack.length - 1].group;
-      const groupEntries = [];
-      while (undoStack.length && undoStack[undoStack.length - 1].group === targetGroup) {
-        groupEntries.push(undoStack.pop());
-      }
-      let undoCount = 0;
-      for (const entry of groupEntries) {
-        try {
-          entry.undo();
-          undoCount++;
-          if (entry.redo) redoStack.push(entry);
-        } catch (err) {
-          log('Undo failed: ' + (err && err.message ? err.message : err), 'err');
+            this.undoStack = [];
+            this.redoStack = [];
+            this.undoGroup = 0;
+            this.commandHistory = [];
+            this.historyIndex = -1;
+            this.lastUserCommand = null;
+            this.pendingOp = null;
+            this.bulkMode = false;
+            this.bulkCount = 0;
+            this.currentObject = null;
+            this.currentObjectName = null;
+            this.currentSelection = [];
+            this.currentSelectionType = null;
+            this.consoleDiv = null;
+            this.outputDiv = null;
+            this.inputEl = null;
+            this.knownObjects = {};
+            this.typeCounters = {};
+            this.multiLineBuffer = [];
+            this.inBlock = false;
+            this.blockContext = null;
         }
-      }
-      if (undoCount > 1) {
-        log('Undo: ' + groupEntries[0].description + ' (' + undoCount + ' operations)', 'ok');
-      } else if (undoCount === 1) {
-        log('Undo: ' + groupEntries[0].description, 'ok');
-      }
-    }
-  }
 
-  // @parity perform_redo v1
-  function performRedo(count = 1) {
-    if (!redoStack.length) {
-      log('Nothing to redo', 'err');
-      return;
-    }
-    const steps = Math.min(Math.max(1, count), redoStack.length);
-    for (let i = 0; i < steps; i++) {
-      const entry = redoStack.pop();
-      if (!entry || typeof entry.redo !== 'function') continue;
-      try {
-        entry.redo();
-        log('Redo: ' + entry.description, 'ok');
-        undoStack.push(entry);
-      } catch (err) {
-        log('Redo failed: ' + (err && err.message ? err.message : err), 'err');
-        break;
-      }
-    }
-  }
-
-  // ==========================================================================
-  // FUZZY MATCHING
-  // ==========================================================================
-
-  function levenshtein(a, b) {
-    const m = a.length, n = b.length;
-    if (m === 0) return n;
-    if (n === 0) return m;
-    const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
-    for (let i = 0; i <= m; i++) dp[i][0] = i;
-    for (let j = 0; j <= n; j++) dp[0][j] = j;
-    for (let i = 1; i <= m; i++) {
-      for (let j = 1; j <= n; j++) {
-        dp[i][j] = a[i-1] === b[j-1]
-          ? dp[i-1][j-1]
-          : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
-      }
-    }
-    return dp[m][n];
-  }
-
-  function fuzzyMatch(input, candidates, maxDistance = 2) {
-    const lower = input.toLowerCase();
-    let best = null, bestDist = Infinity;
-    for (const c of candidates) {
-      const dist = levenshtein(lower, c.toLowerCase());
-      if (dist < bestDist && dist <= maxDistance) {
-        best = c;
-        bestDist = dist;
-      }
-    }
-    return best;
-  }
-
-  // Known commands for fuzzy matching
-  const KNOWN_COMMANDS = [
-    'set', 'get', 'list', 'create', 'delete', 'destroy', 'remove', 'reset',
-    'hide', 'show', 'clone', 'look', 'examine', 'inspect', 'x', 'ex',
-    'help', 'save', 'load', 'undo', 'redo', 'count', 'move', 'make',
-    'clear', 'repeat', ':repeat', ':r', 'go', 'goto', 'scene', 'scenes',
-    'rooms', 'credits', 'camera', 'capabilities',
-    'connect', 'disconnect', 'twin', 'say', 'users', 'who',
-    'yes', 'no', 'cancel'  // Confirmation commands
-  ];
-
-  /**
-   * Find objects by fuzzy substring matching
-   * Returns array of matching objects (name, object)
-   */
-  function fuzzyFindObjects(searchName, sceneOnly = false) {
-    if (!adapter.getAllObjects) return [];
-
-    const allObjects = adapter.getAllObjects();
-    const lowerSearch = searchName.toLowerCase();
-    const matches = [];
-    const currentScene = adapter.getCurrentScene ? adapter.getCurrentScene() : null;
-
-    for (const obj of allObjects) {
-      const objName = obj.name || (obj.userData && obj.userData._name) || '';
-      if (!objName || objName.startsWith('_')) continue;  // Skip hidden objects
-
-      // If sceneOnly, filter to current scene
-      if (sceneOnly && currentScene) {
-        const objScene = obj.userData?._scene || obj.object?.userData?._scene;
-        if (objScene && objScene !== currentScene) continue;
-      }
-
-      const lowerObjName = objName.toLowerCase();
-
-      // Check if search term is contained in object name or vice versa
-      if (lowerObjName.includes(lowerSearch) || lowerSearch.includes(lowerObjName)) {
-        matches.push({ name: objName, object: obj });
-      }
-    }
-
-    return matches;
-  }
-
-  function fuzzyCorrectCommand(cmd) {
-    const parts = cmd.trim().split(/\s+/);
-    const corrections = [];
-    let suggestion = null;  // For "did you mean?" when command is unknown
-
-    // Try to correct the first word (command)
-    if (parts.length > 0) {
-      const first = parts[0].toLowerCase();
-      if (!KNOWN_COMMANDS.includes(first)) {
-        const match = fuzzyMatch(first, KNOWN_COMMANDS);
-        if (match && match !== first) {
-          // Only auto-correct if it's a close match (distance 1-2)
-          // For very different words, suggest instead
-          const dist = levenshtein(first, match);
-          if (dist <= 2) {
-            corrections.push(first + ' → ' + match);
-            parts[0] = match;
-          } else {
-            suggestion = match;  // Will show "did you mean?"
-          }
+        init() {
+            this.initConsole();
+            this.initKeyboardShortcuts();
+            this.log("Rosh Console v" + ROSH_RUNTIME_VERSION + " ready. Type 'help' for commands.", 'ok');
         }
-      }
-    }
 
-    // Commands where arguments are NOT object names (don't autocorrect)
-    const noObjectArgCmds = ['connect', 'disconnect', 'goto', 'scene', 'go', 'say', 'twin', 'help'];
-    const cmdLower = parts[0]?.toLowerCase();
-
-    // Try to correct object names (if adapter provides object list)
-    // Skip for CREATE/MAKE commands - don't correct type names to object names
-    // Skip for commands where arguments aren't object names
-    const isCreateCmd = ['create', 'make'].includes(cmdLower);
-    const skipObjectCorrection = noObjectArgCmds.includes(cmdLower);
-
-    if (adapter && adapter.getObjectNames && parts.length > 1 && !isCreateCmd && !skipObjectCorrection) {
-      const objectNames = adapter.getObjectNames();
-      const skipWords = ['to', 'the', 'a', 'an', 'is', 'are', 'color', 'size', 'x', 'y', 'z'];
-      for (let i = 1; i < parts.length; i++) {
-        const word = parts[i].toLowerCase();
-        if (skipWords.includes(word)) continue;
-        if (!objectNames.map(n => n.toLowerCase()).includes(word)) {
-          const match = fuzzyMatch(word, objectNames);
-          if (match && match.toLowerCase() !== word) {
-            corrections.push(word + ' → ' + match);
-            parts[i] = match;
-          }
+        nextName(typeName) {
+            const key = typeName.toLowerCase();
+            if (!this.typeCounters[key]) this.typeCounters[key] = 0;
+            this.typeCounters[key]++;
+            return key + '-' + this.typeCounters[key];
         }
-      }
-    }
 
-    return { cmd: parts.join(' '), corrections, suggestion };
-  }
+        initConsole() {
+            const style = document.createElement('style');
+            style.textContent = `
+                #rosh-console {
+                    position: fixed; bottom: 0; left: 0; width: 100%; height: 250px;
+                    background: rgba(0,0,0,0.95); color: #0f0;
+                    font-family: monospace; font-size: 14px;
+                    border-top: 2px solid #0f0;
+                    display: none; flex-direction: column; z-index: 10000;
+                }
+                #rosh-console.visible { display: flex; }
+                #rosh-output { flex: 1; overflow-y: auto; padding: 10px; }
+                #rosh-output .cmd { color: #ff0; }
+                #rosh-output .ok { color: #3f3; }
+                #rosh-output .err { color: #f33; }
+                #rosh-output .cyan { color: #0ff; }
+                #rosh-output .dim { color: #888; }
+                #rosh-output .warn { color: #fa0; }
+                #rosh-input-line {
+                    padding: 10px; border-top: 1px solid #0f0;
+                    display: flex; gap: 8px; align-items: center;
+                }
+                #rosh-input-line input {
+                    flex: 1; background: #111; border: 1px solid #0f0;
+                    color: #0f0; padding: 8px; font-family: inherit;
+                }
+            `;
+            document.head.appendChild(style);
 
-  // ==========================================================================
-  // HELPERS
-  // ==========================================================================
+            this.consoleDiv = document.createElement('div');
+            this.consoleDiv.id = 'rosh-console';
+            this.consoleDiv.innerHTML = `
+                <div style="padding:8px;background:#111;border-bottom:1px solid #0f0">
+                    <strong>ROSH CONSOLE</strong>
+                    <small style="color:#888">Press \` to toggle</small>
+                </div>
+                <div id="rosh-output"></div>
+                <div id="rosh-input-line">
+                    <span style="color:#0f0">rosh></span>
+                    <input type="text" id="rosh-input" placeholder="type command..." autocomplete="off">
+                </div>
+            `;
+            document.body.appendChild(this.consoleDiv);
 
-  function singularize(word) {
-    const w = word.toLowerCase();
-    // Words that end in 's' but aren't plural
-    const exceptions = ['torus', 'bus', 'plus', 'radius', 'canvas', 'axis', 'lewis', 'chris', 'paris', 'harris', 'morris', 'dennis', 'texas', 'kansas', 'christmas'];
-    if (exceptions.includes(w)) return w;
-    // Words ending in 'is' are usually not plural (basis, thesis, lewis)
-    if (w.endsWith('is')) return w;
-    if (w.endsWith('ies')) return w.slice(0, -3) + 'y';
-    if (w.endsWith('es') && !w.endsWith('ses')) return w.slice(0, -2);
-    if (w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
-    return w;
-  }
+            this.outputDiv = document.getElementById('rosh-output');
+            this.inputEl = document.getElementById('rosh-input');
+            this.inputEl.addEventListener('keydown', (e) => this.handleInput(e));
+        }
 
-  function parseColor(str) {
-    // Delegate to RoshColors if available
-    if (typeof RoshColors !== 'undefined') {
-      return RoshColors.parse(str);
-    }
-    // Fallback for standalone use
-    const colorMap = {
-      red: 0xff0000, green: 0x00ff00, blue: 0x0000ff,
-      yellow: 0xffff00, cyan: 0x00ffff, magenta: 0xff00ff,
-      white: 0xffffff, black: 0x111111, orange: 0xff8800,  // black is 0x111111 for visibility
-      purple: 0x8800ff, pink: 0xff88ff, gray: 0x888888,
-      grey: 0x888888, gold: 0xffd700, silver: 0xc0c0c0
-    };
-    const lower = str.toLowerCase();
-    if (colorMap[lower] !== undefined) return colorMap[lower];
-    if (str.startsWith('#')) return parseInt(str.slice(1), 16);
-    if (str.startsWith('0x')) return parseInt(str, 16);
-    return null;
-  }
+        initKeyboardShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                if (e.key === '`' || e.key === '~' || e.keyCode === 192 || e.code === 'Backquote') {
+                    e.preventDefault();
+                    this.toggleConsole();
+                }
+            });
+            console.log('Rosh: Keyboard shortcuts initialized. Press ` to toggle console.');
+        }
 
-  // ==========================================================================
-  // VOICE INPUT
-  // ==========================================================================
-
-  let recognition = null;
-  let isListening = false;
-
-  function initVoice() {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      return false;
-    }
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-
-    recognition.onresult = function(event) {
-      const transcript = event.results[0][0].transcript;
-      log('[voice] ' + transcript, 'dim');
-      execCommand(transcript);
-    };
-
-    recognition.onend = function() {
-      isListening = false;
-      const btn = document.getElementById('rosh-voice');
-      if (btn) btn.classList.remove('listening');
-    };
-
-    recognition.onerror = function(event) {
-      log('Voice error: ' + event.error, 'err');
-      isListening = false;
-      const btn = document.getElementById('rosh-voice');
-      if (btn) btn.classList.remove('listening');
-    };
-
-    return true;
-  }
-
-  function toggleVoice() {
-    if (!recognition && !initVoice()) {
-      log('Voice input not supported in this browser', 'err');
-      return;
-    }
-    if (isListening) {
-      recognition.stop();
-    } else {
-      recognition.start();
-      isListening = true;
-      const btn = document.getElementById('rosh-voice');
-      if (btn) btn.classList.add('listening');
-      log('Listening...', 'dim');
-    }
-  }
-
-  // ==========================================================================
-  // COMMAND EXECUTION
-  // ==========================================================================
-
-  function execCommand(cmd, isUserCommand = true) {
-    if (!adapter) {
-      log('No adapter configured', 'err');
-      return;
-    }
-
-    // Increment undo group for each user command
-    if (isUserCommand) undoGroup++;
-
-    // Check for pending confirmation BEFORE fuzzy correction
-    // This prevents "yes" from being corrected to "set"
-    const rawParts = cmd.trim().toLowerCase().split(/\s+/);
-    if (pendingCrossScene) {
-      if (['go', 'confirm', 'yes'].includes(rawParts[0])) {
-        log('> ' + cmd, 'cmd');
-        executePendingCrossScene();
-        return;
-      } else {
-        cancelPendingCrossScene();
-      }
-    }
-
-    // Apply fuzzy matching
-    const fuzzyResult = fuzzyCorrectCommand(cmd);
-    const originalCmd = cmd;
-    const commandSuggestion = fuzzyResult.suggestion;  // For "did you mean?" on unknown commands
-    cmd = fuzzyResult.cmd;
-    if (fuzzyResult.corrections.length > 0) {
-      log('[corrected: ' + fuzzyResult.corrections.join(', ') + ']', 'dim');
-    }
-    log('> ' + cmd, 'cmd');
-
-    // Normalize British spellings
-    cmd = cmd.replace(/colour/gi, 'color').replace(/centre/gi, 'center');
-
-    // Resolve 'it' and 'this' to current object
-    if (currentObjectName && /\b(it|this)\b/i.test(cmd)) {
-      cmd = cmd.replace(/\b(it|this)\b/gi, currentObjectName);
-      log('[resolved: it/this → ' + currentObjectName + ']', 'dim');
-    }
-
-    // Track last substantive command for :repeat
-    const nonSubstantive = /^(undo|redo|help|:repeat|\?|history)/i;
-    if (isUserCommand && !nonSubstantive.test(cmd.trim())) {
-      lastUserCommand = originalCmd;
-    }
-
-    const parts = cmd.trim().toLowerCase().split(/\s+/);
-
-    try {
-
-      // Route commands
-      switch (parts[0]) {
-        case 'help':
-        case '?':
-          showHelp(parts.slice(1));
-          break;
-
-        case 'clear':
-          clearOutput();
-          break;
-
-        case 'list':
-        case 'ls':
-        case 'objects':
-          listObjects(parts.slice(1));
-          break;
-
-        case 'scenes':
-        case 'rooms':
-          listScenes();
-          break;
-
-        case 'go':
-        case 'goto':
-        case 'scene':
-          if (parts[1]) {
-            gotoScene(parts.slice(1).join(' '));
-          } else {
-            log('Usage: go <scene>', 'err');
-          }
-          break;
-
-        case 'create':
-          handleCreate(cmd, parts.slice(1));
-          break;
-
-        case 'make':
-          handleMake(cmd, parts.slice(1));
-          break;
-
-        case 'delete':
-        case 'remove':
-        case 'destroy':
-          handleDelete(parts.slice(1));
-          break;
-
-        case 'clone':
-          handleClone(parts.slice(1));
-          break;
-
-        case 'set':
-          handleSet(cmd, parts.slice(1));
-          break;
-
-        case 'get':
-          handleGet(parts.slice(1));
-          break;
-
-        case 'hide':
-          handleHide(parts.slice(1));
-          break;
-
-        case 'show':
-        case 'unhide':
-          handleShow(parts.slice(1));
-          break;
-
-        case 'select':
-        case 'sel':
-          if (adapter.selectByName) {
-            const name = parts.slice(1).join(' ');
-            if (name) {
-              const result = adapter.selectByName(name);
-              if (result) {
-                log('Selected: ' + result, 'ok');
-              } else {
-                log('Object not found: ' + name, 'err');
-              }
-            } else {
-              log('Usage: select <name> (or just click an object)', 'dim');
+        toggleConsole() {
+            this.consoleDiv.classList.toggle('visible');
+            if (this.consoleDiv.classList.contains('visible')) {
+                this.inputEl.focus();
             }
-          }
-          break;
+        }
 
-        case 'deselect':
-        case 'desel':
-          if (adapter.deselect) {
-            adapter.deselect();
-            log('Deselected', 'dim');
-          }
-          break;
+        log(msg, cls = '') {
+            const div = document.createElement('div');
+            div.className = cls;
+            div.textContent = msg;
+            this.outputDiv.appendChild(div);
+            this.outputDiv.scrollTop = this.outputDiv.scrollHeight;
+        }
 
-        case 'edit':
-          if (adapter.enableEditMode && adapter.disableEditMode) {
-            const arg = parts[1]?.toLowerCase();
-            if (arg === 'on' || arg === 'true' || arg === '1') {
-              adapter.enableEditMode();
-              log('Edit mode ON - click to select objects, use "control" to move them', 'ok');
-            } else if (arg === 'off' || arg === 'false' || arg === '0') {
-              adapter.disableEditMode();
-              log('Edit mode OFF - view only', 'ok');
-            } else if (!arg) {
-              const isEdit = adapter.isEditMode ? adapter.isEditMode() : false;
-              log('Edit mode: ' + (isEdit ? 'ON' : 'OFF'), 'dim');
-              log('Usage: edit on | edit off', 'dim');
-            } else {
-              log('Usage: edit on | edit off', 'err');
+        pushUndo(description, undoFn, redoFn) {
+            if (typeof undoFn !== 'function') return;
+            this.undoStack.push({
+                description: description || 'change',
+                undo: undoFn,
+                redo: typeof redoFn === 'function' ? redoFn : null,
+                group: this.undoGroup
+            });
+            if (this.undoStack.length > this.options.maxUndoStack) {
+                this.undoStack.shift();
             }
-          } else {
-            log('Edit mode not supported by this adapter', 'err');
-          }
-          break;
+            this.redoStack.length = 0;
+        }
 
-        case 'move':
-          handleMove(cmd, parts.slice(1));
-          break;
-
-        case 'look':
-        case 'examine':
-        case 'inspect':
-        case 'x':
-        case 'ex':
-          handleLook(parts.slice(1));
-          break;
-
-        case 'undo':
-          const undoCount = parseInt(parts[1]) || 1;
-          performUndo(undoCount);
-          break;
-
-        case 'redo':
-          const redoCount = parseInt(parts[1]) || 1;
-          performRedo(redoCount);
-          break;
-
-        case ':repeat':
-        case ':r':
-        case 'repeat':
-          if (lastUserCommand) {
-            log('[repeating: ' + lastUserCommand + ']', 'dim');
-            execCommand(lastUserCommand, false);
-          } else {
-            log('No command to repeat', 'err');
-          }
-          break;
-
-        case 'save':
-          if (adapter.saveGame) {
-            const slot = parts[1] || 'default';
-            adapter.saveGame(slot);
-            log('Game saved to slot: ' + slot, 'ok');
-          }
-          break;
-
-        case 'load':
-          if (adapter.loadGame) {
-            const slot = parts[1] || 'default';
-            if (adapter.loadGame(slot)) {
-              log('Game loaded from slot: ' + slot, 'ok');
-            } else {
-              log('No save found in slot: ' + slot, 'err');
+        performUndo(count = 1) {
+            if (!this.undoStack.length) {
+                this.log('Nothing to undo', 'err');
+                return;
             }
-          }
-          break;
-
-        case 'count':
-          if (adapter.countObjects) {
-            const typeName = parts[1] ? singularize(parts[1]) : null;
-            const count = adapter.countObjects(typeName);
-            if (typeName) {
-              log(typeName + ': ' + count, 'ok');
-            } else {
-              log('Total objects: ' + count, 'ok');
+            for (let step = 0; step < count; step++) {
+                if (!this.undoStack.length) break;
+                const targetGroup = this.undoStack[this.undoStack.length - 1].group;
+                const groupEntries = [];
+                while (this.undoStack.length &&
+                       this.undoStack[this.undoStack.length - 1].group === targetGroup) {
+                    groupEntries.push(this.undoStack.pop());
+                }
+                let undoCount = 0;
+                for (const entry of groupEntries) {
+                    try {
+                        entry.undo();
+                        undoCount++;
+                        if (entry.redo) this.redoStack.push(entry);
+                    } catch (err) {
+                        this.log('Undo failed: ' + (err.message || err), 'err');
+                    }
+                }
+                if (undoCount > 1) {
+                    this.log('Undo: ' + groupEntries[0].description + ' (' + undoCount + ' ops)', 'ok');
+                } else if (undoCount === 1) {
+                    this.log('Undo: ' + groupEntries[0].description, 'ok');
+                }
             }
-          }
-          break;
+        }
 
-        case 'credits':
-          log('Rosh Runtime v0.1.0', 'cyan');
-          log('https://rosh.io', 'dim');
-          break;
-
-        // ====================================================================
-        // PHYSICS COMMANDS (ThreeJS-first)
-        // ====================================================================
-
-        case 'gravity':
-          if (adapter.enableGravity) {
-            const arg = parts[1]?.toLowerCase();
-            if (arg === 'off' || arg === 'false' || arg === '0') {
-              adapter.disableGravity();
-              log('Gravity disabled', 'ok');
-            } else if (arg === 'on' || arg === 'true' || arg === '1' || !arg) {
-              const strength = parts[2] ? parseFloat(parts[2]) : undefined;
-              const result = adapter.enableGravity(strength);
-              log('Gravity enabled (strength: ' + result.gravity + ')', 'ok');
-            } else {
-              // Assume it's a number for strength
-              const strength = parseFloat(arg);
-              if (!isNaN(strength)) {
-                adapter.enableGravity(strength);
-                log('Gravity enabled (strength: ' + strength + ')', 'ok');
-              } else {
-                log('Usage: gravity [on|off|<strength>]', 'dim');
-              }
+        performRedo(count = 1) {
+            if (!this.redoStack.length) {
+                this.log('Nothing to redo', 'err');
+                return;
             }
-          } else {
-            log('Gravity not supported by this adapter', 'err');
-          }
-          break;
-
-        case 'ground':
-          if (adapter.setGroundLevel) {
-            const level = parts[1] ? parseFloat(parts[1]) : 0;
-            adapter.setGroundLevel(level);
-            log('Ground level set to: ' + level, 'ok');
-          }
-          break;
-
-        case 'clickmove':
-        case 'click-move':
-        case 'clicktomove':
-          if (adapter.enableClickToMove) {
-            const arg = parts[1]?.toLowerCase();
-            if (arg === 'off' || arg === 'false' || arg === '0') {
-              adapter.disableClickToMove();
-              log('Click-to-move disabled', 'ok');
-            } else {
-              // arg could be 'on' or a player name
-              const playerName = (arg === 'on' || arg === 'true' || arg === '1') ? parts[2] : arg;
-              const result = adapter.enableClickToMove(playerName);
-              if (playerName) {
-                log('Click-to-move enabled for: ' + playerName, 'ok');
-              } else {
-                log('Click-to-move enabled (no object set - use "control <name>")', 'ok');
-              }
+            const steps = Math.min(count, this.redoStack.length);
+            for (let i = 0; i < steps; i++) {
+                const entry = this.redoStack.pop();
+                if (!entry || typeof entry.redo !== 'function') continue;
+                try {
+                    entry.redo();
+                    this.log('Redo: ' + entry.description, 'ok');
+                    this.undoStack.push(entry);
+                } catch (err) {
+                    this.log('Redo failed: ' + (err.message || err), 'err');
+                    break;
+                }
             }
-          } else {
-            log('Click-to-move not supported by this adapter', 'err');
-          }
-          break;
+        }
 
-        case 'control':
-        case 'player':  // Alias for backwards compatibility
-          if (adapter.setPlayer) {
-            let name = parts[1];
-            // Use selected object if no name given
-            if (!name && adapter.getSelectedObject) {
-              name = adapter.getSelectedObject();
-              if (name) log('(using selected: ' + name + ')', 'dim');
+        handleInput(e) {
+            if (e.key === 'Enter') {
+                const line = this.inputEl.value.trim();
+                this.inputEl.value = '';
+
+                if (this.inBlock) {
+                    if (line.toLowerCase() === 'end') {
+                        this.log('... end', 'dim');
+                        this.executeBlock();
+                    } else {
+                        this.multiLineBuffer.push(line);
+                        this.log('...   ' + line, 'dim');
+                    }
+                    return;
+                }
+
+                const corrected = this.fuzzyCorrect(line);
+                if (corrected.corrections.length > 0) {
+                    this.log('[corrected: ' + corrected.corrections.join(', ') + ']', 'dim');
+                }
+                const correctedLine = corrected.cmd;
+
+                const blockStart = correctedLine.match(/^create\s+(?:object\s+)?(\w+)$/i) ||
+                                   correctedLine.match(/^define\s+(\w+)\s+as$/i);
+                if (blockStart) {
+                    this.inBlock = true;
+                    this.multiLineBuffer = [];
+                    this.blockContext = {
+                        type: 'create',
+                        objType: blockStart[1],
+                        objName: this.nextName(blockStart[1])
+                    };
+                    this.log('> ' + correctedLine, 'cmd');
+                    this.log('... (multiline mode, type "end" to finish)', 'dim');
+                    return;
+                }
+
+                if (line) {
+                    this.commandHistory.push(line);
+                    this.historyIndex = this.commandHistory.length;
+                    this.execCommand(line);
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (this.historyIndex > 0) {
+                    this.historyIndex--;
+                    this.inputEl.value = this.commandHistory[this.historyIndex];
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (this.historyIndex < this.commandHistory.length - 1) {
+                    this.historyIndex++;
+                    this.inputEl.value = this.commandHistory[this.historyIndex];
+                } else {
+                    this.historyIndex = this.commandHistory.length;
+                    this.inputEl.value = '';
+                }
             }
-            if (name) {
-              adapter.setPlayer(name);
-              // Also enable keyboard control
-              if (adapter.enablePlayerKeyboard) {
-                adapter.enablePlayerKeyboard(name);
-                log('Controlling: ' + name + ' (arrows + ./ to move)', 'ok');
-              } else {
-                log('Controlling: ' + name, 'ok');
-              }
-            } else {
-              log('Usage: control <name> (or click to select first)', 'dim');
+        }
+
+        executeBlock() {
+            const ctx = this.blockContext;
+            this.inBlock = false;
+            this.blockContext = null;
+
+            if (!ctx) {
+                this.log('Block error: no context', 'err');
+                return;
             }
-          }
-          break;
 
-        case 'keys':
-        case 'keyboard':
-          if (adapter.enablePlayerKeyboard) {
-            const arg = parts[1]?.toLowerCase();
-            if (arg === 'off' || arg === 'false' || arg === '0') {
-              adapter.disablePlayerKeyboard();
-              log('Keyboard control disabled', 'ok');
-            } else {
-              const playerName = (arg === 'on' || arg === 'true' || arg === '1') ? parts[2] : arg;
-              adapter.enablePlayerKeyboard(playerName);
-              log('Keyboard control enabled (arrow keys)', 'ok');
+            const props = {};
+            for (const line of this.multiLineBuffer) {
+                const match = line.match(/^(?:set\s+)?(\w+)\s+to\s+(.+)$/i);
+                if (match) {
+                    const prop = match[1].toLowerCase();
+                    const value = this.parseValue(match[2].trim());
+                    props[prop] = value;
+                }
             }
-          }
-          break;
 
-        case 'speed':
-        case 'movespeed':
-          if (adapter.setMoveSpeed) {
-            const speed = parts[1] ? parseFloat(parts[1]) : 5;
-            adapter.setMoveSpeed(speed);
-            log('Move speed set to: ' + speed, 'ok');
-          }
-          break;
-
-        // ====================================================================
-        // LIGHTING COMMANDS
-        // ====================================================================
-
-        case 'spotlight':
-        case 'spot':
-          if (adapter.toggleSpotlight) {
-            const arg = parts[1]?.toLowerCase();
-            if (arg === 'off' || arg === 'hide' || arg === 'false' || arg === '0') {
-              adapter.toggleSpotlight(false);
-              log('Spotlight hidden', 'ok');
-              // Broadcast spotlight off to twins
-              if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
-                RoshNetwork.broadcastUpdate('_spotlight', 'visible', false);
-              }
-            } else if (arg === 'on' || arg === 'show' || arg === 'true' || arg === '1' || !arg) {
-              adapter.toggleSpotlight(true);
-              log('Spotlight visible', 'ok');
-              // Broadcast spotlight on to twins
-              if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
-                RoshNetwork.broadcastUpdate('_spotlight', 'visible', true);
-              }
-            } else {
-              // Target a specific object
-              adapter.toggleSpotlight(true, arg);
-              log('Spotlight targeting: ' + arg, 'ok');
-              // Broadcast spotlight target to twins
-              if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
-                RoshNetwork.broadcastUpdate('_spotlight', 'target', arg);
-              }
+            const obj = this.adapter.createObject(ctx.objType, ctx.objName, props);
+            if (!obj) {
+                this.log('Failed to create ' + ctx.objType, 'err');
+                return;
             }
-          } else {
-            log('Spotlight not supported by this adapter', 'err');
-          }
-          break;
 
-        // ====================================================================
-        // PROJECT TWIN - SHARED WORLDS
-        // ====================================================================
-
-        case 'connect':
-        case 'twin':
-          if (typeof RoshNetwork !== 'undefined') {
-            RoshNetwork.connect(parts[1] || 'default');
-          } else {
-            log('RoshNetwork not loaded', 'err');
-          }
-          break;
-
-        case 'disconnect':
-          if (typeof RoshNetwork !== 'undefined') {
-            RoshNetwork.disconnect();
-          } else {
-            log('Not connected', 'dim');
-          }
-          break;
-
-        case 'clearworld':
-        case 'resetworld':
-          log('Clear world not yet implemented in RoshNetwork', 'dim');
-          break;
-
-        case 'say':
-          if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
-            RoshNetwork.say(parts.slice(1).join(' '));
-          } else {
-            log('Not connected. Use "connect" first.', 'err');
-          }
-          break;
-
-        case 'users':
-        case 'who':
-          if (typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
-            RoshNetwork.listUsers();
-          } else {
-            log('Not connected. Use "connect" first.', 'err');
-          }
-          break;
-
-        default:
-          // Try adapter's custom command handler
-          if (adapter.handleCustomCommand) {
-            const handled = adapter.handleCustomCommand(cmd, parts);
-            if (!handled) {
-              log('Unknown command: ' + parts[0], 'err');
-              if (commandSuggestion) {
-                log('Did you mean: ' + commandSuggestion + '?', 'dim');
-              } else {
-                log('Type "help" for available commands', 'dim');
-              }
+            for (const [prop, value] of Object.entries(props)) {
+                this.adapter.setProperty(obj, prop, value);
             }
-          } else {
-            log('Unknown command: ' + parts[0], 'err');
-            if (commandSuggestion) {
-              log('Did you mean: ' + commandSuggestion + '?', 'dim');
-            } else {
-              log('Type "help" for available commands', 'dim');
-            }
-          }
-      }
-    } catch (err) {
-      log('Error: ' + (err.message || err), 'err');
-      console.error('Rosh command error:', err);
-    }
-  }
 
-  // ==========================================================================
-  // COMMAND HANDLERS
-  // ==========================================================================
-
-  function showHelp(args) {
-    if (args.length === 0) {
-      log('=== Rosh Console Commands ===', 'cyan');
-      log('create <type>     - Create an object', 'ok');
-      log('delete <name>     - Delete an object', 'ok');
-      log('clone <name>      - Clone an object', 'ok');
-      log('set <obj> <prop> to <val> - Set property', 'ok');
-      log('get <obj>         - Select/examine object', 'ok');
-      log('list [type]       - List objects', 'ok');
-      log('hide/show <obj>   - Toggle visibility', 'ok');
-      log('move <obj> <dir> <amt> - Move object', 'ok');
-      log('go <scene>        - Go to scene', 'ok');
-      log('scenes            - List scenes', 'ok');
-      log('undo/redo         - Undo/redo last action', 'ok');
-      log(':repeat           - Repeat last command', 'ok');
-      log('save/load [slot]  - Save/load game', 'ok');
-      log('clear             - Clear console', 'ok');
-      log('--- Physics (Three.js) ---', 'cyan');
-      log('gravity [on|off]  - Toggle gravity', 'ok');
-      log('ground <level>    - Set ground Y level', 'ok');
-      log('clickmove [name]  - Enable click-to-move', 'ok');
-      log('control <name>    - Control object with keys', 'ok');
-      log('speed <value>     - Set move speed', 'ok');
-      log('--- Shared Worlds ---', 'cyan');
-      log('connect [world]   - Join a shared world', 'ok');
-      log('disconnect        - Leave shared world', 'ok');
-      log('say <message>     - Chat with other users', 'ok');
-      log('', '');
-      log('Type "help <command>" for details', 'dim');
-    } else {
-      const topic = args[0].toLowerCase();
-      showDetailedHelp(topic);
-    }
-  }
-
-  function showDetailedHelp(topic) {
-    switch (topic) {
-      case 'create':
-      case 'clone':
-        log('=== create - Create objects ===', 'cyan');
-        log('', '');
-        log('You can create any object:', 'ok');
-        log('  create ball           - Create object "ball"', 'dim');
-        log('  create red cube       - Create red cube', 'dim');
-        log('  create big blue ball  - With size and color', 'dim');
-        log('  create 5 cubes        - Create multiple', 'dim');
-        log('  create three balls    - Number words work too', 'dim');
-        log('  clone ball            - Clone existing object', 'dim');
-        log('', '');
-        log('Supported types: cube, sphere, ball, box, cylinder,', 'ok');
-        log('  cone, torus, plane, capsule, pyramid, tetrahedron', 'dim');
-        log('', '');
-        log('Size modifiers: tiny, small, medium, big, large, huge, giant, massive', 'ok');
-        log('Color modifiers: red, green, blue, yellow, orange, purple, pink,', 'ok');
-        log('  cyan, white, black, gray, brown, gold, silver', 'dim');
-        break;
-
-      case 'make':
-        log('=== make - Adjust object properties ===', 'cyan');
-        log('', '');
-        log('Usage:', 'ok');
-        log('  make <obj> bigger     - Scale up by 1.5x', 'dim');
-        log('  make <obj> smaller    - Scale down by 0.67x', 'dim');
-        log('  make <obj> red        - Change color', 'dim');
-        log('  make <obj> scale 2    - Set exact scale', 'dim');
-        log('  make big red ball     - Create if not exists', 'dim');
-        log('', '');
-        log('"make" is upsert: sets property if object exists,', 'ok');
-        log('creates object if it doesn\'t exist.', 'dim');
-        break;
-
-      case 'set':
-        log('=== set - Set object properties ===', 'cyan');
-        log('', '');
-        log('Usage:', 'ok');
-        log('  set <obj> <prop> to <value>', 'dim');
-        log('  set ball color to red', 'dim');
-        log('  set cube x to 100', 'dim');
-        log('  set sphere scale to 2', 'dim');
-        log('', '');
-        log('Common properties: x, y, z, color, scale, visible,', 'ok');
-        log('  rotation, opacity, speed, group', 'dim');
-        break;
-
-      case 'get':
-        log('=== get - Select/examine objects ===', 'cyan');
-        log('', '');
-        log('Usage:', 'ok');
-        log('  get <name>            - Select single object', 'dim');
-        log('  get all cubes         - Select all of type', 'dim');
-        log('  get all red balls     - With color modifier', 'dim');
-        log('  get all where x > 0   - Filter by condition', 'dim');
-        log('', '');
-        log('After selecting, use "it" or "this" to reference.', 'dim');
-        break;
-
-      case 'delete':
-      case 'destroy':
-      case 'remove':
-        log('=== delete - Remove objects ===', 'cyan');
-        log('', '');
-        log('Usage:', 'ok');
-        log('  delete <name>         - Delete single object', 'dim');
-        log('  delete all cubes      - Delete all of type', 'dim');
-        log('  delete all red balls  - With color modifier', 'dim');
-        log('', '');
-        log('Bulk deletes require confirmation (type "go" or "yes").', 'dim');
-        break;
-
-      case 'move':
-        log('=== move - Move objects ===', 'cyan');
-        log('', '');
-        log('Relative movement:', 'ok');
-        log('  move <obj> up 5       - Move up by 5', 'dim');
-        log('  move <obj> left 10    - Move left by 10', 'dim');
-        log('  move <obj> forward 3  - Move forward by 3', 'dim');
-        log('', '');
-        log('Absolute position:', 'ok');
-        log('  move <obj> to 0 10 0  - Move to x=0, y=10, z=0', 'dim');
-        log('', '');
-        log('Directions: up, down, left, right, forward, back', 'dim');
-        break;
-
-      case 'hide':
-      case 'show':
-        log('=== hide/show - Toggle visibility ===', 'cyan');
-        log('', '');
-        log('Usage:', 'ok');
-        log('  hide <name>           - Hide single object', 'dim');
-        log('  show <name>           - Show single object', 'dim');
-        log('  hide all cubes        - Hide all of type', 'dim');
-        log('  show all red balls    - Show with modifier', 'dim');
-        log('', '');
-        log('Bulk operations require confirmation.', 'dim');
-        break;
-
-      case 'list':
-      case 'ls':
-        log('=== list - List objects ===', 'cyan');
-        log('', '');
-        log('Usage:', 'ok');
-        log('  list                  - List all objects', 'dim');
-        log('  list cubes            - List objects of type', 'dim');
-        log('  list all              - Include hidden objects', 'dim');
-        break;
-
-      case 'connect':
-      case 'twin':
-        log('=== connect - Join shared world ===', 'cyan');
-        log('', '');
-        log('Usage:', 'ok');
-        log('  connect               - Join default world', 'dim');
-        log('  connect myworld       - Join named world', 'dim');
-        log('  disconnect            - Leave world', 'dim');
-        log('  say hello             - Chat with others', 'dim');
-        log('  users                 - List connected users', 'dim');
-        log('', '');
-        log('Objects created/moved are synced to all users.', 'dim');
-        break;
-
-      default:
-        log('No detailed help for: ' + topic, 'warn');
-        log('Type "help" to see all commands.', 'dim');
-    }
-  }
-
-  function listObjects(args) {
-    if (!adapter.getObjects) return;
-
-    const objects = adapter.getObjects();
-    const searchTerm = args[0] ? args[0].toLowerCase() : null;
-
-    // Filter by visibility (only show objects in current scene)
-    // Also hide objects starting with _ (hidden/internal objects)
-    let filtered = objects.filter(o => o.visible !== false && !o.name.startsWith('_'));
-
-    // Filter by type if specified
-    if (searchTerm) {
-      // Helper to check if object matches a term
-      const matchesTerm = (o, term) => {
-        const name = (o.name || '').toLowerCase();
-        const type = (o.type || '').toLowerCase();
-        return name === term ||
-               type === term ||
-               name.includes(term) ||
-               type.includes(term) ||
-               name.startsWith(term + '-');
-      };
-
-      // First try exact/contains match with original term
-      let matches = filtered.filter(o => matchesTerm(o, searchTerm));
-
-      // If no matches, try singularized version
-      if (matches.length === 0) {
-        const singular = singularize(searchTerm);
-        if (singular !== searchTerm) {
-          matches = filtered.filter(o => matchesTerm(o, singular));
-        }
-      }
-
-      filtered = matches;
-    }
-
-    if (filtered.length === 0) {
-      log(searchTerm ? 'No ' + searchTerm + ' objects found' : 'No objects', 'dim');
-      return;
-    }
-
-    log('Objects' + (searchTerm ? ' (' + searchTerm + ')' : '') + ':', 'cyan');
-    for (const obj of filtered) {
-      const info = obj.type ? obj.name + ' [' + obj.type + ']' : obj.name;
-      log('  ' + info, 'ok');
-    }
-    log('Total: ' + filtered.length, 'dim');
-  }
-
-  function listScenes() {
-    if (!adapter.getScenes) {
-      log('Scenes not supported', 'err');
-      return;
-    }
-    const scenes = adapter.getScenes();
-    const current = adapter.getCurrentScene ? adapter.getCurrentScene() : null;
-
-    if (scenes.length === 0) {
-      log('No scenes defined', 'dim');
-      return;
-    }
-
-    log('Scenes:', 'cyan');
-    for (const s of scenes) {
-      const marker = (s === current) ? ' (current)' : '';
-      log('  ' + s + marker, 'ok');
-    }
-  }
-
-  function gotoScene(sceneName) {
-    if (!adapter.gotoScene) {
-      log('Scene navigation not supported', 'err');
-      return;
-    }
-    const result = adapter.gotoScene(sceneName);
-    if (result.success) {
-      log('Now in: ' + result.scene, 'ok');
-    } else {
-      log(result.error || 'Scene not found: ' + sceneName, 'err');
-    }
-  }
-
-  function handleCreate(cmd, args) {
-    if (!adapter.createObject) return;
-
-    // Number words mapping
-    const numberWords = { one: 1, two: 2, three: 3, four: 4, five: 5,
-                          six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
-    // Articles to filter out
-    const articles = ['a', 'an', 'the', 'some', 'my', 'this'];
-
-    // Check for bulk create: create N type (numeric)
-    const bulkMatch = cmd.match(/^create\s+(\d+)\s+(.+)$/i);
-    // Check for bulk create: create three cubes (number word)
-    const wordMatch = cmd.match(/^create\s+(one|two|three|four|five|six|seven|eight|nine|ten)\s+(.+)$/i);
-
-    if (bulkMatch || wordMatch) {
-      const match = bulkMatch || wordMatch;
-      const count = bulkMatch ? parseInt(match[1], 10) : numberWords[match[1].toLowerCase()];
-      // Filter articles from type/modifiers
-      const typeAndMods = match[2].trim().split(/\s+/).filter(w => !articles.includes(w.toLowerCase()));
-      const typeName = singularize(typeAndMods[typeAndMods.length - 1] || 'cube');
-      const modifiers = typeAndMods.slice(0, -1);
-
-      if (count >= 10) {
-        log('Creating ' + count + ' ' + typeName + '(s)...', 'dim');
-      }
-
-      bulkCreateMode = count >= 10;
-      bulkCreateCount = 0;
-
-      for (let i = 0; i < count; i++) {
-        const result = adapter.createObject(typeName, null, { modifiers });
-        if (result.success) {
-          if (!bulkCreateMode || bulkCreateCount < BULK_LOG_LIMIT) {
-            log('Created ' + result.name, 'ok');
-          }
-          bulkCreateCount++;
-          // Set up undo
-          const name = result.name;
-          pushUndo('create ' + name,
-            () => adapter.deleteObject(name),
-            () => adapter.createObject(typeName, name, { modifiers })
-          );
-        }
-      }
-
-      if (bulkCreateMode && count > BULK_LOG_LIMIT) {
-        log('  ... and ' + (count - BULK_LOG_LIMIT) + ' more', 'dim');
-      }
-      log('Created ' + count + ' ' + typeName + '(s)', 'ok');
-      bulkCreateMode = false;
-      return;
-    }
-
-    // Single create - filter articles
-    const filteredArgs = args.filter(w => !articles.includes(w.toLowerCase()));
-    const typeName = singularize(filteredArgs[filteredArgs.length - 1] || 'cube');
-    const modifiers = filteredArgs.slice(0, -1);
-
-    const result = adapter.createObject(typeName, null, { modifiers });
-    if (result.success) {
-      log('✔ Created object: ' + result.name, 'ok');
-      currentObject = result.object;
-      currentObjectName = result.name;
-
-      // Show original input as description (without the command word)
-      const description = cmd.replace(/^(create|make)\s+/i, '');
-      log('   Description: "' + description + '"', 'dim');
-
-      // Show interpreted properties as JSON-like object
-      const props = [];
-      props.push('type: "' + typeName + '"');
-      if (result.color && result.color !== 'gray') props.push('color: "' + result.color + '"');
-      if (result.size && result.size !== 1) props.push('scale: ' + result.size);
-      log('   Interpreted as: { ' + props.join(', ') + ' }', 'dim');
-
-      // Warn if type wasn't recognized
-      if (result.knownType === false) {
-        const supported = adapter.getSupportedTypes ? adapter.getSupportedTypes() : [];
-        log('   ⚠ Unknown type "' + typeName + '" - created as cube', 'err');
-        if (supported.length > 0) {
-          log('   Supported types: ' + supported.join(', '), 'dim');
-        }
-      }
-
-      // Broadcast to shared world if connected (include raw command)
-      // Support both Three.js (obj.position.x) and Phaser (obj.x) formats
-      const obj = result.object;
-      const x = obj?.position?.x ?? obj?.x ?? 0;
-      const y = obj?.position?.y ?? obj?.y ?? 0;
-      const z = obj?.position?.z ?? obj?.z ?? 0;
-      const color = result.color || null;
-      const size = result.size || 1;
-      twinBroadcastCreate(result.name, typeName, x, y, z, color, size, cmd);
-
-      pushUndo('create ' + result.name,
-        () => adapter.deleteObject(result.name),
-        () => adapter.createObject(typeName, result.name, { modifiers })
-      );
-    } else {
-      log(result.error || 'Failed to create ' + typeName, 'err');
-    }
-  }
-
-  function handleMake(cmd, args) {
-    // "make" is upsert: set property if object exists, create if not
-    // Examples:
-    //   make banana scale 4     → set banana's scale to 4 (or create banana, then set)
-    //   make banana red         → set banana's color to red (or create red banana)
-    //   make big red ball       → create a big red ball (no object named "big")
-    //   make banana             → create banana if doesn't exist
-
-    if (args.length === 0) {
-      log('Usage: make <object> [property] [value]', 'err');
-      return;
-    }
-
-    // Get list of existing objects
-    const existingNames = adapter.getObjectNames ? adapter.getObjectNames() : [];
-    const existingLower = existingNames.map(n => n.toLowerCase());
-
-    // Check if first word matches an existing object
-    const firstWord = args[0].toLowerCase();
-    const matchIdx = existingLower.findIndex(n => n === firstWord || n.startsWith(firstWord + '-'));
-
-    // Size modifiers
-    const SIZE_MODIFIERS = {
-      tiny: 0.25, small: 0.5, big: 2, large: 2, huge: 4,
-      bigger: 1.5, smaller: 0.67, larger: 1.5
-    };
-    const COLORS = ['red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'white', 'black', 'orange', 'purple', 'pink', 'gray', 'grey', 'gold', 'silver'];
-
-    if (matchIdx !== -1) {
-      // Object exists - treat as "set" command
-      const objName = existingNames[matchIdx];
-      const restArgs = args.slice(1);
-
-      if (restArgs.length === 0) {
-        // Just "make banana" - select it
-        currentObjectName = objName;
-        if (adapter.getObject) {
-          const obj = adapter.getObject(objName);
-          if (obj) currentObject = obj.object;
-        }
-        log('Selected: ' + objName, 'ok');
-        return;
-      }
-
-      // Check for size modifier: "make ball big" -> multiply scale
-      const firstArg = restArgs[0].toLowerCase();
-      if (SIZE_MODIFIERS[firstArg] && restArgs.length === 1) {
-        const multiplier = SIZE_MODIFIERS[firstArg];
-        const currentScale = adapter.getProperty ? adapter.getProperty(objName, 'scale') : 1;
-        const newScale = (currentScale || 1) * multiplier;
-        adapter.setProperty(objName, 'scale', newScale);
-        log(objName + '.scale = ' + newScale.toFixed(2), 'ok');
-        return;
-      }
-
-      // Check for color modifier: "make ball red" -> set color
-      if (COLORS.includes(firstArg) && restArgs.length === 1) {
-        adapter.setProperty(objName, 'color', firstArg);
-        log(objName + '.color = ' + firstArg, 'ok');
-        return;
-      }
-
-      // "make banana scale 4" or other property setting
-      // Reconstruct as set command
-      const setCmd = 'set ' + objName + ' ' + restArgs.join(' ');
-      log('[→ ' + setCmd + ']', 'dim');
-      handleSet(setCmd, [objName].concat(restArgs));
-    } else {
-      // Object doesn't exist - treat as "create" command
-      const createCmd = 'create ' + args.join(' ');
-      log('[→ ' + createCmd + ']', 'dim');
-      handleCreate(createCmd, args);
-    }
-  }
-
-  function handleDelete(args) {
-    if (!adapter.deleteObject) return;
-    let name = args.join(' ');
-
-    // Handle bulk delete: delete all [modifiers] <type>
-    if (args[0]?.toLowerCase() === 'all' && args.length > 1) {
-      handleDeleteAll(args.slice(1));
-      return;
-    }
-
-    // Handle selection-based deletion: destroy / destroy confirmed
-    if (!name || name.toLowerCase() === 'confirmed') {
-      const isConfirmed = name.toLowerCase() === 'confirmed';
-
-      // If we have a multi-selection from query, operate on that
-      if (currentSelection && currentSelection.length > 0) {
-        const count = currentSelection.length;
-        if (!isConfirmed) {
-          log('⚠ destroy affects ' + count + ' object(s). Use "destroy confirmed" to proceed.', 'warn');
-          return;
-        }
-
-        // Confirmed: delete all selected objects
-        let deleted = 0;
-        for (const item of currentSelection) {
-          const objName = item.name;
-          const result = adapter.deleteObject(objName);
-          if (result.success) {
-            deleted++;
-            twinBroadcastDelete(objName);
-          }
-        }
-        currentSelection = [];
-        log('destroyed ' + deleted + ' object(s)', 'ok');
-        return;
-      }
-
-      // No selection - try using single selected object
-      if (adapter.getSelectedObject) {
-        name = adapter.getSelectedObject();
-        if (name) {
-          log('(using selected: ' + name + ')', 'dim');
-        }
-      }
-    }
-
-    if (!name || name.toLowerCase() === 'confirmed') {
-      log('Usage: delete <name>, or use "get all where..." then "destroy confirmed"', 'err');
-      return;
-    }
-
-    // @parity do_delete v1
-    function doDelete(resolvedName) {
-      // Get object state for undo
-      const obj = adapter.getObject ? adapter.getObject(resolvedName) : null;
-
-      const result = adapter.deleteObject(resolvedName);
-      if (result.success) {
-        log('Deleted ' + resolvedName, 'ok');
-        if (currentObjectName === resolvedName) {
-          currentObject = null;
-          currentObjectName = null;
-        }
-        // Deselect if we deleted the selected object
-        if (adapter.getSelectedObject && adapter.getSelectedObject() === resolvedName && adapter.deselect) {
-          adapter.deselect();
-        }
-
-        // Broadcast to shared world if connected
-        twinBroadcastDelete(resolvedName);
-
-        if (obj) {
-          pushUndo('delete ' + resolvedName,
-            () => adapter.restoreObject(resolvedName, obj),
-            () => adapter.deleteObject(resolvedName)
-          );
-        }
-      } else {
-        log(result.error || 'Object not found: ' + resolvedName, 'err');
-      }
-    }
-
-    // Resolve object name with fuzzy matching (scene-aware with confirmation)
-    const resolved = fuzzyMatchObject(name, {
-      operation: 'delete',
-      onConfirm: doDelete
-    });
-
-    // If null, confirmation is pending - don't proceed
-    if (resolved === null) return;
-
-    doDelete(resolved);
-  }
-
-  function handleClone(args) {
-    if (!adapter.cloneObject) return;
-    let name = args[0];
-    if (!name) {
-      log('Usage: clone <name>', 'err');
-      return;
-    }
-
-    // @parity do_clone v1
-    function doClone(resolvedName) {
-      const result = adapter.cloneObject(resolvedName);
-      if (result.success) {
-        log('Cloned ' + resolvedName + ' → ' + result.name, 'ok');
-        currentObject = result.object;
-        currentObjectName = result.name;
-
-        // Broadcast clone to twins with raw command
-        // Support both Three.js and Phaser position formats
-        const obj = result.object;
-        const typeName = obj.userData?._type || obj.getData?.('_type') || 'cube';
-        const color = obj.material?.color ? obj.material.color.getHex() : (obj.getData?.('_color') || 0x00ff00);
-        const x = obj.position?.x ?? obj?.x ?? 0;
-        const y = obj.position?.y ?? obj?.y ?? 0;
-        const z = obj.position?.z ?? obj?.z ?? 0;
-        twinBroadcastCreate(result.name, typeName, x, y, z, color, 1, 'clone ' + resolvedName);
-
-        pushUndo('clone ' + resolvedName,
-          () => adapter.deleteObject(result.name),
-          () => adapter.cloneObject(resolvedName)
-        );
-      } else {
-        log(result.error || 'Failed to clone ' + resolvedName, 'err');
-      }
-    }
-
-    // Resolve object name with fuzzy matching (scene-aware)
-    // Clone doesn't need confirmation - it doesn't modify the source object
-    const resolved = fuzzyMatchObject(name);
-    doClone(resolved);
-  }
-
-  function handleSet(cmd, args) {
-    if (!adapter.setProperty) return;
-
-    // Parse: set <obj> <prop> [to] <value> - "to" is optional
-    // Also support: set <prop> [to] <value> (uses selected object)
-    let match = cmd.match(/^set\s+(\S+)\s+(\S+)\s+(?:to\s+)?(.+)$/i);
-    let objName, prop, value;
-
-    if (match) {
-      [, objName, prop, value] = match;
-    } else {
-      // Try parsing without object name: set <prop> [to] <value>
-      const shortMatch = cmd.match(/^set\s+(\S+)\s+(?:to\s+)?(.+)$/i);
-      if (shortMatch && adapter.getSelectedObject) {
-        objName = adapter.getSelectedObject();
-        if (objName) {
-          [, prop, value] = shortMatch;
-          log('(using selected: ' + objName + ')', 'dim');
-        }
-      }
-    }
-
-    if (!objName || !prop || !value) {
-      log('Usage: set <object> <property> [to] <value>', 'err');
-      log('Or click an object first, then: set <property> [to] <value>', 'dim');
-      return;
-    }
-
-    // @parity do_set v1
-    function doSet(resolvedName) {
-      // Get old value for undo
-      const oldValue = adapter.getProperty ? adapter.getProperty(resolvedName, prop) : null;
-
-      // Check if this is a capability property (pulse, spin, bounce)
-      const capabilityProps = ['pulse', 'spin', 'bounce'];
-      const isCapability = capabilityProps.includes(prop.toLowerCase());
-
-      let result;
-      if (isCapability && adapter.applyCapability) {
-        // Parse value: "on", "off", or number
-        let capValue = value.toLowerCase() === 'on' ? 1 :
-                       value.toLowerCase() === 'off' ? 0 :
-                       parseFloat(value) || 1;
-        result = adapter.applyCapability(resolvedName, prop.toLowerCase(), capValue);
-
-        // Broadcast to other clients
-        if (result && result.success && typeof RoshNetwork !== 'undefined') {
-          if (RoshNetwork.isConnected()) {
-            console.log('[Runtime] Broadcasting capability:', resolvedName, prop, capValue);
-            RoshNetwork.broadcastUpdate(resolvedName, prop.toLowerCase(), capValue);
-          } else {
-            console.log('[Runtime] Not connected - skipping broadcast');
-          }
-        }
-      } else {
-        result = adapter.setProperty(resolvedName, prop, value);
-
-        // Broadcast regular property changes too
-        if (result && result.success && typeof RoshNetwork !== 'undefined' && RoshNetwork.isConnected()) {
-          RoshNetwork.broadcastUpdate(resolvedName, prop, value);
-        }
-      }
-
-      if (result && result.success) {
-        log('Set ' + resolvedName + '.' + prop + ' = ' + value, 'ok');
-
-        pushUndo('set ' + resolvedName + '.' + prop,
-          () => isCapability && adapter.applyCapability ?
-                adapter.applyCapability(resolvedName, prop, oldValue) :
-                adapter.setProperty(resolvedName, prop, oldValue),
-          () => isCapability && adapter.applyCapability ?
-                adapter.applyCapability(resolvedName, prop, value) :
-                adapter.setProperty(resolvedName, prop, value)
-        );
-      } else {
-        log((result && result.error) || 'Object not found: ' + resolvedName, 'err');
-      }
-    }
-
-    // Resolve object name with fuzzy matching (scene-aware with confirmation)
-    const resolved = fuzzyMatchObject(objName, {
-      operation: 'set property on',
-      onConfirm: doSet
-    });
-
-    // If null, confirmation is pending - don't proceed
-    if (resolved === null) return;
-
-    doSet(resolved);
-  }
-
-  function handleGet(args) {
-    if (!adapter.getObject) return;
-    const name = args.join(' ');
-    if (!name) {
-      log('Usage: get <name>', 'err');
-      return;
-    }
-
-    // Check for type search: get all spheres, get blue cube
-    if (args[0] === 'all' && args[1]) {
-      handleGetAll(args.slice(1));
-      return;
-    }
-
-    // Deep search with modifiers
-    if (adapter.deepSearch) {
-      const result = adapter.deepSearch(args);
-      if (result.success && result.objects.length > 0) {
-        // Show message if search expanded beyond current scene
-        if (result.expandedSearch) {
-          log('[searching all scenes - none found in "' + (result.currentScene || 'current') + '"]', 'dim');
-        }
-
-        if (result.objects.length === 1) {
-          currentObject = result.objects[0].object;
-          currentObjectName = result.objects[0].name;
-          log('Selected: ' + currentObjectName, 'ok');
-        } else {
-          currentSelection = result.objects;
-          const suffix = result.expandedSearch ? ' (all scenes)' : '';
-          log('Found ' + result.objects.length + ' matches' + suffix + ':', 'ok');
-          for (const o of result.objects.slice(0, 5)) {
-            log('  ' + o.name, 'dim');
-          }
-          if (result.objects.length > 5) {
-            log('  ... and ' + (result.objects.length - 5) + ' more', 'dim');
-          }
-        }
-        return;
-      }
-      // Fall through to fuzzy matching if deepSearch found nothing
-    }
-
-    // Simple name lookup first
-    let obj = adapter.getObject(name);
-
-    // If not found, try fuzzy matching - first in current scene, then all scenes
-    if (!obj && adapter.getAllObjects) {
-      // First try current scene only
-      let matches = fuzzyFindObjects(name, true);
-      let expandedSearch = false;
-
-      // If no matches in current scene, expand to all scenes
-      if (matches.length === 0) {
-        matches = fuzzyFindObjects(name, false);
-        if (matches.length > 0) {
-          expandedSearch = true;
-          const currentScene = adapter.getCurrentScene ? adapter.getCurrentScene() : 'unknown';
-          log('[searching all scenes - none found in "' + currentScene + '"]', 'dim');
-        }
-      }
-
-      if (matches.length === 1) {
-        log('[resolved: "' + name + '" -> "' + matches[0].name + '"]', 'dim');
-        obj = adapter.getObject(matches[0].name);
-      } else if (matches.length > 1) {
-        log('Found ' + matches.length + ' matches' + (expandedSearch ? ' (all scenes)' : '') + ':', 'cyan');
-        for (const m of matches.slice(0, 8)) {
-          log('  ' + m.name, 'dim');
-        }
-        if (matches.length > 8) {
-          log('  ... and ' + (matches.length - 8) + ' more', 'dim');
-        }
-        return;
-      }
-    }
-
-    if (obj) {
-      currentObject = obj.object;
-      currentObjectName = obj.name;
-      log('Selected: ' + currentObjectName, 'ok');
-    } else {
-      log('No matches found', 'err');
-    }
-  }
-
-  function handleGetAll(args) {
-    if (!adapter.getObjectsByType) return;
-
-    // Check for 'where' clause: get all [type] where <condition>
-    const whereIndex = args.findIndex(a => a.toLowerCase() === 'where');
-
-    if (whereIndex !== -1) {
-      // Parse: get all [type] where <property> <op> <value>
-      const typePart = args.slice(0, whereIndex);
-      const conditionPart = args.slice(whereIndex + 1);
-
-      // Get candidates - either by type or all objects
-      let candidates;
-      if (typePart.length > 0) {
-        const typeName = singularize(typePart.join(' '));
-        candidates = adapter.getObjectsByType(typeName);
-      } else {
-        // Get all objects
-        candidates = adapter.getAllObjects ? adapter.getAllObjects() : [];
-      }
-
-      // Parse condition: <property> <op> <value>
-      // Supported: x is above 5, group is enemies, y is below 0
-      if (conditionPart.length < 3) {
-        log('Usage: get all where <property> is <op> <value>', 'err');
-        return;
-      }
-
-      const propName = conditionPart[0];
-      const opParts = conditionPart.slice(1);
-
-      // Parse operator and value
-      let op, valueStr;
-      if (opParts[0] === 'is' && opParts.length >= 2) {
-        if (opParts[1] === 'above' || opParts[1] === 'greater' || opParts[1] === 'over') {
-          op = '>';
-          valueStr = opParts.slice(2).join(' ');
-        } else if (opParts[1] === 'below' || opParts[1] === 'less' || opParts[1] === 'under') {
-          op = '<';
-          valueStr = opParts.slice(2).join(' ');
-        } else {
-          // "is <value>" means equals
-          op = '==';
-          valueStr = opParts.slice(1).join(' ');
-        }
-      } else {
-        op = '==';
-        valueStr = opParts.join(' ');
-      }
-
-      // Parse value (number or string)
-      let value = parseFloat(valueStr);
-      if (isNaN(value)) {
-        value = valueStr.replace(/^["']|["']$/g, ''); // Remove quotes
-      }
-
-      // Filter candidates
-      const matching = candidates.filter(obj => {
-        const objData = obj.object || obj;
-        let propValue;
-
-        // Check userData first (for properties set via console)
-        if (objData.userData && objData.userData[propName] !== undefined) {
-          propValue = objData.userData[propName];
-        }
-        // Special handling for color - check userData.color first, then material
-        else if (propName === 'color') {
-          if (objData.userData && objData.userData.color) {
-            propValue = objData.userData.color;
-          } else if (objData.material && objData.material.color) {
-            // Convert hex to color name for comparison
-            const hexNum = objData.material.color.getHex();
-            // Use RoshColors if available for reverse lookup
-            if (typeof RoshColors !== 'undefined') {
-              propValue = RoshColors.getName(hexNum) || RoshColors.toHexString(hexNum);
-            } else {
-              propValue = '#' + objData.material.color.getHexString();
-            }
-          }
-        }
-        // Then check position/scale/rotation
-        else if (propName === 'x' && objData.position) propValue = objData.position.x;
-        else if (propName === 'y' && objData.position) propValue = objData.position.y;
-        else if (propName === 'z' && objData.position) propValue = objData.position.z;
-        else if (propName === 'scale' && objData.scale) propValue = objData.scale.x; // Use x for uniform
-        else if (objData[propName] !== undefined) propValue = objData[propName];
-        else return false;
-
-        // Apply comparison
-        if (op === '>') return propValue > value;
-        if (op === '<') return propValue < value;
-        if (op === '>=') return propValue >= value;
-        if (op === '<=') return propValue <= value;
-        if (op === '==') return propValue == value;
-        if (op === '!=') return propValue != value;
-        return false;
-      });
-
-      currentSelection = matching;
-      if (matching.length === 0) {
-        log('No matches found', 'err');
-      } else {
-        log('selected ' + matching.length + ' object(s):', 'ok');
-        for (const o of matching.slice(0, 5)) {
-          log('  ' + o.name, 'dim');
-        }
-        if (matching.length > 5) {
-          log('  ... and ' + (matching.length - 5) + ' more', 'dim');
-        }
-      }
-      return;
-    }
-
-    // Original behavior: get all <type>
-    const rawTypeName = args.join(' ');
-    // Try exact match first, then singularize
-    let objects = adapter.getObjectsByType(rawTypeName);
-    let typeName = rawTypeName;
-
-    if (objects.length === 0) {
-      const singularized = singularize(rawTypeName);
-      if (singularized !== rawTypeName) {
-        objects = adapter.getObjectsByType(singularized);
-        typeName = singularized;
-      }
-    }
-
-    if (objects.length === 0) {
-      log('No ' + typeName + ' objects found', 'err');
-      return;
-    }
-
-    currentSelection = objects;
-    currentSelectionType = typeName;
-    log('Selected ' + objects.length + ' ' + typeName + '(s)', 'ok');
-  }
-
-  function handleHide(args) {
-    if (!adapter.setVisible) return;
-
-    // Handle bulk hide: hide all [modifiers] <type>
-    if (args[0]?.toLowerCase() === 'all' && args.length > 1) {
-      handleHideAll(args.slice(1));
-      return;
-    }
-
-    let name = args.join(' ') || currentObjectName;
-
-    if (!name) {
-      log('Usage: hide <name> or select an object first', 'err');
-      return;
-    }
-
-    // @parity do_hide v1
-    function doHide(resolvedName) {
-      const result = adapter.setVisible(resolvedName, false);
-      if (result.success) {
-        log('Hid ' + resolvedName, 'ok');
-        twinBroadcastProperty(resolvedName, 'visible', false);
-        pushUndo('hide ' + resolvedName,
-          () => adapter.setVisible(resolvedName, true),
-          () => adapter.setVisible(resolvedName, false)
-        );
-      } else {
-        log(result.error || 'Failed to hide ' + resolvedName, 'err');
-      }
-    }
-
-    // Resolve with scene-aware confirmation
-    const resolved = fuzzyMatchObject(name, {
-      operation: 'hide',
-      onConfirm: doHide
-    });
-
-    if (resolved === null) return;
-    doHide(resolved);
-  }
-
-  function handleShow(args) {
-    if (!adapter.setVisible) return;
-
-    // Handle bulk show: show all [modifiers] <type>
-    if (args[0]?.toLowerCase() === 'all' && args.length > 1) {
-      handleShowAll(args.slice(1));
-      return;
-    }
-
-    let name = args.join(' ') || currentObjectName;
-
-    if (!name) {
-      log('Usage: show <name> or select an object first', 'err');
-      return;
-    }
-
-    // @parity do_show v1
-    function doShow(resolvedName) {
-      const result = adapter.setVisible(resolvedName, true);
-      if (result.success) {
-        log('Showed ' + resolvedName, 'ok');
-        twinBroadcastProperty(resolvedName, 'visible', true);
-        pushUndo('show ' + resolvedName,
-          () => adapter.setVisible(resolvedName, false),
-          () => adapter.setVisible(resolvedName, true)
-        );
-      } else {
-        log(result.error || 'Failed to show ' + resolvedName, 'err');
-      }
-    }
-
-    // Resolve with scene-aware confirmation
-    const resolved = fuzzyMatchObject(name, {
-      operation: 'show',
-      onConfirm: doShow
-    });
-
-    if (resolved === null) return;
-    doShow(resolved);
-  }
-
-  // Bulk operations helper: find objects matching type and modifiers
-  function findMatchingObjects(args) {
-    if (!adapter.getAllObjects) return { objects: [], desc: args.join(' ') };
-
-    const allObjects = adapter.getAllObjects();
-    const colors = ['red', 'green', 'blue', 'yellow', 'orange', 'purple', 'pink',
-                    'cyan', 'white', 'black', 'gray', 'grey', 'brown', 'gold', 'silver'];
-    const sizes = { big: 2, large: 2, huge: 4, small: 0.5, tiny: 0.25 };
-
-    // Parse args into modifiers and type
-    let targetColor = null;
-    let targetSize = null;
-    let targetTypeOriginal = null;
-
-    for (const arg of args) {
-      const lower = arg.toLowerCase();
-      if (colors.includes(lower)) {
-        targetColor = lower;
-      } else if (sizes[lower] !== undefined) {
-        targetSize = lower;
-      } else {
-        targetTypeOriginal = lower;  // Keep original, singularize later if needed
-      }
-    }
-
-    // Filter helper - matches objects with given type (and color/size modifiers)
-    const filterWithType = (type) => allObjects.filter(obj => {
-      const objType = (obj.userData?.type || obj.name?.split('-')[0] || '').toLowerCase();
-      const objColor = (obj.userData?.color || '').toLowerCase();
-      const objScale = obj.userData?.scale || obj.scale?.x || 1;
-
-      if (type && objType !== type) return false;
-      if (targetColor && objColor !== targetColor) return false;
-      if (targetSize) {
-        if (targetSize === 'big' || targetSize === 'large' || targetSize === 'huge') {
-          if (objScale < 1.5) return false;
-        } else if (targetSize === 'small' || targetSize === 'tiny') {
-          if (objScale > 0.75) return false;
-        }
-      }
-      return true;
-    });
-
-    // Try exact type match first
-    let matching = filterWithType(targetTypeOriginal);
-    let targetType = targetTypeOriginal;
-
-    // If no matches with exact type, try singularized
-    if (matching.length === 0 && targetTypeOriginal) {
-      const singularized = singularize(targetTypeOriginal);
-      if (singularized !== targetTypeOriginal) {
-        matching = filterWithType(singularized);
-        targetType = singularized;
-      }
-    }
-
-    // Build description
-    const descParts = [];
-    if (targetColor) descParts.push(targetColor);
-    if (targetSize) descParts.push(targetSize);
-    if (targetType) descParts.push(targetType + (matching.length !== 1 ? 's' : ''));
-    const desc = descParts.join(' ') || 'objects';
-
-    return { objects: matching, desc };
-  }
-
-  function handleDeleteAll(args) {
-    const { objects, desc } = findMatchingObjects(args);
-
-    if (objects.length === 0) {
-      log('No ' + desc + ' found', 'warn');
-      return;
-    }
-
-    // Set up pending operation with confirmation
-    pendingCrossScene = {
-      desc: 'delete ' + objects.length + ' ' + desc,
-      execute: () => {
-        let deleted = 0;
-        for (const obj of objects) {
-          const name = obj.userData?._name || obj.name;
-          if (name && adapter.deleteObject) {
-            const result = adapter.deleteObject(name);
-            if (result.success) {
-              deleted++;
-              twinBroadcastDelete(name);
-            }
-          }
-        }
-        log('Deleted ' + deleted + ' ' + desc, 'ok');
-      }
-    };
-
-    log('⚠ About to delete ' + objects.length + ' ' + desc + '. Type "go" or "yes" to confirm.', 'warn');
-  }
-
-  function handleHideAll(args) {
-    const { objects, desc } = findMatchingObjects(args);
-
-    if (objects.length === 0) {
-      log('No ' + desc + ' found', 'warn');
-      return;
-    }
-
-    // Set up pending operation with confirmation
-    pendingCrossScene = {
-      desc: 'hide ' + objects.length + ' ' + desc,
-      execute: () => {
-        let hidden = 0;
-        for (const obj of objects) {
-          const name = obj.userData?._name || obj.name;
-          if (name && adapter.setVisible) {
-            const result = adapter.setVisible(name, false);
-            if (result.success) hidden++;
-          }
-        }
-        log('Hid ' + hidden + ' ' + desc, 'ok');
-      }
-    };
-
-    log('⚠ About to hide ' + objects.length + ' ' + desc + '. Type "go" or "yes" to confirm.', 'warn');
-  }
-
-  function handleShowAll(args) {
-    const { objects, desc } = findMatchingObjects(args);
-
-    if (objects.length === 0) {
-      log('No ' + desc + ' found', 'warn');
-      return;
-    }
-
-    // Set up pending operation with confirmation
-    pendingCrossScene = {
-      desc: 'show ' + objects.length + ' ' + desc,
-      execute: () => {
-        let shown = 0;
-        for (const obj of objects) {
-          const name = obj.userData?._name || obj.name;
-          if (name && adapter.setVisible) {
-            const result = adapter.setVisible(name, true);
-            if (result.success) shown++;
-          }
-        }
-        log('Showed ' + shown + ' ' + desc, 'ok');
-      }
-    };
-
-    log('⚠ About to show ' + objects.length + ' ' + desc + '. Type "go" or "yes" to confirm.', 'warn');
-  }
-
-  // Fuzzy match object reference (e.g., "red ball" -> "ball-1" with color red)
-  // @parity fuzzy_find_with_confirmation v1 - Search current scene first, ask before acting on other scenes
-  function fuzzyMatchObject(objRef, options = {}) {
-    if (!adapter.getAllObjects) return objRef;
-
-    const allObjects = adapter.getAllObjects();
-    const refWords = objRef.toLowerCase().split(/\s+/);
-    const currentScene = adapter.getCurrentScene ? adapter.getCurrentScene() : null;
-
-    // Separate objects by scene
-    const currentSceneObjects = [];
-    const otherSceneObjects = [];
-
-    for (const obj of allObjects) {
-      const name = obj.name || (obj.userData && obj.userData._name) || '';
-      if (!name || name.startsWith('_')) continue;
-
-      const objScene = obj.userData?._scene || obj.object?.userData?._scene;
-      if (currentScene && objScene && objScene !== currentScene) {
-        otherSceneObjects.push({ obj, name, scene: objScene });
-      } else {
-        currentSceneObjects.push({ obj, name, scene: objScene || currentScene });
-      }
-    }
-
-    // Helper to find best match in a list
-    function findBestMatch(objectList) {
-      // First try exact match
-      for (const item of objectList) {
-        if (item.name.toLowerCase() === objRef.toLowerCase()) {
-          return { name: item.name, scene: item.scene, exact: true };
-        }
-      }
-
-      // Fuzzy match by type and color
-      let bestMatch = null;
-      let bestScore = 0;
-      let bestScene = null;
-
-      for (const item of objectList) {
-        const objType = (item.obj.userData && item.obj.userData._type) || '';
-        const objColor = (item.obj.userData && item.obj.userData.color) || '';
-        const nameLower = item.name.toLowerCase();
-
-        let score = 0;
-        for (const word of refWords) {
-          if (word === objType.toLowerCase() || word === objType.toLowerCase() + 's') score += 10;
-          if (word === objColor.toLowerCase()) score += 5;
-          if (nameLower.includes(word)) score += 3;
-        }
-
-        if (score > bestScore) {
-          bestScore = score;
-          bestMatch = item.name;
-          bestScene = item.scene;
-        }
-      }
-
-      if (bestMatch && bestScore > 0) {
-        return { name: bestMatch, scene: bestScene, score: bestScore };
-      }
-      return null;
-    }
-
-    // Search current scene first
-    const currentMatch = findBestMatch(currentSceneObjects);
-    if (currentMatch) {
-      if (!currentMatch.exact) {
-        log('[matched: "' + objRef + '" → "' + currentMatch.name + '"]', 'dim');
-      }
-      return currentMatch.name;
-    }
-
-    // Not found in current scene - check other scenes
-    const otherMatch = findBestMatch(otherSceneObjects);
-    if (otherMatch) {
-      // If operation and callback provided, set up confirmation
-      if (options.operation && options.onConfirm) {
-        log('⚠ "' + objRef + '" not found in "' + (currentScene || 'current') + '"', 'warn');
-        log('  Found "' + otherMatch.name + '" in scene "' + otherMatch.scene + '"', 'dim');
-        log('  Type "go" or "yes" to ' + options.operation + ' it, or any other command to cancel', 'dim');
-
-        pendingCrossScene = {
-          desc: options.operation + ' ' + otherMatch.name + ' from scene "' + otherMatch.scene + '"',
-          execute: () => options.onConfirm(otherMatch.name)
-        };
-        return null;  // Signal caller to abort - confirmation pending
-      }
-
-      // No confirmation needed (e.g., read-only operations) - just warn and return
-      log('[not in "' + (currentScene || 'current') + '" - found in "' + otherMatch.scene + '"]', 'warn');
-      log('[matched: "' + objRef + '" → "' + otherMatch.name + '"]', 'dim');
-      return otherMatch.name;
-    }
-
-    return objRef;  // Return original if no match anywhere
-  }
-
-  function handleMove(cmd, args) {
-    if (!adapter.moveObject) return;
-
-    // Parse: move <obj_ref> to <x> <y> [z] (obj_ref can be multi-word)
-    const toMatch = cmd.match(/^move\s+(.+?)\s+to\s+(-?\d+\.?\d*)\s+(-?\d+\.?\d*)\s*(-?\d+\.?\d*)?$/i);
-    if (toMatch) {
-      const [, objRef, x, y, z] = toMatch;
-
-      // @parity do_move v1
-      function doMove(resolvedName) {
-        const oldPos = adapter.getPosition ? adapter.getPosition(resolvedName) : null;
-
-        const result = adapter.moveObject(resolvedName, { x: parseFloat(x), y: parseFloat(y), z: z ? parseFloat(z) : undefined });
-        if (result.success) {
-          log('Moved ' + resolvedName + ' to ' + x + ', ' + y + (z ? ', ' + z : ''), 'ok');
-          // Broadcast move to network with raw command
-          twinBroadcastMove(resolvedName, parseFloat(x), parseFloat(y), z ? parseFloat(z) : 0, cmd);
-          if (oldPos) {
-            pushUndo('move ' + resolvedName,
-              () => adapter.moveObject(resolvedName, oldPos),
-              () => adapter.moveObject(resolvedName, { x: parseFloat(x), y: parseFloat(y), z: z ? parseFloat(z) : undefined })
+            this.log("Created '" + ctx.objName + "' (" + ctx.objType + ") with " +
+                     Object.keys(props).length + " properties", 'ok');
+
+            this.pushUndo(
+                "create '" + ctx.objName + "'",
+                () => this.adapter.deleteObject(obj),
+                () => {
+                    const newObj = this.adapter.createObject(ctx.objType, ctx.objName, props);
+                    for (const [prop, value] of Object.entries(props)) {
+                        this.adapter.setProperty(newObj, prop, value);
+                    }
+                }
             );
-          }
+
+            this.multiLineBuffer = [];
         }
-      }
 
-      // Resolve with scene-aware confirmation
-      const resolved = fuzzyMatchObject(objRef, {
-        operation: 'move',
-        onConfirm: doMove
-      });
+        execCommand(cmd, isUserCommand = true) {
+            if (isUserCommand) this.undoGroup++;
 
-      if (resolved === null) return;
-      doMove(resolved);
-      return;
-    }
+            const corrected = this.fuzzyCorrect(cmd);
+            if (corrected.corrections.length > 0) {
+                this.log('[corrected: ' + corrected.corrections.join(', ') + ']', 'dim');
+            }
+            cmd = corrected.cmd;
+            this.log('> ' + cmd, 'cmd');
 
-    // Relative movement: move <obj_ref> <dir> <amount> (obj_ref can be multi-word)
-    const relMatch = cmd.match(/^move\s+(.+?)\s+(forward|back|backward|left|right|up|down)\s+(-?\d+\.?\d*)$/i);
-    if (relMatch) {
-      const [, objRef, dir, amt] = relMatch;
-      const amount = parseFloat(amt);
+            const nonSubstantive = /^(undo|redo|help|:repeat|\?|history)/i;
+            if (isUserCommand && !nonSubstantive.test(cmd.trim())) {
+                this.lastUserCommand = cmd;
+            }
 
-      // Helper to perform the actual relative move
-      function doRelMove(resolvedName) {
-        const oldPos = adapter.getPosition ? adapter.getPosition(resolvedName) : null;
+            const parts = cmd.trim().toLowerCase().split(/\s+/);
 
-        const result = adapter.moveObjectRelative(resolvedName, dir.toLowerCase(), amount);
-        if (result.success) {
-          log('Moved ' + resolvedName + ' ' + dir + ' ' + amt, 'ok');
-          // Broadcast new position to network with raw command
-          const newPos = adapter.getPosition ? adapter.getPosition(resolvedName) : null;
-          if (newPos) {
-            twinBroadcastMove(resolvedName, newPos.x, newPos.y, newPos.z || 0, cmd);
-          }
-          if (oldPos) {
-            pushUndo('move ' + resolvedName + ' ' + dir,
-              () => adapter.moveObject(resolvedName, oldPos),
-              () => adapter.moveObjectRelative(resolvedName, dir.toLowerCase(), amount)
-            );
-          }
-        } else {
-          log('Failed to move ' + resolvedName + ': ' + (result.error || 'object not found'), 'err');
+            try {
+                if ((parts[0] === 'go' || parts[0] === 'confirm' || parts[0] === 'yes') && this.pendingOp) {
+                    this.pendingOp.execute();
+                    this.pendingOp = null;
+                    return;
+                }
+                if (this.pendingOp) {
+                    this.log('Cancelled pending operation', 'dim');
+                    this.pendingOp = null;
+                }
+
+                if (parts[0] === 'help') {
+                    this.cmdHelp(parts.slice(1));
+                } else if (parts[0] === 'version') {
+                    this.log('Rosh Runtime v' + ROSH_RUNTIME_VERSION + ' (IR ' + IMPLEMENTS_IR_VERSION + ')', 'cyan');
+                } else if (parts[0] === 'list' || parts[0] === 'ls' || parts[0] === 'objects') {
+                    this.cmdList(parts.slice(1));
+                } else if (parts[0] === 'create') {
+                    this.cmdCreate(cmd, parts.slice(1));
+                } else if (parts[0] === 'set') {
+                    this.cmdSet(cmd, parts.slice(1));
+                } else if (parts[0] === 'get') {
+                    this.cmdGet(parts.slice(1));
+                } else if (parts[0] === 'delete' || parts[0] === 'remove') {
+                    this.cmdDelete(parts.slice(1));
+                } else if (parts[0] === 'hide') {
+                    this.cmdHide(parts[1]);
+                } else if (parts[0] === 'show') {
+                    this.cmdShow(parts[1]);
+                } else if (parts[0] === 'undo' || parts[0] === 'oops') {
+                    const count = parseInt(parts[1]) || 1;
+                    this.performUndo(count);
+                } else if (parts[0] === 'redo') {
+                    const count = parseInt(parts[1]) || 1;
+                    this.performRedo(count);
+                } else if (parts[0] === 'look' || parts[0] === 'l' || parts[0] === 'examine' ||
+                           parts[0] === 'inspect' || parts[0] === 'x' || parts[0] === 'ex' ||
+                           parts[0] === 'dump' || parts[0] === 'properties' || parts[0] === 'props') {
+                    this.cmdLook(parts.slice(1).join(' '));
+                } else if (parts[0] === 'count') {
+                    this.cmdCount(parts[1]);
+                } else if (parts[0] === ':repeat' || parts[0] === ':r') {
+                    if (this.lastUserCommand) {
+                        this.execCommand(this.lastUserCommand, true);
+                    } else {
+                        this.log('No previous command to repeat', 'err');
+                    }
+                } else if (parts[0] === 'credits') {
+                    this.cmdCredits();
+                } else if (parts[0] === 'meta') {
+                    this.cmdMeta(parts.slice(1));
+                } else if (parts[0] === 'make') {
+                    this.cmdMake(cmd, parts.slice(1));
+                } else if (parts[0] === 'move') {
+                    this.cmdMove(cmd, parts.slice(1));
+                } else if (parts[0] === 'clone' || parts[0] === 'copy' || parts[0] === 'duplicate') {
+                    this.cmdClone(parts.slice(1).join(' '));
+                } else if (parts[0] === 'prompt' || parts[0] === 'ai') {
+                    this.cmdPrompt(cmd.substring(cmd.indexOf(' ') + 1));
+                } else {
+                    this.log('Unknown command: ' + parts[0] + ". Type 'help' for commands.", 'err');
+                }
+            } catch (err) {
+                this.log('Error: ' + (err.message || err), 'err');
+            }
         }
-      }
 
-      // Resolve with scene-aware confirmation
-      const resolved = fuzzyMatchObject(objRef, {
-        operation: 'move',
-        onConfirm: doRelMove
-      });
-
-      if (resolved === null) return;
-      doRelMove(resolved);
-      return;
-    }
-
-    log('Usage: move <obj> <direction> <amount> OR move <obj> to <x> <y> [z]', 'err');
-  }
-
-  function handleLook(args) {
-    let name = args.join(' ') || currentObjectName;
-    // Use selected object if no name given
-    if (!name && adapter.getSelectedObject) {
-      name = adapter.getSelectedObject();
-      if (name) log('(using selected: ' + name + ')', 'dim');
-    }
-    if (!name) {
-      log('Usage: look <name> (or click to select first)', 'err');
-      return;
-    }
-
-    if (!adapter.getObjectDetails) {
-      log('Object inspection not supported', 'err');
-      return;
-    }
-
-    let details = adapter.getObjectDetails(name);
-
-    // If not found, try fuzzy matching
-    if (!details && adapter.getAllObjects) {
-      const matches = fuzzyFindObjects(name);
-
-      if (matches.length === 1) {
-        log('[resolved: "' + name + '" -> "' + matches[0].name + '"]', 'dim');
-        name = matches[0].name;
-        details = adapter.getObjectDetails(name);
-      } else if (matches.length > 1) {
-        // Multiple matches - ask user to clarify
-        log('Multiple matches for "' + name + '":', 'cyan');
-        for (const m of matches.slice(0, 8)) {
-          log('  ' + m.name, 'dim');
+        // Command implementations (abbreviated for compatibility layer)
+        cmdHelp(args) {
+            if (args.length === 0) {
+                this.log('Rosh Console Commands:', 'cyan');
+                this.log('  create <type>       - Create an object');
+                this.log('  set <obj> <prop> to <value>');
+                this.log('  move <obj> to <x> <y> - Set position');
+                this.log('  make <obj> bigger   - Relative changes');
+                this.log('  get <obj>           - Select object');
+                this.log('  list                - List all objects');
+                this.log('  look/x <obj>        - Inspect object');
+                this.log('  clone <obj>         - Duplicate object');
+                this.log('  hide/show <obj>     - Toggle visibility');
+                this.log('  delete <obj>        - Remove object');
+                this.log('  undo [N]            - Undo last N changes');
+                this.log('  redo [N]            - Redo last N undos');
+                this.log('  :repeat             - Repeat last command');
+                this.log('  prompt <text>       - AI-powered creation');
+                this.log('  credits             - Show credits');
+                this.log("Type 'help <cmd>' for details", 'dim');
+            } else {
+                this.log('Help for: ' + args[0], 'cyan');
+            }
         }
-        if (matches.length > 8) {
-          log('  ... and ' + (matches.length - 8) + ' more', 'dim');
+
+        cmdList(args) {
+            const objects = this.adapter.getAllObjects();
+            if (objects.length === 0) {
+                this.log('No objects in scene', 'dim');
+                return;
+            }
+            this.log('Objects (' + objects.length + '):', 'cyan');
+            const limit = Math.min(objects.length, 20);
+            for (let i = 0; i < limit; i++) {
+                const obj = objects[i];
+                const name = this.adapter.getObjectName(obj);
+                const type = this.adapter.getObjectType(obj);
+                const pos = this.adapter.getObjectPosition(obj);
+                this.log('  ' + name + ' (' + type + ') at [' +
+                         pos.x.toFixed(0) + ', ' + pos.y.toFixed(0) + ', ' + pos.z.toFixed(0) + ']');
+            }
+            if (objects.length > 20) {
+                this.log('  ... and ' + (objects.length - 20) + ' more', 'dim');
+            }
         }
-        log('Which one did you mean?', 'dim');
-        return;
-      } else {
-        // No matches - show suggestions
-        const allObjects = adapter.getAllObjects();
-        const available = allObjects
-          .map(obj => obj.name || (obj.userData && obj.userData._name) || '')
-          .filter(n => n && !n.startsWith('_'))
-          .slice(0, 10);
-        log('Object not found: ' + name, 'err');
-        if (available.length > 0) {
-          log('Available: ' + available.join(', ') + (allObjects.length > 10 ? '...' : ''), 'dim');
+
+        cmdCreate(fullCmd, args) {
+            if (args.length === 0) {
+                this.log('Usage: create <type> [name]', 'err');
+                return;
+            }
+            const bulkMatch = fullCmd.match(/^create\s+(\d+)\s+(\w+)$/i);
+            if (bulkMatch) {
+                const count = parseInt(bulkMatch[1]);
+                const typeName = this.singularize(bulkMatch[2]);
+                if (count > this.options.confirmThreshold) {
+                    this.log('Create ' + count + ' ' + typeName + 's? Type "go" to confirm.', 'cyan');
+                    this.pendingOp = { execute: () => this.createBulk(typeName, count) };
+                    return;
+                }
+                this.createBulk(typeName, count);
+                return;
+            }
+            const typeName = this.singularize(args[args.length - 1]);
+            const name = this.nextName(typeName);
+            const obj = this.adapter.createObject(typeName, name, {});
+            if (obj) {
+                this.log("Created '" + name + "' (" + typeName + ")", 'ok');
+                this.pushUndo("create '" + name + "'",
+                    () => this.adapter.deleteObject(obj),
+                    () => this.adapter.createObject(typeName, name, {}));
+            } else {
+                this.log('Failed to create object', 'err');
+            }
         }
-        return;
-      }
-    } else if (!details) {
-      log('Object not found: ' + name, 'err');
-      return;
+
+        createBulk(typeName, count) {
+            const created = [];
+            for (let i = 0; i < count; i++) {
+                const name = this.nextName(typeName);
+                const obj = this.adapter.createObject(typeName, name, {});
+                if (obj) {
+                    const angle = (i / count) * Math.PI * 2;
+                    const radius = 50 + count * 2;
+                    this.adapter.setProperty(obj, 'x', Math.cos(angle) * radius);
+                    this.adapter.setProperty(obj, 'z', Math.sin(angle) * radius);
+                    created.push({ obj, name });
+                }
+            }
+            this.log('Created ' + created.length + ' ' + typeName + 's', 'ok');
+            this.pushUndo('create ' + count + ' ' + typeName + 's',
+                () => created.forEach(c => this.adapter.deleteObject(c.obj)),
+                () => this.createBulk(typeName, count));
+        }
+
+        cmdSet(fullCmd, args) {
+            const knownProps = 'x|y|z|color|scale|visible|rotation|speed|health|text|name|width|height|size|font_size|opacity|alpha';
+            const bulkMatch = fullCmd.match(new RegExp('^set\\s+all\\s+(\\w+)\\s+(' + knownProps + ')\\s+to\\s+(.+)$', 'i'));
+            if (bulkMatch) {
+                const typeName = this.singularize(bulkMatch[1]);
+                const prop = bulkMatch[2].toLowerCase();
+                const valueStr = bulkMatch[3].trim();
+                const newValue = this.parseValue(valueStr);
+                const allObjects = this.adapter.getAllObjects();
+                const targets = allObjects.filter(obj => {
+                    const type = this.adapter.getObjectType(obj);
+                    const name = this.adapter.getObjectName(obj);
+                    return type === typeName || name.includes(typeName);
+                });
+                if (targets.length === 0) {
+                    this.log('No ' + typeName + ' objects found', 'err');
+                    return;
+                }
+                targets.forEach(obj => this.adapter.setProperty(obj, prop, newValue));
+                this.log('Set ' + prop + ' to ' + valueStr + ' on ' + targets.length + ' ' + typeName + 's', 'ok');
+                return;
+            }
+            let objInput, prop, valueStr;
+            const explicitMatch = fullCmd.match(new RegExp('^set\\s+(.+)\\s+(' + knownProps + ')\\s+to\\s+(.+)$', 'i'));
+            if (explicitMatch) {
+                objInput = explicitMatch[1].trim();
+                prop = explicitMatch[2].toLowerCase();
+                valueStr = explicitMatch[3].trim();
+            } else {
+                const implicitMatch = fullCmd.match(/^set\s+(.+)\s+to\s+(.+)$/i);
+                if (!implicitMatch) {
+                    this.log('Usage: set <object> [property] to <value>', 'err');
+                    return;
+                }
+                objInput = implicitMatch[1].trim();
+                valueStr = implicitMatch[2].trim();
+                prop = this.inferProperty(valueStr);
+                if (!prop) {
+                    this.log("Can't guess property for '" + valueStr + "'", 'err');
+                    this.log('Try: set <object> x|y|z|color|scale to ' + valueStr, 'dim');
+                    return;
+                }
+                this.log('[inferred: ' + prop + ']', 'dim');
+            }
+            const resolved = this.resolveObject(objInput);
+            if (!resolved.obj) {
+                this.log('Object not found: ' + objInput, 'err');
+                return;
+            }
+            if (resolved.correction) this.log('[resolved: ' + resolved.correction + ']', 'dim');
+            const obj = resolved.obj;
+            const objName = resolved.resolvedName;
+
+            // Show normalization echo if natural language was used
+            // (input differs from canonical dot notation form)
+            const canonicalCmd = 'set ' + objName + '.' + prop + ' to ' + valueStr;
+            const inputNormalized = fullCmd.toLowerCase().replace(/\s+/g, ' ').trim();
+            const canonicalNormalized = canonicalCmd.toLowerCase().replace(/\s+/g, ' ').trim();
+            if (inputNormalized !== canonicalNormalized) {
+                this.log('[→ ' + canonicalCmd + ']', 'cyan');
+            }
+
+            const oldValue = this.adapter.getProperty(obj, prop);
+            const newValue = this.parseValue(valueStr);
+            this.adapter.setProperty(obj, prop, newValue);
+            this.log(objName + '.' + prop + ' = ' + valueStr, 'ok');
+            this.pushUndo("set " + objName + "." + prop,
+                () => this.adapter.setProperty(obj, prop, oldValue),
+                () => this.adapter.setProperty(obj, prop, newValue));
+        }
+
+        cmdMake(fullCmd, args) {
+            const modifiers = {
+                bigger: { prop: 'scale', factor: 1.5 }, larger: { prop: 'scale', factor: 1.5 },
+                smaller: { prop: 'scale', factor: 0.5 }, tiny: { prop: 'scale', factor: 0.25 },
+                huge: { prop: 'scale', factor: 3.0 }, faster: { prop: 'speed', factor: 1.5 },
+                slower: { prop: 'speed', factor: 0.5 }, brighter: { prop: 'brightness', factor: 1.5 },
+                darker: { prop: 'brightness', factor: 0.5 },
+            };
+            let modifier = null, modKey = null;
+            for (const [key, mod] of Object.entries(modifiers)) {
+                if (fullCmd.toLowerCase().includes(key)) { modifier = mod; modKey = key; break; }
+            }
+            if (!modifier) {
+                this.log('Usage: make <object(s)> bigger|smaller|faster|slower', 'err');
+                return;
+            }
+            const match = fullCmd.match(new RegExp('make\\s+(.+?)\\s+' + modKey, 'i'));
+            if (!match) {
+                this.log('Usage: make <object(s)> ' + modKey, 'err');
+                return;
+            }
+            const objSpec = match[1].trim();
+            let targets = [];
+            const allMatch = objSpec.match(/^all\s+(.+)$/i);
+            if (allMatch) {
+                const typeName = this.singularize(allMatch[1].trim());
+                const allObjects = this.adapter.getAllObjects();
+                targets = allObjects.filter(obj => {
+                    const type = this.adapter.getObjectType(obj);
+                    const name = this.adapter.getObjectName(obj);
+                    return type === typeName || name.includes(typeName);
+                });
+                if (targets.length === 0) {
+                    this.log('No ' + typeName + ' objects found', 'err');
+                    return;
+                }
+            } else {
+                const resolved = this.resolveObject(objSpec);
+                if (!resolved.obj) { this.log('Object not found: ' + objSpec, 'err'); return; }
+                if (resolved.correction) this.log('[resolved: ' + resolved.correction + ']', 'dim');
+                targets = [resolved.obj];
+            }
+            const undoOps = [];
+            for (const obj of targets) {
+                const oldValue = this.adapter.getProperty(obj, modifier.prop) || 1;
+                const newValue = oldValue * modifier.factor;
+                this.adapter.setProperty(obj, modifier.prop, newValue);
+                undoOps.push({ obj, prop: modifier.prop, oldValue, newValue });
+            }
+            if (targets.length === 1) {
+                this.log(this.adapter.getObjectName(targets[0]) + ' is now ' + modKey, 'ok');
+            } else {
+                this.log('Made ' + targets.length + ' objects ' + modKey, 'ok');
+            }
+            this.pushUndo('make ' + objSpec + ' ' + modKey,
+                () => undoOps.forEach(op => this.adapter.setProperty(op.obj, op.prop, op.oldValue)),
+                () => undoOps.forEach(op => this.adapter.setProperty(op.obj, op.prop, op.newValue)));
+        }
+
+        cmdMove(fullCmd, args) {
+            const match = fullCmd.match(/^move\s+(.+?)\s+to\s+(.+)$/i);
+            if (!match) { this.log('Usage: move <object> to <x> <y> [z]', 'err'); return; }
+            const objInput = match[1].trim();
+            const posStr = match[2].trim();
+            const posValues = posStr.split(/[\s,]+/).map(v => this.parseValue(v.trim()));
+            const resolved = this.resolveObject(objInput);
+            if (!resolved.obj) { this.log('Object not found: ' + objInput, 'err'); return; }
+            if (resolved.correction) this.log('[resolved: ' + resolved.correction + ']', 'dim');
+            const obj = resolved.obj;
+            const objName = resolved.resolvedName;
+            const oldX = this.adapter.getProperty(obj, 'x');
+            const oldY = this.adapter.getProperty(obj, 'y');
+            const oldZ = this.adapter.getProperty(obj, 'z');
+            if (posValues[0] !== undefined) this.adapter.setProperty(obj, 'x', posValues[0]);
+            if (posValues[1] !== undefined) this.adapter.setProperty(obj, 'y', posValues[1]);
+            if (posValues[2] !== undefined) this.adapter.setProperty(obj, 'z', posValues[2]);
+            this.log('Moved ' + objName + ' to ' + posStr, 'ok');
+            this.pushUndo('move ' + objName,
+                () => { this.adapter.setProperty(obj, 'x', oldX); this.adapter.setProperty(obj, 'y', oldY); this.adapter.setProperty(obj, 'z', oldZ); },
+                () => { if (posValues[0] !== undefined) this.adapter.setProperty(obj, 'x', posValues[0]); if (posValues[1] !== undefined) this.adapter.setProperty(obj, 'y', posValues[1]); if (posValues[2] !== undefined) this.adapter.setProperty(obj, 'z', posValues[2]); });
+        }
+
+        cmdClone(objInput) {
+            if (!objInput) { this.log('Usage: clone <object>', 'err'); return; }
+            const resolved = this.resolveObject(objInput);
+            if (!resolved.obj) { this.log('Object not found: ' + objInput, 'err'); return; }
+            if (resolved.correction) this.log('[resolved: ' + resolved.correction + ']', 'dim');
+            const srcObj = resolved.obj;
+            const srcName = resolved.resolvedName;
+            const srcType = this.adapter.getObjectType(srcObj);
+            const props = {};
+            if (srcObj.userData) {
+                for (const [key, val] of Object.entries(srcObj.userData)) {
+                    if (!key.startsWith('_')) props[key] = val;
+                }
+            }
+            const pos = this.adapter.getObjectPosition(srcObj);
+            const offsetX = typeof pos.x === 'number' ? pos.x + 30 : pos.x;
+            const newName = this.nextName(srcType);
+            const newObj = this.adapter.createObject(srcType, newName, props);
+            this.adapter.setProperty(newObj, 'x', offsetX);
+            if (pos.y !== undefined) this.adapter.setProperty(newObj, 'y', pos.y);
+            if (pos.z !== undefined) this.adapter.setProperty(newObj, 'z', pos.z);
+            const color = this.adapter.getObjectColor(srcObj);
+            if (color !== undefined) this.adapter.setProperty(newObj, 'color', color);
+            const scale = this.adapter.getObjectScale(srcObj);
+            if (scale !== undefined && scale !== 1) this.adapter.setProperty(newObj, 'scale', scale);
+            this.log("Cloned '" + srcName + "' -> '" + newName + "'", 'ok');
+            this.pushUndo('clone ' + srcName,
+                () => this.adapter.deleteObject(newObj),
+                () => { const obj = this.adapter.createObject(srcType, newName, props); this.adapter.setProperty(obj, 'x', offsetX); });
+        }
+
+        cmdGet(args) {
+            if (args.length === 0) { this.log('Usage: get <object>', 'err'); return; }
+            const resolved = this.resolveObject(args.join(' '));
+            if (resolved.obj) {
+                if (resolved.correction) this.log('[resolved: ' + resolved.correction + ']', 'dim');
+                this.currentObject = resolved.obj;
+                this.currentObjectName = resolved.resolvedName;
+                this.log("Selected '" + resolved.resolvedName + "'", 'ok');
+            } else {
+                this.log('Object not found: ' + args.join(' '), 'err');
+            }
+        }
+
+        cmdDelete(args) {
+            if (args.length === 0) { this.log('Usage: delete <object> or delete all <type>', 'err'); return; }
+            const input = args.join(' ');
+            const allMatch = input.match(/^all\s+(\w+)$/i);
+            if (allMatch) {
+                const typeName = this.singularize(allMatch[1]);
+                const allObjects = this.adapter.getAllObjects();
+                const targets = allObjects.filter(obj => {
+                    const type = this.adapter.getObjectType(obj);
+                    const name = this.adapter.getObjectName(obj);
+                    return type === typeName || name.includes(typeName);
+                });
+                if (targets.length === 0) { this.log('No ' + typeName + ' objects found', 'err'); return; }
+                if (targets.length > this.options.confirmThreshold) {
+                    this.log('Delete ' + targets.length + ' ' + typeName + 's? Type "go" to confirm.', 'cyan');
+                    this.pendingOp = { execute: () => { targets.forEach(obj => this.adapter.deleteObject(obj)); this.log('Deleted ' + targets.length + ' ' + typeName + 's', 'ok'); } };
+                    return;
+                }
+                targets.forEach(obj => this.adapter.deleteObject(obj));
+                this.log('Deleted ' + targets.length + ' ' + typeName + 's', 'ok');
+                return;
+            }
+            const resolved = this.resolveObject(input);
+            if (resolved.obj) {
+                if (resolved.correction) this.log('[resolved: ' + resolved.correction + ']', 'dim');
+                this.adapter.deleteObject(resolved.obj);
+                this.log("Deleted '" + resolved.resolvedName + "'", 'ok');
+                this.pushUndo("delete '" + resolved.resolvedName + "'", () => {}, () => this.adapter.deleteObject(resolved.obj));
+            } else {
+                this.log('Object not found: ' + input, 'err');
+            }
+        }
+
+        cmdHide(name) {
+            if (!name) { this.log('Usage: hide <object>', 'err'); return; }
+            const resolved = this.resolveObject(name);
+            if (resolved.obj) {
+                if (resolved.correction) this.log('[resolved: ' + resolved.correction + ']', 'dim');
+                this.adapter.setObjectVisible(resolved.obj, false);
+                this.log("Hid '" + resolved.resolvedName + "'", 'ok');
+                this.pushUndo("hide '" + resolved.resolvedName + "'",
+                    () => this.adapter.setObjectVisible(resolved.obj, true),
+                    () => this.adapter.setObjectVisible(resolved.obj, false));
+            } else {
+                this.log('Object not found: ' + name, 'err');
+            }
+        }
+
+        cmdShow(name) {
+            if (!name) { this.log('Usage: show <object>', 'err'); return; }
+            const resolved = this.resolveObject(name);
+            if (resolved.obj) {
+                if (resolved.correction) this.log('[resolved: ' + resolved.correction + ']', 'dim');
+                this.adapter.setObjectVisible(resolved.obj, true);
+                this.log("Showed '" + resolved.resolvedName + "'", 'ok');
+                this.pushUndo("show '" + resolved.resolvedName + "'",
+                    () => this.adapter.setObjectVisible(resolved.obj, false),
+                    () => this.adapter.setObjectVisible(resolved.obj, true));
+            } else {
+                this.log('Object not found: ' + name, 'err');
+            }
+        }
+
+        cmdLook(name) {
+            if (!name) { this.log('Usage: look <object>', 'err'); return; }
+            const resolved = this.resolveObject(name);
+            if (resolved.obj) {
+                if (resolved.correction) this.log('[resolved: ' + resolved.correction + ']', 'dim');
+                const obj = resolved.obj;
+                const objName = resolved.resolvedName;
+                const type = this.adapter.getObjectType(obj);
+                const pos = this.adapter.getObjectPosition(obj);
+                const color = this.adapter.getObjectColor(obj);
+                const scale = this.adapter.getObjectScale(obj);
+                this.log(objName + ' (' + type + '):', 'cyan');
+                const fmtPos = (v) => {
+                    if (v && typeof v === 'object' && v.percent !== undefined) return v.percent + '%';
+                    if (typeof v === 'number') return v.toFixed(1);
+                    return String(v);
+                };
+                this.log('  position: [' + fmtPos(pos.x) + ', ' + fmtPos(pos.y) + ', ' + fmtPos(pos.z) + ']');
+                if (color !== undefined) this.log('  color: #' + color.toString(16).padStart(6, '0'));
+                if (scale !== undefined && scale !== 1) this.log('  scale: ' + scale.toFixed(2));
+                if (obj.userData) {
+                    for (const [key, val] of Object.entries(obj.userData)) {
+                        if (!key.startsWith('_')) {
+                            const display = typeof val === 'string' ? '"' + val + '"' : val;
+                            this.log('  ' + key + ': ' + display);
+                        }
+                    }
+                }
+            } else {
+                this.log('Object not found: ' + name, 'err');
+            }
+        }
+
+        cmdCount(typeName) {
+            const objects = this.adapter.getAllObjects();
+            if (!typeName) { this.log('Total objects: ' + objects.length, 'ok'); return; }
+            const singular = this.singularize(typeName);
+            let count = 0;
+            for (const obj of objects) {
+                const type = this.adapter.getObjectType(obj);
+                const name = this.adapter.getObjectName(obj);
+                if (type === singular || name === singular || name.startsWith(singular + '-')) count++;
+            }
+            this.log(singular + ': ' + count, 'ok');
+        }
+
+        cmdCredits() {
+            this.log('Rosh - One language. Many worlds.', 'cyan');
+            this.log('https://rosh.cloud', 'dim');
+            this.log('Runtime v' + ROSH_RUNTIME_VERSION, 'dim');
+        }
+
+        cmdMeta(args) {
+            if (args.length === 0) {
+                this.log('Meta settings:', 'cyan');
+                this.log('  quiet: ' + (this.options.quiet ? 'on' : 'off'), 'dim');
+                this.log('Usage: meta <setting> [on|off]', 'dim');
+                return;
+            }
+
+            const setting = args[0].toLowerCase();
+            const value = args[1] ? args[1].toLowerCase() : 'toggle';
+
+            if (setting === 'quiet') {
+                if (value === 'on' || value === 'true') {
+                    this.options.quiet = true;
+                    this.log('Quiet mode enabled.', 'ok');
+                } else if (value === 'off' || value === 'false') {
+                    this.options.quiet = false;
+                    this.log('Verbose mode enabled.', 'ok');
+                } else {
+                    this.options.quiet = !this.options.quiet;
+                    this.log('Quiet mode: ' + (this.options.quiet ? 'on' : 'off'), 'ok');
+                }
+            } else if (setting === 'list') {
+                this.log('Meta settings:', 'cyan');
+                this.log('  quiet: ' + (this.options.quiet ? 'on' : 'off'), 'dim');
+            } else {
+                this.log('Unknown meta setting: ' + setting, 'err');
+                this.log('Available: quiet, list', 'dim');
+            }
+        }
+
+        // =====================================================================
+        // AI PROMPT COMMAND
+        // =====================================================================
+        // Sends natural language to server, receives Rosh code, executes it
+        // This is the "AI proposes, Rosh validates, humans approve" pattern
+
+        async cmdPrompt(promptText) {
+            // Check if prompt is empty or too short
+            if (!promptText || !promptText.trim()) {
+                this.log('Usage: prompt <describe what you want>', 'cyan');
+                this.log('Examples:', 'dim');
+                this.log('  prompt create a big blue ball', 'dim');
+                this.log('  prompt add a red cube to the left', 'dim');
+                this.log('  prompt make the scene darker', 'dim');
+                return;
+            }
+
+            const words = promptText.trim().split(/\s+/);
+            if (words.length < 2) {
+                this.log('Please describe what you want to create or change.', 'err');
+                this.log('Example: prompt create a blue sphere', 'dim');
+                return;
+            }
+
+            // Show thinking indicator
+            this.log('Thinking...', 'dim');
+            const thinkingDiv = this.outputDiv.lastChild;
+
+            try {
+                // Minimal context - avoid adapter methods that might not exist
+                let context = { objectCount: 0 };
+                try {
+                    if (this.adapter && typeof this.adapter.getObjectNames === 'function') {
+                        const names = this.adapter.getObjectNames();
+                        context.objectCount = names.length;
+                        context.existingObjects = names.slice(0, 10);
+                    }
+                } catch (ctxErr) {
+                    // Context gathering failed - continue without it
+                }
+
+                // Call the AI endpoint
+                const response = await fetch('/api/ai/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: promptText,
+                        context: context
+                    })
+                });
+
+                // Remove thinking indicator
+                if (thinkingDiv && thinkingDiv.textContent === 'Thinking...') {
+                    thinkingDiv.remove();
+                }
+
+                if (!response.ok) {
+                    let errorMsg = 'Server returned ' + response.status;
+                    try {
+                        const error = await response.json();
+                        errorMsg = error.error || JSON.stringify(error);
+                    } catch (e) {
+                        errorMsg = await response.text() || errorMsg;
+                    }
+                    this.log('AI error: ' + errorMsg, 'err');
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (!data.code) {
+                    // Show the actual error from the server
+                    this.log(data.error || 'AI returned empty response', 'err');
+                    return;
+                }
+
+                // Check if response looks like Rosh code
+                const code = data.code;
+                const looksLikeCode = code.includes('create ') ||
+                                      code.includes('set ') ||
+                                      code.includes('delete ') ||
+                                      code.includes('move ');
+
+                if (!looksLikeCode) {
+                    // Just a text response - display it
+                    this.log(code, 'ok');
+                    return;
+                }
+
+                // Show the generated code
+                this.log('AI generated:', 'cyan');
+                const codeLines = code.split('\n');
+                for (const line of codeLines) {
+                    this.log('  ' + line, 'dim');
+                }
+
+                if (!data.valid) {
+                    this.log('Warning: ' + data.error, 'warn');
+                }
+
+                // Confirm before executing
+                this.log('Execute? Type "go" to run, or any other command to cancel.', 'cyan');
+                this.pendingOp = {
+                    description: 'AI: ' + promptText.substring(0, 30),
+                    execute: () => this.executeAiCode(code, promptText)
+                };
+                return;
+
+            } catch (err) {
+                // Remove thinking indicator on error
+                if (thinkingDiv && thinkingDiv.textContent === 'Thinking...') {
+                    thinkingDiv.remove();
+                }
+                // Provide helpful error messages
+                const errMsg = err.message || String(err);
+                if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
+                    this.log('Could not reach AI server.', 'err');
+                    this.log('Make sure the server is running: flask run', 'dim');
+                } else {
+                    this.log('AI request failed: ' + errMsg, 'err');
+                }
+            }
+        }
+
+        executeAiCode(code, originalPrompt) {
+            // Execute AI-generated Rosh code
+            // Handle "create object <name> ... end" blocks
+            const lines = code.split('\n');
+
+            // Parse the block to extract name, type, and properties
+            let objName = null;
+            let objType = 'cube';  // default type
+            const props = {};
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed === 'end') continue;
+
+                // Match "create object <name>"
+                const createMatch = trimmed.match(/^create\s+object\s+(\w+)$/i);
+                if (createMatch) {
+                    objName = createMatch[1];
+                    continue;
+                }
+
+                // Match "set <prop> to <value>"
+                const setMatch = trimmed.match(/^set\s+(\w+)\s+to\s+(.+)$/i);
+                if (setMatch) {
+                    const prop = setMatch[1].toLowerCase();
+                    let value = setMatch[2].trim();
+                    // Remove quotes from string values
+                    if ((value.startsWith('"') && value.endsWith('"')) ||
+                        (value.startsWith("'") && value.endsWith("'"))) {
+                        value = value.slice(1, -1);
+                    }
+                    if (prop === 'type') {
+                        objType = value;
+                    } else {
+                        props[prop] = this.parseValue(value);
+                    }
+                    continue;
+                }
+            }
+
+            if (!objName) {
+                this.log('Could not parse object name from AI code', 'err');
+                return;
+            }
+
+            // Create the object using the adapter
+            try {
+                const obj = this.adapter.createObject(objType, objName, props);
+                if (obj) {
+                    // Apply additional properties
+                    for (const [prop, value] of Object.entries(props)) {
+                        this.adapter.setProperty(obj, prop, value);
+                    }
+                    this.log("Created '" + objName + "' (" + objType + ")", 'ok');
+
+                    // Register for undo
+                    this.pushUndo(
+                        "create '" + objName + "'",
+                        () => this.adapter.deleteObject(obj),
+                        () => this.adapter.createObject(objType, objName, props)
+                    );
+                } else {
+                    this.log("Failed to create object", 'err');
+                }
+            } catch (err) {
+                this.log('Error creating object: ' + (err.message || err), 'err');
+            }
+        }
+
+        // Utilities
+        inferProperty(valueStr) {
+            const v = valueStr.toLowerCase().trim();
+            const colorNames = ['red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'white', 'black', 'orange', 'purple', 'pink', 'gray', 'grey', 'gold', 'silver', 'brown', 'lime', 'navy', 'teal', 'coral', 'crimson', 'violet', 'indigo', 'maroon', 'olive', 'aqua'];
+            if (colorNames.includes(v)) return 'color';
+            if (/^#?[0-9a-f]{6}$/i.test(v)) return 'color';
+            if (v === 'visible' || v === 'hidden' || v === 'invisible') return 'visible';
+            return null;
+        }
+
+        singularize(word) {
+            if (!word) return word;
+            word = word.toLowerCase();
+            if (word.endsWith('ies')) return word.slice(0, -3) + 'y';
+            if (word.endsWith('es')) return word.slice(0, -2);
+            if (word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
+            return word;
+        }
+
+        resolveObject(input) {
+            if (!input) return { obj: null };
+            const original = input.trim();
+            const lower = original.toLowerCase();
+            const words = lower.split(/\s+/);
+            let obj = this.adapter.getObject(original);
+            if (obj) return { obj, resolvedName: original, correction: null };
+            obj = this.adapter.getObject(lower);
+            if (obj) return { obj, resolvedName: lower, correction: null };
+            if (words.length > 1) {
+                const noSpaces = words.join('');
+                obj = this.adapter.getObject(noSpaces);
+                if (obj) return { obj, resolvedName: noSpaces, correction: `"${original}" -> "${noSpaces}"` };
+                const hyphenated = words.join('-');
+                obj = this.adapter.getObject(hyphenated);
+                if (obj) return { obj, resolvedName: hyphenated, correction: `"${original}" -> "${hyphenated}"` };
+            }
+            if (words.length > 1) {
+                const typeName = this.singularize(words[words.length - 1]);
+                const modifiers = words.slice(0, -1);
+                const allObjects = this.adapter.getAllObjects();
+                for (const candidate of allObjects) {
+                    const name = this.adapter.getObjectName(candidate).toLowerCase();
+                    const type = this.adapter.getObjectType(candidate).toLowerCase();
+                    if (type === typeName || name.includes(typeName)) {
+                        const hasAllModifiers = modifiers.every(mod => name.includes(mod));
+                        if (hasAllModifiers) {
+                            return { obj: candidate, resolvedName: this.adapter.getObjectName(candidate), correction: `"${original}" -> "${this.adapter.getObjectName(candidate)}"` };
+                        }
+                    }
+                }
+            }
+            const allObjects = this.adapter.getAllObjects();
+            for (const candidate of allObjects) {
+                const name = this.adapter.getObjectName(candidate).toLowerCase();
+                if (name.includes(lower) || lower.includes(name)) {
+                    return { obj: candidate, resolvedName: this.adapter.getObjectName(candidate), correction: `"${original}" -> "${this.adapter.getObjectName(candidate)}"` };
+                }
+            }
+            return { obj: null };
+        }
+
+        parseValue(str) {
+            str = str.trim();
+            const pctMatch = str.match(/^(-?\d+(?:\.\d+)?)\s*%$/);
+            if (pctMatch) { const pct = parseFloat(pctMatch[1]); return { percent: pct, normalized: pct / 100 }; }
+            if (/^-?\d+(\.\d+)?$/.test(str)) return parseFloat(str);
+            if (str === 'true') return true;
+            if (str === 'false') return false;
+            if (str === 'visible') return true;
+            if (str === 'hidden' || str === 'invisible') return false;
+            const colors = { red: 0xff0000, green: 0x00ff00, blue: 0x0000ff, yellow: 0xffff00, cyan: 0x00ffff, magenta: 0xff00ff, white: 0xffffff, black: 0x000000, orange: 0xff8800, purple: 0x8800ff, pink: 0xff69b4, gray: 0x888888, grey: 0x888888, gold: 0xffd700, silver: 0xc0c0c0, brown: 0x8b4513, lime: 0x00ff00, navy: 0x000080, teal: 0x008080, coral: 0xff7f50, crimson: 0xdc143c, violet: 0xee82ee, indigo: 0x4b0082, maroon: 0x800000, olive: 0x808000, aqua: 0x00ffff };
+            if (colors[str.toLowerCase()]) return colors[str.toLowerCase()];
+            if (/^#?[0-9a-f]{6}$/i.test(str)) return parseInt(str.replace('#', ''), 16);
+            if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) return str.slice(1, -1);
+            return str;
+        }
+
+        fuzzyCorrect(cmd, isVoice = false) {
+            const corrections = [];
+
+            // Voice escapes: ALWAYS process (useful for demos)
+            // "dot" → . (joins adjacent words)
+            // "underscore" → _ (joins adjacent words)
+            // "equals" → = (keeps spaces)
+            // "plus" → + (keeps spaces)
+            const voiceEscapes = { 'dot': '.', 'underscore': '_', 'equals': '=', 'plus': '+' };
+            const parts = cmd.split(/\s+/);
+            const escapedParts = [];
+            for (let i = 0; i < parts.length; i++) {
+                const lower = parts[i].toLowerCase();
+                if (voiceEscapes[lower]) {
+                    const char = voiceEscapes[lower];
+                    corrections.push(parts[i] + '→' + char);
+                    if ((char === '.' || char === '_') && escapedParts.length > 0 && i + 1 < parts.length) {
+                        // Join with previous and next word
+                        const prev = escapedParts.pop();
+                        const next = parts[i + 1];
+                        escapedParts.push(prev + char + next);
+                        i++; // Skip next word
+                    } else if (char === '=' || char === '+') {
+                        escapedParts.push(char);
+                    } else {
+                        escapedParts.push(char);
+                    }
+                } else {
+                    escapedParts.push(parts[i]);
+                }
+            }
+            cmd = escapedParts.join(' ');
+
+            // Voice-only corrections (typos, spellings)
+            // Only apply when isVoice=true to avoid unwanted corrections on keyboard input
+            if (isVoice) {
+                const typos = { 'creat': 'create', 'crate': 'create', 'craete': 'create', 'delte': 'delete', 'deleet': 'delete', 'remov': 'remove', 'lst': 'list', 'lsit': 'list', 'hdie': 'hide', 'hsow': 'show', 'shwo': 'show', 'udno': 'undo', 'redo': 'redo', 'hlep': 'help', 'hep': 'help', 'mak': 'make', 'maek': 'make', 'st': 'set', 'ste': 'set', 'est': 'set', 'mov': 'move', 'moev': 'move', 'mvoe': 'move', 'clon': 'clone', 'cloen': 'clone', 'coyp': 'copy' };
+                const cmdParts = cmd.split(/\s+/);
+                if (cmdParts[0] && typos[cmdParts[0].toLowerCase()]) {
+                    const fixed = typos[cmdParts[0].toLowerCase()];
+                    corrections.push(cmdParts[0] + '→' + fixed);
+                    cmdParts[0] = fixed;
+                    cmd = cmdParts.join(' ');
+                }
+                cmd = cmd.replace(/colour/gi, () => { corrections.push('colour→color'); return 'color'; });
+                cmd = cmd.replace(/centre/gi, () => { corrections.push('centre→center'); return 'center'; });
+            }
+            return { cmd, corrections };
+        }
     }
+}
 
-    log('=== ' + name + ' ===', 'cyan');
-    // Show description first if available (natural language)
-    if (details.description) {
-      log('  "' + details.description + '"', 'dim');
+// =============================================================================
+// Static init wrapper - creates singleton instance
+// =============================================================================
+// The emitter calls RoshRuntime.init(adapter) - this wraps the class
+RoshRuntime.init = function(adapter, options = {}) {
+    if (RoshRuntime._instance) {
+        console.warn('RoshRuntime already initialized');
+        return RoshRuntime._instance;
     }
-    for (const [key, value] of Object.entries(details)) {
-      if (key === 'description') continue;  // Already shown above
-      if (value === null) continue;  // Skip null values
-      const formatted = typeof value === 'object' ? JSON.stringify(value) : value;
-      log('  ' + key + ': ' + formatted, 'ok');
+    RoshRuntime._instance = new RoshRuntime(adapter, options);
+    RoshRuntime._instance.init();
+    return RoshRuntime._instance;
+};
+
+// Proxy static methods to the singleton instance
+RoshRuntime.log = function(msg, cls) {
+    if (RoshRuntime._instance) {
+        RoshRuntime._instance.log(msg, cls);
     }
-  }
+};
 
-  // ==========================================================================
-  // PUBLIC API
-  // ==========================================================================
-
-  return {
-    init: function(adapterObj) {
-      adapter = adapterObj;
-      createConsoleUI();
-      initVoice();
-      const platform = adapter && adapter.platform ? adapter.platform : 'unknown';
-      updateConsoleHeader(platform);  // Display engine name in header
-      log('Rosh v' + ROSH_VERSION + ' | ' + platform + ' | Build ' + ROSH_BUILD_TIME, 'cyan');
-      log('Type help for commands. Press ` to toggle console.', 'dim');
-      // Flush any pending logs from early print statements
-      if (window._roshPendingLogs) {
-        window._roshPendingLogs.forEach(item => log(item.msg, item.cls));
-        delete window._roshPendingLogs;
-      }
-    },
-
-    exec: execCommand,
-    execCommand: execCommand,  // Alias for network module
-    log: log,
-    toggleConsole: toggleConsole,
-    pushUndo: pushUndo,
-
-    // State accessors
-    getCurrentObject: () => ({ object: currentObject, name: currentObjectName }),
-    getSelection: () => currentSelection,
-
-    // For adapter use
-    setCurrentObject: (obj, name) => {
-      currentObject = obj;
-      currentObjectName = name;
+RoshRuntime.execCommand = function(cmd) {
+    if (RoshRuntime._instance) {
+        RoshRuntime._instance.execCommand(cmd);
     }
-  };
-})();
+};
 
 // Export for module systems
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = RoshRuntime;
+    module.exports = { RoshRuntime, ROSH_RUNTIME_VERSION, IMPLEMENTS_IR_VERSION };
 }
