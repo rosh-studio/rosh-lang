@@ -264,14 +264,56 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
     },
 
     // Get all objects (for query syntax: get all where ...)
-    getAllObjects: function() {
+    getAllObjects: function(options) {
       const results = [];
-      scene.traverse(o => {
-        if ((o.isMesh || o.isSprite || o.isGroup) && o.name && !o.name.startsWith('_')) {
-          results.push({ name: o.name, object: o, type: getTypeName(o) });
+      const sceneOnly = options && options.sceneOnly;
+      // Return registered Rosh objects (not raw scene meshes like walls/floors)
+      for (const [name, o] of Object.entries(objects)) {
+        if (!o || !o.name) continue;
+        // Filter by current scene if requested
+        if (sceneOnly) {
+          const objScene = o.userData?._scene;
+          if (objScene !== currentScene && (objScene || currentScene)) continue;
         }
-      });
+        results.push({ name: o.name, object: o, type: getTypeName(o) });
+      }
       return results;
+    },
+
+    // Object accessor methods (used by RoshRuntime)
+    getObjectName: function(obj) {
+      if (typeof obj === 'string') return obj;
+      if (obj && obj.name) return obj.name;
+      return 'unknown';
+    },
+
+    getObjectType: function(obj) {
+      if (typeof obj === 'string') {
+        const found = findObject(obj);
+        return found ? getTypeName(found) : 'unknown';
+      }
+      if (obj && obj.type) return obj.type;
+      if (obj && obj.object) return getTypeName(obj.object);
+      if (obj && (obj.isMesh || obj.isGroup || obj.isSprite)) return getTypeName(obj);
+      return 'unknown';
+    },
+
+    getObjectPosition: function(obj) {
+      const mesh = (typeof obj === 'string') ? findObject(obj) : (obj && obj.object) || obj;
+      if (mesh && mesh.position) return { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z };
+      return { x: 0, y: 0, z: 0 };
+    },
+
+    getObjectColor: function(obj) {
+      const mesh = (typeof obj === 'string') ? findObject(obj) : (obj && obj.object) || obj;
+      if (mesh && mesh.material && mesh.material.color) return mesh.material.color.getHex();
+      // Check children (groups)
+      if (mesh && mesh.children) {
+        for (const child of mesh.children) {
+          if (child.material && child.material.color) return child.material.color.getHex();
+        }
+      }
+      return undefined;
     },
 
     // Deep search: find by color, size, type

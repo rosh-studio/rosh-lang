@@ -205,22 +205,64 @@ function createPhaserAdapter(phaserScene, options = {}) {
     },
 
     // Get all objects (for query syntax)
-    getAllObjects: function() {
-      return Object.entries(objects).map(([name, obj]) => {
-        // Include scene data in userData format for compatibility with rosh-runtime.js
-        const scene = obj.getData ? obj.getData('_scene') : null;
-        return {
-          name,
-          object: obj,
-          type: getTypeName(obj),
-          userData: {
-            _scene: scene,
-            _type: getTypeName(obj),
-            _name: name,
-            color: getColorName(obj)
+    getAllObjects: function(options) {
+      const sceneOnly = options && options.sceneOnly;
+      return Object.entries(objects)
+        .filter(([name, obj]) => {
+          if (!obj) return false;
+          if (sceneOnly) {
+            const objScene = obj.getData ? obj.getData('_scene') : null;
+            if (objScene !== currentScene && (objScene || currentScene)) return false;
           }
-        };
-      });
+          return true;
+        })
+        .map(([name, obj]) => {
+          const scene = obj.getData ? obj.getData('_scene') : null;
+          return {
+            name,
+            object: obj,
+            type: getTypeName(obj),
+            userData: {
+              _scene: scene,
+              _type: getTypeName(obj),
+              _name: name,
+              color: getColorName(obj)
+            }
+          };
+        });
+    },
+
+    // Object accessor methods (used by RoshRuntime)
+    getObjectName: function(obj) {
+      if (typeof obj === 'string') return obj;
+      if (obj && obj.name) return obj.name;
+      return 'unknown';
+    },
+
+    getObjectType: function(obj) {
+      if (typeof obj === 'string') {
+        const found = findObject(obj);
+        return found ? getTypeName(found) : 'unknown';
+      }
+      if (obj && obj.type) return obj.type;
+      if (obj && obj.object) return getTypeName(obj.object);
+      return getTypeName(obj) || 'unknown';
+    },
+
+    getObjectPosition: function(obj) {
+      const sprite = (typeof obj === 'string') ? findObject(obj) : (obj && obj.object) || obj;
+      if (sprite && typeof sprite.x !== 'undefined') return { x: sprite.x, y: sprite.y, z: 0 };
+      return { x: 0, y: 0, z: 0 };
+    },
+
+    getObjectColor: function(obj) {
+      const sprite = (typeof obj === 'string') ? findObject(obj) : (obj && obj.object) || obj;
+      if (sprite && sprite.getData) {
+        const colorName = sprite.getData('_color');
+        if (colorName && COLOR_MAP[colorName]) return COLOR_MAP[colorName];
+      }
+      if (sprite && sprite.tintTopLeft !== undefined && sprite.tintTopLeft !== 0xffffff) return sprite.tintTopLeft;
+      return undefined;
     },
 
     // Deep search

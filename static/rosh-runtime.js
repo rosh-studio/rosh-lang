@@ -158,6 +158,16 @@ if (typeof Rosh3DRuntime !== 'undefined') {
             this.outputDiv = document.getElementById('rosh-output');
             this.inputEl = document.getElementById('rosh-input');
             this.inputEl.addEventListener('keydown', (e) => this.handleInput(e));
+
+            // Stop all keyboard events from reaching game movement handlers
+            // when console is visible
+            this.consoleDiv.addEventListener('keydown', (e) => {
+                if (e.key !== '`' && e.key !== '~' && e.code !== 'Backquote') {
+                    e.stopPropagation();
+                }
+            });
+            this.consoleDiv.addEventListener('keyup', (e) => e.stopPropagation());
+            this.consoleDiv.addEventListener('keypress', (e) => e.stopPropagation());
         }
 
         initKeyboardShortcuts() {
@@ -172,8 +182,15 @@ if (typeof Rosh3DRuntime !== 'undefined') {
 
         toggleConsole() {
             this.consoleDiv.classList.toggle('visible');
-            if (this.consoleDiv.classList.contains('visible')) {
+            const isVisible = this.consoleDiv.classList.contains('visible');
+            if (isVisible) {
                 this.inputEl.focus();
+            }
+            // Disable/enable OrbitControls when console is open
+            // Look for controls on common locations used by demos
+            const controls = window._orbitControls || window.controls;
+            if (controls && typeof controls.enabled !== 'undefined') {
+                controls.enabled = !isVisible;
             }
         }
 
@@ -467,7 +484,7 @@ if (typeof Rosh3DRuntime !== 'undefined') {
         }
 
         cmdList(args) {
-            const objects = this.adapter.getAllObjects();
+            const objects = this.adapter.getAllObjects({ sceneOnly: true });
             if (objects.length === 0) {
                 this.log('No objects in scene', 'dim');
                 return;
@@ -478,9 +495,10 @@ if (typeof Rosh3DRuntime !== 'undefined') {
                 const obj = objects[i];
                 const name = this.adapter.getObjectName(obj);
                 const type = this.adapter.getObjectType(obj);
-                const pos = this.adapter.getObjectPosition(obj);
-                this.log('  ' + name + ' (' + type + ') at [' +
-                         pos.x.toFixed(0) + ', ' + pos.y.toFixed(0) + ', ' + pos.z.toFixed(0) + ']');
+                const color = this.adapter.getObjectColor(obj);
+                const colorStr = color !== undefined ? ' #' + color.toString(16).padStart(6, '0') : '';
+                const visible = obj.object && obj.object.visible === false ? ' [hidden]' : '';
+                this.log('  ' + name + ' (' + type + ')' + colorStr + visible);
             }
             if (objects.length > 20) {
                 this.log('  ... and ' + (objects.length - 20) + ' more', 'dim');
@@ -504,14 +522,30 @@ if (typeof Rosh3DRuntime !== 'undefined') {
                 this.createBulk(typeName, count);
                 return;
             }
-            const typeName = this.singularize(args[args.length - 1]);
+            // Parse modifiers (color, size) and type from args
+            // e.g. "create big red ball" -> modifiers=['big','red'], type='ball'
+            const colorNames = ['red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'white', 'black', 'orange', 'purple', 'pink', 'gray', 'grey', 'gold', 'silver', 'brown', 'lime', 'navy', 'teal', 'coral', 'crimson', 'violet', 'indigo', 'maroon', 'olive', 'aqua'];
+            const sizeNames = ['tiny', 'small', 'medium', 'big', 'large', 'huge'];
+            const filtered = args.filter(a => a !== 'a' && a !== 'an' && a !== 'the');
+            const modifiers = [];
+            let color = null;
+            let typeName = null;
+            for (const arg of filtered) {
+                const lower = arg.toLowerCase();
+                if (colorNames.includes(lower)) { color = lower; modifiers.push(lower); }
+                else if (sizeNames.includes(lower)) { modifiers.push(lower); }
+                else { typeName = this.singularize(lower); }
+            }
+            if (!typeName) typeName = 'cube';
             const name = this.nextName(typeName);
-            const obj = this.adapter.createObject(typeName, name, {});
+            const options = { modifiers: modifiers };
+            if (color) options.color = color;
+            const obj = this.adapter.createObject(typeName, name, options);
             if (obj) {
-                this.log("Created '" + name + "' (" + typeName + ")", 'ok');
+                this.log("Created '" + name + "' (" + typeName + ")" + (color ? ' [' + color + ']' : ''), 'ok');
                 this.pushUndo("create '" + name + "'",
                     () => this.adapter.deleteObject(obj),
-                    () => this.adapter.createObject(typeName, name, {}));
+                    () => this.adapter.createObject(typeName, name, options));
             } else {
                 this.log('Failed to create object', 'err');
             }
