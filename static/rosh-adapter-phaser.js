@@ -57,6 +57,16 @@ function createPhaserAdapter(phaserScene, options = {}) {
   // HELPERS
   // ==========================================================================
 
+  function generateUUID() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
   function generateName(typeName) {
     if (!typeCounters[typeName]) typeCounters[typeName] = 0;
     typeCounters[typeName]++;
@@ -384,6 +394,8 @@ function createPhaserAdapter(phaserScene, options = {}) {
             if (phaserScene.textures.exists(spriteKey)) {
               const sprite = phaserScene.add.sprite(obj.x, obj.y, spriteKey);
               sprite.name = objName;
+              sprite.setData('_uuid', obj.getData('_uuid'));
+              sprite.setData('_created_at', obj.getData('_created_at'));
               sprite.setData('_type', typeName);
               sprite.setData('_color', color);
               sprite.setData('_roshId', objName);
@@ -416,6 +428,8 @@ function createPhaserAdapter(phaserScene, options = {}) {
 
       // Set common properties
       obj.name = objName;
+      obj.setData('_uuid', generateUUID());
+      obj.setData('_created_at', new Date().toISOString());
       obj.setData('_type', typeName);
       obj.setData('_color', color);
       obj.setData('_roshId', objName);
@@ -459,6 +473,11 @@ function createPhaserAdapter(phaserScene, options = {}) {
       if (result.success) {
         result.object.x = obj.x + 30;
         result.object.y = obj.y + 30;
+        // Track lineage: link clone to its parent
+        const parentUUID = obj.getData ? obj.getData('_uuid') : null;
+        if (parentUUID && result.object.setData) {
+          result.object.setData('_parent_uuid', parentUUID);
+        }
       }
 
       return result;

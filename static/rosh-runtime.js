@@ -448,6 +448,8 @@ if (typeof Rosh3DRuntime !== 'undefined') {
                     this.cmdMove(cmd, parts.slice(1));
                 } else if (parts[0] === 'clone' || parts[0] === 'copy' || parts[0] === 'duplicate') {
                     this.cmdClone(parts.slice(1).join(' '));
+                } else if (parts[0] === 'export') {
+                    this.cmdExportSpec(parts.slice(1));
                 } else if (parts[0] === 'prompt' || parts[0] === 'ai') {
                     this.cmdPrompt(cmd.substring(cmd.indexOf(' ') + 1));
                 } else {
@@ -475,11 +477,23 @@ if (typeof Rosh3DRuntime !== 'undefined') {
                 this.log('  undo [N]            - Undo last N changes');
                 this.log('  redo [N]            - Redo last N undos');
                 this.log('  :repeat             - Repeat last command');
+                this.log('  export [spec]       - Export world as TOML');
                 this.log('  prompt <text>       - AI-powered creation');
                 this.log('  credits             - Show credits');
                 this.log("Type 'help <cmd>' for details", 'dim');
             } else {
-                this.log('Help for: ' + args[0], 'cyan');
+                const topic = args[0].toLowerCase();
+                if (topic === 'export') {
+                    this.log('export [spec]', 'cyan');
+                    this.log('  Exports all objects in the current scene as typed TOML.');
+                    this.log('  The output includes UUIDs, types, colors, sizes, and positions.');
+                    this.log('  If supported, the TOML is also copied to your clipboard.', 'dim');
+                    this.log('  Usage:', 'dim');
+                    this.log('    export         - Export all objects', 'dim');
+                    this.log('    export spec    - Same as above', 'dim');
+                } else {
+                    this.log('Help for: ' + topic, 'cyan');
+                }
             }
         }
 
@@ -725,8 +739,23 @@ if (typeof Rosh3DRuntime !== 'undefined') {
 
         cmdClone(objInput) {
             if (!objInput) { this.log('Usage: clone <object>', 'err'); return; }
-            const resolved = this.resolveObject(objInput);
-            if (!resolved.obj) { this.log('Object not found: ' + objInput, 'err'); return; }
+            // Strip modifiers (colors, sizes, articles) so "clone big red ball" finds "ball"
+            const colorNames = ['red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'white', 'black', 'orange', 'purple', 'pink', 'gray', 'grey', 'gold', 'silver', 'brown', 'lime', 'navy', 'teal', 'coral', 'crimson', 'violet', 'indigo', 'maroon', 'olive', 'aqua'];
+            const sizeNames = ['tiny', 'small', 'medium', 'big', 'large', 'huge'];
+            const articles = ['a', 'an', 'the'];
+            const words = objInput.trim().split(/\s+/);
+            const stripped = words.filter(w => {
+                const lower = w.toLowerCase();
+                return !colorNames.includes(lower) && !sizeNames.includes(lower) && !articles.includes(lower);
+            }).join(' ');
+            const lookupName = stripped || objInput;
+            const resolved = this.resolveObject(lookupName);
+            if (!resolved.obj) {
+                // No object found — create one instead, using the full input as a create command
+                this.log("No '" + lookupName + "' found to clone — creating one instead.", 'warn');
+                this.cmdCreate('create ' + objInput, objInput.trim().split(/\s+/));
+                return;
+            }
             if (resolved.correction) this.log('[resolved: ' + resolved.correction + ']', 'dim');
             const srcObj = resolved.obj;
             const srcName = resolved.resolvedName;
@@ -741,17 +770,17 @@ if (typeof Rosh3DRuntime !== 'undefined') {
             const offsetX = typeof pos.x === 'number' ? pos.x + 30 : pos.x;
             const newName = this.nextName(srcType);
             const newObj = this.adapter.createObject(srcType, newName, props);
-            this.adapter.setProperty(newObj, 'x', offsetX);
-            if (pos.y !== undefined) this.adapter.setProperty(newObj, 'y', pos.y);
-            if (pos.z !== undefined) this.adapter.setProperty(newObj, 'z', pos.z);
+            this.adapter.setProperty(newName, 'x', offsetX);
+            if (pos.y !== undefined) this.adapter.setProperty(newName, 'y', pos.y);
+            if (pos.z !== undefined) this.adapter.setProperty(newName, 'z', pos.z);
             const color = this.adapter.getObjectColor(srcObj);
-            if (color !== undefined) this.adapter.setProperty(newObj, 'color', color);
+            if (color !== undefined) this.adapter.setProperty(newName, 'color', color);
             const scale = this.adapter.getObjectScale(srcObj);
-            if (scale !== undefined && scale !== 1) this.adapter.setProperty(newObj, 'scale', scale);
+            if (scale !== undefined && scale !== 1) this.adapter.setProperty(newName, 'scale', scale);
             this.log("Cloned '" + srcName + "' -> '" + newName + "'", 'ok');
             this.pushUndo('clone ' + srcName,
-                () => this.adapter.deleteObject(newObj),
-                () => { const obj = this.adapter.createObject(srcType, newName, props); this.adapter.setProperty(obj, 'x', offsetX); });
+                () => this.adapter.deleteObject(newName),
+                () => { const obj = this.adapter.createObject(srcType, newName, props); this.adapter.setProperty(newName, 'x', offsetX); });
         }
 
         cmdGet(args) {
@@ -880,6 +909,156 @@ if (typeof Rosh3DRuntime !== 'undefined') {
             this.log('Rosh - One language. Many worlds.', 'cyan');
             this.log('https://rosh.cloud', 'dim');
             this.log('Runtime v' + ROSH_RUNTIME_VERSION, 'dim');
+        }
+
+        // =============================================================
+        // EXPORT SPEC COMMAND (Project Loom — Milestone 1)
+        // =============================================================
+        // Walks all runtime objects and emits typed TOML to console.
+        // Handles objects with or without UUIDs (backwards compat).
+
+        cmdExportSpec(args) {
+            // Determine engine name from adapter
+            const engine = (this.adapter.platform || 'unknown').toLowerCase();
+
+            // Collect objects via adapter
+            const allObjects = this.adapter.getAllObjects({ sceneOnly: true });
+            if (allObjects.length === 0) {
+                this.log('No objects to export', 'dim');
+                return;
+            }
+
+            const now = new Date().toISOString();
+            const lines = [];
+
+            // Header comment
+            lines.push('# Rosh Spec Export');
+            lines.push('# Generated: ' + now);
+            lines.push('');
+
+            // [meta] section
+            lines.push('[meta]');
+            lines.push('version = "0.3.0"');
+            lines.push('engine = "' + engine + '"');
+            lines.push('exported_at = "' + now + '"');
+            lines.push('object_count = ' + allObjects.length);
+            lines.push('');
+
+            // Helper: reverse-lookup scale to size name
+            function scaleToSize(scale) {
+                if (scale <= 0.25) return 'tiny';
+                if (scale <= 0.5) return 'small';
+                if (scale <= 1.0) return 'medium';
+                if (scale <= 2.0) return 'big';
+                if (scale <= 4.0) return 'large';
+                return 'huge';
+            }
+
+            // Helper: generate a UUID v4 for objects that lack one
+            function generateUUID() {
+                if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+                    return crypto.randomUUID();
+                }
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            }
+
+            // Helper: format a number for TOML (always include decimal point)
+            function fmt(n) {
+                if (typeof n !== 'number' || isNaN(n)) return '0.0';
+                var s = n.toFixed(1);
+                return s;
+            }
+
+            // Per-object sections
+            for (const entry of allObjects) {
+                const name = this.adapter.getObjectName(entry);
+                const rawObj = entry.object || entry;
+                const type = this.adapter.getObjectType(entry) || 'unknown';
+                const pos = this.adapter.getObjectPosition(entry);
+
+                // Read userData fields (Three.js) or getData (Phaser)
+                let uuid, color, createdAt, scale;
+                if (rawObj.userData) {
+                    // Three.js path
+                    uuid = rawObj.userData._uuid;
+                    color = rawObj.userData._color || '';
+                    createdAt = rawObj.userData._created_at || null;
+                    scale = rawObj.scale ? rawObj.scale.x : 1;
+                } else if (rawObj.getData) {
+                    // Phaser path
+                    uuid = rawObj.getData('_uuid');
+                    color = rawObj.getData('_color') || '';
+                    createdAt = rawObj.getData('_created_at') || null;
+                    scale = rawObj.scaleX || 1;
+                } else {
+                    uuid = null;
+                    color = '';
+                    createdAt = null;
+                    scale = 1;
+                }
+
+                // Backwards compat: generate UUID on the fly if missing
+                if (!uuid) {
+                    uuid = generateUUID();
+                    // Attach it so future exports are consistent
+                    if (rawObj.userData) {
+                        rawObj.userData._uuid = uuid;
+                    } else if (rawObj.setData) {
+                        rawObj.setData('_uuid', uuid);
+                    }
+                }
+
+                const sizeName = scaleToSize(scale);
+                const colorName = color || 'default';
+
+                lines.push('[objects.' + name + ']');
+                lines.push('uuid = "' + uuid + '"');
+                lines.push('type = "' + type + '"');
+                lines.push('color = "' + colorName + '"');
+                lines.push('size = "' + sizeName + '"');
+
+                // Position — always include x, y; include z if present and non-zero
+                if (pos.z !== undefined && pos.z !== 0) {
+                    lines.push('position = { x = ' + fmt(pos.x) + ', y = ' + fmt(pos.y) + ', z = ' + fmt(pos.z) + ' }');
+                } else {
+                    lines.push('position = { x = ' + fmt(pos.x) + ', y = ' + fmt(pos.y) + ' }');
+                }
+
+                // Optional: created_at timestamp
+                if (createdAt) {
+                    lines.push('created_at = "' + createdAt + '"');
+                }
+
+                lines.push('');
+            }
+
+            const toml = lines.join('\n');
+
+            // Output to console
+            for (const line of lines) {
+                if (line.startsWith('#')) {
+                    this.log(line, 'dim');
+                } else if (line.startsWith('[')) {
+                    this.log(line, 'cyan');
+                } else if (line === '') {
+                    // skip empty lines in console for readability
+                } else {
+                    this.log(line);
+                }
+            }
+
+            this.log('Exported ' + allObjects.length + ' object(s)', 'ok');
+
+            // Copy to clipboard if available
+            if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                navigator.clipboard.writeText(toml).then(
+                    () => this.log('(copied to clipboard)', 'dim'),
+                    () => {}  // Silently ignore clipboard failures
+                );
+            }
         }
 
         cmdMeta(args) {

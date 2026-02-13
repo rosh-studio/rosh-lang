@@ -83,6 +83,16 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
   // HELPERS
   // ==========================================================================
 
+  function generateUUID() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
   function generateName(typeName) {
     if (!typeCounters[typeName]) typeCounters[typeName] = 0;
     typeCounters[typeName]++;
@@ -306,14 +316,23 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
 
     getObjectColor: function(obj) {
       const mesh = (typeof obj === 'string') ? findObject(obj) : (obj && obj.object) || obj;
+      // Return the Rosh color name if stored, otherwise fall back to hex
+      if (mesh && mesh.userData && mesh.userData._color) return mesh.userData._color;
       if (mesh && mesh.material && mesh.material.color) return mesh.material.color.getHex();
       // Check children (groups)
       if (mesh && mesh.children) {
         for (const child of mesh.children) {
+          if (child.userData && child.userData._color) return child.userData._color;
           if (child.material && child.material.color) return child.material.color.getHex();
         }
       }
       return undefined;
+    },
+
+    getObjectScale: function(obj) {
+      const mesh = (typeof obj === 'string') ? findObject(obj) : (obj && obj.object) || obj;
+      if (mesh && mesh.scale) return mesh.scale.x;
+      return 1;
     },
 
     // Deep search: find by color, size, type
@@ -416,6 +435,8 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
             const material = new THREE.SpriteMaterial({ map: texture });
             const sprite = new THREE.Sprite(material);
             sprite.name = objName;
+            sprite.userData._uuid = generateUUID();
+            sprite.userData._created_at = new Date().toISOString();
             sprite.userData._type = typeName;
             sprite.userData._color = color;
             sprite.userData._roshId = objName;
@@ -457,6 +478,8 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         const mat = new THREE.MeshStandardMaterial({ color: colorHex });
         const mesh = new THREE.Mesh(geom, mat);
         mesh.name = objName;
+        mesh.userData._uuid = generateUUID();
+        mesh.userData._created_at = new Date().toISOString();
         mesh.userData._type = typeName;
         mesh.userData._color = color;
         mesh.userData._roshId = objName;
@@ -486,7 +509,11 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         const placeholderGeom = new THREE.BoxGeometry(0.5, 0.5, 0.5);
         const placeholderMat = new THREE.MeshStandardMaterial({ color: colorHex, transparent: true, opacity: 0.3 });
         const placeholder = new THREE.Mesh(placeholderGeom, placeholderMat);
+        const placeholderUUID = generateUUID();
+        const placeholderCreatedAt = new Date().toISOString();
         placeholder.name = objName;
+        placeholder.userData._uuid = placeholderUUID;
+        placeholder.userData._created_at = placeholderCreatedAt;
         placeholder.userData._type = typeName;
         placeholder.userData._color = color;
         placeholder.userData._roshId = objName;
@@ -504,6 +531,8 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
           (gltf) => {
             const model = gltf.scene;
             model.name = objName;
+            model.userData._uuid = placeholderUUID;
+            model.userData._created_at = placeholderCreatedAt;
             model.userData._type = typeName;
             model.userData._color = color;
             model.userData._roshId = objName;
@@ -581,6 +610,8 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
         const placeholderMat = new THREE.MeshStandardMaterial({ color: colorHex, transparent: true, opacity: 0.3 });
         const placeholder = new THREE.Mesh(placeholderGeom, placeholderMat);
         placeholder.name = objName;
+        placeholder.userData._uuid = generateUUID();
+        placeholder.userData._created_at = new Date().toISOString();
         placeholder.userData._type = typeName;
         placeholder.userData._color = color;
         placeholder.userData._roshId = objName;
@@ -627,6 +658,8 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       const mesh = new THREE.Mesh(geometry, material);
 
       mesh.name = objName;
+      mesh.userData._uuid = generateUUID();
+      mesh.userData._created_at = new Date().toISOString();
       mesh.userData._type = typeName;
       mesh.userData._color = color;
       mesh.userData._roshId = objName;
@@ -689,6 +722,9 @@ function createThreeJSAdapter(scene, camera, renderer, options = {}) {
       const clone = obj.clone();
 
       clone.name = newName;
+      clone.userData._parent_uuid = obj.userData._uuid;
+      clone.userData._uuid = generateUUID();
+      clone.userData._created_at = new Date().toISOString();
       clone.userData._roshId = newName;
       clone.userData._scene = currentScene;  // Clone goes to CURRENT scene, not source scene
       clone.visible = true;  // Make visible immediately (source might be hidden in different scene)
