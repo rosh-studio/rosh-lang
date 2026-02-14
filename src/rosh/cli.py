@@ -4570,7 +4570,7 @@ def main():
     http://localhost:{port}/demos/scottish-museum/
     http://localhost:{port}/demos/rosh-airspace/
 
-  Demo list (requires login):
+  Demo list
     http://localhost:{port}/demos
 
   WebSocket: ws://localhost:{port}/ws/world/<name>
