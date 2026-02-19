@@ -1,0 +1,106 @@
+# =============================================================================
+# MUSEUM EXHIBIT - Homepage Demo
+# =============================================================================
+#
+# A single spotlit museum artifact with an editable label.
+# Designed for the rosh.cloud homepage — shows visitors they can
+# type plain English to change the exhibit in real time.
+#
+# Target: Three.js (3D browser)
+# Build:  rosh build demos/museum-exhibit/game.rosh --target threejs
+#
+# =============================================================================
+
+meta
+    title "Museum Exhibit"
+    author "Rosh"
+    version "0.1.0"
+    description "A museum artifact with an editable label"
+end
+
+meta.scene
+    background "#0d0d15"
+    fog_color "#0d0d15"
+    fog_near 15
+    fog_far 50
+end
+
+meta.camera
+    position "0 3 8"
+    target "0 1.5 0"
+    fov 50
+    controls "orbit"
+end
+
+# -----------------------------------------------------------------------------
+# Lighting
+# -----------------------------------------------------------------------------
+
+create light ambient as ambient
+    set color to "#1a1a2e"
+    set intensity to 0.3
+end
+
+create light main_spot as spot
+    set color to "#ffeedd"
+    set intensity to 3.0
+    set x to 0
+    set y to 7
+    set z to 2
+    set angle to 25
+    set penumbra to 0.4
+    set cast_shadow to true
+end
+
+# -----------------------------------------------------------------------------
+# Floor
+# -----------------------------------------------------------------------------
+
+create object floor
+    set type to "plane"
+    set color to "#1a1a1a"
+    set scale to 20
+    set x to 0
+    set y to 0
+    set metalness to 0.3
+    set roughness to 0.8
+end
+
+# -----------------------------------------------------------------------------
+# Pedestal
+# -----------------------------------------------------------------------------
+
+create object pedestal
+    set type to "cylinder"
+    set color to "#2a2a2a"
+    set x to 0
+    set y to 0.75
+    set z to 0
+    set scale to 0.9
+    set cast_shadow to true
+end
+
+# -----------------------------------------------------------------------------
+# Artifact — Spartan helmet, slowly spinning
+# -----------------------------------------------------------------------------
+
+create object artifact
+    set type to "spartan_bronze_helmet"
+    set x to 0
+    set y to 2.0
+    set z to 0
+    set spin to "0 5 0"
+end
+
+# -----------------------------------------------------------------------------
+# Label — editable text below the artifact
+# -----------------------------------------------------------------------------
+
+create object label
+    set text to "Spartan Helmet, c.500 BC"
+    set x to 0
+    set y to 0.6
+    set z to 3
+    set color to "#cccccc"
+    set font_size to 32
+end
