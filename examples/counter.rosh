@@ -1,0 +1,4 @@
+# Counter example
+create number count
+set count to 1
+print "Count is: {count}"

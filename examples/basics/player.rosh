@@ -1,5 +1,0 @@
-create object player
-  set name to "Hero"
-  set health to 100
-end
-print "Player created successfully"

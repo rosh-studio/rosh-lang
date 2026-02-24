@@ -1,0 +1,6 @@
+# Player setup
+create object player
+set player health to 100
+set player x to 50
+set player y to 90
+print "Player created at ({player.x}, {player.y}) with {player.health} HP"

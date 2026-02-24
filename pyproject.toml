@@ -1,67 +1,16 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "rosh"
-version = "0.2.11"
-description = "A spoken-language-first, stack-based, AI-native programming language"
-license = {text = "MIT"}
-readme = "README.md"
+name = "rosh-lang"
+version = "0.4.0"
+description = "Rosh language — parser, runtime, and composition engine"
 requires-python = ">=3.10"
-authors = [
-    {name = "Rosh Project"}
-]
-urls = {Homepage = "https://github.com/rdubar/rosh", Repository = "https://github.com/rdubar/rosh"}
-dependencies = [
-    "rich>=13.0.0",
-    "tomli>=2.0.0; python_version<'3.11'",
-    "tomli-w>=1.0.0",
-    "websockets>=15.0.1",
-    "websocket-client>=1.6.0",
-    "pillow>=12.1.0",
-]
+dependencies = []
 
 [project.optional-dependencies]
-ai = [
-    "openai>=1.0.0",
-    "anthropic>=0.18.0"
-]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "ruff>=0.1.0",
-    "black>=23.0.0",
-]
-pygame = [
-    "pygame-ce>=2.5.0",  # Community edition - better Python 3.14 compatibility
-]
+dev = ["pytest>=7.0"]
 
-[project.scripts]
-rosh = "rosh.cli:main"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-data]
-"*" = ["*.rosh"]
-
-# Include assets in distribution
-[tool.setuptools.data-files]
-"share/rosh/assets/sprites" = [
-    "assets/sprites/hero.png",
-    "assets/sprites/enemy.png",
-    "assets/sprites/coin.png",
-    "assets/sprites/player.png",
-    "assets/sprites/laserGreen.png",
-    "assets/sprites/enemyShip.png",
-    "assets/sprites/space-invader-32x32-6f.png",
-]
-"share/rosh/assets/sounds" = [
-    "assets/sounds/laser1.ogg",
-    "assets/sounds/lose1.ogg",
-    "assets/sounds/lose3.ogg",
-]
-"share/rosh/assets" = [
-    "assets/CREDITS.md",
-]
+[tool.pytest.ini_options]
+testpaths = ["tests"]

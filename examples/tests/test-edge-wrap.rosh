@@ -1,9 +1,0 @@
-# Test edge wrapping
-create object hero from player
-    set x to 50%
-    set y to 50%
-    set wrap_edges to true
-end
-
-print "Hero with edge wrapping enabled"
-print "Move to screen edge - you'll wrap around!"

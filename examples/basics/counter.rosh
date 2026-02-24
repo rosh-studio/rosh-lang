@@ -1,9 +1,0 @@
-# Simple counter example
-
-create counter to 0
-
-print counter
-
-set counter to 5
-
-print counter
