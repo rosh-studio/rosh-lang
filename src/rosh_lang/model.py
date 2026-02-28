@@ -2,69 +2,174 @@
 
 A programme is a list of statements. Each statement is a dataclass
 representing one line of Rosh code. The parser produces these;
-the compose step consumes them.
+the runtime consumes them.
 
-Backward compatible with Rosh v0.1/v0.2 syntax:
-  print "hello world"
-  create object player
-  set player health to 100
-  when collision hero enemy then ... end
+17 keywords + comments + blanks, per BUILDING-ROSH.md Sections 4 & 7.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 
 # ── Statements ─────────────────────────────────────────────────
-#
-# Each statement type corresponds to a Rosh keyword.
-# We start small: print, create, set, when/end.
-# More will be added as needed.
 
 
 @dataclass
 class PrintStatement:
     """print "hello world" or print "Score: {score}" """
 
-    text: str  # the string content (without outer quotes)
+    text: str
     line: int = 0
 
 
 @dataclass
 class CreateStatement:
-    """create object player / create number score as 0"""
+    """create object player / create number score"""
 
-    kind: str  # "object", "number", "string", "list"
+    kind: str
     name: str
-    parent: str = ""  # for "create object hero from player"
-    count: int = 1  # for "create 5 objects as bullets"
+    parent: str = ""
+    count: int = 1
     line: int = 0
 
 
 @dataclass
 class SetStatement:
-    """set player health to 100 / set x to 50"""
+    """set player health to 100 / set score to score + 1"""
 
-    target: str  # "player.health" or "x" (dot-separated)
-    value: str  # raw value string — parsed later
-    line: int = 0
-
-
-@dataclass
-class EndStatement:
-    """end — closes a block (create object, when, define function, if, etc.)"""
-
+    target: str
+    value: str  # raw — may be literal or arithmetic expression
     line: int = 0
 
 
 @dataclass
 class WhenStatement:
-    """when update then / when collision hero enemy then"""
+    """when start then / when collision hero enemy then"""
 
-    event: str  # "update", "collision", "space_pressed", etc.
-    args: list[str] = field(default_factory=list)  # e.g. ["hero", "enemy"] for collision
+    event: str
+    args: list[str] = field(default_factory=list)
+    line: int = 0
+
+
+@dataclass
+class EndStatement:
+    """end — closes a when block."""
+
+    line: int = 0
+
+
+@dataclass
+class GetStatement:
+    """get score / get all / get all bool"""
+
+    target: str
+    line: int = 0
+
+
+@dataclass
+class SayStatement:
+    """say Welcome to the dungeon"""
+
+    text: str
+    line: int = 0
+
+
+@dataclass
+class SendStatement:
+    """send timer_expired / send score_changed old=50 new=100"""
+
+    event: str
+    payload: dict[str, str] = field(default_factory=dict)
+    line: int = 0
+
+
+@dataclass
+class EventStatement:
+    """event timer_expired / event score_changed old new"""
+
+    name: str
+    payload_fields: list[str] = field(default_factory=list)
+    line: int = 0
+
+
+@dataclass
+class OnStatement:
+    """on alarm set status to "triggered" """
+
+    event: str
+    action: str
+    args: str
+    condition: str = ""
+    line: int = 0
+
+
+@dataclass
+class GoStatement:
+    """go corridor / go back"""
+
+    target: str
+    line: int = 0
+
+
+@dataclass
+class LookStatement:
+    """look / look player"""
+
+    target: str = ""
+    line: int = 0
+
+
+@dataclass
+class ConnectStatement:
+    """connect api https://example.com / connect api disconnect"""
+
+    name: str
+    url: str = ""
+    line: int = 0
+
+
+@dataclass
+class DestroyStatement:
+    """destroy bullet_7"""
+
+    name: str
+    line: int = 0
+
+
+@dataclass
+class SpriteStatement:
+    """sprite player "pixel art spaceship" """
+
+    name: str
+    description: str
+    line: int = 0
+
+
+@dataclass
+class SoundStatement:
+    """sound laser "short sci-fi laser blast" """
+
+    name: str
+    description: str
+    line: int = 0
+
+
+@dataclass
+class PlayStatement:
+    """play explosion / play music loop / play music stop"""
+
+    sound: str
+    mode: str = ""
+    line: int = 0
+
+
+@dataclass
+class UseStatement:
+    """use score / use player speed 0.02 / use enemy-grid rows 2 cols 5"""
+
+    name: str
+    config: dict[str, str] = field(default_factory=dict)
     line: int = 0
 
 
@@ -88,8 +193,21 @@ Statement = (
     PrintStatement
     | CreateStatement
     | SetStatement
-    | EndStatement
     | WhenStatement
+    | EndStatement
+    | GetStatement
+    | SayStatement
+    | SendStatement
+    | EventStatement
+    | OnStatement
+    | GoStatement
+    | LookStatement
+    | ConnectStatement
+    | DestroyStatement
+    | SpriteStatement
+    | SoundStatement
+    | PlayStatement
+    | UseStatement
     | CommentStatement
     | BlankStatement
 )
@@ -100,4 +218,4 @@ class Programme:
     """A parsed Rosh programme — a list of statements."""
 
     statements: list[Statement] = field(default_factory=list)
-    source: str = ""  # filename or "<string>"
+    source: str = ""

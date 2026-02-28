@@ -1,0 +1,5 @@
+create string status
+event alarm
+on alarm set status to "triggered"
+send alarm
+print "Status: {status}"

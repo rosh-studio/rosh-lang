@@ -1,0 +1,14 @@
+# widget: score
+# version: 0.1
+# config: max=999
+
+create number value
+set value to 0
+
+create object display
+set display label to "{value}"
+set display x to 0.02
+set display y to 0.02
+set display width to 0.15
+set display height to 0.06
+set display color to "#333"

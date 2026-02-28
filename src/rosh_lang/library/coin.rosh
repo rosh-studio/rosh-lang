@@ -1,0 +1,15 @@
+# widget: coin
+# version: 0.1
+# description: Collectible item with position and collect sound
+# config: x=0.5 y=0.1 color=#ffd700
+# licence: Rosh-BSL
+
+create object gem
+set gem.x to 0.5
+set gem.y to 0.1
+set gem.width to 0.06
+set gem.height to 0.06
+set gem.color to "#ffd700"
+
+sprite gem "gold crystal"
+sound chime "coin collect"

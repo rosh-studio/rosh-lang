@@ -1,0 +1,2 @@
+# Bullet example — single projectile
+use bullet speed 0.02

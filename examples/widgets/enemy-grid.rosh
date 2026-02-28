@@ -1,0 +1,2 @@
+# Enemy grid example — 2 rows of 5 enemies
+use enemy-grid rows 2 cols 5

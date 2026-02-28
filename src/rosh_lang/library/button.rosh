@@ -1,0 +1,13 @@
+# widget: button
+# version: 0.1
+# description: Clickable button with label
+# config: label=Click x=0.4 y=0.5
+# licence: Rosh-BSL
+
+create object box
+set box.label to "Click"
+set box.x to 0.4
+set box.y to 0.5
+set box.width to 0.20
+set box.height to 0.08
+set box.color to "#3366cc"

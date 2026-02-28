@@ -1,0 +1,18 @@
+# Step 6 spec verification — interactive click counter
+# Run: rosh examples/click.rosh --target web --run
+
+create object box
+set box x to 0.4
+set box y to 0.4
+set box width to 0.2
+set box height to 0.2
+set box color to "red"
+
+create number clicks
+set clicks to 0
+
+when click box
+  set clicks to clicks + 1
+  set box color to "green"
+  print "Clicked {clicks} times!"
+end

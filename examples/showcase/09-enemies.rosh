@@ -1,0 +1,79 @@
+# demo: Enemy Grid
+# description: Playable space invaders — moving enemies, keyboard ship, bullet, scoring
+# badges: Keyboard, Widgets, Game Loop
+
+use starfield count 10
+use score
+use player speed 0.04
+use enemy-grid rows 2 cols 4 drift 0.003 sprite "red alien"
+use bullet
+
+# Arrow keys move the player ship
+when keydown ArrowLeft
+  set player.ship.x to player.ship.x - 0.04
+end
+
+when keydown ArrowRight
+  set player.ship.x to player.ship.x + 0.04
+end
+
+# Space fires the bullet from the player
+when keydown " "
+  set bullet.obj.x to player.ship.x
+  set bullet.obj.y to 0.85
+  play bullet.pew
+end
+
+# Scoring event
+event hit
+on hit set score.value to score.value + 1
+
+# Row 0 collisions
+when collision bullet.obj enemy-grid.e0_0
+  destroy enemy-grid.e0_0
+  set bullet.obj.y to -1
+  send hit
+end
+
+when collision bullet.obj enemy-grid.e0_1
+  destroy enemy-grid.e0_1
+  set bullet.obj.y to -1
+  send hit
+end
+
+when collision bullet.obj enemy-grid.e0_2
+  destroy enemy-grid.e0_2
+  set bullet.obj.y to -1
+  send hit
+end
+
+when collision bullet.obj enemy-grid.e0_3
+  destroy enemy-grid.e0_3
+  set bullet.obj.y to -1
+  send hit
+end
+
+# Row 1 collisions
+when collision bullet.obj enemy-grid.e1_0
+  destroy enemy-grid.e1_0
+  set bullet.obj.y to -1
+  send hit
+end
+
+when collision bullet.obj enemy-grid.e1_1
+  destroy enemy-grid.e1_1
+  set bullet.obj.y to -1
+  send hit
+end
+
+when collision bullet.obj enemy-grid.e1_2
+  destroy enemy-grid.e1_2
+  set bullet.obj.y to -1
+  send hit
+end
+
+when collision bullet.obj enemy-grid.e1_3
+  destroy enemy-grid.e1_3
+  set bullet.obj.y to -1
+  send hit
+end

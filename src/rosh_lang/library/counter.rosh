@@ -1,0 +1,13 @@
+# widget: counter
+# version: 0.1
+# description: Click counter — increments on each click
+# config: start=0
+# licence: Rosh-BSL
+
+create number value
+set value to 0
+
+when click
+  set value to value + 1
+  print "Count: {value}"
+end

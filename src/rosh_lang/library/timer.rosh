@@ -1,0 +1,19 @@
+# widget: timer
+# version: 0.1
+# description: Countdown/countup timer display
+# config: start=60 step=1
+# licence: Rosh-BSL
+
+create number seconds
+set seconds to 60
+
+create number step
+set step to 1
+
+create object display
+set display.label to "Time: {seconds}"
+set display.x to 0.80
+set display.y to 0.02
+set display.width to 0.18
+set display.height to 0.06
+set display.color to "#444"

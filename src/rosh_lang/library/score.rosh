@@ -1,0 +1,16 @@
+# widget: score
+# version: 0.1
+# description: Score display with current value and label
+# config: max=999
+# licence: Rosh-BSL
+
+create number value
+set value to 0
+
+create object display
+set display.label to "Score: {value}"
+set display.x to 0.02
+set display.y to 0.02
+set display.width to 0.15
+set display.height to 0.06
+set display.color to "#333"

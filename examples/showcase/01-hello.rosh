@@ -1,0 +1,22 @@
+# demo: Hello World
+# description: Print text and place objects on the canvas — no code, no frameworks
+# badges: Static
+
+print "Hello from Rosh!"
+print "One script, many worlds."
+
+create object banner
+set banner.x to 0.2
+set banner.y to 0.3
+set banner.width to 0.6
+set banner.height to 0.12
+set banner.color to "#e94560"
+set banner.label to "Welcome to Rosh"
+
+create object badge
+set badge.x to 0.25
+set badge.y to 0.5
+set badge.width to 0.5
+set badge.height to 0.08
+set badge.color to "#533483"
+set badge.label to "Plain English Programming"

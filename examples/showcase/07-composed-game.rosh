@@ -1,0 +1,44 @@
+# demo: Composed Game
+# description: Multiple widgets + event wiring — the Rosh composition pattern
+# badges: Keyboard, Widgets, Game Loop
+
+use score
+use lives count 3
+use player speed 0.04
+
+# Arrow keys move the player ship
+when keydown ArrowLeft
+  set player.ship.x to player.ship.x - 0.04
+end
+
+when keydown ArrowRight
+  set player.ship.x to player.ship.x + 0.04
+end
+
+# Falling target to catch
+create object gem
+set gem.x to 0.48
+set gem.y to 0.05
+set gem.width to 0.08
+set gem.height to 0.08
+set gem.color to "#ffd700"
+sprite gem "gold crystal"
+
+sound ding "coin collect"
+
+# Event wiring — one-liners
+event caught
+on caught set score.value to score.value + 1
+on update when gem.y > 1 set gem.y to 0.05
+
+when update
+  set gem.y to gem.y + 0.004
+end
+
+when collision player.ship gem
+  play ding
+  send caught
+  set gem.y to 0.05
+  set player.ship.x to 0.5
+  print "Catch! Score: {score.value}"
+end

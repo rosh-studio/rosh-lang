@@ -1,0 +1,20 @@
+# demo: Click Counter
+# description: Click the box to count — shows events, state, and arithmetic
+# badges: Click
+
+create object box
+set box.x to 0.3
+set box.y to 0.25
+set box.width to 0.4
+set box.height to 0.3
+set box.color to "#e94560"
+set box.label to "Click me!"
+
+create number clicks
+set clicks to 0
+
+when click box
+  set clicks to clicks + 1
+  set box.color to "#533483"
+  print "Click #{clicks}"
+end

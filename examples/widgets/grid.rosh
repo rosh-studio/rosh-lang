@@ -1,0 +1,2 @@
+# Grid example — 3×3 grid of cells
+use grid rows 3 cols 3

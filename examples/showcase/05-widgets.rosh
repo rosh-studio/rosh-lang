@@ -1,0 +1,13 @@
+# demo: Widget Composition
+# description: Reusable widgets with use, namespace prefixing, and config overrides
+# badges: Click, Widgets
+
+use score
+use button label "Add Point" x 0.35 y 0.5
+
+set score.value to 0
+
+when click button.box
+  set score.value to score.value + 1
+  print "Score: {score.value}"
+end

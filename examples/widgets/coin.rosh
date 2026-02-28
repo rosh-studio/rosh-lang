@@ -1,0 +1,2 @@
+# Coin example — collectible item
+use coin x 0.5 y 0.3

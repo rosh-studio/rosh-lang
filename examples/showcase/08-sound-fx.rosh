@@ -1,0 +1,88 @@
+# demo: Sound Effects
+# description: Click coloured panels to play different sound presets — sound + play keywords
+# badges: Click, Events
+
+create object laser_btn
+set laser_btn.x to 0.05
+set laser_btn.y to 0.15
+set laser_btn.width to 0.28
+set laser_btn.height to 0.3
+set laser_btn.color to "#e74c3c"
+set laser_btn.label to "Laser"
+
+create object coin_btn
+set coin_btn.x to 0.36
+set coin_btn.y to 0.15
+set coin_btn.width to 0.28
+set coin_btn.height to 0.3
+set coin_btn.color to "#f1c40f"
+set coin_btn.label to "Coin"
+
+create object jump_btn
+set jump_btn.x to 0.67
+set jump_btn.y to 0.15
+set jump_btn.width to 0.28
+set jump_btn.height to 0.3
+set jump_btn.color to "#2ecc71"
+set jump_btn.label to "Jump"
+
+create object boom_btn
+set boom_btn.x to 0.05
+set boom_btn.y to 0.55
+set boom_btn.width to 0.28
+set boom_btn.height to 0.3
+set boom_btn.color to "#9b59b6"
+set boom_btn.label to "Explosion"
+
+create object win_btn
+set win_btn.x to 0.36
+set win_btn.y to 0.55
+set win_btn.width to 0.28
+set win_btn.height to 0.3
+set win_btn.color to "#3498db"
+set win_btn.label to "Win"
+
+create object hit_btn
+set hit_btn.x to 0.67
+set hit_btn.y to 0.55
+set hit_btn.width to 0.28
+set hit_btn.height to 0.3
+set hit_btn.color to "#e67e22"
+set hit_btn.label to "Hit"
+
+sound zap "laser beam"
+sound ding "coin collect"
+sound boing "jump spring"
+sound kaboom "explosion blast"
+sound fanfare "win victory"
+sound thud "hit impact"
+
+when click laser_btn
+  play zap
+  print "Pew pew!"
+end
+
+when click coin_btn
+  play ding
+  print "Cha-ching!"
+end
+
+when click jump_btn
+  play boing
+  print "Boing!"
+end
+
+when click boom_btn
+  play kaboom
+  print "BOOM!"
+end
+
+when click win_btn
+  play fanfare
+  print "You win!"
+end
+
+when click hit_btn
+  play thud
+  print "Ouch!"
+end

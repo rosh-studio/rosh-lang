@@ -1,0 +1,48 @@
+# demo: Mini Game
+# description: Catch the falling ball — arrow keys move left/right, ball falls automatically
+# badges: Keyboard, Game Loop
+
+create object player
+set player.x to 0.4
+set player.y to 0.8
+set player.width to 0.12
+set player.height to 0.05
+set player.color to "#e94560"
+sprite player "red spaceship"
+
+create object ball
+set ball.x to 0.45
+set ball.y to 0.05
+set ball.width to 0.06
+set ball.height to 0.06
+set ball.color to "#2ecc71"
+sprite ball "green orb"
+
+create number score
+set score to 0
+
+sound catch "coin collect"
+
+on update when ball.y > 1 set ball.y to 0.05
+
+print "Arrow keys to move. Catch the ball!"
+
+when keydown ArrowLeft
+  set player.x to player.x - 0.05
+end
+
+when keydown ArrowRight
+  set player.x to player.x + 0.05
+end
+
+when update
+  set ball.y to ball.y + 0.003
+end
+
+when collision player ball
+  play catch
+  set score to score + 1
+  set ball.y to 0.05
+  set player.x to 0.4
+  print "Catch #{score}!"
+end

@@ -1,0 +1,38 @@
+# demo: Keyboard Mover
+# description: Arrow keys move the player in four directions
+# badges: Keyboard
+
+create object player
+set player.x to 0.45
+set player.y to 0.45
+set player.width to 0.08
+set player.height to 0.08
+set player.color to "#e94560"
+sprite player "red pixel hero"
+
+create number steps
+set steps to 0
+
+when keydown ArrowRight
+  set player.x to player.x + 0.03
+  set steps to steps + 1
+  print "Step {steps}: right"
+end
+
+when keydown ArrowLeft
+  set player.x to player.x - 0.03
+  set steps to steps + 1
+  print "Step {steps}: left"
+end
+
+when keydown ArrowDown
+  set player.y to player.y + 0.03
+  set steps to steps + 1
+  print "Step {steps}: down"
+end
+
+when keydown ArrowUp
+  set player.y to player.y - 0.03
+  set steps to steps + 1
+  print "Step {steps}: up"
+end
