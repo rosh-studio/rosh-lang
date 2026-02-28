@@ -21,6 +21,7 @@ from typing import Any
 from rosh_lang.model import (
     CreateStatement,
     DestroyStatement,
+    IfStatement,
     OnStatement,
     PlayStatement,
     PrintStatement,
@@ -358,6 +359,14 @@ def _prefix_statement(stmt: Statement, ns: str) -> Statement:
             action=stmt.action,
             args=new_args,
             condition=new_condition,
+            line=stmt.line,
+        )
+
+    if isinstance(stmt, IfStatement):
+        return IfStatement(
+            condition=_prefix_on_condition(stmt.condition, ns) if stmt.condition else "",
+            then_body=[_prefix_statement(s, ns) for s in stmt.then_body],
+            else_body=[_prefix_statement(s, ns) for s in stmt.else_body],
             line=stmt.line,
         )
 

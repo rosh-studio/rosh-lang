@@ -15,6 +15,9 @@ from rosh_lang.model import (
     DestroyStatement,
     EndStatement,
     EventStatement,
+    GoStatement,
+    IfStatement,
+    LookStatement,
     OnStatement,
     PlayStatement,
     PrintStatement,
@@ -169,6 +172,10 @@ def _emit_statement(stmt: Statement) -> str:
         return _emit_sound(stmt)
     if isinstance(stmt, PlayStatement):
         return _emit_play(stmt)
+    if isinstance(stmt, IfStatement):
+        return _emit_if(stmt)
+    if isinstance(stmt, GoStatement):
+        return _emit_go(stmt)
     return ""
 
 
@@ -177,6 +184,8 @@ def _emit_print(stmt: PrintStatement) -> str:
 
 
 def _emit_create(stmt: CreateStatement) -> str:
+    if stmt.kind.lower() == "scene":
+        return f'rosh.createScene("{_escape_js(stmt.name)}");'
     return f'rosh.create("{_escape_js(stmt.kind)}", "{_escape_js(stmt.name)}");'
 
 
@@ -223,6 +232,10 @@ def _emit_sprite(stmt: SpriteStatement) -> str:
         f'rosh.set("{_escape_js(stmt.name)}.sprite", '
         f'"{_escape_js(stmt.description)}");'
     )
+
+
+def _emit_go(stmt: GoStatement) -> str:
+    return f'rosh.goScene("{_escape_js(stmt.target)}");'
 
 
 def _emit_on(stmt: OnStatement) -> str:
@@ -278,13 +291,49 @@ def _emit_on(stmt: OnStatement) -> str:
 # ── Helpers ───────────────────────────────────────────────────────
 
 
+def _emit_if(stmt: IfStatement, indent: str = "") -> str:
+    """Emit JS for an if/else block."""
+    parts = stmt.condition.split()
+    if len(parts) != 3:
+        return ""
+    field, op, val = parts
+    js_op = {"=": "===", "==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<="}.get(op, op)
+
+    # Coerce value: try number first, then string comparison
+    try:
+        float(val)
+        js_val = val
+    except ValueError:
+        # String comparison — quote the value
+        js_val = f'"{_escape_js(val)}"'
+
+    lines = [f'{indent}if (rosh.get("{_escape_js(field)}") {js_op} {js_val}) {{']
+    for s in stmt.then_body:
+        line = _emit_statement(s)
+        if line:
+            # If it's a multi-line block (nested if), re-indent each line
+            for sub in line.split("\n"):
+                lines.append(f"{indent}  {sub}")
+    if stmt.else_body:
+        lines.append(f"{indent}}} else {{")
+        for s in stmt.else_body:
+            line = _emit_statement(s)
+            if line:
+                for sub in line.split("\n"):
+                    lines.append(f"{indent}  {sub}")
+    lines.append(f"{indent}}}")
+    return "\n".join(lines)
+
+
 def _emit_body(stmts: list[Statement]) -> str:
     """Emit JS for a list of body statements (inside a handler)."""
     lines: list[str] = []
     for stmt in stmts:
         line = _emit_statement(stmt)
         if line:
-            lines.append(f"  {line}")
+            # Multi-line (if blocks) — indent each line
+            for sub in line.split("\n"):
+                lines.append(f"  {sub}")
     return "\n".join(lines) + "\n" if lines else ""
 
 

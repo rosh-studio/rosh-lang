@@ -35,6 +35,16 @@ var rosh = (function() {
 
   function set(key, val) {
     var parts = key.split(".");
+    // Route scene property sets to scene data
+    if (parts.length >= 2 && scenes[parts[0]]) {
+      var prop = parts.slice(1).join(".");
+      if (prop === "exits" && typeof val === "string") {
+        scenes[parts[0]].exits = val.split(/\\s+/);
+      } else {
+        scenes[parts[0]][prop] = val;
+      }
+      return;
+    }
     if (parts.length === 1) {
       state[key] = val;
       return;
@@ -275,9 +285,44 @@ var rosh = (function() {
     _audioData[name] = params;
   }
 
+  // ── Scenes ─────────────────────────────────────────────
+  var scenes = {};
+
+  function createScene(name) {
+    scenes[name] = {};
+  }
+
+  function setSceneProp(name, prop, val) {
+    if (!scenes[name]) scenes[name] = {};
+    if (prop === "exits" && typeof val === "string") {
+      scenes[name].exits = val.split(/\\s+/);
+    } else {
+      scenes[name][prop] = val;
+    }
+  }
+
+  function goScene(target) {
+    if (target === "back") {
+      target = get("_prev_scene");
+      if (!target) return;
+    }
+    if (!scenes[target]) return;
+    var current = get("_scene") || "";
+    if (current) send("scene_exit", {scene: current});
+    set("_prev_scene", current);
+    set("_scene", target);
+    // Apply scene overrides
+    var sd = scenes[target];
+    for (var k in sd) {
+      if (k !== "exits") state[k] = sd[k];
+    }
+    send("scene_enter", {scene: target});
+  }
+
   return {
     state: state,
     objects: objects,
+    scenes: scenes,
     _spriteData: {},
     _audioData: _audioData,
     get: get,
@@ -289,7 +334,10 @@ var rosh = (function() {
     on: on,
     send: send,
     playAudio: playAudio,
-    registerSound: registerSound
+    registerSound: registerSound,
+    createScene: createScene,
+    setSceneProp: setSceneProp,
+    goScene: goScene
   };
 })();
 """

@@ -1058,3 +1058,247 @@ class TestCheckpointProgrammes:
         buf = io.StringIO()
         run(prog, output=buf)
         assert buf.getvalue() == "Score: 15\n"
+
+
+class TestIfExecution:
+    """Tests for if/else execution."""
+
+    def test_if_true_branch(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create number score\n'
+            'set score to 20\n'
+            'if score > 10\n'
+            '  print "high"\n'
+            'end\n'
+        )
+        buf = io.StringIO()
+        run(prog, output=buf)
+        assert buf.getvalue() == "high\n"
+
+    def test_if_false_skips(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create number score\n'
+            'set score to 5\n'
+            'if score > 10\n'
+            '  print "high"\n'
+            'end\n'
+        )
+        buf = io.StringIO()
+        run(prog, output=buf)
+        assert buf.getvalue() == ""
+
+    def test_if_else_true(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create number score\n'
+            'set score to 20\n'
+            'if score > 10\n'
+            '  print "high"\n'
+            'else\n'
+            '  print "low"\n'
+            'end\n'
+        )
+        buf = io.StringIO()
+        run(prog, output=buf)
+        assert buf.getvalue() == "high\n"
+
+    def test_if_else_false(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create number score\n'
+            'set score to 5\n'
+            'if score > 10\n'
+            '  print "high"\n'
+            'else\n'
+            '  print "low"\n'
+            'end\n'
+        )
+        buf = io.StringIO()
+        run(prog, output=buf)
+        assert buf.getvalue() == "low\n"
+
+    def test_if_equals_string(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create string status\n'
+            'set status to "ready"\n'
+            'if status == ready\n'
+            '  print "go"\n'
+            'end\n'
+        )
+        buf = io.StringIO()
+        run(prog, output=buf)
+        assert buf.getvalue() == "go\n"
+
+    def test_if_inside_when(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create number score\n'
+            'set score to 20\n'
+            'when start\n'
+            '  if score > 10\n'
+            '    print "high"\n'
+            '  else\n'
+            '    print "low"\n'
+            '  end\n'
+            'end\n'
+        )
+        buf = io.StringIO()
+        rt = Runtime(output=buf)
+        rt.run(prog)
+        rt.send("start")
+        assert buf.getvalue() == "high\n"
+
+    def test_if_nested(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create number x\n'
+            'set x to 5\n'
+            'create number y\n'
+            'set y to 3\n'
+            'if x > 0\n'
+            '  if y > 0\n'
+            '    print "both positive"\n'
+            '  end\n'
+            'end\n'
+        )
+        buf = io.StringIO()
+        run(prog, output=buf)
+        assert buf.getvalue() == "both positive\n"
+
+    def test_if_with_set(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create number lives\n'
+            'set lives to 0\n'
+            'create string status\n'
+            'if lives == 0\n'
+            '  set status to "gameover"\n'
+            'else\n'
+            '  set status to "playing"\n'
+            'end\n'
+        )
+        buf = io.StringIO()
+        rt = Runtime(output=buf)
+        rt.run(prog)
+        assert rt.state["status"] == "gameover"
+
+    def test_if_dotted_field(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create object player\n'
+            'set player.health to 0\n'
+            'if player.health <= 0\n'
+            '  print "dead"\n'
+            'end\n'
+        )
+        buf = io.StringIO()
+        run(prog, output=buf)
+        assert buf.getvalue() == "dead\n"
+
+
+class TestSceneExecution:
+    """Tests for scene (go/look) execution."""
+
+    def test_create_scene(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string('create scene lobby')
+        buf = io.StringIO()
+        rt = Runtime(output=buf)
+        rt.run(prog)
+        assert "lobby" in rt.scenes
+
+    def test_set_scene_description(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create scene lobby\n'
+            'set lobby.description to "A grand entrance hall"\n'
+        )
+        buf = io.StringIO()
+        rt = Runtime(output=buf)
+        rt.run(prog)
+        assert rt.scenes["lobby"]["description"] == "A grand entrance hall"
+
+    def test_go_scene(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create scene lobby\n'
+            'go lobby\n'
+        )
+        buf = io.StringIO()
+        rt = Runtime(output=buf)
+        rt.run(prog)
+        assert rt.state["_scene"] == "lobby"
+
+    def test_go_back(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create scene lobby\n'
+            'create scene corridor\n'
+            'go lobby\n'
+            'go corridor\n'
+            'go back\n'
+        )
+        buf = io.StringIO()
+        rt = Runtime(output=buf)
+        rt.run(prog)
+        assert rt.state["_scene"] == "lobby"
+
+    def test_go_fires_events(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create scene lobby\n'
+            'create scene corridor\n'
+            'create string log\n'
+            'when scene_enter\n'
+            '  set log to "entered"\n'
+            'end\n'
+            'go lobby\n'
+        )
+        buf = io.StringIO()
+        rt = Runtime(output=buf)
+        rt.run(prog)
+        assert rt.state["log"] == "entered"
+
+    def test_scene_exits_restriction(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create scene lobby\n'
+            'set lobby.exits to "corridor"\n'
+            'create scene corridor\n'
+            'create scene secret\n'
+            'go lobby\n'
+            'go secret\n'
+        )
+        buf = io.StringIO()
+        rt = Runtime(output=buf)
+        with pytest.raises(KeyError, match="Cannot go"):
+            rt.run(prog)
+
+    def test_look_outputs_scene(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create scene lobby\n'
+            'set lobby.description to "A grand hall"\n'
+            'go lobby\n'
+            'look\n'
+        )
+        buf = io.StringIO()
+        rt = Runtime(output=buf)
+        rt.run(prog)
+        assert "[lobby]" in buf.getvalue()
+        assert "A grand hall" in buf.getvalue()
+
+    def test_scene_overrides_state(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create scene lobby\n'
+            'set lobby.music to "jazz"\n'
+            'go lobby\n'
+        )
+        buf = io.StringIO()
+        rt = Runtime(output=buf)
+        rt.run(prog)
+        assert rt.state["music"] == "jazz"

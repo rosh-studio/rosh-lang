@@ -165,6 +165,23 @@ class PlayStatement:
 
 
 @dataclass
+class IfStatement:
+    """if score > 10 ... else ... end"""
+
+    condition: str  # "field op value"
+    then_body: list[Statement] = field(default_factory=list)
+    else_body: list[Statement] = field(default_factory=list)
+    line: int = 0
+
+
+@dataclass
+class ElseStatement:
+    """else — used during parsing to separate if/else branches."""
+
+    line: int = 0
+
+
+@dataclass
 class UseStatement:
     """use score / use player speed 0.02 / use enemy-grid rows 2 cols 5"""
 
@@ -207,6 +224,8 @@ Statement = (
     | SpriteStatement
     | SoundStatement
     | PlayStatement
+    | IfStatement
+    | ElseStatement
     | UseStatement
     | CommentStatement
     | BlankStatement

@@ -20,6 +20,7 @@ from rosh_lang.model import (
     EventStatement,
     GetStatement,
     GoStatement,
+    IfStatement,
     LookStatement,
     OnStatement,
     PlayStatement,
@@ -119,6 +120,8 @@ class Runtime:
             self._exec_sound(stmt)
         elif isinstance(stmt, PlayStatement):
             self._exec_play(stmt)
+        elif isinstance(stmt, IfStatement):
+            self._exec_if(stmt)
         elif isinstance(stmt, UseStatement):
             self._exec_use(stmt)
         elif isinstance(stmt, (CommentStatement, BlankStatement, EndStatement)):
@@ -189,6 +192,10 @@ class Runtime:
 
     def _exec_create(self, stmt: CreateStatement) -> None:
         kind = stmt.kind.lower()
+        if kind == "scene":
+            # Register a scene — creates an empty scene definition
+            self.scenes[stmt.name] = {}
+            return
         if stmt.parent and stmt.parent in self.state:
             parent_val = self._resolve(stmt.parent)
             if isinstance(parent_val, dict):
@@ -210,6 +217,19 @@ class Runtime:
 
     def _exec_set(self, stmt: SetStatement) -> None:
         value = self._eval_set_value(stmt.target, stmt.value)
+        # Check if target is a scene property (e.g. "corridor.description")
+        parts = stmt.target.split(".", 1)
+        if len(parts) == 2 and parts[0] in self.scenes:
+            scene_name, prop = parts
+            if prop == "exits":
+                # Parse exits as a list: "courtyard entrance" → ["courtyard", "entrance"]
+                if isinstance(value, str):
+                    self.scenes[scene_name]["exits"] = value.split()
+                else:
+                    self.scenes[scene_name]["exits"] = value
+            else:
+                self.scenes[scene_name][prop] = value
+            return
         self._set_path(stmt.target, value)
 
     def _set_path(self, key: str, value: Any) -> None:
@@ -340,8 +360,9 @@ class Runtime:
             result.append({"key": "_scene", "value": scene_name, "type": "str"})
             if scene_name in self.scenes:
                 scene = self.scenes[scene_name]
-                if "room_description" in scene:
-                    result.append({"key": "description", "value": scene["room_description"], "type": "str"})
+                desc = scene.get("description") or scene.get("room_description", "")
+                if desc:
+                    result.append({"key": "description", "value": desc, "type": "str"})
                 exits = scene.get("exits")
                 if exits is not None:
                     result.append({"key": "exits", "value": exits, "type": "list"})
@@ -356,7 +377,7 @@ class Runtime:
         if scene_name:
             self.output.write(f"[{scene_name}]\n")
             if scene_name in self.scenes:
-                desc = self.scenes[scene_name].get("room_description", "")
+                desc = self.scenes[scene_name].get("description") or self.scenes[scene_name].get("room_description", "")
                 if desc:
                     self.output.write(f"{desc}\n")
                 exits = self.scenes[scene_name].get("exits")
@@ -415,6 +436,15 @@ class Runtime:
         # Stub — no-op without adapter. Sound must exist.
         if stmt.sound not in self.audio_registry:
             return  # no-op if sound doesn't exist
+
+    def _exec_if(self, stmt: IfStatement) -> None:
+        """Execute an if/else block."""
+        if self._eval_condition(stmt.condition):
+            for s in stmt.then_body:
+                self.execute(s)
+        else:
+            for s in stmt.else_body:
+                self.execute(s)
 
     def _exec_use(self, stmt: UseStatement) -> None:
         """Load a widget: find, namespace-prefix, apply config, execute."""

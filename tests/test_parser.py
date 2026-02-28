@@ -19,6 +19,7 @@ from rosh_lang.model import (
     EventStatement,
     GetStatement,
     GoStatement,
+    IfStatement,
     LookStatement,
     OnStatement,
     PlayStatement,
@@ -592,6 +593,67 @@ class TestFileLoading:
 
 
 # ── Error reporting ────────────────────────────────────────────
+
+
+class TestIf:
+    def test_if_simple(self) -> None:
+        prog = parse_string('if score > 10\n  print "yes"\nend')
+        stmt = prog.statements[0]
+        assert isinstance(stmt, IfStatement)
+        assert stmt.condition == "score > 10"
+        assert len(stmt.then_body) == 1
+        assert isinstance(stmt.then_body[0], PrintStatement)
+        assert stmt.else_body == []
+
+    def test_if_else(self) -> None:
+        prog = parse_string('if lives == 0\n  print "game over"\nelse\n  print "keep going"\nend')
+        stmt = prog.statements[0]
+        assert isinstance(stmt, IfStatement)
+        assert stmt.condition == "lives == 0"
+        assert len(stmt.then_body) == 1
+        assert len(stmt.else_body) == 1
+        assert isinstance(stmt.else_body[0], PrintStatement)
+
+    def test_if_with_then_keyword(self) -> None:
+        prog = parse_string('if score > 10 then\n  print "high"\nend')
+        stmt = prog.statements[0]
+        assert isinstance(stmt, IfStatement)
+        assert stmt.condition == "score > 10"
+
+    def test_if_nested(self) -> None:
+        code = "if x > 0\n  if y > 0\n    print \"both positive\"\n  end\nend"
+        prog = parse_string(code)
+        outer = prog.statements[0]
+        assert isinstance(outer, IfStatement)
+        inner = outer.then_body[0]
+        assert isinstance(inner, IfStatement)
+        assert inner.condition == "y > 0"
+
+    def test_if_inside_when(self) -> None:
+        code = "when start\n  if score > 10\n    print \"high\"\n  end\nend"
+        prog = parse_string(code)
+        # when/end are still flat — collected at runtime
+        # But the if/else/end inside should be collected by parser
+        from rosh_lang.model import WhenStatement, EndStatement
+        assert isinstance(prog.statements[0], WhenStatement)
+        assert isinstance(prog.statements[1], IfStatement)
+        assert isinstance(prog.statements[2], EndStatement)
+
+    def test_if_no_condition_error(self) -> None:
+        with pytest.raises(ParseError, match="if requires a condition"):
+            parse_string("if\n  print \"x\"\nend")
+
+    def test_if_no_end_error(self) -> None:
+        with pytest.raises(ParseError, match="no matching end"):
+            parse_string("if score > 0\n  print \"x\"")
+
+    def test_if_multi_body(self) -> None:
+        code = 'if health <= 0\n  print "dead"\n  set status to "gameover"\nelse\n  print "alive"\nend'
+        prog = parse_string(code)
+        stmt = prog.statements[0]
+        assert isinstance(stmt, IfStatement)
+        assert len(stmt.then_body) == 2
+        assert len(stmt.else_body) == 1
 
 
 class TestErrors:

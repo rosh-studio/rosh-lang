@@ -16,10 +16,12 @@ from rosh_lang.model import (
     ConnectStatement,
     CreateStatement,
     DestroyStatement,
+    ElseStatement,
     EndStatement,
     EventStatement,
     GetStatement,
     GoStatement,
+    IfStatement,
     LookStatement,
     OnStatement,
     PlayStatement,
@@ -59,6 +61,8 @@ def parse_string(text: str, source: str = "<string>") -> Programme:
     for i, raw_line in enumerate(text.splitlines(), start=1):
         stmt = _parse_line(raw_line, line=i, source=source)
         statements.append(stmt)
+    # Post-pass: collect if/else/end blocks into IfStatement trees
+    statements = _collect_if_blocks(statements, source=source)
     return Programme(statements=statements, source=source)
 
 
@@ -80,6 +84,8 @@ def _parse_line(raw: str, line: int, source: str) -> Statement:
         "set": _parse_set,
         "when": _parse_when,
         "end": lambda _s, _l, _src: EndStatement(line=_l),
+        "if": _parse_if,
+        "else": lambda _s, _l, _src: ElseStatement(line=_l),
         "get": _parse_get,
         "say": _parse_say,
         "send": _parse_send,
@@ -352,3 +358,97 @@ def _parse_use(line_text: str, line: int, source: str) -> UseStatement:
             config[key] = ""
             i += 1
     return UseStatement(name=name, config=config, line=line)
+
+
+def _parse_if(line_text: str, line: int, source: str) -> IfStatement:
+    """Parse 'if <field> <op> <value>' — body collected in post-pass."""
+    rest = line_text[len("if"):].strip()
+    # Strip optional trailing "then"
+    if rest.lower().endswith(" then"):
+        rest = rest[:-5].strip()
+    if not rest:
+        raise ParseError("if requires a condition (field op value)", line=line, source=source)
+    tokens = rest.split()
+    if len(tokens) < 3:
+        raise ParseError(
+            "if condition must be: field op value",
+            line=line, source=source,
+        )
+    condition = " ".join(tokens[:3])
+    return IfStatement(condition=condition, line=line)
+
+
+def _collect_if_blocks(
+    stmts: list[Statement], source: str = ""
+) -> list[Statement]:
+    """Post-pass: collect if/else/end into IfStatement with then_body/else_body.
+
+    Handles nesting: if blocks inside if blocks, if blocks inside when blocks.
+    Does NOT consume end statements that belong to when blocks — only those
+    that match an open if.
+    """
+    result: list[Statement] = []
+    i = 0
+    while i < len(stmts):
+        stmt = stmts[i]
+        if isinstance(stmt, IfStatement):
+            if_stmt, i = _collect_one_if(stmts, i, source)
+            result.append(if_stmt)
+        else:
+            result.append(stmt)
+            i += 1
+    return result
+
+
+def _collect_one_if(
+    stmts: list[Statement], start: int, source: str
+) -> tuple[IfStatement, int]:
+    """Collect a single if/else/end block starting at index `start`.
+
+    Returns (populated IfStatement, next index after the closing end).
+    """
+    if_stmt = stmts[start]
+    assert isinstance(if_stmt, IfStatement)
+    then_body: list[Statement] = []
+    else_body: list[Statement] = []
+    in_else = False
+    i = start + 1
+
+    while i < len(stmts):
+        s = stmts[i]
+
+        # Nested if — recurse
+        if isinstance(s, IfStatement):
+            nested, i = _collect_one_if(stmts, i, source)
+            if in_else:
+                else_body.append(nested)
+            else:
+                then_body.append(nested)
+            continue
+
+        # Else — switch to else branch
+        if isinstance(s, ElseStatement):
+            in_else = True
+            i += 1
+            continue
+
+        # End — closes this if block
+        if isinstance(s, EndStatement):
+            return IfStatement(
+                condition=if_stmt.condition,
+                then_body=then_body,
+                else_body=else_body,
+                line=if_stmt.line,
+            ), i + 1
+
+        # Regular statement — add to current branch
+        if in_else:
+            else_body.append(s)
+        else:
+            then_body.append(s)
+        i += 1
+
+    raise ParseError(
+        "if block has no matching end",
+        line=if_stmt.line, source=source,
+    )

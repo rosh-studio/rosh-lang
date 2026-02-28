@@ -393,3 +393,73 @@ class TestJSVariableArithmetic:
         prog = parse_string("create number score\nset score to score + 1")
         result = compile_programme(prog)
         assert '"score + 1"' in result.init_code
+
+
+class TestIfCodegen:
+    """Tests for if/else JS codegen."""
+
+    def test_if_simple(self):
+        prog = parse_string(
+            'create number score\n'
+            'set score to 20\n'
+            'if score > 10\n'
+            '  print "high"\n'
+            'end\n'
+        )
+        result = compile_programme(prog)
+        assert 'if (rosh.get("score") > 10)' in result.init_code
+        assert 'rosh.appendOutput' in result.init_code
+
+    def test_if_else(self):
+        prog = parse_string(
+            'if lives == 0\n'
+            '  print "game over"\n'
+            'else\n'
+            '  print "playing"\n'
+            'end\n'
+        )
+        result = compile_programme(prog)
+        assert '} else {' in result.init_code
+        assert 'rosh.get("lives") === 0' in result.init_code
+
+    def test_if_in_handler(self):
+        prog = parse_string(
+            'when start\n'
+            '  if score > 10\n'
+            '    print "high"\n'
+            '  end\n'
+            'end\n'
+        )
+        result = compile_programme(prog)
+        assert 'if (rosh.get("score") > 10)' in result.handler_code
+
+    def test_if_string_comparison(self):
+        prog = parse_string(
+            'if status == ready\n'
+            '  print "go"\n'
+            'end\n'
+        )
+        result = compile_programme(prog)
+        assert 'rosh.get("status") === "ready"' in result.init_code
+
+
+class TestSceneCodegen:
+    """Tests for scene (go/look) JS codegen."""
+
+    def test_create_scene(self):
+        prog = parse_string('create scene lobby')
+        result = compile_programme(prog)
+        assert 'rosh.createScene("lobby")' in result.init_code
+
+    def test_go_scene(self):
+        prog = parse_string(
+            'create scene lobby\n'
+            'go lobby\n'
+        )
+        result = compile_programme(prog)
+        assert 'rosh.goScene("lobby")' in result.init_code
+
+    def test_go_back(self):
+        prog = parse_string('go back')
+        result = compile_programme(prog)
+        assert 'rosh.goScene("back")' in result.init_code
