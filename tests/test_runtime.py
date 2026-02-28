@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from rosh_lang.model import (
+    AnimateStatement,
     BlankStatement,
     CommentStatement,
     ConnectStatement,
@@ -1302,3 +1303,40 @@ class TestSceneExecution:
         rt = Runtime(output=buf)
         rt.run(prog)
         assert rt.state["music"] == "jazz"
+
+
+# ── Animate ────────────────────────────────────────────────
+
+
+class TestAnimate:
+    def test_exec_animate_records_registry(self) -> None:
+        """_exec_animate stores metadata in animation_registry."""
+        rt = _run([
+            AnimateStatement(
+                name="player", sheet="walk.png", frames=4, speed=8, mode="loop",
+            ),
+        ])
+        assert "player" in rt.animation_registry
+        info = rt.animation_registry["player"]
+        assert info["sheet"] == "walk.png"
+        assert info["frames"] == 4
+        assert info["speed"] == 8
+        assert info["mode"] == "loop"
+
+    def test_exec_animate_once_mode(self) -> None:
+        """Animation with mode 'once' is recorded correctly."""
+        rt = _run([
+            AnimateStatement(
+                name="explosion", sheet="boom.png", frames=9, speed=15, mode="once",
+            ),
+        ])
+        assert rt.animation_registry["explosion"]["mode"] == "once"
+
+    def test_exec_animate_bounce_mode(self) -> None:
+        """Animation with mode 'bounce' is recorded correctly."""
+        rt = _run([
+            AnimateStatement(
+                name="flag", sheet="flag.png", frames=3, speed=4, mode="bounce",
+            ),
+        ])
+        assert rt.animation_registry["flag"]["mode"] == "bounce"

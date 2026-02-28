@@ -11,6 +11,7 @@ import warnings
 from typing import Any, TextIO
 
 from rosh_lang.model import (
+    AnimateStatement,
     BlankStatement,
     CommentStatement,
     ConnectStatement,
@@ -64,6 +65,7 @@ class Runtime:
         self.scenes: dict[str, dict[str, Any]] = {}
         self.connections: dict[str, str] = {}
         self.audio_registry: dict[str, str] = {}  # sound_name → description
+        self.animation_registry: dict[str, dict[str, Any]] = {}  # name → {sheet, frames, speed, mode}
         self.output = output
         self.search_paths = search_paths
         self._send_depth = 0
@@ -120,6 +122,8 @@ class Runtime:
             self._exec_sound(stmt)
         elif isinstance(stmt, PlayStatement):
             self._exec_play(stmt)
+        elif isinstance(stmt, AnimateStatement):
+            self._exec_animate(stmt)
         elif isinstance(stmt, IfStatement):
             self._exec_if(stmt)
         elif isinstance(stmt, UseStatement):
@@ -436,6 +440,15 @@ class Runtime:
         # Stub — no-op without adapter. Sound must exist.
         if stmt.sound not in self.audio_registry:
             return  # no-op if sound doesn't exist
+
+    def _exec_animate(self, stmt: AnimateStatement) -> None:
+        """Record animation metadata for the web/phaser targets to pick up."""
+        self.animation_registry[stmt.name] = {
+            "sheet": stmt.sheet,
+            "frames": stmt.frames,
+            "speed": stmt.speed,
+            "mode": stmt.mode,
+        }
 
     def _exec_if(self, stmt: IfStatement) -> None:
         """Execute an if/else block."""

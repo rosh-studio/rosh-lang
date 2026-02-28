@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from rosh_lang.model import (
+    AnimateStatement,
     BlankStatement,
     CommentStatement,
     ConnectStatement,
@@ -668,3 +669,50 @@ class TestErrors:
     def test_error_includes_source(self) -> None:
         with pytest.raises(ParseError, match="test.rosh"):
             parse_string("frobnicate", source="test.rosh")
+
+
+# ── Animate ────────────────────────────────────────────────
+
+
+class TestAnimate:
+    def test_basic(self) -> None:
+        prog = parse_string('animate player sheet "player-sheet.png" frames 4')
+        stmt = prog.statements[0]
+        assert isinstance(stmt, AnimateStatement)
+        assert stmt.name == "player"
+        assert stmt.sheet == "player-sheet.png"
+        assert stmt.frames == 4
+        assert stmt.speed == 8  # default
+        assert stmt.mode == "loop"  # default
+
+    def test_with_speed(self) -> None:
+        prog = parse_string('animate hero sheet "hero.png" frames 6 speed 12')
+        stmt = prog.statements[0]
+        assert isinstance(stmt, AnimateStatement)
+        assert stmt.speed == 12
+
+    def test_with_mode(self) -> None:
+        prog = parse_string('animate explosion sheet "boom.png" frames 9 mode once')
+        stmt = prog.statements[0]
+        assert isinstance(stmt, AnimateStatement)
+        assert stmt.mode == "once"
+
+    def test_with_all_options(self) -> None:
+        prog = parse_string('animate player sheet "walk.png" frames 4 speed 10 mode bounce')
+        stmt = prog.statements[0]
+        assert isinstance(stmt, AnimateStatement)
+        assert stmt.frames == 4
+        assert stmt.speed == 10
+        assert stmt.mode == "bounce"
+
+    def test_missing_sheet(self) -> None:
+        with pytest.raises(ParseError, match="sheet"):
+            parse_string("animate player frames 4")
+
+    def test_missing_frames(self) -> None:
+        with pytest.raises(ParseError, match="frames"):
+            parse_string('animate player sheet "test.png"')
+
+    def test_missing_name(self) -> None:
+        with pytest.raises(ParseError, match="animate requires"):
+            parse_string("animate")

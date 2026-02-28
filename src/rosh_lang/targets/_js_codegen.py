@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from rosh_lang.model import (
+    AnimateStatement,
     BlankStatement,
     CommentStatement,
     CreateStatement,
@@ -136,6 +137,9 @@ def compile_programme(
             i += 1
             continue
         else:
+            # AnimateStatement requires a game loop for tickAnimations
+            if isinstance(stmt, AnimateStatement):
+                needs_loop = True
             line = _emit_statement(stmt)
             if line:
                 init_lines.append(line)
@@ -176,6 +180,8 @@ def _emit_statement(stmt: Statement) -> str:
         return _emit_if(stmt)
     if isinstance(stmt, GoStatement):
         return _emit_go(stmt)
+    if isinstance(stmt, AnimateStatement):
+        return _emit_animate(stmt)
     return ""
 
 
@@ -236,6 +242,13 @@ def _emit_sprite(stmt: SpriteStatement) -> str:
 
 def _emit_go(stmt: GoStatement) -> str:
     return f'rosh.goScene("{_escape_js(stmt.target)}");'
+
+
+def _emit_animate(stmt: AnimateStatement) -> str:
+    import json
+    config = {"frames": stmt.frames, "speed": stmt.speed, "mode": stmt.mode}
+    config_json = json.dumps(config, separators=(",", ":"))
+    return f'rosh.registerAnimation("{_escape_js(stmt.name)}", {config_json});'
 
 
 def _emit_on(stmt: OnStatement) -> str:
@@ -345,11 +358,53 @@ def _emit_args_array(args: list[str]) -> str:
     return f"[{items}]"
 
 
+def _collision_match_expr(pattern: str, field: str) -> str:
+    """Return a JS expression that matches a collision name against a pattern.
+
+    Supports wildcards: "bullet.*" matches any name starting with "bullet.".
+    """
+    if pattern.endswith(".*"):
+        prefix = pattern[:-1]  # "bullet.*" → "bullet."
+        return f'{field}.startsWith("{_escape_js(prefix)}")'
+    return f'{field} === "{_escape_js(pattern)}"'
+
+
 def _wrap_collision_filter(a: str, b: str, body_js: str) -> str:
-    """Wrap body JS in a collision name filter."""
+    """Wrap body JS in a collision name filter.
+
+    Supports wildcard patterns: "bullet.*" matches bullet.b0, bullet.b1, etc.
+    When wildcards match pool objects, automatically recycles them (y=-1, vx=vy=0).
+    """
+    a_match = _collision_match_expr(a, "payload.a")
+    b_match = _collision_match_expr(b, "payload.b")
+    a_match_rev = _collision_match_expr(a, "payload.b")
+    b_match_rev = _collision_match_expr(b, "payload.a")
+
+    # After filtering, recycle any matched pool bullets
+    recycle_lines = ""
+    if a.endswith(".*") or b.endswith(".*"):
+        # Determine which payload field holds each pattern's match
+        recycle_lines = (
+            '  var _ma = ({a_fwd}) ? payload.a : payload.b;\n'
+            '  var _mb = ({a_fwd}) ? payload.b : payload.a;\n'
+        ).format(a_fwd=a_match)
+        # Recycle whichever matched names are pool bullets (have parent._pool_count)
+        for pat, var in [(a, "_ma"), (b, "_mb")]:
+            if pat.endswith(".*"):
+                prefix = pat[:-2]  # "bullet.*" → "bullet"
+                recycle_lines += (
+                    f'  if (rosh.get("{_escape_js(prefix)}._pool_count") != null) {{\n'
+                    f'    rosh.set({var} + ".x", -1);\n'
+                    f'    rosh.set({var} + ".y", -1);\n'
+                    f'    rosh.set({var} + ".vx", 0);\n'
+                    f'    rosh.set({var} + ".vy", 0);\n'
+                    f'  }}\n'
+                )
+
     return (
-        f'  if (!((payload.a === "{_escape_js(a)}" && payload.b === "{_escape_js(b)}") ||\n'
-        f'        (payload.a === "{_escape_js(b)}" && payload.b === "{_escape_js(a)}"))) return;\n'
+        f"  if (!(({a_match} && {b_match}) ||\n"
+        f"        ({a_match_rev} && {b_match_rev}))) return;\n"
+        f"{recycle_lines}"
         f"{body_js}"
     )
 

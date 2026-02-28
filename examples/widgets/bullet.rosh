@@ -1,2 +1,2 @@
-# Bullet example — single projectile
-use bullet speed 0.02
+# Bullet example — pooled projectile
+use bullet count 3

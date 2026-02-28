@@ -182,6 +182,18 @@ class ElseStatement:
 
 
 @dataclass
+class AnimateStatement:
+    """animate player sheet "player-sheet.png" frames 4 speed 8 mode loop"""
+
+    name: str  # object name
+    sheet: str  # path to spritesheet
+    frames: int  # number of frames
+    speed: int = 8  # fps
+    mode: str = "loop"  # loop | once | bounce
+    line: int = 0
+
+
+@dataclass
 class UseStatement:
     """use score / use player speed 0.02 / use enemy-grid rows 2 cols 5"""
 
@@ -226,6 +238,7 @@ Statement = (
     | PlayStatement
     | IfStatement
     | ElseStatement
+    | AnimateStatement
     | UseStatement
     | CommentStatement
     | BlankStatement

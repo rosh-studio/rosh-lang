@@ -246,6 +246,27 @@ class TestInteractiveJSRuntime:
         assert "syncAll" in html
 
 
+class TestVisibilityInRuntime:
+    """The JS runtime should support a visible property on objects."""
+
+    def test_runtime_contains_visible_check(self):
+        prog = parse_string('when click\n  print "clicked"\nend')
+        html = render_html(prog)
+        assert "obj.visible" in html
+
+    def test_tickpools_in_runtime(self):
+        prog = parse_string('when click\n  print "clicked"\nend')
+        html = render_html(prog)
+        assert "tickPools" in html
+
+    def test_evalsetvalue_resolves_variable_references(self):
+        """evalSetValue should resolve dotted name references to their values."""
+        prog = parse_string('when click\n  print "clicked"\nend')
+        html = render_html(prog)
+        # The JS runtime should contain variable resolution in evalSetValue
+        assert "var resolved = get(raw)" in html
+
+
 class TestInteractiveCodegen:
     """Interactive HTML should contain compiled JS from codegen."""
 
@@ -593,3 +614,43 @@ class TestSoundInteractive:
         )
         html = render_html(prog)
         assert "registerSound" in html
+
+
+# ── Animation ──────────────────────────────────────────────
+
+
+class TestAnimationDataInjection:
+    def test_animate_injects_anim_data(self):
+        """Animate statement should inject _animData into rendered HTML."""
+        from pathlib import Path
+        import struct, zlib
+
+        # Create a tiny test spritesheet (2 frames, 4x2px)
+        def _make_png(w, h):
+            def _chunk(ct, d):
+                c = ct + d
+                crc = zlib.crc32(c) & 0xFFFFFFFF
+                return struct.pack(">I", len(d)) + c + struct.pack(">I", crc)
+            ihdr = struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)
+            raw = b""
+            for _ in range(h):
+                raw += b"\x00" + b"\xff\x00\x00\xff" * w
+            return b"\x89PNG\r\n\x1a\n" + _chunk(b"IHDR", ihdr) + _chunk(b"IDAT", zlib.compress(raw)) + _chunk(b"IEND", b"")
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sheet_path = Path(tmpdir) / "test-sheet.png"
+            sheet_path.write_bytes(_make_png(4, 2))
+
+            prog = parse_string(
+                'create object player\n'
+                'set player.x to 0.5\n'
+                'set player.y to 0.5\n'
+                f'animate player sheet "test-sheet.png" frames 2 speed 10\n'
+                'when click\n  set player.x to 0.6\nend'
+            )
+            html = render_html(prog, search_paths=[Path(tmpdir)])
+            assert "rosh._animData" in html
+            assert "data:image/png;base64," in html
+            assert "registerAnimation" in html
+            assert "tickAnimations" in html

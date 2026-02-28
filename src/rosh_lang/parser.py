@@ -8,9 +8,12 @@ The parser ONLY produces data — no logic, no execution, no side effects.
 
 from __future__ import annotations
 
+import re
+import shlex
 from pathlib import Path
 
 from rosh_lang.model import (
+    AnimateStatement,
     BlankStatement,
     CommentStatement,
     ConnectStatement,
@@ -98,6 +101,7 @@ def _parse_line(raw: str, line: int, source: str) -> Statement:
         "sprite": _parse_sprite,
         "sound": _parse_sound,
         "play": _parse_play,
+        "animate": _parse_animate,
         "use": _parse_use,
     }
 
@@ -188,7 +192,10 @@ def _parse_when(line_text: str, line: int, source: str) -> WhenStatement:
         rest = ""
     if not rest:
         raise ParseError("when requires an event name", line=line, source=source)
-    tokens = rest.split()
+    try:
+        tokens = shlex.split(rest)
+    except ValueError:
+        tokens = rest.split()
     event = tokens[0]
     args = tokens[1:]
     return WhenStatement(event=event, args=args, line=line)
@@ -358,6 +365,51 @@ def _parse_use(line_text: str, line: int, source: str) -> UseStatement:
             config[key] = ""
             i += 1
     return UseStatement(name=name, config=config, line=line)
+
+
+def _parse_animate(line_text: str, line: int, source: str) -> AnimateStatement:
+    """Parse 'animate player sheet "player-sheet.png" frames 4 [speed 8] [mode loop]'."""
+    rest = line_text[len("animate"):].strip()
+    if not rest:
+        raise ParseError("animate requires an object name", line=line, source=source)
+
+    # Extract the object name (first token)
+    tokens = rest.split()
+    name = tokens[0]
+
+    # Extract sheet path (must be quoted)
+    if "sheet" not in rest.lower():
+        raise ParseError("animate requires: sheet \"path\"", line=line, source=source)
+
+    # Find sheet "..." — extract quoted path
+    sheet_match = re.search(r'sheet\s+"([^"]+)"', rest, re.IGNORECASE)
+    if not sheet_match:
+        sheet_match = re.search(r"sheet\s+'([^']+)'", rest, re.IGNORECASE)
+    if not sheet_match:
+        raise ParseError('animate sheet requires a quoted path: sheet "file.png"', line=line, source=source)
+    sheet = sheet_match.group(1)
+
+    # Extract frames N (required)
+    frames_match = re.search(r'frames\s+(\d+)', rest, re.IGNORECASE)
+    if not frames_match:
+        raise ParseError("animate requires: frames <N>", line=line, source=source)
+    frames = int(frames_match.group(1))
+
+    # Extract optional speed N (default 8)
+    speed = 8
+    speed_match = re.search(r'speed\s+(\d+)', rest, re.IGNORECASE)
+    if speed_match:
+        speed = int(speed_match.group(1))
+
+    # Extract optional mode (default "loop")
+    mode = "loop"
+    mode_match = re.search(r'mode\s+(loop|once|bounce)', rest, re.IGNORECASE)
+    if mode_match:
+        mode = mode_match.group(1).lower()
+
+    return AnimateStatement(
+        name=name, sheet=sheet, frames=frames, speed=speed, mode=mode, line=line,
+    )
 
 
 def _parse_if(line_text: str, line: int, source: str) -> IfStatement:

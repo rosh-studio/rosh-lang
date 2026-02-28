@@ -658,10 +658,24 @@ class TestTitleScreenWidget:
 
 
 class TestExplosionWidget:
-    def test_load(self):
+    def test_load_default_creates_3_flashes(self):
         stmts = load_widget("explosion", search_paths=[BUNDLED_DIR])
         creates = [s for s in stmts if isinstance(s, CreateStatement)]
-        assert any(c.name == "explosion.flash" for c in creates)
+        obj_creates = [c for c in creates if c.name.startswith("explosion.b")]
+        assert len(obj_creates) == 3
+
+    def test_config_override_count(self):
+        stmts = load_widget("explosion", config={"count": "5"}, search_paths=[BUNDLED_DIR])
+        creates = [s for s in stmts if isinstance(s, CreateStatement)]
+        obj_creates = [c for c in creates if c.name.startswith("explosion.b")]
+        assert len(obj_creates) == 5
+
+    def test_pool_metadata(self):
+        stmts = load_widget("explosion", search_paths=[BUNDLED_DIR])
+        sets = [s for s in stmts if isinstance(s, SetStatement)]
+        pool_count = [s for s in sets if s.target == "explosion._pool_count"]
+        assert len(pool_count) == 1
+        assert pool_count[0].value == "3"
 
     def test_has_sound(self):
         stmts = load_widget("explosion", search_paths=[BUNDLED_DIR])
@@ -673,25 +687,62 @@ class TestExplosionWidget:
         ons = [s for s in stmts if isinstance(s, OnStatement)]
         assert len(ons) >= 2
 
+    def test_is_python_factory(self):
+        path = find_widget("explosion", search_paths=[BUNDLED_DIR])
+        assert path is not None
+        assert path.suffix == ".py"
+
+    def test_metadata(self):
+        meta = parse_metadata(BUNDLED_DIR / "explosion.py")
+        assert meta["widget"] == "explosion"
+        assert meta["config"]["count"] == "3"
+        assert meta["licence"] == "Rosh-BSL"
+
 
 class TestBulletWidget:
-    def test_load(self):
+    def test_load_default_creates_3_bullets(self):
         stmts = load_widget("bullet", search_paths=[BUNDLED_DIR])
         creates = [s for s in stmts if isinstance(s, CreateStatement)]
-        assert any(c.name == "bullet.obj" for c in creates)
+        obj_creates = [c for c in creates if c.name.startswith("bullet.b")]
+        assert len(obj_creates) == 3
+        assert obj_creates[0].name == "bullet.b0"
+        assert obj_creates[1].name == "bullet.b1"
+        assert obj_creates[2].name == "bullet.b2"
+
+    def test_config_override_count(self):
+        stmts = load_widget("bullet", config={"count": "5"}, search_paths=[BUNDLED_DIR])
+        creates = [s for s in stmts if isinstance(s, CreateStatement)]
+        obj_creates = [c for c in creates if c.name.startswith("bullet.b")]
+        assert len(obj_creates) == 5
+
+    def test_pool_metadata(self):
+        stmts = load_widget("bullet", search_paths=[BUNDLED_DIR])
+        sets = [s for s in stmts if isinstance(s, SetStatement)]
+        pool_count = [s for s in sets if s.target == "bullet._pool_count"]
+        assert len(pool_count) == 1
+        assert pool_count[0].value == "3"
 
     def test_has_sound(self):
         stmts = load_widget("bullet", search_paths=[BUNDLED_DIR])
         sounds = [s for s in stmts if isinstance(s, SoundStatement)]
         assert any(s.name == "bullet.pew" for s in sounds)
 
-    def test_on_statements_prefixed(self):
+    def test_no_boundary_on_statements(self):
+        """Boundary cleanup is handled by tickPools, not on-statements."""
         stmts = load_widget("bullet", search_paths=[BUNDLED_DIR])
         ons = [s for s in stmts if isinstance(s, OnStatement)]
-        assert len(ons) >= 1
-        # The "set obj.y to obj.y - 0.02" should be prefixed
-        set_ons = [o for o in ons if o.action == "set"]
-        assert any("bullet.obj.y" in o.args for o in set_ons)
+        assert len(ons) == 0
+
+    def test_is_python_factory(self):
+        path = find_widget("bullet", search_paths=[BUNDLED_DIR])
+        assert path is not None
+        assert path.suffix == ".py"
+
+    def test_metadata(self):
+        meta = parse_metadata(BUNDLED_DIR / "bullet.py")
+        assert meta["widget"] == "bullet"
+        assert meta["config"]["count"] == "3"
+        assert meta["licence"] == "Rosh-BSL"
 
 
 class TestCoinWidget:

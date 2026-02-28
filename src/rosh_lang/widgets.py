@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from rosh_lang.model import (
+    AnimateStatement,
     CreateStatement,
     DestroyStatement,
     IfStatement,
@@ -359,6 +360,16 @@ def _prefix_statement(stmt: Statement, ns: str) -> Statement:
             action=stmt.action,
             args=new_args,
             condition=new_condition,
+            line=stmt.line,
+        )
+
+    if isinstance(stmt, AnimateStatement):
+        return AnimateStatement(
+            name=_prefix_name(stmt.name, ns),
+            sheet=stmt.sheet,
+            frames=stmt.frames,
+            speed=stmt.speed,
+            mode=stmt.mode,
             line=stmt.line,
         )
 

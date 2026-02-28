@@ -37,7 +37,7 @@ _META_RE = re.compile(r"^#\s*(demo|description|badges):\s*(.+)$")
 _KEYWORDS = frozenset({
     "print", "create", "set", "when", "end", "use", "on",
     "event", "send", "destroy", "get", "say", "go", "look",
-    "connect", "sprite", "sound", "play", "if", "else",
+    "connect", "sprite", "sound", "play", "if", "else", "animate",
 })
 
 

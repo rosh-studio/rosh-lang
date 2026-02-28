@@ -1,6 +1,6 @@
 # demo: Mini Game
-# description: Catch the falling ball — arrow keys move left/right, ball falls automatically
-# badges: Keyboard, Game Loop
+# description: Shoot or catch the falling ball — arrow keys move, space to fire
+# badges: Keyboard, Velocity, Game Loop
 
 create object player
 set player.x to 0.4
@@ -18,6 +18,9 @@ set ball.height to 0.06
 set ball.color to "#2ecc71"
 sprite ball "green orb"
 
+use bullet count 3
+use explosion count 3
+
 create number score
 set score to 0
 
@@ -25,7 +28,7 @@ sound catch "coin collect"
 
 on update when ball.y > 1 set ball.y to 0.05
 
-print "Arrow keys to move. Catch the ball!"
+print "Arrows move, Space shoots!"
 
 when keydown ArrowLeft
   set player.x to player.x - 0.05
@@ -33,6 +36,14 @@ end
 
 when keydown ArrowRight
   set player.x to player.x + 0.05
+end
+
+# Space fires the bullet from the player
+when keydown " "
+  set bullet._x to player.x + 0.05
+  set bullet._y to 0.75
+  set bullet._fire to 1
+  play bullet.pew
 end
 
 when update
@@ -45,4 +56,15 @@ when collision player ball
   set ball.y to 0.05
   set player.x to 0.4
   print "Catch #{score}!"
+end
+
+# Wildcard — any bullet hitting the ball scores + explosion
+when collision bullet.* ball
+  set explosion._x to ball.x
+  set explosion._y to ball.y
+  set explosion._fire to 1
+  play explosion.boom
+  set score to score + 2
+  set ball.y to 0.05
+  print "Shot! +2 = {score}"
 end

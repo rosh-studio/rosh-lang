@@ -118,7 +118,7 @@ var rosh = (function() {
         if (isNaN(rval)) {
           var resolved = get(right);
           if (typeof resolved === "number") rval = resolved;
-          else continue;
+          else { var cur = get(target); return cur != null ? cur : 0; }
         }
         var cur = get(left);
         if (typeof cur === "number") {
@@ -127,6 +127,9 @@ var rosh = (function() {
           if (op === "*") return cur * rval;
           if (op === "/" && rval !== 0) return cur / rval;
         }
+        // Left operand not numeric — return current value unchanged
+        var existing = get(target);
+        return existing != null ? existing : 0;
       }
     }
 
@@ -139,6 +142,10 @@ var rosh = (function() {
     // Boolean
     if (raw.toLowerCase() === "true") return true;
     if (raw.toLowerCase() === "false") return false;
+
+    // Variable reference: resolve dotted name to its current value
+    var resolved = get(raw);
+    if (resolved != null && typeof resolved !== "object") return resolved;
 
     return raw;
   }
@@ -285,6 +292,107 @@ var rosh = (function() {
     _audioData[name] = params;
   }
 
+  // ── Animation engine ──────────────────────────────────
+  var _animData = {};  // name → {frames:[uri...], speed, mode, _frame, _elapsed, _dir}
+  var _spriteDataRef = {};  // set to mod._spriteData after module construction
+
+  function registerAnimation(name, config) {
+    _animData[name] = {
+      frames: config.frames || [],
+      speed: config.speed || 8,
+      mode: config.mode || "loop",
+      _frame: 0,
+      _elapsed: 0,
+      _dir: 1  // 1=forward, -1=backward (for bounce)
+    };
+  }
+
+  function tickVelocity(dt) {
+    for (var name in objects) {
+      var obj = get(name);
+      if (!obj || typeof obj !== "object") continue;
+      if (typeof obj.vx === "number") set(name + ".x", (obj.x || 0) + obj.vx * dt);
+      if (typeof obj.vy === "number") set(name + ".y", (obj.y || 0) + obj.vy * dt);
+    }
+  }
+
+  function tickPools() {
+    for (var key in state) {
+      if (!state[key] || typeof state[key] !== "object") continue;
+      var poolCount = state[key]._pool_count;
+      if (typeof poolCount !== "number") continue;
+      if (!state[key]._fire) continue;
+
+      var prefix = key;
+      var count = poolCount;
+      var startIdx = state[prefix]._next || 0;
+      var next = -1;
+      for (var i = 0; i < count; i++) {
+        var idx = (startIdx + i) % count;
+        var bobj = get(prefix + ".b" + idx);
+        if (bobj && bobj.y <= -1) { next = idx; break; }
+      }
+      state[prefix]._fire = 0;
+      if (next < 0) continue;  // all bullets in flight — skip
+
+      var name = prefix + ".b" + next;
+      set(name + ".x", state[prefix]._x || 0);
+      set(name + ".y", state[prefix]._y || 0);
+      set(name + ".vx", state[prefix]._vx || 0);
+      set(name + ".vy", state[prefix]._vy || 0);
+      state[prefix]._next = (next + 1) % count;
+      // Reset velocity overrides to pool defaults
+      state[prefix]._vx = state[prefix]._pool_vx || 0;
+      state[prefix]._vy = state[prefix]._pool_vy || 0;
+    }
+    // Recycle out-of-bounds bullets and update _active counters
+    for (var key in state) {
+      if (!state[key] || typeof state[key] !== "object") continue;
+      var poolCount = state[key]._pool_count;
+      if (typeof poolCount !== "number") continue;
+      var active = 0;
+      for (var i = 0; i < poolCount; i++) {
+        var bobj = get(key + ".b" + i);
+        if (!bobj) continue;
+        // Recycle bullets that left the canvas
+        if (bobj.y > -1 && (bobj.y < -0.05 || bobj.y > 1.05 || bobj.x < -0.05 || bobj.x > 1.05)) {
+          var bname = key + ".b" + i;
+          set(bname + ".x", -1);
+          set(bname + ".y", -1);
+          set(bname + ".vx", 0);
+          set(bname + ".vy", 0);
+          continue;
+        }
+        if (bobj.y > -1) active++;
+      }
+      state[key]._active = active;
+    }
+  }
+
+  function tickAnimations(dt) {
+    for (var name in _animData) {
+      var anim = _animData[name];
+      if (!anim.frames || !anim.frames.length) continue;
+      anim._elapsed += dt;
+      var interval = 1.0 / anim.speed;
+      if (anim._elapsed >= interval) {
+        anim._elapsed -= interval;
+        var len = anim.frames.length;
+        if (anim.mode === "bounce") {
+          anim._frame += anim._dir;
+          if (anim._frame >= len - 1) { anim._frame = len - 1; anim._dir = -1; }
+          if (anim._frame <= 0) { anim._frame = 0; anim._dir = 1; }
+        } else if (anim.mode === "once") {
+          if (anim._frame < len - 1) anim._frame++;
+        } else {
+          anim._frame = (anim._frame + 1) % len;
+        }
+        // Swap active sprite to current frame
+        _spriteDataRef[name] = anim.frames[anim._frame];
+      }
+    }
+  }
+
   // ── Scenes ─────────────────────────────────────────────
   var scenes = {};
 
@@ -319,12 +427,13 @@ var rosh = (function() {
     send("scene_enter", {scene: target});
   }
 
-  return {
+  var mod = {
     state: state,
     objects: objects,
     scenes: scenes,
     _spriteData: {},
     _audioData: _audioData,
+    _animData: _animData,
     get: get,
     set: set,
     create: create,
@@ -335,10 +444,17 @@ var rosh = (function() {
     send: send,
     playAudio: playAudio,
     registerSound: registerSound,
+    registerAnimation: registerAnimation,
+    tickVelocity: tickVelocity,
+    tickPools: tickPools,
+    tickAnimations: tickAnimations,
     createScene: createScene,
     setSceneProp: setSceneProp,
     goScene: goScene
   };
+  // Wire animation engine to the module's sprite data
+  _spriteDataRef = mod._spriteData;
+  return mod;
 })();
 """
 
@@ -394,8 +510,20 @@ JS_RUNTIME_DOM = """\
         divs[name] = div;
       }
 
+      // Visibility check: visible === 0 or visible === false hides the object
+      if (obj.visible === 0 || obj.visible === false) {
+        div.style.display = "none";
+        continue;
+      }
+
       var x = obj.x;
       var y = obj.y;
+
+      // Hide pool objects parked off-screen (either axis well below 0)
+      if ((typeof x === "number" && x < -0.5) || (typeof y === "number" && y < -0.5)) {
+        div.style.display = "none";
+        continue;
+      }
       var w = obj.width != null ? obj.width : 0.1;
       var h = obj.height != null ? obj.height : 0.1;
       var color = obj.color || "#444";
@@ -471,7 +599,11 @@ JS_RUNTIME_DOM = """\
         var a = names[i], b = names[j];
         var oa = rosh.get(a), ob = rosh.get(b);
         if (!oa || !ob) continue;
+        if (oa.visible === 0 || oa.visible === false) continue;
+        if (ob.visible === 0 || ob.visible === false) continue;
         if (oa.x == null || oa.y == null || ob.x == null || ob.y == null) continue;
+        if (oa.x < -0.5 || oa.y < -0.5) continue;
+        if (ob.x < -0.5 || ob.y < -0.5) continue;
         var aw = oa.width || 0.1, ah = oa.height || 0.1;
         var bw = ob.width || 0.1, bh = ob.height || 0.1;
         if (oa.x < ob.x + bw && oa.x + aw > ob.x &&
@@ -505,11 +637,13 @@ JS_RUNTIME_DOM = """\
   });
 
   document.addEventListener("keydown", function(e) {
+    if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
     rosh.send("keydown", {key: e.key});
     if (!loopRunning) syncAll();
   });
 
   document.addEventListener("keyup", function(e) {
+    if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
     rosh.send("keyup", {key: e.key});
     if (!loopRunning) syncAll();
   });
@@ -531,6 +665,9 @@ JS_RUNTIME_DOM = """\
     if (dt > 0.1) dt = 0.1;  // cap delta
     lastTime = now;
     rosh.send("update", {dt: dt});
+    rosh.tickVelocity(dt);
+    rosh.tickPools();
+    rosh.tickAnimations(dt);
     checkCollisions();
     syncAll();
     requestAnimationFrame(tick);

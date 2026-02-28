@@ -98,6 +98,9 @@ JS_RUNTIME_PHASER = """\
       var dt = delta / 1000;
       if (dt > 0.1) dt = 0.1;
       rosh.send("update", {dt: dt});
+      rosh.tickVelocity(dt);
+      rosh.tickPools();
+      rosh.tickAnimations(dt);
       checkCollisions();
       syncAll();
     }
@@ -125,6 +128,18 @@ JS_RUNTIME_PHASER = """\
         continue;
       }
 
+      // Visibility check: visible === 0 or visible === false hides the object
+      var isVisible = !(obj.visible === 0 || obj.visible === false);
+      // Hide pool objects parked off-screen (either axis well below 0)
+      if ((typeof obj.x === "number" && obj.x < -0.5) || (typeof obj.y === "number" && obj.y < -0.5)) {
+        isVisible = false;
+      }
+      if (sprites[name]) {
+        sprites[name].setVisible(isVisible);
+        if (labels[name]) labels[name].setVisible(isVisible);
+      }
+      if (!isVisible) continue;
+
       var x = px(obj.x != null ? obj.x : 0, W);
       var y = px(obj.y != null ? obj.y : 0, H);
       var w = px(obj.width != null ? obj.width : 0.1, W);
@@ -147,6 +162,22 @@ JS_RUNTIME_PHASER = """\
       // Update position and size
       s.setPosition(x, y);
       s.setDisplaySize(w, h);
+
+      // Check if animated sprite frame changed — re-register texture
+      if (rosh._spriteData[name] && s._roshSpriteUri !== rosh._spriteData[name]) {
+        var newUri = rosh._spriteData[name];
+        var newKey = "spr_" + name + "_" + (s._roshTexIdx = (s._roshTexIdx || 0) + 1);
+        var tempImg = new Image();
+        tempImg.onload = (function(k, sp, nk) {
+          return function() {
+            if (scene.textures.exists(nk)) return;
+            scene.textures.addImage(nk, tempImg);
+            sp.setTexture(nk);
+          };
+        })(name, s, newKey);
+        tempImg.src = newUri;
+        s._roshSpriteUri = newUri;
+      }
 
       // Update color (rectangles only)
       if (s.setFillStyle) {
@@ -191,7 +222,11 @@ JS_RUNTIME_PHASER = """\
         var a = names[i], b = names[j];
         var oa = rosh.get(a), ob = rosh.get(b);
         if (!oa || !ob) continue;
+        if (oa.visible === 0 || oa.visible === false) continue;
+        if (ob.visible === 0 || ob.visible === false) continue;
         if (oa.x == null || oa.y == null || ob.x == null || ob.y == null) continue;
+        if (oa.x < -0.5 || oa.y < -0.5) continue;
+        if (ob.x < -0.5 || ob.y < -0.5) continue;
         var ax = px(oa.x, W), ay = px(oa.y, H);
         var aw = px(oa.width || 0.1, W), ah = px(oa.height || 0.1, H);
         var bx = px(ob.x, W), by = px(ob.y, H);

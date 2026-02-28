@@ -133,6 +133,35 @@ class TestCompileProgramme:
         assert "hero" in result.handler_code
         assert "enemy" in result.handler_code
 
+    def test_collision_wildcard(self):
+        """when collision bullet.* enemy → startsWith filter."""
+        prog = parse_string(
+            'when collision bullet.* enemy\n  print "hit!"\nend'
+        )
+        result = compile_programme(prog)
+        assert result.has_handlers
+        assert result.needs_loop
+        assert 'startsWith("bullet.")' in result.handler_code
+        assert '"enemy"' in result.handler_code
+
+    def test_collision_wildcard_both_sides(self):
+        """when collision bullet.* enemy.* → both sides use startsWith."""
+        prog = parse_string(
+            'when collision bullet.* enemy.*\n  print "hit!"\nend'
+        )
+        result = compile_programme(prog)
+        assert 'startsWith("bullet.")' in result.handler_code
+        assert 'startsWith("enemy.")' in result.handler_code
+
+    def test_collision_exact_unchanged(self):
+        """Exact collision names still use === comparison."""
+        prog = parse_string(
+            'when collision hero enemy\n  print "hit!"\nend'
+        )
+        result = compile_programme(prog)
+        assert 'payload.a === "hero"' in result.handler_code
+        assert 'payload.b === "enemy"' in result.handler_code
+
     def test_handler_body_contains_statements(self):
         prog = parse_string(
             'when click\n  set score to score + 1\n  print "Score: {score}"\nend'
@@ -463,3 +492,22 @@ class TestSceneCodegen:
         prog = parse_string('go back')
         result = compile_programme(prog)
         assert 'rosh.goScene("back")' in result.init_code
+
+
+# ── Animate ────────────────────────────────────────────────
+
+
+class TestEmitAnimate:
+    def test_basic(self):
+        prog = parse_string('animate player sheet "walk.png" frames 4')
+        result = compile_programme(prog)
+        assert 'rosh.registerAnimation("player"' in result.init_code
+        assert '"frames":4' in result.init_code
+        assert '"speed":8' in result.init_code
+        assert '"mode":"loop"' in result.init_code
+
+    def test_custom_speed_and_mode(self):
+        prog = parse_string('animate hero sheet "hero.png" frames 6 speed 12 mode bounce')
+        result = compile_programme(prog)
+        assert '"speed":12' in result.init_code
+        assert '"mode":"bounce"' in result.init_code

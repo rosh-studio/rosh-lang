@@ -29,6 +29,7 @@ from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE
 from rosh_lang.targets._js_runtime_phaser import JS_RUNTIME_PHASER
 from rosh_lang.targets.web import (
     _collect_objects,
+    _generate_animation_data,
     _generate_audio_data,
     _generate_sprite_data,
 )
@@ -82,6 +83,27 @@ def render_phaser(
             for k, v in audio_data.items()
         )
         script_parts.append(f"rosh._audioData = {{{audio_pairs}}};")
+
+    # Inject animation data (sliced spritesheet frames)
+    anim_data = _generate_animation_data(
+        programme, rt, search_paths=search_paths,
+    )
+    if anim_data:
+        anim_init_lines: list[str] = []
+        for anim_name, anim_info in anim_data.items():
+            frames_json = json.dumps(anim_info["frames"], separators=(",", ":"))
+            anim_init_lines.append(
+                f'rosh._animData["{anim_name}"] = '
+                f'{{"frames": {frames_json}, '
+                f'"speed": {anim_info["speed"]}, '
+                f'"mode": "{anim_info["mode"]}", '
+                f'"_frame": 0, "_elapsed": 0, "_dir": 1}};'
+            )
+            # Set initial sprite to frame 0
+            anim_init_lines.append(
+                f'rosh._spriteData["{anim_name}"] = {json.dumps(anim_info["frames"][0])};'
+            )
+        script_parts.extend(anim_init_lines)
 
     if compiled.has_handlers:
         script_parts.extend(["", "// ── Handlers ──", compiled.handler_code])

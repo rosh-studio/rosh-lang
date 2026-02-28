@@ -21,7 +21,7 @@ from typing import Any
 from rosh_lang import __version__
 from pathlib import Path
 
-from rosh_lang.model import Programme, SoundStatement, UseStatement, WhenStatement
+from rosh_lang.model import AnimateStatement, Programme, SoundStatement, UseStatement, WhenStatement
 from rosh_lang.runtime import Runtime
 from rosh_lang.sounds import generate_sound_params
 from rosh_lang.sprites import generate_sprite
@@ -75,6 +75,69 @@ def _generate_audio_data(programme: Programme) -> dict[str, dict[str, Any]]:
     # Also check the runtime's audio_registry (it captured sounds from
     # when-block bodies and use-widget expansions during .run())
     return audio_data
+
+
+def _generate_animation_data(
+    programme: Programme,
+    runtime: Runtime,
+    search_paths: list[Path] | None = None,
+    source_dir: Path | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Slice spritesheets and build animation data for all animate statements.
+
+    Returns: {name: {frames: [uri...], speed: N, mode: "loop"}}
+    """
+    from rosh_lang.assets import resolve_asset
+    from rosh_lang.sheets import slice_spritesheet
+
+    anim_data: dict[str, dict[str, Any]] = {}
+
+    # Collect from programme statements
+    for stmt in programme.statements:
+        if isinstance(stmt, AnimateStatement):
+            _process_animate(stmt, anim_data, search_paths, source_dir)
+
+    # Collect from runtime registry (animate inside when blocks / use widgets)
+    for name, info in runtime.animation_registry.items():
+        if name not in anim_data:
+            sheet_path = resolve_asset(
+                info["sheet"], search_paths=search_paths, source_dir=source_dir,
+            )
+            if sheet_path:
+                frames = slice_spritesheet(sheet_path, info["frames"])
+                anim_data[name] = {
+                    "frames": frames,
+                    "speed": info["speed"],
+                    "mode": info["mode"],
+                }
+
+    return anim_data
+
+
+def _process_animate(
+    stmt: AnimateStatement,
+    anim_data: dict[str, dict[str, Any]],
+    search_paths: list[Path] | None = None,
+    source_dir: Path | None = None,
+) -> None:
+    """Process a single AnimateStatement into animation data."""
+    from rosh_lang.assets import resolve_asset
+    from rosh_lang.sheets import slice_spritesheet
+
+    sheet_path = resolve_asset(
+        stmt.sheet, search_paths=search_paths, source_dir=source_dir,
+    )
+    if sheet_path is None:
+        import warnings
+        warnings.warn(f"Spritesheet not found: {stmt.sheet!r}")
+        return
+
+    frames = slice_spritesheet(sheet_path, stmt.frames)
+    anim_data[stmt.name] = {
+        "frames": frames,
+        "speed": stmt.speed,
+        "mode": stmt.mode,
+    }
 
 
 def _render_object(
@@ -250,6 +313,29 @@ def _render_interactive(
             for k, v in audio_data.items()
         )
         script_parts.append(f"rosh._audioData = {{{audio_pairs}}};")
+
+    # Inject animation data (sliced spritesheet frames)
+    anim_data = _generate_animation_data(
+        programme, rt, search_paths=search_paths,
+    )
+    if anim_data:
+        import json
+
+        anim_init_lines: list[str] = []
+        for anim_name, anim_info in anim_data.items():
+            frames_json = json.dumps(anim_info["frames"], separators=(",", ":"))
+            anim_init_lines.append(
+                f'rosh._animData["{escape(anim_name)}"] = '
+                f'{{"frames": {frames_json}, '
+                f'"speed": {anim_info["speed"]}, '
+                f'"mode": "{escape(anim_info["mode"])}", '
+                f'"_frame": 0, "_elapsed": 0, "_dir": 1}};'
+            )
+            # Set initial sprite to frame 0
+            anim_init_lines.append(
+                f'rosh._spriteData["{escape(anim_name)}"] = {json.dumps(anim_info["frames"][0])};'
+            )
+        script_parts.extend(anim_init_lines)
 
     if compiled.has_handlers:
         script_parts.extend(["", "// ── Handlers ──", compiled.handler_code])
