@@ -102,25 +102,93 @@ _FILL_PROB = [0.7, 0.55, 0.35, 0.2]
 # Top/bottom rows are sparser for head/feet shaping.
 _ROW_WEIGHT = [0.3, 0.6, 0.8, 1.0, 1.0, 1.0, 0.8, 0.6, 0.3]
 
+# ── Shape families ───────────────────────────────────────────
+#
+# Each family overrides fill_prob and/or row_weight to produce
+# a distinctive silhouette. Keywords are matched case-insensitively
+# with hyphens/underscores stripped (same pattern as _extract_color).
+
+_SHAPE_FAMILIES: dict[str, tuple[list[float], list[float]]] = {
+    "spaceship": (
+        [0.9, 0.7, 0.3, 0.15],
+        [0.2, 0.5, 0.9, 1.0, 1.0, 1.0, 0.9, 0.5, 0.2],
+    ),
+    "ship": (
+        [0.9, 0.7, 0.3, 0.15],
+        [0.2, 0.5, 0.9, 1.0, 1.0, 1.0, 0.9, 0.5, 0.2],
+    ),
+    "ball": (
+        [0.3, 0.7, 0.9, 0.7],
+        [0.3, 0.7, 0.9, 1.0, 1.0, 0.9, 0.7, 0.3, 0.1],
+    ),
+    "orb": (
+        [0.3, 0.7, 0.9, 0.7],
+        [0.3, 0.7, 0.9, 1.0, 1.0, 0.9, 0.7, 0.3, 0.1],
+    ),
+    "alien": (
+        [0.6, 0.8, 0.6, 0.4],
+        [0.5, 0.8, 1.0, 0.9, 0.7, 0.9, 1.0, 0.8, 0.5],
+    ),
+    "invader": (
+        [0.6, 0.8, 0.6, 0.4],
+        [0.5, 0.8, 1.0, 0.9, 0.7, 0.9, 1.0, 0.8, 0.5],
+    ),
+    "bullet": (
+        [0.9, 0.6, 0.2, 0.1],
+        [0.3, 0.5, 0.8, 1.0, 1.0, 0.8, 0.5, 0.3, 0.2],
+    ),
+    "crystal": (
+        [0.5, 0.8, 0.5, 0.2],
+        [0.2, 0.4, 0.7, 1.0, 1.0, 0.7, 0.4, 0.3, 0.1],
+    ),
+    "gem": (
+        [0.5, 0.8, 0.5, 0.2],
+        [0.2, 0.4, 0.7, 1.0, 1.0, 0.7, 0.4, 0.3, 0.1],
+    ),
+    "star": (
+        [0.4, 0.9, 0.4, 0.3],
+        [0.3, 0.9, 0.5, 0.9, 0.3, 0.9, 0.5, 0.9, 0.3],
+    ),
+}
+
+
+def _extract_shape(
+    description: str,
+) -> tuple[list[float], list[float]] | None:
+    """Extract a shape family from the description, or return None for defaults."""
+    desc_clean = description.lower().replace("-", "").replace("_", "")
+    for keyword, shape in _SHAPE_FAMILIES.items():
+        if keyword in desc_clean:
+            return shape
+    return None
+
 
 # ── Grid generation ───────────────────────────────────────────
 
 
-def _generate_grid(rng: random.Random) -> list[list[bool]]:
+def _generate_grid(
+    rng: random.Random,
+    fill_prob: list[float] | None = None,
+    row_weight: list[float] | None = None,
+) -> list[list[bool]]:
     """Generate a bilaterally symmetric logical grid.
 
     Uses graduated fill probability (center dense, edges sparse)
     with row weighting (top/bottom sparse) to produce body-shaped
     silhouettes. Generates half-width, then mirrors.
+
+    Optional fill_prob/row_weight override the defaults for shape families.
     """
+    fp = fill_prob if fill_prob is not None else _FILL_PROB
+    rw = row_weight if row_weight is not None else _ROW_WEIGHT
     half_w = (_LOGICAL_W + 1) // 2  # 4
 
     grid: list[list[bool]] = []
     for row_idx in range(_LOGICAL_H):
-        row_w = _ROW_WEIGHT[row_idx]
+        row_wt = rw[row_idx]
         row: list[bool] = []
         for col_idx in range(half_w):
-            prob = _FILL_PROB[col_idx] * row_w
+            prob = fp[col_idx] * row_wt
             row.append(rng.random() < prob)
         grid.append(row)
 
@@ -206,7 +274,11 @@ def generate_sprite(name: str, description: str = "") -> str:
     rng = random.Random(digest)
 
     color = _extract_color(description, rng)
-    grid = _generate_grid(rng)
+    shape = _extract_shape(description)
+    if shape:
+        grid = _generate_grid(rng, fill_prob=shape[0], row_weight=shape[1])
+    else:
+        grid = _generate_grid(rng)
 
     # Darken color for outline
     outline = (max(0, color[0] - 60), max(0, color[1] - 60), max(0, color[2] - 60))

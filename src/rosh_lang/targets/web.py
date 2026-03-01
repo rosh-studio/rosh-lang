@@ -21,7 +21,15 @@ from typing import Any
 from rosh_lang import __version__
 from pathlib import Path
 
-from rosh_lang.model import AnimateStatement, Programme, SoundStatement, UseStatement, WhenStatement
+from rosh_lang.model import (
+    AnimateStatement,
+    PrintStatement,
+    Programme,
+    SayStatement,
+    SoundStatement,
+    UseStatement,
+    WhenStatement,
+)
 from rosh_lang.runtime import Runtime
 from rosh_lang.sounds import generate_sound_params
 from rosh_lang.sprites import generate_sprite
@@ -149,7 +157,7 @@ def _render_object(
     w = obj.get("width", 0.1)
     h = obj.get("height", 0.1)
     color = obj.get("color", "#444")
-    label = obj.get("label", name)
+    label = obj.get("label", "")
 
     has_position = x is not None or y is not None
 
@@ -269,10 +277,18 @@ def _render_interactive(
     search_paths: list[Path] | None = None,
 ) -> str:
     """Render an interactive programme — embeds JS runtime + codegen output."""
-    # Run Python runtime for initial state (top-level creates/sets/prints)
+    # Run Python runtime for initial state (top-level creates/sets).
+    # Filter out print/say — JS codegen already emits appendOutput() for those.
+    filtered = Programme(
+        statements=[
+            s for s in programme.statements
+            if not isinstance(s, (PrintStatement, SayStatement))
+        ],
+        source=programme.source,
+    )
     buf = io.StringIO()
     rt = Runtime(output=buf, search_paths=search_paths)
-    rt.run(programme)
+    rt.run(filtered)
 
     text_output = buf.getvalue()
 
@@ -339,6 +355,8 @@ def _render_interactive(
 
     if compiled.has_handlers:
         script_parts.extend(["", "// ── Handlers ──", compiled.handler_code])
+    # Fire "start" event after all handlers are registered
+    script_parts.append('rosh.send("start", {});')
     if compiled.needs_loop:
         script_parts.extend(["", "// ── Start game loop ──", "rosh.startLoop();"])
     else:

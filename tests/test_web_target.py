@@ -266,6 +266,15 @@ class TestVisibilityInRuntime:
         # The JS runtime should contain variable resolution in evalSetValue
         assert "var resolved = get(raw)" in html
 
+    def test_collision_payload_includes_positions(self):
+        """Collision send should include a_x, a_y, b_x, b_y."""
+        prog = parse_string('when collision a b\n  print "hit"\nend')
+        html = render_html(prog)
+        assert "a_x: oa.x" in html
+        assert "a_y: oa.y" in html
+        assert "b_x: ob.x" in html
+        assert "b_y: ob.y" in html
+
 
 class TestInteractiveCodegen:
     """Interactive HTML should contain compiled JS from codegen."""
@@ -319,6 +328,25 @@ class TestInteractiveCodegen:
         prog = parse_string('when collision a b\n  print "hit"\nend')
         html = render_html(prog)
         assert "rosh.startLoop()" in html
+
+    def test_start_event_fired_after_handlers(self):
+        """start event should be sent after all handlers are registered."""
+        prog = parse_string('when start\n  print "go"\nend')
+        html = render_html(prog)
+        assert 'rosh.send("start"' in html
+        # start event must come after handler registration
+        handler_pos = html.index('rosh.on("start"')
+        start_pos = html.index('rosh.send("start"')
+        assert start_pos > handler_pos
+
+    def test_start_event_before_game_loop(self):
+        """start event should fire before startLoop."""
+        prog = parse_string('when update\n  print "tick"\nend')
+        html = render_html(prog)
+        assert 'rosh.send("start"' in html
+        start_pos = html.index('rosh.send("start"')
+        loop_pos = html.index("rosh.startLoop()")
+        assert start_pos < loop_pos
 
     def test_no_loop_without_update_or_collision(self):
         prog = parse_string('when click\n  print "clicked"\nend')
@@ -429,7 +457,8 @@ class TestWebWidgets:
         )
         html = render_html(prog, search_paths=[WIDGETS_DIR])
         assert "<script>" in html
-        assert "Score: 42" in html
+        # Print handled by JS codegen (interpolated at runtime, not in <pre>)
+        assert "Score: {score.value}" in html
         assert 'rosh.on("click_score.display"' in html
 
 
@@ -654,3 +683,135 @@ class TestAnimationDataInjection:
             assert "data:image/png;base64," in html
             assert "registerAnimation" in html
             assert "tickAnimations" in html
+
+
+# ── Duplicate print fix ──────────────────────────────────────────
+
+
+class TestDuplicatePrintFix:
+    """Interactive print/say should appear only once (JS), not in <pre> too."""
+
+    def test_interactive_print_not_in_pre(self):
+        """Print in interactive programme should not appear in <pre> output."""
+        prog = parse_string(
+            'create object box\n'
+            'set box.x to 0.5\n'
+            'print "hello"\n'
+            'when click\n  print "clicked"\nend'
+        )
+        html = render_html(prog)
+        # The <pre> output section should NOT contain the print text
+        pre_start = html.index('<pre id="output">')
+        pre_end = html.index("</pre>")
+        pre_content = html[pre_start:pre_end]
+        assert "hello" not in pre_content
+        # But JS codegen should still have it
+        assert 'appendOutput(rosh.interpolate("hello"))' in html
+
+    def test_interactive_say_not_in_pre(self):
+        """Say in interactive programme should not appear in <pre> output."""
+        prog = parse_string(
+            'say "welcome"\n'
+            'when click\n  print "clicked"\nend'
+        )
+        html = render_html(prog)
+        pre_start = html.index('<pre id="output">')
+        pre_end = html.index("</pre>")
+        pre_content = html[pre_start:pre_end]
+        assert "welcome" not in pre_content
+
+    def test_static_print_still_works(self):
+        """Static programmes (no when blocks) should still show print in <pre>."""
+        prog = parse_string('print "hello world"')
+        html = render_html(prog)
+        assert "<script>" not in html
+        assert "hello world" in html
+
+    def test_print_inside_when_start_works(self):
+        """Print inside when start block should appear via JS."""
+        prog = parse_string(
+            'when start\n  print "started"\nend'
+        )
+        html = render_html(prog)
+        assert 'appendOutput(rosh.interpolate("started"))' in html
+
+    def test_create_set_still_produce_divs(self):
+        """Create/set should still produce initial state divs in interactive path."""
+        prog = parse_string(
+            'create object box\n'
+            'set box.x to 0.5\n'
+            'set box.color to "red"\n'
+            'print "info"\n'
+            'when click\n  print "clicked"\nend'
+        )
+        html = render_html(prog)
+        assert 'data-name="box"' in html
+        assert "background-color: red" in html
+
+    def test_multiple_prints_not_duplicated(self):
+        """Multiple prints in interactive programme should not appear in <pre>."""
+        prog = parse_string(
+            'print "line 1"\n'
+            'print "line 2"\n'
+            'when click\n  print "clicked"\nend'
+        )
+        html = render_html(prog)
+        pre_start = html.index('<pre id="output">')
+        pre_end = html.index("</pre>")
+        pre_content = html[pre_start:pre_end]
+        assert "line 1" not in pre_content
+        assert "line 2" not in pre_content
+
+
+# ── Key-hold state tracking ──────────────────────────────────────
+
+
+class TestKeyHoldState:
+    """JS runtime should track held keys in state._keys."""
+
+    def test_keys_init_in_core(self):
+        """state._keys should be initialized in JS_RUNTIME_CORE."""
+        from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE
+        assert "state._keys = {}" in JS_RUNTIME_CORE
+
+    def test_keydown_sets_key_to_1(self):
+        """DOM keydown listener should set _keys[e.key] = 1."""
+        from rosh_lang.targets._js_runtime import JS_RUNTIME_DOM
+        assert "rosh.state._keys[e.key] = 1" in JS_RUNTIME_DOM
+
+    def test_keyup_sets_key_to_0(self):
+        """DOM keyup listener should set _keys[e.key] = 0."""
+        from rosh_lang.targets._js_runtime import JS_RUNTIME_DOM
+        assert "rosh.state._keys[e.key] = 0" in JS_RUNTIME_DOM
+
+    def test_key_hold_in_rendered_html(self):
+        """Rendered interactive HTML should contain key-hold tracking."""
+        prog = parse_string('when click\n  print "hi"\nend')
+        html = render_html(prog)
+        assert "state._keys = {}" in html
+        assert "_keys[e.key] = 1" in html
+        assert "_keys[e.key] = 0" in html
+
+
+# ── Game pause ───────────────────────────────────────────────────
+
+
+class TestGamePause:
+    """JS runtime should support pausing the game loop via _paused state."""
+
+    def test_paused_init_in_core(self):
+        """state._paused should be initialized to 0 in JS_RUNTIME_CORE."""
+        from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE
+        assert "state._paused = 0" in JS_RUNTIME_CORE
+
+    def test_pause_check_in_dom_tick(self):
+        """DOM tick() should check _paused and skip logic when paused."""
+        from rosh_lang.targets._js_runtime import JS_RUNTIME_DOM
+        assert "rosh.state._paused" in JS_RUNTIME_DOM
+
+    def test_pause_in_rendered_html(self):
+        """Rendered interactive HTML should contain pause support."""
+        prog = parse_string('when click\n  print "hi"\nend')
+        html = render_html(prog)
+        assert "state._paused = 0" in html
+        assert "rosh.state._paused" in html

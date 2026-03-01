@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from rosh_lang.model import (
+    AfterStatement,
     AnimateStatement,
     BlankStatement,
     CommentStatement,
@@ -182,6 +183,8 @@ def _emit_statement(stmt: Statement) -> str:
         return _emit_go(stmt)
     if isinstance(stmt, AnimateStatement):
         return _emit_animate(stmt)
+    if isinstance(stmt, AfterStatement):
+        return _emit_after(stmt)
     return ""
 
 
@@ -249,6 +252,11 @@ def _emit_animate(stmt: AnimateStatement) -> str:
     config = {"frames": stmt.frames, "speed": stmt.speed, "mode": stmt.mode}
     config_json = json.dumps(config, separators=(",", ":"))
     return f'rosh.registerAnimation("{_escape_js(stmt.name)}", {config_json});'
+
+
+def _emit_after(stmt: AfterStatement) -> str:
+    delay_ms = int(stmt.delay * 1000)
+    return f'setTimeout(function() {{ rosh.send("{_escape_js(stmt.event)}", {{}}); }}, {delay_ms});'
 
 
 def _emit_on(stmt: OnStatement) -> str:
@@ -373,14 +381,15 @@ def _wrap_collision_filter(a: str, b: str, body_js: str) -> str:
     """Wrap body JS in a collision name filter.
 
     Supports wildcard patterns: "bullet.*" matches bullet.b0, bullet.b1, etc.
-    When wildcards match pool objects, automatically recycles them (y=-1, vx=vy=0).
+    When wildcards match, automatically recycles matched objects (y=-1, vx=vy=0)
+    so they visually disappear. Works for pool objects and regular objects alike.
     """
     a_match = _collision_match_expr(a, "payload.a")
     b_match = _collision_match_expr(b, "payload.b")
     a_match_rev = _collision_match_expr(a, "payload.b")
     b_match_rev = _collision_match_expr(b, "payload.a")
 
-    # After filtering, recycle any matched pool bullets
+    # After filtering, recycle any wildcard-matched objects
     recycle_lines = ""
     if a.endswith(".*") or b.endswith(".*"):
         # Determine which payload field holds each pattern's match
@@ -388,17 +397,14 @@ def _wrap_collision_filter(a: str, b: str, body_js: str) -> str:
             '  var _ma = ({a_fwd}) ? payload.a : payload.b;\n'
             '  var _mb = ({a_fwd}) ? payload.b : payload.a;\n'
         ).format(a_fwd=a_match)
-        # Recycle whichever matched names are pool bullets (have parent._pool_count)
+        # Recycle all wildcard-matched objects (move off-screen)
         for pat, var in [(a, "_ma"), (b, "_mb")]:
             if pat.endswith(".*"):
-                prefix = pat[:-2]  # "bullet.*" → "bullet"
                 recycle_lines += (
-                    f'  if (rosh.get("{_escape_js(prefix)}._pool_count") != null) {{\n'
-                    f'    rosh.set({var} + ".x", -1);\n'
-                    f'    rosh.set({var} + ".y", -1);\n'
-                    f'    rosh.set({var} + ".vx", 0);\n'
-                    f'    rosh.set({var} + ".vy", 0);\n'
-                    f'  }}\n'
+                    f'  rosh.set({var} + ".x", -1);\n'
+                    f'  rosh.set({var} + ".y", -1);\n'
+                    f'  rosh.set({var} + ".vx", 0);\n'
+                    f'  rosh.set({var} + ".vy", 0);\n'
                 )
 
     return (

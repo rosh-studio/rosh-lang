@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from rosh_lang.model import (
+    AfterStatement,
     AnimateStatement,
     BlankStatement,
     CommentStatement,
@@ -1340,3 +1341,12 @@ class TestAnimate:
             ),
         ])
         assert rt.animation_registry["flag"]["mode"] == "bounce"
+
+
+# ── after statement (noop in terminal) ───────────────────────────
+
+
+class TestAfterTerminal:
+    def test_after_is_noop(self) -> None:
+        """after should not raise in terminal — just silently skip."""
+        rt = _run([AfterStatement(delay=2.0, event="wave_2")])

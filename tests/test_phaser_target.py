@@ -159,6 +159,22 @@ class TestPhaserSound:
 # ── Showcase demos ───────────────────────────────────────────
 
 
+class TestPhaserStartEvent:
+    """Phaser target should fire the start event after scene is ready."""
+
+    def test_start_event_in_phaser_runtime(self):
+        prog = parse_string('when start\n  print "go"\nend')
+        html = render_phaser(prog)
+        assert 'rosh.send("start"' in html
+
+    def test_collision_payload_includes_positions(self):
+        """Phaser collision send should include position keys."""
+        prog = parse_string('when collision a b\n  print "hit"\nend')
+        html = render_phaser(prog)
+        assert "a_x: oa.x" in html
+        assert "b_x: ob.x" in html
+
+
 class TestPhaserShowcaseDemos:
     """All 9 showcase demos should compile to Phaser HTML without error."""
 
@@ -176,3 +192,54 @@ class TestPhaserShowcaseDemos:
             )
             assert "<!DOCTYPE html>" in html, f"{demo.name} failed"
             assert "Phaser.Game" in html, f"{demo.name} missing Phaser"
+
+
+# ── Duplicate print fix ──────────────────────────────────────────
+
+
+class TestPhaserDuplicatePrintFix:
+    """Phaser print should appear only once — via JS codegen, not Python re-emission."""
+
+    def test_phaser_print_not_duplicated(self):
+        """Print in Phaser programme should appear via JS appendOutput only."""
+        prog = parse_string(
+            'print "hello phaser"\n'
+            'when click\n  print "clicked"\nend'
+        )
+        html = render_phaser(prog)
+        # JS codegen should have the print
+        assert 'appendOutput(rosh.interpolate("hello phaser"))' in html
+        # There should be no duplicate re-emission after Phaser renderer
+        # (no standalone appendOutput("hello phaser") calls outside handler code)
+        phaser_idx = html.index("// ── Phaser renderer ──")
+        after_phaser = html[phaser_idx:]
+        assert 'appendOutput("hello phaser")' not in after_phaser
+
+
+# ── Key-hold state tracking ──────────────────────────────────────
+
+
+class TestPhaserKeyHoldState:
+    """Phaser runtime should track held keys in state._keys."""
+
+    def test_phaser_keydown_sets_key(self):
+        """Phaser keydown listener should set _keys[e.key] = 1."""
+        from rosh_lang.targets._js_runtime_phaser import JS_RUNTIME_PHASER
+        assert "rosh.state._keys[e.key] = 1" in JS_RUNTIME_PHASER
+
+    def test_phaser_keyup_sets_key(self):
+        """Phaser keyup listener should set _keys[e.key] = 0."""
+        from rosh_lang.targets._js_runtime_phaser import JS_RUNTIME_PHASER
+        assert "rosh.state._keys[e.key] = 0" in JS_RUNTIME_PHASER
+
+
+# ── Game pause ───────────────────────────────────────────────────
+
+
+class TestPhaserGamePause:
+    """Phaser runtime should support pausing via _paused state."""
+
+    def test_phaser_pause_check_in_update(self):
+        """Phaser update() should check _paused and skip logic when paused."""
+        from rosh_lang.targets._js_runtime_phaser import JS_RUNTIME_PHASER
+        assert "rosh.state._paused" in JS_RUNTIME_PHASER

@@ -194,6 +194,15 @@ class AnimateStatement:
 
 
 @dataclass
+class AfterStatement:
+    """after 2 send wave_2 — schedule a delayed event."""
+
+    delay: float
+    event: str
+    line: int = 0
+
+
+@dataclass
 class UseStatement:
     """use score / use player speed 0.02 / use enemy-grid rows 2 cols 5"""
 
@@ -239,6 +248,7 @@ Statement = (
     | IfStatement
     | ElseStatement
     | AnimateStatement
+    | AfterStatement
     | UseStatement
     | CommentStatement
     | BlankStatement

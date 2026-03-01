@@ -11,6 +11,7 @@ import warnings
 from typing import Any, TextIO
 
 from rosh_lang.model import (
+    AfterStatement,
     AnimateStatement,
     BlankStatement,
     CommentStatement,
@@ -128,6 +129,8 @@ class Runtime:
             self._exec_if(stmt)
         elif isinstance(stmt, UseStatement):
             self._exec_use(stmt)
+        elif isinstance(stmt, AfterStatement):
+            pass  # Terminal has no setTimeout — noop
         elif isinstance(stmt, (CommentStatement, BlankStatement, EndStatement)):
             pass
         return None

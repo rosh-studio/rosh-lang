@@ -13,6 +13,7 @@ import shlex
 from pathlib import Path
 
 from rosh_lang.model import (
+    AfterStatement,
     AnimateStatement,
     BlankStatement,
     CommentStatement,
@@ -103,6 +104,7 @@ def _parse_line(raw: str, line: int, source: str) -> Statement:
         "play": _parse_play,
         "animate": _parse_animate,
         "use": _parse_use,
+        "after": _parse_after,
     }
 
     handler = dispatch.get(keyword)
@@ -262,9 +264,30 @@ def _parse_on(line_text: str, line: int, source: str) -> OnStatement:
             raise ParseError("on ... when requires: field op value action", line=line, source=source)
         cond_field = remaining[1]
         cond_op = remaining[2]
-        cond_value = remaining[3]
+        # Handle quoted condition values (e.g., when key == " ")
+        # .split() breaks quoted strings with spaces into multiple tokens
+        if remaining[3].startswith('"') or remaining[3].startswith("'"):
+            quote_char = remaining[3][0]
+            if remaining[3].endswith(quote_char) and len(remaining[3]) > 1:
+                # Single-token quoted value like "ArrowUp"
+                cond_value = remaining[3]
+                remaining = remaining[4:]
+            else:
+                # Multi-token quoted value — rejoin until closing quote
+                end_idx = 4
+                joined = remaining[3]
+                while end_idx < len(remaining):
+                    joined += " " + remaining[end_idx]
+                    if remaining[end_idx].endswith(quote_char):
+                        end_idx += 1
+                        break
+                    end_idx += 1
+                cond_value = joined
+                remaining = remaining[end_idx:]
+        else:
+            cond_value = remaining[3]
+            remaining = remaining[4:]
         condition = f"{cond_field} {cond_op} {cond_value}"
-        remaining = remaining[4:]
 
     if not remaining:
         raise ParseError("on requires an action (set, send, say, print)", line=line, source=source)
@@ -365,6 +388,26 @@ def _parse_use(line_text: str, line: int, source: str) -> UseStatement:
             config[key] = ""
             i += 1
     return UseStatement(name=name, config=config, line=line)
+
+
+def _parse_after(line_text: str, line: int, source: str) -> AfterStatement:
+    """Parse 'after <seconds> send <event>'."""
+    rest = line_text[len("after"):].strip()
+    if not rest:
+        raise ParseError("after requires: after <seconds> send <event>", line=line, source=source)
+    tokens = rest.split()
+    if len(tokens) < 3:
+        raise ParseError("after requires: after <seconds> send <event>", line=line, source=source)
+    # Parse delay
+    try:
+        delay = float(tokens[0])
+    except ValueError:
+        raise ParseError(f"after delay must be a number, got: {tokens[0]!r}", line=line, source=source)
+    # Expect "send"
+    if tokens[1].lower() != "send":
+        raise ParseError("after requires 'send' keyword: after <seconds> send <event>", line=line, source=source)
+    event = tokens[2]
+    return AfterStatement(delay=delay, event=event, line=line)
 
 
 def _parse_animate(line_text: str, line: int, source: str) -> AnimateStatement:

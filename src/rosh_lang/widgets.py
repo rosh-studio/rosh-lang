@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from rosh_lang.model import (
+    AfterStatement,
     AnimateStatement,
     CreateStatement,
     DestroyStatement,
@@ -380,6 +381,10 @@ def _prefix_statement(stmt: Statement, ns: str) -> Statement:
             else_body=[_prefix_statement(s, ns) for s in stmt.else_body],
             line=stmt.line,
         )
+
+    if isinstance(stmt, AfterStatement):
+        # Event names stay global (like send), delay unchanged
+        return stmt
 
     # Comments, blanks, end, event declarations, etc. — pass through
     return stmt

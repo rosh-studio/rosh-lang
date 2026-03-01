@@ -511,3 +511,34 @@ class TestEmitAnimate:
         result = compile_programme(prog)
         assert '"speed":12' in result.init_code
         assert '"mode":"bounce"' in result.init_code
+
+
+# ── after ──────────────────────────────────────────────────────
+
+
+class TestEmitAfter:
+    def test_basic_set_timeout(self):
+        prog = parse_string("after 2 send wave_2")
+        result = compile_programme(prog)
+        assert 'setTimeout(function() { rosh.send("wave_2", {}); }, 2000)' in result.init_code
+
+    def test_float_delay(self):
+        prog = parse_string("after 0.5 send spawn")
+        result = compile_programme(prog)
+        assert 'setTimeout(function() { rosh.send("spawn", {}); }, 500)' in result.init_code
+
+    def test_inside_handler_body(self):
+        prog = parse_string(
+            'when collision bullet.* enemy\n'
+            '  after 0.5 send spawn_replacement\n'
+            'end'
+        )
+        result = compile_programme(prog)
+        assert "setTimeout" in result.handler_code
+        assert 'rosh.send("spawn_replacement"' in result.handler_code
+
+    def test_no_loop_required(self):
+        """after alone should not trigger a game loop."""
+        prog = parse_string("after 2 send wave_2")
+        result = compile_programme(prog)
+        assert not result.needs_loop

@@ -75,9 +75,11 @@ JS_RUNTIME_PHASER = """\
 
       // Keyboard input → rosh events
       this.input.keyboard.on("keydown", function(e) {
+        rosh.state._keys[e.key] = 1;
         rosh.send("keydown", {key: e.key});
       });
       this.input.keyboard.on("keyup", function(e) {
+        rosh.state._keys[e.key] = 0;
         rosh.send("keyup", {key: e.key});
       });
 
@@ -92,11 +94,18 @@ JS_RUNTIME_PHASER = """\
         }
         rosh.send("click", {x: nx, y: ny});
       });
+
+      // Fire start event after scene is ready
+      rosh.send("start", {});
     }
 
     update(time, delta) {
       var dt = delta / 1000;
       if (dt > 0.1) dt = 0.1;
+      if (rosh.state._paused) {
+        syncAll();
+        return;
+      }
       rosh.send("update", {dt: dt});
       rosh.tickVelocity(dt);
       rosh.tickPools();
@@ -185,7 +194,7 @@ JS_RUNTIME_PHASER = """\
       }
 
       // Label text (non-sprite objects)
-      var rawLabel = obj.label != null ? obj.label : name;
+      var rawLabel = obj.label != null ? obj.label : "";
       var labelText = (typeof rawLabel === "string") ? rosh.interpolate(rawLabel) : String(rawLabel);
       var hasSprite = rosh._spriteData[name];
 
@@ -236,7 +245,7 @@ JS_RUNTIME_PHASER = """\
           var pair = a + ":" + b;
           current[pair] = true;
           if (!prevCollisions[pair]) {
-            rosh.send("collision", {a: a, b: b});
+            rosh.send("collision", {a: a, b: b, a_x: oa.x, a_y: oa.y, b_x: ob.x, b_y: ob.y});
           }
         }
       }

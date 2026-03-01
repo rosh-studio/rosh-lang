@@ -50,6 +50,7 @@ HELP = f"""\
 [rosh.heading]Usage[/]
   rosh                     Start the interactive REPL
   rosh <file.rosh>         Run a programme file
+  rosh new [template] [name]  Scaffold a starter programme
   rosh library list        List available widgets
   rosh library info <name> Show widget details
   rosh --version           Show version
@@ -300,6 +301,12 @@ def main() -> None:
     if sys.argv[1] == "library":
         from rosh_lang.library_cli import library_main
         library_main(sys.argv[2:])
+        return
+
+    # "rosh new ..." — handle before argparse
+    if sys.argv[1] == "new":
+        from rosh_lang.scaffolder import scaffold
+        scaffold(sys.argv[2:])
         return
 
     parser = _build_parser()

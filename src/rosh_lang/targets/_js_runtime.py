@@ -17,6 +17,8 @@ Future targets (e.g. Phaser) import JS_RUNTIME_CORE + provide their own renderer
 JS_RUNTIME_CORE = """\
 var rosh = (function() {
   var state = {};
+  state._keys = {};
+  state._paused = 0;
   var objects = {};
   var handlers = {};
   var sendDepth = 0;
@@ -527,7 +529,7 @@ JS_RUNTIME_DOM = """\
       var w = obj.width != null ? obj.width : 0.1;
       var h = obj.height != null ? obj.height : 0.1;
       var color = obj.color || "#444";
-      var rawLabel = obj.label != null ? obj.label : name;
+      var rawLabel = obj.label != null ? obj.label : "";
       var label = (typeof rawLabel === "string") ? rosh.interpolate(rawLabel) : rawLabel;
       var hasPos = x != null || y != null;
 
@@ -611,7 +613,7 @@ JS_RUNTIME_DOM = """\
           var pair = a + ":" + b;
           current[pair] = true;
           if (!prevCollisions[pair]) {
-            rosh.send("collision", {a: a, b: b});
+            rosh.send("collision", {a: a, b: b, a_x: oa.x, a_y: oa.y, b_x: ob.x, b_y: ob.y});
           }
         }
       }
@@ -638,12 +640,14 @@ JS_RUNTIME_DOM = """\
 
   document.addEventListener("keydown", function(e) {
     if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
+    rosh.state._keys[e.key] = 1;
     rosh.send("keydown", {key: e.key});
     if (!loopRunning) syncAll();
   });
 
   document.addEventListener("keyup", function(e) {
     if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
+    rosh.state._keys[e.key] = 0;
     rosh.send("keyup", {key: e.key});
     if (!loopRunning) syncAll();
   });
@@ -664,6 +668,11 @@ JS_RUNTIME_DOM = """\
     var dt = (now - lastTime) / 1000;
     if (dt > 0.1) dt = 0.1;  // cap delta
     lastTime = now;
+    if (rosh.state._paused) {
+      syncAll();
+      requestAnimationFrame(tick);
+      return;
+    }
     rosh.send("update", {dt: dt});
     rosh.tickVelocity(dt);
     rosh.tickPools();

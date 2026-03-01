@@ -21,7 +21,7 @@ from typing import Any
 
 from pathlib import Path
 
-from rosh_lang.model import Programme
+from rosh_lang.model import PrintStatement, Programme, SayStatement
 from rosh_lang.runtime import Runtime
 from rosh_lang.sounds import generate_sound_params
 from rosh_lang.targets._js_codegen import compile_programme
@@ -46,12 +46,18 @@ def render_phaser(
     search_paths: list[Path] | None = None,
 ) -> str:
     """Render a programme as a Phaser game in HTML."""
-    # Run Python runtime for initial state
+    # Run Python runtime for initial state (top-level creates/sets).
+    # Filter out print/say — JS codegen already emits appendOutput() for those.
+    filtered = Programme(
+        statements=[
+            s for s in programme.statements
+            if not isinstance(s, (PrintStatement, SayStatement))
+        ],
+        source=programme.source,
+    )
     buf = io.StringIO()
     rt = Runtime(output=buf, search_paths=search_paths)
-    rt.run(programme)
-
-    text_output = buf.getvalue()
+    rt.run(filtered)
 
     # Collect renderable objects and their assets
     objects = _collect_objects(rt.state)
@@ -110,14 +116,6 @@ def render_phaser(
 
     # Phaser renderer layer (always included — it creates the game)
     script_parts.extend(["", "// ── Phaser renderer ──", JS_RUNTIME_PHASER])
-
-    # Print output injected after Phaser init via appendOutput
-    if text_output.strip():
-        lines = text_output.rstrip("\n").split("\n")
-        for line in lines:
-            script_parts.append(
-                f'rosh.appendOutput("{_escape_js(line)}");'
-            )
 
     script_block = "\n".join(script_parts)
 
@@ -183,17 +181,6 @@ try {{
   </script>
 </body>
 </html>"""
-
-
-def _escape_js(s: str) -> str:
-    """Escape a string for embedding in a JS string literal."""
-    return (
-        s.replace("\\", "\\\\")
-        .replace('"', '\\"')
-        .replace("'", "\\'")
-        .replace("\n", "\\n")
-        .replace("\r", "\\r")
-    )
 
 
 # ── HTTP server ───────────────────────────────────────────────

@@ -10,7 +10,6 @@ set ship.y to 0.9
 set ship.width to 0.12
 set ship.height to 0.05
 set ship.color to "#00ff88"
-set ship.label to "player"
 
 create number speed
 set speed to 0.02

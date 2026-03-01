@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from rosh_lang.model import (
+    AfterStatement,
     AnimateStatement,
     BlankStatement,
     CommentStatement,
@@ -346,6 +347,24 @@ class TestOn:
     def test_on_empty_raises(self) -> None:
         with pytest.raises(ParseError, match="on requires"):
             parse_string("on")
+
+    def test_on_space_key_condition(self) -> None:
+        """on keydown when key == ' ' send fire → condition should preserve the space."""
+        prog = parse_string('on keydown when key == " " send fire')
+        stmt = prog.statements[0]
+        assert isinstance(stmt, OnStatement)
+        assert stmt.event == "keydown"
+        assert stmt.condition == 'key == " "'
+        assert stmt.action == "send"
+        assert stmt.args == "fire"
+
+    def test_on_unquoted_condition_unchanged(self) -> None:
+        """Normal unquoted conditions should still work."""
+        prog = parse_string("on update when score > 100 send win")
+        stmt = prog.statements[0]
+        assert stmt.condition == "score > 100"
+        assert stmt.action == "send"
+        assert stmt.args == "win"
 
 
 # ── Group 3: go, look ─────────────────────────────────────────
@@ -716,3 +735,34 @@ class TestAnimate:
     def test_missing_name(self) -> None:
         with pytest.raises(ParseError, match="animate requires"):
             parse_string("animate")
+
+
+# ── after ──────────────────────────────────────────────────────
+
+
+class TestAfter:
+    def test_basic_after(self) -> None:
+        prog = parse_string("after 2 send wave_2")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, AfterStatement)
+        assert stmt.delay == 2.0
+        assert stmt.event == "wave_2"
+
+    def test_float_delay(self) -> None:
+        prog = parse_string("after 0.5 send spawn")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, AfterStatement)
+        assert stmt.delay == 0.5
+        assert stmt.event == "spawn"
+
+    def test_missing_send(self) -> None:
+        with pytest.raises(ParseError, match="send"):
+            parse_string("after 2 fire wave")
+
+    def test_missing_event(self) -> None:
+        with pytest.raises(ParseError, match="after requires"):
+            parse_string("after 2 send")
+
+    def test_non_numeric_delay(self) -> None:
+        with pytest.raises(ParseError, match="number"):
+            parse_string("after soon send wave")

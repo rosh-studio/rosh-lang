@@ -1,0 +1,280 @@
+# Pong — arcade game with menu screen
+# Run: rosh examples/pong.rosh --target web --run
+
+# === SOUNDS ===
+sound hit "click tap"
+sound wall "click tap"
+sound point "coin collect"
+
+# === MODE: 0=menu, 1=1-player, 2=2-player ===
+create number mode
+set mode to 0
+
+# === SCOREBOARD ===
+create number score1
+set score1 to 0
+create number score2
+set score2 to 0
+
+create object lbl
+set lbl.x to 0.35
+set lbl.y to 0.01
+set lbl.width to 0.3
+set lbl.height to 0.06
+set lbl.color to "transparent"
+set lbl.label to "{score1} - {score2}"
+set lbl.visible to 0
+
+# === MIDLINE ===
+create object midline
+set midline.x to 0.498
+set midline.y to 0
+set midline.width to 0.004
+set midline.height to 1.0
+set midline.color to "#333355"
+set midline.visible to 0
+
+# === PADDLES ===
+create object p1
+set p1.x to 0.03
+set p1.y to 0.41
+set p1.width to 0.02
+set p1.height to 0.18
+set p1.color to "#00d2ff"
+set p1.visible to 0
+
+create object p2
+set p2.x to 0.95
+set p2.y to 0.41
+set p2.width to 0.02
+set p2.height to 0.18
+set p2.color to "#e94560"
+set p2.visible to 0
+
+# === BALL ===
+create object ball
+set ball.x to 0.49
+set ball.y to 0.49
+set ball.width to 0.025
+set ball.height to 0.025
+set ball.color to "#ffffff"
+set ball.vx to 0
+set ball.vy to 0
+set ball.visible to 0
+
+# === MENU OBJECTS ===
+create object title
+set title.x to 0.2
+set title.y to 0.15
+set title.width to 0.6
+set title.height to 0.1
+set title.color to "transparent"
+set title.label to "PONG"
+
+create object btn1p
+set btn1p.x to 0.3
+set btn1p.y to 0.45
+set btn1p.width to 0.4
+set btn1p.height to 0.1
+set btn1p.color to "#00d2ff"
+set btn1p.label to "1 Player"
+
+create object btn2p
+set btn2p.x to 0.3
+set btn2p.y to 0.65
+set btn2p.width to 0.4
+set btn2p.height to 0.1
+set btn2p.color to "#e94560"
+set btn2p.label to "2 Players"
+
+# === EVENTS ===
+event p1-scores
+event p2-scores
+event game-over
+event game-start
+event return-menu
+
+# === MENU CLICK HANDLERS ===
+when click btn1p
+  set mode to 1
+  send game-start
+end
+
+when click btn2p
+  set mode to 2
+  send game-start
+end
+
+# === GAME START ===
+when game-start
+  # hide menu
+  set title.visible to 0
+  set btn1p.visible to 0
+  set btn2p.visible to 0
+  # show game objects
+  set lbl.visible to 1
+  set midline.visible to 1
+  set p1.visible to 1
+  set p2.visible to 1
+  set ball.visible to 1
+  # reset scores
+  set score1 to 0
+  set score2 to 0
+  # reset positions
+  set p1.y to 0.41
+  set p2.y to 0.41
+  set ball.x to 0.49
+  set ball.y to 0.49
+  # serve ball
+  set ball.vx to 0.3
+  set ball.vy to 0.2
+  set _paused to 0
+  if mode == 1
+    print "1 PLAYER — W/S to move, P to pause"
+  else
+    print "2 PLAYERS — W/S vs Arrows, P to pause"
+  end
+end
+
+# === RETURN TO MENU ===
+when return-menu
+  set mode to 0
+  # stop ball
+  set ball.vx to 0
+  set ball.vy to 0
+  # hide game objects
+  set lbl.visible to 0
+  set midline.visible to 0
+  set p1.visible to 0
+  set p2.visible to 0
+  set ball.visible to 0
+  # show menu
+  set title.visible to 1
+  set btn1p.visible to 1
+  set btn2p.visible to 1
+end
+
+# === PAUSE (only during game) ===
+when keydown p
+  if mode != 0
+    if _paused == 0
+      set _paused to 1
+    else
+      set _paused to 0
+    end
+  end
+end
+
+# === CONTROLS ===
+when update
+  # P1: W / S (always active during game)
+  if _keys.w == 1
+    set p1.vy to -0.5
+  else
+    if _keys.s == 1
+      set p1.vy to 0.5
+    else
+      set p1.vy to 0
+    end
+  end
+  # P2: ArrowUp / ArrowDown (2-player only)
+  if mode == 2
+    if _keys.ArrowUp == 1
+      set p2.vy to -0.5
+    else
+      if _keys.ArrowDown == 1
+        set p2.vy to 0.5
+      else
+        set p2.vy to 0
+      end
+    end
+  end
+  # AI paddle (1-player only)
+  set _ai_diff to ball.y - p2.y
+  if mode == 1
+    if _ai_diff < 0.05
+      set p2.vy to -0.4
+    else
+      if _ai_diff > 0.13
+        set p2.vy to 0.4
+      else
+        set p2.vy to 0
+      end
+    end
+  end
+end
+
+# === PADDLE CLAMPING ===
+on update when p1.y < 0.02 set p1.y to 0.02
+on update when p1.y > 0.82 set p1.y to 0.82
+on update when p2.y < 0.02 set p2.y to 0.02
+on update when p2.y > 0.82 set p2.y to 0.82
+
+# === WALL BOUNCE ===
+when update
+  if ball.y < 0.02
+    set ball.y to 0.02
+    set ball.vy to ball.vy * -1
+    play wall
+  end
+  if ball.y > 0.95
+    set ball.y to 0.95
+    set ball.vy to ball.vy * -1
+    play wall
+  end
+end
+
+# === PADDLE COLLISION ===
+when collision ball p1
+  set ball.vx to ball.vx * -1
+  set ball.x to 0.06
+  play hit
+end
+
+when collision ball p2
+  set ball.vx to ball.vx * -1
+  set ball.x to 0.94
+  play hit
+end
+
+# === SCORING ===
+on update when ball.x > 1.05 send p1-scores
+on update when ball.x < -0.05 send p2-scores
+
+when p1-scores
+  set score1 to score1 + 1
+  set ball.x to 0.49
+  set ball.y to 0.49
+  set ball.vx to 0.3
+  set ball.vy to 0.2
+  play point
+  print "P1 scores! ({score1} - {score2})"
+end
+
+when p2-scores
+  set score2 to score2 + 1
+  set ball.x to 0.49
+  set ball.y to 0.49
+  set ball.vx to -0.3
+  set ball.vy to -0.2
+  play point
+  print "P2 scores! ({score1} - {score2})"
+end
+
+# === WIN CONDITION ===
+on p1-scores when score1 >= 5 send game-over
+on p2-scores when score2 >= 5 send game-over
+
+when game-over
+  if score1 > score2
+    print "GAME OVER — Player 1 wins! ({score1} - {score2})"
+  else
+    print "GAME OVER — Player 2 wins! ({score1} - {score2})"
+  end
+  send return-menu
+end
+
+# === START ===
+when start
+  print "PONG — Click a button to play"
+end

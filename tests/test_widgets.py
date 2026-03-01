@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from rosh_lang.model import (
+    AfterStatement,
     CreateStatement,
     DestroyStatement,
     OnStatement,
@@ -760,3 +761,18 @@ class TestCoinWidget:
         stmts = load_widget("coin", search_paths=[BUNDLED_DIR])
         sounds = [s for s in stmts if isinstance(s, SoundStatement)]
         assert any(s.name == "coin.chime" for s in sounds)
+
+
+# ── AfterStatement prefix passthrough ────────────────────────────
+
+
+class TestAfterWidgetPrefix:
+    def test_after_event_not_prefixed(self):
+        """after event names should stay global (not prefixed) — like send."""
+        from rosh_lang.widgets import _prefix_statement
+
+        stmt = AfterStatement(delay=2.0, event="wave_2")
+        result = _prefix_statement(stmt, "game")
+        assert isinstance(result, AfterStatement)
+        assert result.event == "wave_2"
+        assert result.delay == 2.0
