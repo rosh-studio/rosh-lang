@@ -303,6 +303,44 @@ class TestSetExecution:
         ])
         assert rt.state["obj"]["x"] == pytest.approx(0.503)
 
+    # Random
+    def test_set_random_bare(self) -> None:
+        """set x to random — produces float in [0, 1)."""
+        rt = _run([SetStatement(target="x", value="random")])
+        assert isinstance(rt.state["x"], float)
+        assert 0.0 <= rt.state["x"] < 1.0
+
+    def test_set_random_range(self) -> None:
+        """set x to random 0.1 0.9 — produces float in [0.1, 0.9)."""
+        rt = _run([SetStatement(target="x", value="random 0.1 0.9")])
+        assert isinstance(rt.state["x"], float)
+        assert 0.1 <= rt.state["x"] < 0.9
+
+    # Clamp
+    def test_set_clamp(self) -> None:
+        """set x to clamp x 0.0 1.0 — constrains to range."""
+        rt = _run([
+            SetStatement(target="x", value="1.5"),
+            SetStatement(target="x", value="clamp x 0.0 1.0"),
+        ])
+        assert rt.state["x"] == 1.0
+
+    def test_set_clamp_lower(self) -> None:
+        """Clamp enforces minimum."""
+        rt = _run([
+            SetStatement(target="x", value="-0.5"),
+            SetStatement(target="x", value="clamp x 0.0 1.0"),
+        ])
+        assert rt.state["x"] == 0.0
+
+    def test_set_clamp_within_range(self) -> None:
+        """Clamp leaves values within range unchanged."""
+        rt = _run([
+            SetStatement(target="x", value="0.5"),
+            SetStatement(target="x", value="clamp x 0.0 1.0"),
+        ])
+        assert rt.state["x"] == 0.5
+
 
 class TestWhenExecution:
     def test_when_registers_handler(self) -> None:
@@ -481,12 +519,14 @@ class TestEventExecution:
         rt = _run([EventStatement(name="score_changed", payload_fields=["old", "new"])])
         assert rt.event_registry["score_changed"] == ["old", "new"]
 
-    def test_event_duplicate_raises(self) -> None:
-        with pytest.raises(ValueError, match="already declared"):
-            _run([
-                EventStatement(name="alarm", payload_fields=[]),
-                EventStatement(name="alarm", payload_fields=[]),
-            ])
+    def test_event_duplicate_is_idempotent(self) -> None:
+        """Duplicate event declarations are allowed (widgets may auto-declare)."""
+        rt = _run([
+            EventStatement(name="alarm", payload_fields=[]),
+            EventStatement(name="alarm", payload_fields=["source"]),
+        ])
+        # Last declaration wins
+        assert rt.event_registry["alarm"] == ["source"]
 
 
 class TestSendExecution:
@@ -1199,6 +1239,57 @@ class TestIfExecution:
         buf = io.StringIO()
         run(prog, output=buf)
         assert buf.getvalue() == "dead\n"
+
+    def test_else_if_first_branch(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create number x\n'
+            'set x to 10\n'
+            'if x > 5\n'
+            '  print "big"\n'
+            'else if x > 3\n'
+            '  print "medium"\n'
+            'else\n'
+            '  print "small"\n'
+            'end\n'
+        )
+        buf = io.StringIO()
+        run(prog, output=buf)
+        assert buf.getvalue() == "big\n"
+
+    def test_else_if_middle_branch(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create number x\n'
+            'set x to 4\n'
+            'if x > 5\n'
+            '  print "big"\n'
+            'else if x > 3\n'
+            '  print "medium"\n'
+            'else\n'
+            '  print "small"\n'
+            'end\n'
+        )
+        buf = io.StringIO()
+        run(prog, output=buf)
+        assert buf.getvalue() == "medium\n"
+
+    def test_else_if_last_branch(self) -> None:
+        from rosh_lang.parser import parse_string
+        prog = parse_string(
+            'create number x\n'
+            'set x to 1\n'
+            'if x > 5\n'
+            '  print "big"\n'
+            'else if x > 3\n'
+            '  print "medium"\n'
+            'else\n'
+            '  print "small"\n'
+            'end\n'
+        )
+        buf = io.StringIO()
+        run(prog, output=buf)
+        assert buf.getvalue() == "small\n"
 
 
 class TestSceneExecution:

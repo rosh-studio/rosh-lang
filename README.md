@@ -45,9 +45,9 @@ rosh new game pong    # creates pong.rosh
 
 | Keyword | Syntax | Example |
 |---------|--------|---------|
-| `print` | `print "text"` | `print "hello {name}"` |
+| `print` | `print "text"` or bare `print` | `print "hello {name}"` / `print` (blank line) |
 | `create` | `create <kind> <name>` | `create object player` |
-| `set` | `set <target> to <value>` | `set score to score + 1` |
+| `set` | `set <target> to <value>` | `set score to score + 1` / `set x to random` / `set x to clamp x 0 1` |
 | `get` | `get <target>` | `get player` |
 | `say` | `say <text>` | `say hello everyone` |
 | `when` | `when <event> [then]` ... `end` | `when click` ... `end` |
@@ -82,9 +82,12 @@ Objects are created with `create object <name>` and configured with `set`:
 | `color` | string | Background color (hex or name) | #444 |
 | `label` | string | Text displayed on the object | (none) |
 | `sprite` | string | Sprite description for procedural generation | none |
-| `visible` | int | 0 hides the object, any other value shows it | 1 |
+| `visible` | int | 0 hides the object (cascades to children), any other shows | 1 |
 | `vx` | float | Horizontal velocity (per second) | none |
 | `vy` | float | Vertical velocity (per second) | none |
+| `text_color` | string | Text color for labels | #fff |
+| `font_size` | string | Font size for labels | 14px |
+| `_max_output` | int | Max console lines (set on global state, excess trimmed from top) | unlimited |
 
 Coordinates: `0.0`–`1.0` maps to percentage of the canvas. Values `>1.0` are treated as pixels.
 
@@ -106,9 +109,11 @@ Coordinates: `0.0`–`1.0` maps to percentage of the canvas. Values `>1.0` are t
 ### Control Flow
 
 ```
-# If/else
+# If/else/else-if (single end for chains)
 if score > 10
   print "high score!"
+else if score > 5
+  print "getting close!"
 else
   print "keep going"
 end
@@ -139,29 +144,32 @@ end
 
 ## Widgets
 
-Widgets are reusable `.rosh` components composed with `use`:
+Widgets are reusable components composed with `use`:
 
 ```
-use score label "Points" max 999
+use score x 0.5 text_color "#ffcc00" font_size "20px"
 use player speed 0.03
 use bullet count 3 vy -0.5
+use timer total 30 running 1
+use ball walls top-sides
+use hazard count 5 vy 0.3 spawn_rate 0.8
 ```
 
-### Available Widgets
+### Available Widgets (23)
 
 | Widget | Type | Config | Description |
 |--------|------|--------|-------------|
-| `score` | .rosh | `label max min` | Score display |
+| `score` | .py | `x y bg text_color font_size` | Score display |
 | `player` | .rosh | `speed` | Keyboard-controlled ship |
 | `counter` | .rosh | — | Click counter |
-| `timer` | .rosh | — | Countdown timer |
-| `health-bar` | .rosh | — | Health display |
-| `lives` | .rosh | — | Lives counter |
+| `timer` | .py | `total running x y bg text_color font_size` | Auto-tick countdown (fires timer_done) |
+| `health-bar` | .py | `max current x y bg text_color font_size` | Health display |
+| `lives` | .py | `count x y bg text_color font_size` | Lives counter |
 | `button` | .rosh | — | Clickable button |
-| `label` | .rosh | — | Text label with interpolation |
-| `fps` | .rosh | — | FPS counter |
-| `message` | .rosh | — | Overlay message box |
-| `title-screen` | .rosh | — | Title screen |
+| `label` | .py | `text x y bg text_color font_size` | Text label with interpolation |
+| `fps` | .py | `x y bg text_color font_size` | FPS counter |
+| `message` | .py | `text x y bg text_color font_size` | Overlay message box |
+| `title-screen` | .py | `title subtitle bg text_color font_size` | Title screen |
 | `coin` | .rosh | — | Collectible with sprite + sound |
 | `grid` | .py | `rows cols size gap color` | Configurable cell grid |
 | `enemy-grid` | .py | `rows cols size gap color` | Enemy formation with drift |
@@ -169,6 +177,9 @@ use bullet count 3 vy -0.5
 | `bullet` | .py | `count vx vy color` | Pooled projectiles |
 | `explosion` | .py | `count color` | Pooled explosion effects |
 | `animation` | .py | `target sheet frames speed mode` | Spritesheet animation |
+| `game-lifecycle` | .py | `title subtitle bg text_color font_size` | Title → playing → over flow |
+| `ball` | .py | `x y size color vx vy walls` | Bouncing ball with wall bounce |
+| `hazard` | .py | `count vx vy color width height sprite spawn_rate` | Auto-spawning obstacle pool |
 
 List widgets from the CLI:
 
@@ -195,10 +206,11 @@ rosh game.rosh --target phaser --run
 ## Example: Space Shooter
 
 ```
-# Score and player
+# Score and player (auto-movement + clamp)
 use score
-use player speed 0.03
-sprite player.ship "green spaceship"
+use lives count 3
+use player speed 0.03 move x
+sprite player "green spaceship"
 
 # Bullet pool
 use bullet count 3 vy -0.5 color "#ffff00"
@@ -216,8 +228,8 @@ sound laser "laser shoot"
 sound hit "explosion hit"
 
 # Controls: space to shoot
-on keydown when key == " " set bullet._x to player.ship.x
-on keydown when key == " " set bullet._y to player.ship.y
+on keydown when key == " " set bullet._x to player.x
+on keydown when key == " " set bullet._y to player.y
 on keydown when key == " " set bullet._fire to 1
 on keydown when key == " " play laser
 

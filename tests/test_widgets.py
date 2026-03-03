@@ -10,6 +10,7 @@ from rosh_lang.model import (
     AfterStatement,
     CreateStatement,
     DestroyStatement,
+    IfStatement,
     OnStatement,
     PlayStatement,
     PrintStatement,
@@ -199,13 +200,13 @@ class TestLoadWidget:
         assert stmts == []
 
     def test_load_player_widget(self):
-        stmts = load_widget("player", search_paths=[WIDGETS_DIR])
+        stmts = load_widget("player", search_paths=[BUNDLED_DIR])
         creates = [s for s in stmts if isinstance(s, CreateStatement)]
-        assert any(c.name == "player.ship" for c in creates)
+        assert any(c.name == "player" for c in creates)  # _self → player
         assert any(c.name == "player.speed" for c in creates)
 
     def test_config_override_applied_after_widget(self):
-        stmts = load_widget("player", config={"speed": "0.05"}, search_paths=[WIDGETS_DIR])
+        stmts = load_widget("player", config={"speed": "0.05"}, search_paths=[BUNDLED_DIR])
         # Config set should be the last statement
         sets = [s for s in stmts if isinstance(s, SetStatement)]
         last_speed = [s for s in sets if s.target == "player.speed"]
@@ -220,17 +221,17 @@ class TestBundledLibrary:
         assert BUNDLED_DIR.is_dir()
 
     def test_bundled_score_widget_exists(self):
-        assert (BUNDLED_DIR / "score.rosh").is_file()
+        assert (BUNDLED_DIR / "score.py").is_file()
 
     def test_find_bundled_widget(self):
         """Widgets found even from arbitrary CWD (bundled path is absolute)."""
         result = find_widget("score", search_paths=[BUNDLED_DIR])
         assert result is not None
-        assert result.name == "score.rosh"
+        assert result.name == "score.py"
 
     def test_bundled_widgets_count(self):
-        """At least 10 widgets bundled."""
-        widgets = list(BUNDLED_DIR.glob("*.rosh"))
+        """At least 10 widgets bundled (.rosh + .py)."""
+        widgets = list(BUNDLED_DIR.glob("*.rosh")) + list(BUNDLED_DIR.glob("*.py"))
         assert len(widgets) >= 10
 
     def test_local_overrides_bundled(self, tmp_path: Path):
@@ -246,20 +247,21 @@ class TestBundledLibrary:
 
 class TestParseMetadata:
     def test_parse_score_metadata(self):
-        meta = parse_metadata(BUNDLED_DIR / "score.rosh")
+        meta = parse_metadata(BUNDLED_DIR / "score.py")
         assert meta["widget"] == "score"
-        assert meta["version"] == "0.1"
+        assert meta["version"] == "0.2"
         assert meta["description"] == "Score display with current value and label"
-        assert meta["config"] == {"max": "999"}
+        assert meta["config"] == {"x": "0.02", "y": "0.02", "bg": "#333", "text_color": "#fff", "font_size": "14px"}
 
     def test_parse_player_metadata(self):
-        meta = parse_metadata(BUNDLED_DIR / "player.rosh")
+        meta = parse_metadata(BUNDLED_DIR / "player.py")
         assert meta["widget"] == "player"
-        assert meta["config"] == {"speed": "0.02"}
+        assert "speed" in meta["config"]
+        assert meta["config"]["speed"] == "0.02"
 
     def test_parse_licence_field(self):
         """Bundled widgets should declare Rosh-BSL licence."""
-        meta = parse_metadata(BUNDLED_DIR / "score.rosh")
+        meta = parse_metadata(BUNDLED_DIR / "score.py")
         assert meta["licence"] == "Rosh-BSL"
 
     def test_parse_no_metadata(self, tmp_path: Path):
@@ -633,7 +635,7 @@ class TestMessageWidget:
         assert label_sets[-1].value == "Game Over"
 
     def test_metadata(self):
-        meta = parse_metadata(BUNDLED_DIR / "message.rosh")
+        meta = parse_metadata(BUNDLED_DIR / "message.py")
         assert meta["widget"] == "message"
         assert meta["licence"] == "Rosh-BSL"
 
@@ -654,7 +656,7 @@ class TestTitleScreenWidget:
         assert title_sets[-1].value == "Space Invaders"
 
     def test_metadata(self):
-        meta = parse_metadata(BUNDLED_DIR / "title-screen.rosh")
+        meta = parse_metadata(BUNDLED_DIR / "title-screen.py")
         assert meta["widget"] == "title-screen"
 
 
@@ -776,3 +778,183 @@ class TestAfterWidgetPrefix:
         assert isinstance(result, AfterStatement)
         assert result.event == "wave_2"
         assert result.delay == 2.0
+
+
+# ── New widget tests ───────────────────────────────────────────────
+
+
+class TestTimerWidget:
+    def test_load(self):
+        stmts = load_widget("timer", search_paths=[BUNDLED_DIR])
+        creates = [s for s in stmts if isinstance(s, CreateStatement)]
+        assert any(c.name == "timer.seconds" for c in creates)
+        assert any(c.name == "timer._timer_total" for c in creates)
+        assert any(c.name == "timer._timer_running" for c in creates)
+
+    def test_config_total(self):
+        stmts = load_widget("timer", config={"total": "30"}, search_paths=[BUNDLED_DIR])
+        sets = [s for s in stmts if isinstance(s, SetStatement)]
+        total_sets = [s for s in sets if s.target == "timer._timer_total"]
+        assert total_sets[-1].value == "30"
+
+    def test_display_has_text_color(self):
+        stmts = load_widget("timer", config={"text_color": "#ffcc00"}, search_paths=[BUNDLED_DIR])
+        sets = [s for s in stmts if isinstance(s, SetStatement)]
+        tc = [s for s in sets if s.target == "timer.display.text_color"]
+        assert tc[-1].value == "#ffcc00"
+
+
+class TestGameLifecycleWidget:
+    def test_load(self):
+        stmts = load_widget("game-lifecycle", search_paths=[BUNDLED_DIR])
+        creates = [s for s in stmts if isinstance(s, CreateStatement)]
+        names = [c.name for c in creates]
+        assert "game-lifecycle.phase" in names
+        assert "game-lifecycle.title_heading" in names
+        assert "game-lifecycle.over_heading" in names
+
+    def test_phase_starts_title(self):
+        stmts = load_widget("game-lifecycle", search_paths=[BUNDLED_DIR])
+        sets = [s for s in stmts if isinstance(s, SetStatement)]
+        phase_sets = [s for s in sets if s.target == "game-lifecycle.phase"]
+        assert phase_sets[0].value == '"title"'
+
+    def test_config_title(self):
+        stmts = load_widget("game-lifecycle", config={"title": "Space Pong"}, search_paths=[BUNDLED_DIR])
+        sets = [s for s in stmts if isinstance(s, SetStatement)]
+        heading = [s for s in sets if s.target == "game-lifecycle.title_heading.label"]
+        assert heading[0].value == '"Space Pong"'
+
+
+class TestBallWidget:
+    def test_load(self):
+        stmts = load_widget("ball", search_paths=[BUNDLED_DIR])
+        creates = [s for s in stmts if isinstance(s, CreateStatement)]
+        assert any(c.name == "ball" for c in creates)
+
+    def test_wall_bounce_all(self):
+        """Default 'all' walls should produce 8 on-statements (4 walls × 2)."""
+        stmts = load_widget("ball", search_paths=[BUNDLED_DIR])
+        ons = [s for s in stmts if isinstance(s, OnStatement)]
+        assert len(ons) == 8
+
+    def test_wall_bounce_top_sides(self):
+        """'top-sides' walls should produce 6 on-statements (3 walls × 2)."""
+        stmts = load_widget("ball", config={"walls": "top-sides"}, search_paths=[BUNDLED_DIR])
+        ons = [s for s in stmts if isinstance(s, OnStatement)]
+        assert len(ons) == 6
+
+    def test_bounce_sound(self):
+        stmts = load_widget("ball", search_paths=[BUNDLED_DIR])
+        sounds = [s for s in stmts if isinstance(s, SoundStatement)]
+        assert any(s.name == "ball.bounce" for s in sounds)
+
+
+class TestPlayerWidget:
+    def test_load(self):
+        stmts = load_widget("player", search_paths=[BUNDLED_DIR])
+        creates = [s for s in stmts if isinstance(s, CreateStatement)]
+        assert any(c.name == "player" for c in creates)
+        assert any(c.name == "player.speed" for c in creates)
+
+    def test_movement_handlers(self):
+        """Default arrows keys should generate 4 IfStatements in a when-update block."""
+        stmts = load_widget("player", search_paths=[BUNDLED_DIR])
+        ifs = [s for s in stmts if isinstance(s, IfStatement)]
+        assert len(ifs) == 4
+        # Verify _keys is NOT prefixed (it's a global)
+        assert any("_keys.ArrowLeft" in i.condition for i in ifs)
+
+    def test_clamp_statements(self):
+        stmts = load_widget("player", search_paths=[BUNDLED_DIR])
+        ons = [s for s in stmts if isinstance(s, OnStatement)]
+        assert any("clamp player.x" in o.args for o in ons)
+        assert any("clamp player.y" in o.args for o in ons)
+
+    def test_horizontal_only(self):
+        stmts = load_widget("player", config={"move": "x"}, search_paths=[BUNDLED_DIR])
+        ifs = [s for s in stmts if isinstance(s, IfStatement)]
+        assert len(ifs) == 2
+        assert all("x" in i.then_body[0].target for i in ifs if isinstance(i, IfStatement))
+
+    def test_no_movement(self):
+        stmts = load_widget("player", config={"move": "none"}, search_paths=[BUNDLED_DIR])
+        ifs = [s for s in stmts if isinstance(s, IfStatement)]
+        assert len(ifs) == 0
+
+    def test_wasd_keys(self):
+        stmts = load_widget("player", config={"keys": "wasd"}, search_paths=[BUNDLED_DIR])
+        ifs = [s for s in stmts if isinstance(s, IfStatement)]
+        assert any("_keys.a" in i.condition for i in ifs)
+        assert any("_keys.w" in i.condition for i in ifs)
+
+
+class TestLivesWidget:
+    def test_auto_gameover_default(self):
+        """Lives widget should generate check-lives → game-over by default."""
+        stmts = load_widget("lives", search_paths=[BUNDLED_DIR])
+        ons = [s for s in stmts if isinstance(s, OnStatement)]
+        assert any(
+            o.event == "check-lives" and "game-over" in o.args and "lives.count <= 0" in o.condition
+            for o in ons
+        )
+
+    def test_auto_gameover_disabled(self):
+        stmts = load_widget("lives", config={"auto_gameover": "0"}, search_paths=[BUNDLED_DIR])
+        ons = [s for s in stmts if isinstance(s, OnStatement)]
+        assert not any(o.event == "check-lives" for o in ons)
+
+
+class TestHazardWidget:
+    def test_load(self):
+        stmts = load_widget("hazard", search_paths=[BUNDLED_DIR])
+        creates = [s for s in stmts if isinstance(s, CreateStatement)]
+        obj_creates = [c for c in creates if c.name.startswith("hazard.b")]
+        assert len(obj_creates) == 5
+
+    def test_spawn_rate(self):
+        stmts = load_widget("hazard", search_paths=[BUNDLED_DIR])
+        sets = [s for s in stmts if isinstance(s, SetStatement)]
+        rate = [s for s in sets if s.target == "hazard._spawn_rate"]
+        assert rate[0].value == "0.8"
+
+    def test_config_count(self):
+        stmts = load_widget("hazard", config={"count": "3"}, search_paths=[BUNDLED_DIR])
+        creates = [s for s in stmts if isinstance(s, CreateStatement)]
+        obj_creates = [c for c in creates if c.name.startswith("hazard.b")]
+        assert len(obj_creates) == 3
+
+
+class TestPrefixRandomClamp:
+    """Verify that random and clamp values survive widget prefixing."""
+
+    def test_prefix_random_bare(self):
+        from rosh_lang.widgets import _prefix_set_value
+        result = _prefix_set_value("x", "random", "ns")
+        assert result == "random"
+
+    def test_prefix_random_range(self):
+        from rosh_lang.widgets import _prefix_set_value
+        result = _prefix_set_value("x", "random 0.1 0.9", "ns")
+        assert result == "random 0.1 0.9"
+
+    def test_prefix_clamp(self):
+        from rosh_lang.widgets import _prefix_set_value
+        result = _prefix_set_value("x", "clamp paddle.x 0.02 0.8", "ns")
+        assert result == "clamp ns.paddle.x 0.02 0.8"
+
+
+class TestTextColorFontSize:
+    """Verify text_color and font_size in compiled output."""
+
+    def test_score_widget_has_text_color(self):
+        stmts = load_widget("score", search_paths=[BUNDLED_DIR])
+        sets = [s for s in stmts if isinstance(s, SetStatement)]
+        tc = [s for s in sets if s.target == "score.display.text_color"]
+        assert len(tc) >= 1
+
+    def test_score_config_font_size(self):
+        stmts = load_widget("score", config={"font_size": "20px"}, search_paths=[BUNDLED_DIR])
+        sets = [s for s in stmts if isinstance(s, SetStatement)]
+        fs = [s for s in sets if s.target == "score.display.font_size"]
+        assert fs[-1].value == "20px"

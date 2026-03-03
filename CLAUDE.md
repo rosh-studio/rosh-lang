@@ -31,8 +31,11 @@ uv tool install --from /path/to/rosh-lang rosh-lang --force
 
 ```
 print "text"                          # output ({var} interpolation)
+print                                 # blank line (no arguments)
 create object player                  # create object/number/string/list
 set player.x to 0.5                   # assign value (arithmetic: score + 1)
+set x to random                       # random 0.0–1.0 (or: random 0.1 0.9)
+set x to clamp x 0.02 0.8             # constrain to [min, max]
 get player                            # query state
 say hello                             # broadcast text
 when click                            # event handler block
@@ -44,6 +47,8 @@ event scored value                    # declare named event
 send scored 10                        # emit event
 if score > 10                         # branching
   print "win!"
+else if score > 5                     # else-if chain (single end)
+  print "close!"
 else
   print "keep going"
 end
@@ -71,12 +76,15 @@ create scene level1                   # scene definition
 | `color` | string | Hex or named color |
 | `label` | string | Text on object (empty by default) |
 | `sprite` | string | Triggers procedural sprite generation |
-| `visible` | int | 0 hides, any other shows |
+| `visible` | int | 0 hides, any other shows (cascades to children) |
 | `vx`, `vy` | float | Velocity (per second) |
+| `text_color` | string | Text color (default #fff) |
+| `font_size` | string | Font size (default 14px) |
+| `_max_output` | int | Max console lines (excess trimmed from top) |
 
 ## Events
 
-`start`, `update` (dt), `click` (x,y), `click_<name>` (x,y), `keydown` (key), `keyup` (key), `collision` (a,b), `scene_enter` (scene), `scene_exit` (scene), `destroy` (name).
+`start`, `update` (dt), `click` (x,y), `click_<name>` (x,y), `keydown` (key), `keyup` (key), `collision` (a,b), `scene_enter` (scene), `scene_exit` (scene), `destroy` (name), `timer_done` (name), `game_start`, `game_over`, `game_restart`.
 
 Key-hold: `_keys.ArrowLeft == 1` inside `when update`.
 
@@ -84,9 +92,11 @@ Key-hold: `_keys.ArrowLeft == 1` inside `when update`.
 
 ```
 # Minimal game: player moves, shoots, scores
+set _max_output to 3
 use score
-use player speed 0.03
-sprite player.ship "green spaceship"
+use lives count 3
+use player speed 0.03 move x
+sprite player "green spaceship"
 
 use bullet count 3 vy -0.5 color "#ffff00"
 
@@ -100,8 +110,8 @@ sprite enemy "red alien"
 sound laser "laser shoot"
 sound hit "explosion hit"
 
-on keydown when key == " " set bullet._x to player.ship.x
-on keydown when key == " " set bullet._y to player.ship.y
+on keydown when key == " " set bullet._x to player.x
+on keydown when key == " " set bullet._y to player.y
 on keydown when key == " " set bullet._fire to 1
 on keydown when key == " " play laser
 
@@ -109,25 +119,30 @@ when collision bullet.* enemy
   set score.value to score.value + 1
   play hit
 end
+
+# game-over auto-fires when lives.count hits 0
+when game-over
+  print "GAME OVER — Score: {score.value}"
+end
 ```
 
 Run: `rosh game.rosh --target web --run`
 
-## Widget Library (19 Widgets)
+## Widget Library (23 Widgets)
 
 | Widget | Type | Config | Purpose |
 |--------|------|--------|---------|
-| `score` | .rosh | `label max min` | Score display |
-| `player` | .rosh | `speed` | Keyboard ship |
+| `score` | .py | `x y bg text_color font_size` | Score display |
+| `player` | .py | `speed keys move x y width height color clamp_x_min clamp_x_max clamp_y_min clamp_y_max` | Keyboard ship with auto-movement |
 | `counter` | .rosh | — | Click counter |
-| `timer` | .rosh | — | Countdown |
-| `health-bar` | .rosh | — | Health display |
-| `lives` | .rosh | — | Lives counter |
+| `timer` | .py | `total running x y bg text_color font_size` | Auto-tick countdown (fires timer_done) |
+| `health-bar` | .py | `max current x y bg text_color font_size` | Health display |
+| `lives` | .py | `count auto_gameover x y bg text_color font_size` | Lives counter (auto game-over at 0) |
 | `button` | .rosh | — | Clickable button |
-| `label` | .rosh | — | Text label |
-| `fps` | .rosh | — | FPS counter |
-| `message` | .rosh | — | Overlay message |
-| `title-screen` | .rosh | — | Title screen |
+| `label` | .py | `text x y bg text_color font_size` | Text label |
+| `fps` | .py | `x y bg text_color font_size` | FPS counter |
+| `message` | .py | `text x y bg text_color font_size` | Overlay message |
+| `title-screen` | .py | `title subtitle bg text_color font_size` | Title screen |
 | `coin` | .rosh | — | Collectible |
 | `grid` | .py | `rows cols size gap color` | Cell grid |
 | `enemy-grid` | .py | `rows cols size gap color` | Enemy formation |
@@ -135,6 +150,9 @@ Run: `rosh game.rosh --target web --run`
 | `bullet` | .py | `count vx vy color` | Pooled projectiles |
 | `explosion` | .py | `count color` | Pooled explosions |
 | `animation` | .py | `target sheet frames speed mode` | Spritesheet |
+| `game-lifecycle` | .py | `title subtitle bg text_color font_size` | Title → playing → over flow |
+| `ball` | .py | `x y size color vx vy walls` | Bouncing ball with wall bounce |
+| `hazard` | .py | `count vx vy color width height sprite spawn_rate` | Auto-spawning obstacle pool |
 
 Use: `use <widget> [key value ...]` — config pairs override defaults.
 

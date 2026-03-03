@@ -815,3 +815,42 @@ class TestGamePause:
         html = render_html(prog)
         assert "state._paused = 0" in html
         assert "rosh.state._paused" in html
+
+
+class TestTextColorFontSize:
+    """text_color and font_size should appear in rendered HTML and JS runtime."""
+
+    def test_text_color_in_static_html(self):
+        prog = parse_string(
+            'create object box\n'
+            'set box.x to 0.1\n'
+            'set box.y to 0.1\n'
+            'set box.text_color to "#ffcc00"\n'
+            'set box.font_size to "20px"\n'
+        )
+        html = render_html(prog)
+        assert "#ffcc00" in html
+        assert "20px" in html
+
+    def test_text_color_in_js_runtime(self):
+        from rosh_lang.targets._js_runtime import JS_RUNTIME_DOM
+        assert "obj.text_color" in JS_RUNTIME_DOM
+        assert "obj.font_size" in JS_RUNTIME_DOM
+
+    def test_random_in_js_runtime(self):
+        from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE
+        assert "Math.random()" in JS_RUNTIME_CORE
+
+    def test_clamp_in_js_runtime(self):
+        from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE
+        assert "Math.max(clo, Math.min(chi, cval))" in JS_RUNTIME_CORE
+
+    def test_tick_timers_in_js_runtime(self):
+        from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE
+        assert "tickTimers" in JS_RUNTIME_CORE
+        assert "timer_done" in JS_RUNTIME_CORE
+
+    def test_group_visibility_in_js_runtime(self):
+        from rosh_lang.targets._js_runtime import JS_RUNTIME_DOM
+        assert "_gParent" in JS_RUNTIME_DOM
+        assert "_gParts" in JS_RUNTIME_DOM

@@ -108,7 +108,8 @@ JS_RUNTIME_PHASER = """\
       }
       rosh.send("update", {dt: dt});
       rosh.tickVelocity(dt);
-      rosh.tickPools();
+      rosh.tickPools(dt);
+      rosh.tickTimers(dt);
       rosh.tickAnimations(dt);
       checkCollisions();
       syncAll();
@@ -139,6 +140,17 @@ JS_RUNTIME_PHASER = """\
 
       // Visibility check: visible === 0 or visible === false hides the object
       var isVisible = !(obj.visible === 0 || obj.visible === false);
+      // Group visibility: if any parent namespace has visible === 0, hide
+      if (isVisible) {
+        var _gParts = name.split(".");
+        for (var _gi = 1; _gi < _gParts.length; _gi++) {
+          var _gParent = rosh.get(_gParts.slice(0, _gi).join("."));
+          if (_gParent && (_gParent.visible === 0 || _gParent.visible === false)) {
+            isVisible = false;
+            break;
+          }
+        }
+      }
       // Hide pool objects parked off-screen (either axis well below 0)
       if ((typeof obj.x === "number" && obj.x < -0.5) || (typeof obj.y === "number" && obj.y < -0.5)) {
         isVisible = false;
@@ -202,14 +214,15 @@ JS_RUNTIME_PHASER = """\
         if (!labels[name]) {
           labels[name] = scene.add.text(x, y, labelText, {
             fontFamily: "system-ui, sans-serif",
-            fontSize: "14px",
-            color: "#ffffff",
+            fontSize: obj.font_size || "14px",
+            color: obj.text_color || "#ffffff",
             align: "center"
           });
           labels[name].setOrigin(0, 0);
         }
         labels[name].setPosition(x + 4, y + 4);
         labels[name].setText(labelText);
+        labels[name].setStyle({fontSize: obj.font_size || "14px", color: obj.text_color || "#ffffff"});
       } else if (labels[name]) {
         labels[name].destroy();
         delete labels[name];
@@ -258,7 +271,15 @@ JS_RUNTIME_PHASER = """\
   rosh.appendOutput = function(text) {
     if (outputText) {
       var cur = outputText.text || "";
-      outputText.setText(cur + text + "\\n");
+      var full = cur + text + "\\n";
+      var max = rosh.state._max_output;
+      if (typeof max === "number" && max > 0) {
+        var lines = full.split("\\n");
+        if (lines.length > max + 1) {
+          full = lines.slice(lines.length - max - 1).join("\\n");
+        }
+      }
+      outputText.setText(full);
     }
   };
   rosh.startLoop = function() { /* Phaser handles the loop */ };

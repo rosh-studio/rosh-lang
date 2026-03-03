@@ -66,9 +66,11 @@ class TestPrint:
         prog = parse_string('print "Health: {player.health}"')
         assert prog.statements[0].text == "Health: {player.health}"
 
-    def test_print_empty_raises(self) -> None:
-        with pytest.raises(ParseError, match="print requires text"):
-            parse_string("print")
+    def test_print_bare_blank_line(self) -> None:
+        """Bare `print` emits a blank line."""
+        prog = parse_string("print")
+        assert isinstance(prog.statements[0], PrintStatement)
+        assert prog.statements[0].text == ""
 
     def test_print_case_insensitive(self) -> None:
         prog = parse_string('PRINT "hello"')
@@ -674,6 +676,62 @@ class TestIf:
         assert isinstance(stmt, IfStatement)
         assert len(stmt.then_body) == 2
         assert len(stmt.else_body) == 1
+
+    def test_else_if_chain(self) -> None:
+        code = 'if x > 5\n  print "big"\nelse if x > 3\n  print "medium"\nelse\n  print "small"\nend'
+        prog = parse_string(code)
+        outer = prog.statements[0]
+        assert isinstance(outer, IfStatement)
+        assert outer.condition == "x > 5"
+        assert len(outer.then_body) == 1
+        # else body is a single nested IfStatement
+        assert len(outer.else_body) == 1
+        inner = outer.else_body[0]
+        assert isinstance(inner, IfStatement)
+        assert inner.condition == "x > 3"
+        assert len(inner.then_body) == 1
+        assert len(inner.else_body) == 1
+        assert isinstance(inner.else_body[0], PrintStatement)
+
+    def test_else_if_no_final_else(self) -> None:
+        code = 'if x > 5\n  print "big"\nelse if x > 3\n  print "medium"\nend'
+        prog = parse_string(code)
+        outer = prog.statements[0]
+        assert isinstance(outer, IfStatement)
+        inner = outer.else_body[0]
+        assert isinstance(inner, IfStatement)
+        assert inner.condition == "x > 3"
+        assert inner.else_body == []
+
+    def test_else_if_triple_chain(self) -> None:
+        code = (
+            'if x > 10\n  print "a"\n'
+            'else if x > 5\n  print "b"\n'
+            'else if x > 0\n  print "c"\n'
+            'else\n  print "d"\nend'
+        )
+        prog = parse_string(code)
+        outer = prog.statements[0]
+        assert isinstance(outer, IfStatement)
+        assert outer.condition == "x > 10"
+        mid = outer.else_body[0]
+        assert isinstance(mid, IfStatement)
+        assert mid.condition == "x > 5"
+        inner = mid.else_body[0]
+        assert isinstance(inner, IfStatement)
+        assert inner.condition == "x > 0"
+        assert len(inner.else_body) == 1
+        assert isinstance(inner.else_body[0], PrintStatement)
+
+    def test_traditional_else_if_separate_lines(self) -> None:
+        """else + if on separate lines still requires two end statements."""
+        code = 'if x > 5\n  print "big"\nelse\n  if x > 3\n    print "medium"\n  end\nend'
+        prog = parse_string(code)
+        outer = prog.statements[0]
+        assert isinstance(outer, IfStatement)
+        inner = outer.else_body[0]
+        assert isinstance(inner, IfStatement)
+        assert inner.condition == "x > 3"
 
 
 class TestErrors:

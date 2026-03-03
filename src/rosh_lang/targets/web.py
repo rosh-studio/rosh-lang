@@ -184,8 +184,10 @@ def _render_object(
     styles.append("justify-content: center")
     styles.append("box-sizing: border-box")
     styles.append("border-radius: 4px")
-    styles.append("color: #fff")
-    styles.append("font-size: 14px")
+    text_color = obj.get("text_color", "#fff")
+    font_size = obj.get("font_size", "14px")
+    styles.append(f"color: {escape(str(text_color))}")
+    styles.append(f"font-size: {escape(str(font_size))}")
     styles.append("font-family: system-ui, sans-serif")
 
     if not has_position:

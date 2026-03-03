@@ -1,0 +1,90 @@
+# Traffic Light — click-based state machine
+# Run: rosh examples/traffic-light.rosh --target web --run
+#
+# Pattern: if/else chains to cycle state on click
+# Shows: state management, if/else, click events, color changes
+
+# === STATE ===
+create number state
+set state to 0
+
+# === HOUSING ===
+create object housing
+set housing.x to 0.35
+set housing.y to 0.1
+set housing.width to 0.3
+set housing.height to 0.7
+set housing.color to "#222"
+
+# === LIGHTS ===
+create object red
+set red.x to 0.4
+set red.y to 0.15
+set red.width to 0.2
+set red.height to 0.15
+set red.color to "#ff0000"
+set red.label to "STOP"
+
+create object yellow
+set yellow.x to 0.4
+set yellow.y to 0.38
+set yellow.width to 0.2
+set yellow.height to 0.15
+set yellow.color to "#333"
+
+create object green
+set green.x to 0.4
+set green.y to 0.6
+set green.width to 0.2
+set green.height to 0.15
+set green.color to "#333"
+
+# === STATUS LABEL ===
+create object status
+set status.x to 0.25
+set status.y to 0.85
+set status.width to 0.5
+set status.height to 0.08
+set status.color to "#444"
+set status.label to "Click a light to change"
+
+# === CLICK TO CYCLE ===
+when click red
+  set state to 1
+  set red.color to "#333"
+  set yellow.color to "#ffcc00"
+  set green.color to "#333"
+  set red.label to ""
+  set yellow.label to "READY"
+  set green.label to ""
+  set status.label to "Yellow — get ready"
+  print "Yellow light"
+end
+
+when click yellow
+  set state to 2
+  set red.color to "#333"
+  set yellow.color to "#333"
+  set green.color to "#00cc00"
+  set red.label to ""
+  set yellow.label to ""
+  set green.label to "GO"
+  set status.label to "Green — go!"
+  print "Green light"
+end
+
+when click green
+  set state to 0
+  set red.color to "#ff0000"
+  set yellow.color to "#333"
+  set green.color to "#333"
+  set red.label to "STOP"
+  set yellow.label to ""
+  set green.label to ""
+  set status.label to "Red — stop!"
+  print "Red light"
+end
+
+when start
+  print "Click the lights to cycle: Red → Yellow → Green → Red"
+end

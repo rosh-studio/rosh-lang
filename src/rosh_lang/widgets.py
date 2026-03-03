@@ -265,7 +265,18 @@ def _load_python_factory(
     merged_config.update(config)
 
     raw_stmts: list[Statement] = generate_fn(merged_config)
-    return [_prefix_statement(s, name) for s in raw_stmts]
+    prefixed = [_prefix_statement(s, name) for s in raw_stmts]
+
+    # Apply config overrides as set statements for keys not in METADATA config
+    # (e.g. dotted-path overrides like "box.label" or "display.x")
+    factory_keys = set(meta.get("config", {}).keys())
+    config_stmts: list[Statement] = []
+    for key, value in config.items():
+        if key not in factory_keys:
+            config_stmts.append(SetStatement(target=f"{name}.{key}", value=value))
+    prefixed.extend(config_stmts)
+
+    return prefixed
 
 
 def prefix_programme(programme: Programme, namespace: str) -> list[Statement]:
@@ -285,8 +296,8 @@ def _prefix_statement(stmt: Statement, ns: str) -> Statement:
     if isinstance(stmt, CreateStatement):
         return CreateStatement(
             kind=stmt.kind,
-            name=f"{ns}.{stmt.name}",
-            parent=f"{ns}.{stmt.parent}" if stmt.parent else "",
+            name=_prefix_name(stmt.name, ns),
+            parent=_prefix_name(stmt.parent, ns) if stmt.parent else "",
             count=stmt.count,
             line=stmt.line,
         )
@@ -390,8 +401,27 @@ def _prefix_statement(stmt: Statement, ns: str) -> Statement:
     return stmt
 
 
+# Runtime globals that should never be namespace-prefixed inside widgets.
+_GLOBAL_NAMES = frozenset({"_keys", "_paused", "_max_output", "_scene", "_prev_scene"})
+
+
 def _prefix_name(name: str, ns: str) -> str:
-    """Prefix a name: 'value' → 'ns.value', 'display.x' → 'ns.display.x'."""
+    """Prefix a name: 'value' → 'ns.value', 'display.x' → 'ns.display.x'.
+
+    Special case: '_self' maps to the namespace root, so factories can create
+    objects that live directly at the namespace level instead of nested inside it.
+    '_self' → 'ns', '_self.x' → 'ns.x'.
+
+    Global runtime names (_keys, _paused, etc.) are never prefixed.
+    """
+    if name == "_self":
+        return ns
+    if name.startswith("_self."):
+        return f"{ns}.{name[6:]}"
+    # Don't prefix global runtime names
+    root = name.split(".")[0]
+    if root in _GLOBAL_NAMES:
+        return name
     return f"{ns}.{name}"
 
 
@@ -407,6 +437,16 @@ def _prefix_set_value(target: str, value: str, ns: str) -> str:
         inner = value[1:-1]
         prefixed_inner = _prefix_interpolation(inner, ns)
         return value[0] + prefixed_inner + value[-1]
+
+    # Random: "random" stays as-is, "random min max" stays as-is (no names to prefix)
+    if value == "random" or (value.startswith("random ") and len(value.split()) == 3):
+        return value
+
+    # Clamp: "clamp field min max" — prefix the field reference
+    if value.startswith("clamp "):
+        parts = value.split()
+        if len(parts) == 4:
+            return f"clamp {_prefix_name(parts[1], ns)} {parts[2]} {parts[3]}"
 
     # Arithmetic: "target + 1" → "ns.target + 1", "target + drift" → "ns.target + ns.drift"
     for op in ("+", "-", "*", "/"):

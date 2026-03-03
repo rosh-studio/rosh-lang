@@ -49,6 +49,21 @@ class TestEmitSet:
         result = compile_programme(prog)
         assert "score + 1" in result.init_code
 
+    def test_set_random(self):
+        prog = parse_string("set x to random")
+        result = compile_programme(prog)
+        assert '"random"' in result.init_code
+
+    def test_set_random_range(self):
+        prog = parse_string("set x to random 0.1 0.9")
+        result = compile_programme(prog)
+        assert '"random 0.1 0.9"' in result.init_code
+
+    def test_set_clamp(self):
+        prog = parse_string("create number x\nset x to clamp x 0.0 1.0")
+        result = compile_programme(prog)
+        assert '"clamp x 0.0 1.0"' in result.init_code
+
 
 class TestEmitDestroy:
     def test_destroy(self):
@@ -470,6 +485,21 @@ class TestIfCodegen:
         )
         result = compile_programme(prog)
         assert 'rosh.get("status") === "ready"' in result.init_code
+
+    def test_else_if_chain(self):
+        prog = parse_string(
+            'if x > 5\n'
+            '  print "big"\n'
+            'else if x > 3\n'
+            '  print "medium"\n'
+            'else\n'
+            '  print "small"\n'
+            'end\n'
+        )
+        result = compile_programme(prog)
+        assert 'rosh.get("x") > 5' in result.init_code
+        assert '} else {' in result.init_code
+        assert 'rosh.get("x") > 3' in result.init_code
 
 
 class TestSceneCodegen:

@@ -97,7 +97,7 @@ var rosh = (function() {
   }
 
   // ── Expression evaluator ──────────────────────────────
-  // Mirrors runtime.py _eval_set_value: quoted → arithmetic → int → float → raw
+  // Mirrors runtime.py _eval_set_value: quoted → random → clamp → arithmetic → int → float → raw
   function evalSetValue(target, raw) {
     if (typeof raw !== "string") return raw;
 
@@ -105,6 +105,28 @@ var rosh = (function() {
     if ((raw[0] === '"' && raw[raw.length-1] === '"') ||
         (raw[0] === "'" && raw[raw.length-1] === "'")) {
       return raw.slice(1, -1);
+    }
+
+    // Random: "random" or "random min max"
+    if (raw === "random") return Math.random();
+    if (raw.indexOf("random ") === 0) {
+      var rparts = raw.split(" ");
+      if (rparts.length === 3) {
+        var rlo = parseFloat(rparts[1]), rhi = parseFloat(rparts[2]);
+        if (!isNaN(rlo) && !isNaN(rhi)) return rlo + Math.random() * (rhi - rlo);
+      }
+    }
+
+    // Clamp: "clamp field min max"
+    if (raw.indexOf("clamp ") === 0) {
+      var cparts = raw.split(" ");
+      if (cparts.length === 4) {
+        var cval = get(cparts[1]);
+        if (typeof cval === "number") {
+          var clo = parseFloat(cparts[2]), chi = parseFloat(cparts[3]);
+          if (!isNaN(clo) && !isNaN(chi)) return Math.max(clo, Math.min(chi, cval));
+        }
+      }
     }
 
     // Arithmetic: left op right (variables or literals)
@@ -318,7 +340,21 @@ var rosh = (function() {
     }
   }
 
-  function tickPools() {
+  function tickPools(dt) {
+    // Auto-spawn: pools with _spawn_rate fire periodically
+    for (var key in state) {
+      if (!state[key] || typeof state[key] !== "object") continue;
+      if (typeof state[key]._pool_count !== "number") continue;
+      var rate = state[key]._spawn_rate;
+      if (typeof rate !== "number" || rate <= 0) continue;
+      state[key]._spawn_timer = (state[key]._spawn_timer || 0) + (dt || 0);
+      if (state[key]._spawn_timer >= rate) {
+        state[key]._spawn_timer = 0;
+        state[key]._fire = 1;
+        state[key]._x = Math.random();
+        state[key]._y = -0.05;
+      }
+    }
     for (var key in state) {
       if (!state[key] || typeof state[key] !== "object") continue;
       var poolCount = state[key]._pool_count;
@@ -368,6 +404,25 @@ var rosh = (function() {
         if (bobj.y > -1) active++;
       }
       state[key]._active = active;
+    }
+  }
+
+  function tickTimers(dt) {
+    for (var key in state) {
+      if (!state[key] || typeof state[key] !== "object") continue;
+      var total = state[key]._timer_total;
+      if (typeof total !== "number") continue;
+      if (!state[key]._timer_running) continue;
+      var prev = state[key].seconds;
+      if (typeof prev !== "number" || prev <= 0) continue;
+      var next = prev - dt;
+      if (next <= 0) {
+        state[key].seconds = 0;
+        state[key]._timer_running = 0;
+        send("timer_done", {name: key});
+      } else {
+        state[key].seconds = Math.round(next * 100) / 100;
+      }
     }
   }
 
@@ -449,6 +504,7 @@ var rosh = (function() {
     registerAnimation: registerAnimation,
     tickVelocity: tickVelocity,
     tickPools: tickPools,
+    tickTimers: tickTimers,
     tickAnimations: tickAnimations,
     createScene: createScene,
     setSceneProp: setSceneProp,
@@ -518,6 +574,21 @@ JS_RUNTIME_DOM = """\
         continue;
       }
 
+      // Group visibility: if any parent namespace has visible === 0, hide
+      var _gParts = name.split(".");
+      var _gHidden = false;
+      for (var _gi = 1; _gi < _gParts.length; _gi++) {
+        var _gParent = get(_gParts.slice(0, _gi).join("."));
+        if (_gParent && (_gParent.visible === 0 || _gParent.visible === false)) {
+          _gHidden = true;
+          break;
+        }
+      }
+      if (_gHidden) {
+        div.style.display = "none";
+        continue;
+      }
+
       var x = obj.x;
       var y = obj.y;
 
@@ -563,8 +634,8 @@ JS_RUNTIME_DOM = """\
       div.style.justifyContent = "center";
       div.style.boxSizing = "border-box";
       div.style.borderRadius = "4px";
-      div.style.color = "#fff";
-      div.style.fontSize = "14px";
+      div.style.color = obj.text_color || "#fff";
+      div.style.fontSize = obj.font_size || "14px";
       div.style.fontFamily = "system-ui, sans-serif";
     }
 
@@ -580,6 +651,13 @@ JS_RUNTIME_DOM = """\
   // ── Output ────────────────────────────────────────────
   function appendOutput(text) {
     output.textContent += text + "\\n";
+    var max = rosh.state._max_output;
+    if (typeof max === "number" && max > 0) {
+      var lines = output.textContent.split("\\n");
+      if (lines.length > max + 1) {
+        output.textContent = lines.slice(lines.length - max - 1).join("\\n");
+      }
+    }
     output.style.display = "block";
   }
 
@@ -675,7 +753,8 @@ JS_RUNTIME_DOM = """\
     }
     rosh.send("update", {dt: dt});
     rosh.tickVelocity(dt);
-    rosh.tickPools();
+    rosh.tickPools(dt);
+    rosh.tickTimers(dt);
     rosh.tickAnimations(dt);
     checkCollisions();
     syncAll();

@@ -1,0 +1,104 @@
+# demo: Breakout
+# description: Ball widget + clamp + styled HUD — paddle, bricks, explosions
+# badges: Keyboard, Game Loop, Widgets
+
+# Limit console to 3 lines so it doesn't eat the screen
+set _max_output to 3
+
+# === WIDGETS — styled HUD + ball with wall bounce ===
+use score text_color "#00ff88" font_size "16px"
+use lives count 3 text_color "#ff6666" font_size "16px"
+use explosion count 5
+use ball x 0.48 y 0.82 size 0.025 vx 0 vy 0 walls top-sides
+
+# === EVENTS ===
+event serve
+
+# === PADDLE ===
+create object paddle
+set paddle.x to 0.4
+set paddle.y to 0.88
+set paddle.width to 0.18
+set paddle.height to 0.03
+set paddle.color to "#00d2ff"
+
+# === BRICKS ===
+use enemy-grid rows 4 cols 8 spacing 0.08 drift 0 color "#e94560" sprite "red crystal"
+
+# === SOUNDS ===
+sound bounce "click tap"
+sound brick "hit impact"
+
+# === CONTROLS ===
+when update
+  if _keys.ArrowLeft == 1
+    set paddle.x to paddle.x - 0.015
+  end
+  if _keys.ArrowRight == 1
+    set paddle.x to paddle.x + 0.015
+  end
+end
+
+# Clamp paddle (one line!)
+on update set paddle.x to clamp paddle.x 0.02 0.8
+
+# === BALL FALLS OFF BOTTOM ===
+when update
+  if ball.y > 0.98
+    set lives.count to lives.count - 1
+    set ball.vx to 0
+    set ball.vy to 0
+    set ball.x to 0.48
+    set ball.y to 0.82
+    send check-lives
+    after 1 send serve
+  end
+end
+
+# === PADDLE COLLISION ===
+when collision ball paddle
+  set ball.vy to ball.vy * -1
+  set ball.y to 0.84
+  play bounce
+end
+
+# === BRICK COLLISION ===
+when collision ball enemy-grid.*
+  set ball.vy to ball.vy * -1
+  set score.value to score.value + 50
+  set explosion._x to b_x
+  set explosion._y to b_y
+  set explosion._fire to 1
+  play brick
+end
+
+# === GAME OVER (auto-fired by lives widget) ===
+when game-over
+  set ball.vx to 0
+  set ball.vy to 0
+  print "GAME OVER — Score: {score.value}"
+end
+
+# === SERVE ===
+when serve
+  if lives.count > 0
+    set ball.vx to 0.25
+    set ball.vy to 0.35
+  end
+end
+
+# === START ===
+when start
+  set score.value to 0
+  set lives.count to 3
+  print "Arrows move, Space serves"
+end
+
+when keydown " "
+  if ball.vx == 0
+    if ball.vy == 0
+      set ball.vx to 0.25
+      set ball.vy to 0.35
+    end
+  end
+end

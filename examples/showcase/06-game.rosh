@@ -2,6 +2,8 @@
 # description: Shoot or catch the falling ball — arrow keys move, space to fire
 # badges: Keyboard, Velocity, Game Loop
 
+set _max_output to 3
+
 create object player
 set player.x to 0.4
 set player.y to 0.8

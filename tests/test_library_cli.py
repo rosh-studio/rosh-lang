@@ -47,9 +47,9 @@ class TestLibraryInfo:
         result = _run_rosh("library", "info", "score")
         assert result.returncode == 0
         assert "score" in result.stdout
-        assert "0.1" in result.stdout
+        assert "0.2" in result.stdout
         assert "bundled" in result.stdout
-        assert "max=999" in result.stdout
+        assert "text_color" in result.stdout
 
     def test_info_missing_widget(self):
         result = _run_rosh("library", "info", "nonexistent")

@@ -5,6 +5,7 @@ Implements 17 keywords per BUILDING-ROSH.md Sections 5 & 7.
 
 from __future__ import annotations
 
+import random
 import re
 import sys
 import warnings
@@ -299,8 +300,7 @@ class Runtime:
         self.send(stmt.event, **payload)
 
     def _exec_event(self, stmt: EventStatement) -> None:
-        if stmt.name in self.event_registry:
-            raise ValueError(f"Event {stmt.name!r} already declared")
+        # Idempotent: widgets may auto-declare events that the game also declares
         self.event_registry[stmt.name] = list(stmt.payload_fields)
 
     def _exec_on(self, stmt: OnStatement) -> None:
@@ -544,12 +544,36 @@ class Runtime:
     def _eval_set_value(self, target: str, raw: str) -> Any:
         """Evaluate the value for a set statement.
 
-        Order: quoted string → arithmetic → int → float → raw string.
+        Order: quoted string → random → clamp → arithmetic → int → float → raw string.
         """
         # Quoted string
         if (raw.startswith('"') and raw.endswith('"')) or \
            (raw.startswith("'") and raw.endswith("'")):
             return raw[1:-1]
+
+        # Random: "random" or "random min max"
+        if raw == "random":
+            return random.random()
+        if raw.startswith("random "):
+            parts = raw.split()
+            if len(parts) == 3:
+                try:
+                    lo, hi = float(parts[1]), float(parts[2])
+                    return lo + random.random() * (hi - lo)
+                except ValueError:
+                    pass
+
+        # Clamp: "clamp field min max"
+        if raw.startswith("clamp "):
+            parts = raw.split()
+            if len(parts) == 4:
+                val = self._resolve(parts[1])
+                if isinstance(val, (int, float)):
+                    try:
+                        lo, hi = float(parts[2]), float(parts[3])
+                        return max(lo, min(hi, val))
+                    except ValueError:
+                        pass
 
         # Arithmetic: <left> <op> <right>
         arith = self._try_arithmetic(raw)

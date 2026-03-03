@@ -2,37 +2,24 @@
 # Run: rosh examples/space-invaders.rosh --target web --run
 
 # === WIDGETS ===
-use player speed 0.02
+use player speed 0.03 move x
 use enemy-grid rows 3 cols 6 drift 0.003
 use bullet
 use score
 use lives count 3
 use explosion
 
-# === CUSTOM EVENTS ===
-event check-lives
-event game-over
-
-# === PLAYER CONTROLS ===
-# Arrow keys move the ship left and right
-when keydown ArrowLeft
-  set player.ship.x to player.ship.x - 0.03
-end
-
-when keydown ArrowRight
-  set player.ship.x to player.ship.x + 0.03
-end
+# === EVENTS ===
 
 # Space bar fires a bullet from the player's position
 when keydown " "
-  set bullet._x to player.ship.x
-  set bullet._y to player.ship.y
+  set bullet._x to player.x
+  set bullet._y to player.y
   set bullet._fire to 1
 end
 
 # === COLLISIONS ===
 # Bullet hits an enemy — score up, both recycled
-# b_x/b_y from collision payload = position of the hit enemy
 when collision bullet.* enemy-grid.*
   set score.value to score.value + 100
   set explosion._x to b_x
@@ -42,18 +29,16 @@ when collision bullet.* enemy-grid.*
 end
 
 # Enemy reaches the player — lose a life
-when collision enemy-grid.* player.ship
+when collision enemy-grid.* player
   set lives.count to lives.count - 1
-  set explosion._x to player.ship.x
-  set explosion._y to player.ship.y
+  set explosion._x to player.x
+  set explosion._y to player.y
   set explosion._fire to 1
   play explosion.boom
   send check-lives
 end
 
-# === GAME OVER CHECK ===
-on check-lives when lives.count <= 0 send game-over
-
+# === GAME OVER (auto-fired by lives widget) ===
 when game-over
   print "GAME OVER — Final Score: {score.value}"
 end

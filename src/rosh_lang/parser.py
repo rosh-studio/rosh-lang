@@ -63,8 +63,15 @@ def parse_string(text: str, source: str = "<string>") -> Programme:
     """Parse a string of Rosh code into a Programme."""
     statements: list[Statement] = []
     for i, raw_line in enumerate(text.splitlines(), start=1):
-        stmt = _parse_line(raw_line, line=i, source=source)
-        statements.append(stmt)
+        stripped = raw_line.strip()
+        # "else if ..." → ElseStatement + IfStatement (same line number)
+        if stripped.lower().startswith("else ") and stripped[5:].strip().lower().startswith("if "):
+            statements.append(ElseStatement(line=i))
+            if_part = stripped[5:].strip()
+            statements.append(_parse_line(if_part, line=i, source=source))
+        else:
+            stmt = _parse_line(raw_line, line=i, source=source)
+            statements.append(stmt)
     # Post-pass: collect if/else/end blocks into IfStatement trees
     statements = _collect_if_blocks(statements, source=source)
     return Programme(statements=statements, source=source)
@@ -118,14 +125,14 @@ def _parse_line(raw: str, line: int, source: str) -> Statement:
 
 def _parse_print(line_text: str, line: int, source: str) -> PrintStatement:
     rest = line_text[len("print"):].strip()
+    if not rest:
+        return PrintStatement(text="", line=line)
     if rest.startswith('"') and rest.endswith('"'):
         text = rest[1:-1]
     elif rest.startswith("'") and rest.endswith("'"):
         text = rest[1:-1]
     else:
         text = rest
-    if not text:
-        raise ParseError("print requires text", line=line, source=source)
     return PrintStatement(text=text, line=line)
 
 
@@ -525,6 +532,17 @@ def _collect_one_if(
         if isinstance(s, ElseStatement):
             in_else = True
             i += 1
+            # else-if chain: if next stmt is IfStatement on the SAME line,
+            # it came from "else if ..." and shares the closing end
+            if i < len(stmts) and isinstance(stmts[i], IfStatement) and stmts[i].line == s.line:
+                nested_if, i = _collect_one_if(stmts, i, source)
+                else_body.append(nested_if)
+                return IfStatement(
+                    condition=if_stmt.condition,
+                    then_body=then_body,
+                    else_body=else_body,
+                    line=if_stmt.line,
+                ), i
             continue
 
         # End — closes this if block

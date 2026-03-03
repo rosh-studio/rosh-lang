@@ -4,22 +4,13 @@
 
 use starfield count 10
 use score
-use player speed 0.04
+use player speed 0.04 move x
 use enemy-grid rows 2 cols 4 drift 0.003 sprite "red alien"
 use bullet count 3
 
-# Arrow keys move the player ship
-when keydown ArrowLeft
-  set player.ship.x to player.ship.x - 0.04
-end
-
-when keydown ArrowRight
-  set player.ship.x to player.ship.x + 0.04
-end
-
 # Space fires the bullet from the player
 when keydown " "
-  set bullet._x to player.ship.x
+  set bullet._x to player.x
   set bullet._y to 0.85
   set bullet._fire to 1
   play bullet.pew
