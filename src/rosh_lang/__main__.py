@@ -60,7 +60,8 @@ HELP = f"""\
   --target terminal        Output to terminal (default)
   --target web             Render as HTML in browser
   --target phaser          Render as Phaser game in browser
-  --run                    Auto-open browser (web/phaser target)
+  --target threejs         Render as Three.js 3D scene in browser
+  --run                    Auto-open browser (web/phaser/threejs target)
 
 [rosh.heading]REPL commands[/]
   state                    Show non-internal state
@@ -279,7 +280,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--target", "-t",
-        choices=["terminal", "web", "phaser"],
+        choices=["terminal", "web", "phaser", "threejs"],
         default="terminal",
         help="Output target (default: terminal)",
     )
@@ -335,6 +336,9 @@ def main() -> None:
     elif args.target == "phaser":
         from rosh_lang.targets.phaser import serve_phaser
         serve_phaser(programme, auto_open=args.run)
+    elif args.target == "threejs":
+        from rosh_lang.targets.threejs import serve_threejs
+        serve_threejs(programme, auto_open=args.run)
     else:
         from rosh_lang.targets.terminal import run_terminal
         run_terminal(programme)

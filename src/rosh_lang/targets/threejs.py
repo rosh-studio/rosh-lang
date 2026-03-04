@@ -1,12 +1,11 @@
-"""Phaser target — render a Rosh programme as a Phaser game in HTML.
+"""Three.js target — render a Rosh programme as a 3D scene in HTML.
 
 Two entry points:
-- render_phaser(programme) → str   (testable, no I/O)
-- serve_phaser(programme, auto_open) (starts HTTP server)
+- render_threejs(programme) → str   (testable, no I/O)
+- serve_threejs(programme, auto_open) (starts HTTP server)
 
-Uses JS_RUNTIME_CORE (shared) + JS_RUNTIME_PHASER (Phaser renderer).
-Reuses helper functions from web.py (_collect_objects, _generate_sprite_data,
-_generate_audio_data, _is_interactive).
+Uses JS_RUNTIME_CORE (shared) + JS_RUNTIME_THREEJS (Three.js renderer).
+No 2D sprites or spritesheet animations — objects use color materials or GLB models.
 """
 
 from __future__ import annotations
@@ -26,26 +25,23 @@ from rosh_lang.runtime import Runtime
 from rosh_lang.sounds import generate_sound_params
 from rosh_lang.targets._js_codegen import compile_programme
 from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE
-from rosh_lang.targets._js_runtime_phaser import JS_RUNTIME_PHASER
-from rosh_lang.targets.web import (
-    _collect_objects,
-    _generate_animation_data,
-    _generate_audio_data,
-    _generate_sprite_data,
-)
+from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_THREEJS
+from rosh_lang.targets.web import _generate_audio_data
 
-PHASER_CDN = "https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"
+THREEJS_CDN = "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"
+ORBIT_CDN = "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"
+GLTF_CDN = "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"
 COPYRIGHT = "(c) Rosh Studio 2026 — rosh.cloud"
 
 
 # ── HTML generation ───────────────────────────────────────────
 
 
-def render_phaser(
+def render_threejs(
     programme: Programme,
     search_paths: list[Path] | None = None,
 ) -> str:
-    """Render a programme as a Phaser game in HTML."""
+    """Render a programme as a Three.js 3D scene in HTML."""
     # Run Python runtime for initial state (top-level creates/sets).
     # Filter out print/say — JS codegen already emits appendOutput() for those.
     filtered = Programme(
@@ -59,11 +55,7 @@ def render_phaser(
     rt = Runtime(output=buf, search_paths=search_paths)
     rt.run(filtered)
 
-    # Collect renderable objects and their assets
-    objects = _collect_objects(rt.state)
-    sprite_data = _generate_sprite_data(objects)
-
-    # Collect audio data
+    # Collect audio data (no sprites/animation in 3D)
     audio_data = _generate_audio_data(programme)
     for name, desc in rt.audio_registry.items():
         if name not in audio_data:
@@ -75,13 +67,6 @@ def render_phaser(
     # Build script block
     script_parts = [JS_RUNTIME_CORE, "", "// ── Init ──", compiled.init_code]
 
-    # Inject sprite data URIs
-    if sprite_data:
-        pairs = ", ".join(
-            f'"{escape(k)}": "{v}"' for k, v in sprite_data.items()
-        )
-        script_parts.append(f"rosh._spriteData = {{{pairs}}};")
-
     # Inject audio data
     if audio_data:
         audio_pairs = ", ".join(
@@ -90,40 +75,19 @@ def render_phaser(
         )
         script_parts.append(f"rosh._audioData = {{{audio_pairs}}};")
 
-    # Inject animation data (sliced spritesheet frames)
-    anim_data = _generate_animation_data(
-        programme, rt, search_paths=search_paths,
-    )
-    if anim_data:
-        anim_init_lines: list[str] = []
-        for anim_name, anim_info in anim_data.items():
-            frames_json = json.dumps(anim_info["frames"], separators=(",", ":"))
-            anim_init_lines.append(
-                f'rosh._animData["{anim_name}"] = '
-                f'{{"frames": {frames_json}, '
-                f'"speed": {anim_info["speed"]}, '
-                f'"mode": "{anim_info["mode"]}", '
-                f'"_frame": 0, "_elapsed": 0, "_dir": 1}};'
-            )
-            # Set initial sprite to frame 0
-            anim_init_lines.append(
-                f'rosh._spriteData["{anim_name}"] = {json.dumps(anim_info["frames"][0])};'
-            )
-        script_parts.extend(anim_init_lines)
-
     if compiled.has_handlers:
         script_parts.extend(["", "// ── Handlers ──", compiled.handler_code])
 
-    # Phaser renderer layer (always included — it creates the game)
-    script_parts.extend(["", "// ── Phaser renderer ──", JS_RUNTIME_PHASER])
+    # Three.js renderer layer (always included — it creates the scene)
+    script_parts.extend(["", "// ── Three.js renderer ──", JS_RUNTIME_THREEJS])
 
     script_block = "\n".join(script_parts)
 
-    return _phaser_html_page(script_block)
+    return _threejs_html_page(script_block)
 
 
-def _phaser_html_page(script: str) -> str:
-    """Build the full Phaser HTML page shell."""
+def _threejs_html_page(script: str) -> str:
+    """Build the full Three.js HTML page shell."""
     return f"""\
 <!DOCTYPE html>
 <html lang="en">
@@ -142,10 +106,10 @@ def _phaser_html_page(script: str) -> str:
       flex-direction: column;
       align-items: center;
     }}
-    #game-container {{
+    #scene-container {{
       margin-top: 16px;
     }}
-    #game-container canvas {{
+    #scene-container canvas {{
       display: block;
       border-radius: 4px;
       max-width: 100%;
@@ -166,12 +130,14 @@ def _phaser_html_page(script: str) -> str:
   </style>
 </head>
 <body>
-  <div id="game-container"></div>
+  <div id="scene-container"></div>
   <footer>{escape(COPYRIGHT)}</footer>
-  <script src="{PHASER_CDN}"></script>
+  <script src="{THREEJS_CDN}"></script>
+  <script src="{ORBIT_CDN}"></script>
+  <script src="{GLTF_CDN}"></script>
   <script>
-if (typeof Phaser === "undefined") {{
-  document.body.innerHTML = '<p style="color:red;padding:20px">Error: Phaser failed to load from CDN</p>';
+if (typeof THREE === "undefined") {{
+  document.body.innerHTML = '<p style="color:red;padding:20px">Error: Three.js failed to load from CDN</p>';
 }} else {{
 try {{
 {script}
@@ -188,14 +154,14 @@ try {{
 # ── HTTP server ───────────────────────────────────────────────
 
 
-def serve_phaser(
+def serve_threejs(
     programme: Programme,
     *,
     auto_open: bool = False,
     search_paths: list[Path] | None = None,
 ) -> None:
-    """Start an HTTP server that serves the Phaser-rendered programme."""
-    html = render_phaser(programme, search_paths=search_paths)
+    """Start an HTTP server that serves the Three.js-rendered programme."""
+    html = render_threejs(programme, search_paths=search_paths)
     html_bytes = html.encode("utf-8")
 
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -212,7 +178,7 @@ def serve_phaser(
     with socketserver.TCPServer(("", 0), Handler) as httpd:
         port = httpd.server_address[1]
         url = f"http://localhost:{port}"
-        print(f"Serving Phaser game at {url} — Ctrl-C to stop")
+        print(f"Serving Three.js scene at {url} — Ctrl-C to stop")
 
         if auto_open:
             webbrowser.open(url)

@@ -1,0 +1,35 @@
+# Three.js Hello — spinning cube and sphere
+# Demonstrates 3D primitives, rotation, and click interaction
+
+create object cube
+set cube.x to -2
+set cube.y to 1
+set cube.z to 0
+set cube.width to 1
+set cube.height to 1
+set cube.color to "cyan"
+set cube.shape to "cube"
+
+create object sphere
+set sphere.x to 2
+set sphere.y to 1
+set sphere.z to 0
+set sphere.width to 1
+set sphere.height to 1
+set sphere.color to "orange"
+set sphere.shape to "sphere"
+
+# Spin both objects
+on update set cube.ry to cube.ry + 0.02
+on update set sphere.ry to sphere.ry + 0.03
+
+# Click to change colors
+when click_cube
+  set cube.color to "magenta"
+end
+
+when click_sphere
+  set sphere.color to "green"
+end
+
+print "Click the objects to change their color!"

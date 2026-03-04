@@ -508,7 +508,12 @@ var rosh = (function() {
     tickAnimations: tickAnimations,
     createScene: createScene,
     setSceneProp: setSceneProp,
-    goScene: goScene
+    goScene: goScene,
+    // Stubs — renderer layers (DOM/Phaser/Three.js) override these
+    _outputBuffer: [],
+    appendOutput: function(text) { mod._outputBuffer.push(text); },
+    syncAll: function() {},
+    startLoop: function() {}
   };
   // Wire animation engine to the module's sprite data
   _spriteDataRef = mod._spriteData;

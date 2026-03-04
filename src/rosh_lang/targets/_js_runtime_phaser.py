@@ -62,7 +62,7 @@ JS_RUNTIME_PHASER = """\
       }
 
       // Output text object (pinned at bottom)
-      outputText = scene.add.text(16, H - 24, "", {
+      outputText = scene.add.text(16, H - 16, "", {
         fontFamily: '"SF Mono", "Fira Code", "Cascadia Code", monospace',
         fontSize: "13px",
         color: "#e0e0e0",
@@ -70,6 +70,7 @@ JS_RUNTIME_PHASER = """\
       });
       outputText.setOrigin(0, 1);
       outputText.setDepth(1000);
+      outputText.setScrollFactor(0);
 
       syncAll();
 
@@ -94,6 +95,12 @@ JS_RUNTIME_PHASER = """\
         }
         rosh.send("click", {x: nx, y: ny});
       });
+
+      // Flush any output buffered before Phaser scene was ready
+      if (rosh._outputBuffer && rosh._outputBuffer.length) {
+        rosh._outputBuffer.forEach(function(t) { rosh.appendOutput(t); });
+        rosh._outputBuffer = [];
+      }
 
       // Fire start event after scene is ready
       rosh.send("start", {});
