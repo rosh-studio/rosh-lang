@@ -53,6 +53,9 @@ HELP = f"""\
   rosh new [template] [name]  Scaffold a starter programme
   rosh library list        List available widgets
   rosh library info <name> Show widget details
+  rosh create "desc"       AI-generate a .rosh programme
+  rosh publish file.rosh   Upload to rosh.cloud
+  rosh config --key KEY    Save your rosh.cloud API key
   rosh --version           Show version
   rosh --help              Show this help
 
@@ -308,6 +311,24 @@ def main() -> None:
     if sys.argv[1] == "new":
         from rosh_lang.scaffolder import scaffold
         scaffold(sys.argv[2:])
+        return
+
+    # "rosh create ..." — AI generation
+    if sys.argv[1] == "create":
+        from rosh_lang.cloud import cmd_create
+        cmd_create(sys.argv[2:])
+        return
+
+    # "rosh publish ..." — upload to rosh.cloud
+    if sys.argv[1] == "publish":
+        from rosh_lang.cloud import cmd_publish
+        cmd_publish(sys.argv[2:])
+        return
+
+    # "rosh config ..." — API key management
+    if sys.argv[1] == "config":
+        from rosh_lang.cloud import cmd_config
+        cmd_config(sys.argv[2:])
         return
 
     parser = _build_parser()
