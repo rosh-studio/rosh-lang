@@ -14,6 +14,7 @@ from typing import Any, TextIO
 from rosh_lang.model import (
     AfterStatement,
     AnimateStatement,
+    BackgroundStatement,
     BlankStatement,
     CommentStatement,
     ConnectStatement,
@@ -132,6 +133,8 @@ class Runtime:
             self._exec_use(stmt)
         elif isinstance(stmt, AfterStatement):
             pass  # Terminal has no setTimeout — noop
+        elif isinstance(stmt, BackgroundStatement):
+            self.state["_background"] = stmt.value
         elif isinstance(stmt, (CommentStatement, BlankStatement, EndStatement)):
             pass
         return None

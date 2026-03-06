@@ -27,7 +27,7 @@ After code changes, reinstall:
 uv tool install --from /path/to/rosh-lang rosh-lang --force
 ```
 
-## Complete Syntax (21 Keywords)
+## Complete Syntax (22 Keywords)
 
 ```
 print "text"                          # output ({var} interpolation)
@@ -62,6 +62,7 @@ sound laser "laser shoot"             # procedural sound
 play laser                            # play sound (once/loop/stop)
 animate obj sheet "run.png" frames 4  # spritesheet animation
 after 3 send timeout                  # delayed event
+background "#1a1a2e"                  # canvas/scene background (colour or image)
 create scene level1                   # scene definition
 ```
 

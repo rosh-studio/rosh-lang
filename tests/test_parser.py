@@ -12,6 +12,7 @@ import pytest
 from rosh_lang.model import (
     AfterStatement,
     AnimateStatement,
+    BackgroundStatement,
     BlankStatement,
     CommentStatement,
     ConnectStatement,
@@ -537,6 +538,49 @@ class TestUse:
     def test_use_empty_raises(self) -> None:
         with pytest.raises(ParseError, match="use requires"):
             parse_string("use")
+
+
+# ── background ──────────────────────────────────────────────────
+
+
+class TestBackground:
+    def test_background_hex_colour(self) -> None:
+        prog = parse_string('background "#1a1a2e"')
+        stmt = prog.statements[0]
+        assert isinstance(stmt, BackgroundStatement)
+        assert stmt.value == "#1a1a2e"
+
+    def test_background_named_colour(self) -> None:
+        prog = parse_string("background darkblue")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, BackgroundStatement)
+        assert stmt.value == "darkblue"
+
+    def test_background_image_path(self) -> None:
+        prog = parse_string('background "sky.png"')
+        stmt = prog.statements[0]
+        assert isinstance(stmt, BackgroundStatement)
+        assert stmt.value == "sky.png"
+
+    def test_background_url(self) -> None:
+        prog = parse_string('background "https://example.com/bg.jpg"')
+        stmt = prog.statements[0]
+        assert isinstance(stmt, BackgroundStatement)
+        assert stmt.value == "https://example.com/bg.jpg"
+
+    def test_background_single_quotes(self) -> None:
+        prog = parse_string("background '#ff0000'")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, BackgroundStatement)
+        assert stmt.value == "#ff0000"
+
+    def test_background_empty_raises(self) -> None:
+        with pytest.raises(ParseError, match="background requires"):
+            parse_string("background")
+
+    def test_background_empty_quotes_raises(self) -> None:
+        with pytest.raises(ParseError, match="background requires"):
+            parse_string('background ""')
 
 
 # ── Comments, blanks, multi-line ───────────────────────────────

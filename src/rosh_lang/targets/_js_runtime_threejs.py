@@ -169,6 +169,18 @@ JS_RUNTIME_THREEJS = """\
 
   // ── Sync state → Three.js objects ────────────────────────
   function syncAll() {
+    // Apply background if changed
+    var bg = rosh.state._background;
+    if (bg && bg !== scene._appliedBg) {
+      if (rosh.state._backgroundType === "image") {
+        new THREE.TextureLoader().load(bg, function(tex) {
+          scene.background = tex;
+        });
+      } else {
+        scene.background = new THREE.Color(bg);
+      }
+      scene._appliedBg = bg;
+    }
     for (var name in rosh.objects) {
       var obj = rosh.get(name);
       if (!obj || typeof obj !== "object") {

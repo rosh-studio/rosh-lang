@@ -4,7 +4,7 @@ A programme is a list of statements. Each statement is a dataclass
 representing one line of Rosh code. The parser produces these;
 the runtime consumes them.
 
-17 keywords + comments + blanks, per BUILDING-ROSH.md Sections 4 & 7.
+22 keywords + comments + blanks, per BUILDING-ROSH.md Sections 4 & 7.
 """
 
 from __future__ import annotations
@@ -212,6 +212,14 @@ class UseStatement:
 
 
 @dataclass
+class BackgroundStatement:
+    """background "#1a1a2e" / background "sky.png" """
+
+    value: str  # colour string or image path/URL
+    line: int = 0
+
+
+@dataclass
 class CommentStatement:
     """# this is a comment"""
 
@@ -250,6 +258,7 @@ Statement = (
     | AnimateStatement
     | AfterStatement
     | UseStatement
+    | BackgroundStatement
     | CommentStatement
     | BlankStatement
 )

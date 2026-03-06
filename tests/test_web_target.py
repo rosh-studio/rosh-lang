@@ -854,3 +854,30 @@ class TestTextColorFontSize:
         from rosh_lang.targets._js_runtime import JS_RUNTIME_DOM
         assert "_gParent" in JS_RUNTIME_DOM
         assert "_gParts" in JS_RUNTIME_DOM
+
+
+class TestBackground:
+    def test_static_background_colour(self):
+        from rosh_lang.parser import parse_string
+        from rosh_lang.targets.web import render_html
+        html = render_html(parse_string('background "#ff0000"'))
+        assert "#ff0000" in html
+        # Default dark blue should NOT be present
+        assert "background: #16213e" not in html
+
+    def test_static_background_image(self):
+        from rosh_lang.parser import parse_string
+        from rosh_lang.targets.web import render_html
+        html = render_html(parse_string('background "sky.png"'))
+        assert "sky.png" in html
+        assert "background-image" in html
+
+    def test_default_background(self):
+        from rosh_lang.parser import parse_string
+        from rosh_lang.targets.web import render_html
+        html = render_html(parse_string('print "hello"'))
+        assert "#16213e" in html
+
+    def test_setbackground_in_js_runtime(self):
+        from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE
+        assert "setBackground" in JS_RUNTIME_CORE

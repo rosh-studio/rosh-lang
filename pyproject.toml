@@ -1,15 +1,31 @@
 [project]
 name = "rosh-lang"
-version = "0.5.0"
-description = "Rosh language — parser, runtime, and composition engine"
+version = "0.8.0"
+description = "One script, many worlds — a plain-English language for terminal, browser, and game engine"
 requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "Rosh-SAL"}
+authors = [{name = "Roger Dubar"}]
+keywords = ["language", "game", "plain-english", "transpiler", "phaser", "creative-coding"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Topic :: Games/Entertainment",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: Software Development :: Interpreters",
+]
 dependencies = [
-    "anthropic>=0.84.0",
     "rich>=13.0",
 ]
 
 [project.optional-dependencies]
+ai = ["anthropic>=0.84.0"]
 dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://rosh.cloud"
+Documentation = "https://rosh.cloud/docs"
+Repository = "https://github.com/roshstudio/rosh-lang"
 
 [project.scripts]
 rosh = "rosh_lang.__main__:main"
@@ -21,8 +37,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/rosh_lang"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"src/rosh_lang/library" = "rosh_lang/library"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

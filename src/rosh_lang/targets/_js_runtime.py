@@ -331,6 +331,19 @@ var rosh = (function() {
     };
   }
 
+  var _IMAGE_EXTS = /\\.(png|jpg|jpeg|gif|svg|webp)($|\\?)/i;
+
+  function setBackground(value) {
+    // Detect image vs colour: file extensions or URLs
+    if (_IMAGE_EXTS.test(value) || value.startsWith("http://") || value.startsWith("https://") || value.startsWith("data:")) {
+      state._background = value;
+      state._backgroundType = "image";
+    } else {
+      state._background = value;
+      state._backgroundType = "color";
+    }
+  }
+
   function tickVelocity(dt) {
     for (var name in objects) {
       var obj = get(name);
@@ -502,6 +515,7 @@ var rosh = (function() {
     playAudio: playAudio,
     registerSound: registerSound,
     registerAnimation: registerAnimation,
+    setBackground: setBackground,
     tickVelocity: tickVelocity,
     tickPools: tickPools,
     tickTimers: tickTimers,
@@ -551,6 +565,21 @@ JS_RUNTIME_DOM = """\
 
   // ── DOM sync ──────────────────────────────────────────
   function syncAll() {
+    // Apply background if changed
+    var bg = rosh.state._background;
+    if (bg && bg !== canvas._appliedBg) {
+      if (rosh.state._backgroundType === "image") {
+        canvas.style.backgroundImage = "url(" + bg + ")";
+        canvas.style.backgroundSize = "cover";
+        canvas.style.backgroundPosition = "center";
+        canvas.style.backgroundRepeat = "no-repeat";
+        canvas.style.backgroundColor = "";
+      } else {
+        canvas.style.backgroundColor = bg;
+        canvas.style.backgroundImage = "";
+      }
+      canvas._appliedBg = bg;
+    }
     // Create/update divs for all objects
     for (var name in rosh.objects) {
       var obj = rosh.get(name);

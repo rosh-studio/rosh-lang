@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from rosh_lang.model import (
     AfterStatement,
     AnimateStatement,
+    BackgroundStatement,
     BlankStatement,
     CommentStatement,
     CreateStatement,
@@ -185,6 +186,8 @@ def _emit_statement(stmt: Statement) -> str:
         return _emit_animate(stmt)
     if isinstance(stmt, AfterStatement):
         return _emit_after(stmt)
+    if isinstance(stmt, BackgroundStatement):
+        return _emit_background(stmt)
     return ""
 
 
@@ -257,6 +260,10 @@ def _emit_animate(stmt: AnimateStatement) -> str:
 def _emit_after(stmt: AfterStatement) -> str:
     delay_ms = int(stmt.delay * 1000)
     return f'setTimeout(function() {{ rosh.send("{_escape_js(stmt.event)}", {{}}); }}, {delay_ms});'
+
+
+def _emit_background(stmt: BackgroundStatement) -> str:
+    return f'rosh.setBackground("{_escape_js(stmt.value)}");'
 
 
 def _emit_on(stmt: OnStatement) -> str:

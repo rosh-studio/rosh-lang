@@ -53,9 +53,12 @@ HELP = f"""\
   rosh new [template] [name]  Scaffold a starter programme
   rosh library list        List available widgets
   rosh library info <name> Show widget details
+  rosh register            Open rosh.cloud registration
+  rosh login               Log in to rosh.cloud
+  rosh logout              Clear local session
+  rosh config --key KEY    Save your rosh.cloud API key
   rosh create "desc"       AI-generate a .rosh programme
   rosh publish file.rosh   Upload to rosh.cloud
-  rosh config --key KEY    Save your rosh.cloud API key
   rosh --version           Show version
   rosh --help              Show this help
 
@@ -311,6 +314,24 @@ def main() -> None:
     if sys.argv[1] == "new":
         from rosh_lang.scaffolder import scaffold
         scaffold(sys.argv[2:])
+        return
+
+    # "rosh register" — open registration page
+    if sys.argv[1] == "register":
+        from rosh_lang.cloud import cmd_register
+        cmd_register(sys.argv[2:])
+        return
+
+    # "rosh login" — authenticate with rosh.cloud
+    if sys.argv[1] == "login":
+        from rosh_lang.cloud import cmd_login
+        cmd_login(sys.argv[2:])
+        return
+
+    # "rosh logout" — clear local session
+    if sys.argv[1] == "logout":
+        from rosh_lang.cloud import cmd_logout
+        cmd_logout(sys.argv[2:])
         return
 
     # "rosh create ..." — AI generation

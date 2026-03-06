@@ -1,37 +1,110 @@
 # Rosh
 
+> **DRAFT** — Much of this document describes the intended workflow. Features marked *planned* are not yet implemented.
+
 **One script, many worlds.** A plain-English language that runs on terminal, browser, and game engine.
 
 ```
 print "hello world"
 ```
 
-That's a complete programme. Run it targeting the terminal, it prints. Target the web, it opens a browser. Target Phaser, it renders in a game engine. Same source, different worlds.
+That's a complete programme. Run it targeting the terminal, it prints. Target the web, it opens a browser. Target Phaser, it renders in a game engine. Deploy it, it uploads to your Rosh account. Same source, different worlds.
 
-## Quick Start
+## Install
 
-### Install
+Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-# Requires Python 3.10+ and uv
+# From PyPI (when published)
 uv tool install rosh-lang
+
+# From GitHub (available now)
+uv tool install git+https://github.com/roshstudio/rosh-lang
+
+# With AI generation support
+uv tool install "rosh-lang[ai]"
 ```
 
-### Hello World
+## Getting Started
+
+### 1. Register (*planned*)
+
+```bash
+rosh register
+```
+
+Opens [rosh.cloud/register](https://rosh.cloud/register) in your browser. Create an account with email or GitHub. A verification link is sent to your email — click it to activate.
+
+### 2. Log In (*planned*)
+
+```bash
+rosh login
+```
+
+Opens [rosh.cloud/login](https://rosh.cloud/login) in your browser. Once authenticated, a session token is saved locally to `~/.rosh/config.json`. You stay logged in until you run `rosh logout`.
+
+### 3. Configure
+
+To deploy to `rosh.cloud` from your command line, you must generate an API key and register it as follows:
+
+```bash
+rosh config --key rosh_k1_your_key_here
+```
+
+Saves your rosh.cloud API key to `~/.rosh/config.json`.
+
+### 4. Write and Run
 
 ```bash
 echo 'print "hello world"' > hello.rosh
 rosh hello.rosh                          # terminal
 rosh hello.rosh --target web --run       # browser
+rosh hello.rosh --target phaser --run    # Phaser game
 ```
 
-### Interactive REPL
+### 5. AI-Generate a Programme (*planned*)
+
+```bash
+rosh create "space invaders with power-ups"
+rosh create "space invaders with power-ups" --target phaser --publish
+```
+
+Fetches the Rosh language reference from the API, builds a prompt, sends it to an AI engine, compiles to verify, and optionally publishes to rosh.cloud.
+
+### 6. Publish
+
+```bash
+rosh publish my-game.rosh --target web --title "My Game"
+```
+
+Compiles locally via the API and uploads to rosh.cloud as a published programme.
+
+## AI Engine Configuration
+
+`rosh create` needs an AI engine to generate programmes. Configure one with environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `ANTHROPIC_API_KEY` | Anthropic (Claude) — default engine |
+| `OPENAI_API_KEY` | OpenAI (GPT) |
+
+Rosh also supports any **OpenAI-compatible API** endpoint (*planned*):
+
+```bash
+export ROSH_AI_BASE_URL=https://your-provider.com/v1
+export ROSH_AI_API_KEY=your_key
+export ROSH_AI_MODEL=model-name
+```
+
+This covers providers like OpenRouter, Ollama, Together, Groq, and any other service that implements the OpenAI chat completions protocol.
+
+## Interactive REPL
 
 ```bash
 rosh
 ```
 
-### Scaffold a Project
+## Scaffold a Project
 
 ```bash
 rosh new              # choose a template interactively
@@ -75,21 +148,21 @@ Objects are created with `create object <name>` and configured with `set`:
 
 | Property | Type | Description | Default |
 |----------|------|-------------|---------|
-| `x` | float | Horizontal position (0.0–1.0 = %, >1 = px) | none |
-| `y` | float | Vertical position (0.0–1.0 = %, >1 = px) | none |
+| `x` | float | Horizontal position (0.0-1.0 = %, >1 = px) | none |
+| `y` | float | Vertical position (0.0-1.0 = %, >1 = px) | none |
 | `width` | float | Width | 0.1 |
 | `height` | float | Height | 0.1 |
 | `color` | string | Background color (hex or name) | #444 |
 | `label` | string | Text displayed on the object | (none) |
 | `sprite` | string | Sprite description for procedural generation | none |
-| `visible` | int | 0 hides the object (cascades to children), any other shows | 1 |
+| `visible` | int | 0 hides the object, any other shows | 1 |
 | `vx` | float | Horizontal velocity (per second) | none |
 | `vy` | float | Vertical velocity (per second) | none |
 | `text_color` | string | Text color for labels | #fff |
 | `font_size` | string | Font size for labels | 14px |
-| `_max_output` | int | Max console lines (set on global state, excess trimmed from top) | unlimited |
+| `_max_output` | int | Max console lines (excess trimmed from top) | unlimited |
 
-Coordinates: `0.0`–`1.0` maps to percentage of the canvas. Values `>1.0` are treated as pixels.
+Coordinates: `0.0`-`1.0` maps to percentage of the canvas. Values `>1.0` are treated as pixels.
 
 ### Events
 
@@ -177,7 +250,7 @@ use hazard count 5 vy 0.3 spawn_rate 0.8
 | `bullet` | .py | `count vx vy color` | Pooled projectiles |
 | `explosion` | .py | `count color` | Pooled explosion effects |
 | `animation` | .py | `target sheet frames speed mode` | Spritesheet animation |
-| `game-lifecycle` | .py | `title subtitle bg text_color font_size` | Title → playing → over flow |
+| `game-lifecycle` | .py | `title subtitle bg text_color font_size` | Title -> playing -> over flow |
 | `ball` | .py | `x y size color vx vy walls` | Bouncing ball with wall bounce |
 | `hazard` | .py | `count vx vy color width height sprite spawn_rate` | Auto-spawning obstacle pool |
 
@@ -253,6 +326,12 @@ rosh <file.rosh> --run            Auto-open browser
 rosh new [template] [name]        Scaffold a starter programme
 rosh library list                 List available widgets
 rosh library info <name>          Show widget details
+rosh register                     Open registration page (planned)
+rosh login                        Authenticate with rosh.cloud (planned)
+rosh logout                       Clear local session (planned)
+rosh config --key KEY             Save rosh.cloud API key
+rosh create "description"         AI-generate a programme (planned)
+rosh publish file.rosh            Upload to rosh.cloud
 rosh --version                    Show version
 rosh --help                       Show help
 ```
@@ -263,7 +342,7 @@ rosh --help                       Show help
 rosh-lang/
   src/rosh_lang/
     model.py          # Data model (21 statement types)
-    parser.py         # Text → Programme
+    parser.py         # Text -> Programme
     runtime.py        # Execute programmes, manage state
     widgets.py        # Widget loader and composition
     sprites.py        # Procedural pixel-art generator
@@ -279,14 +358,16 @@ rosh-lang/
       phaser.py       # Phaser 3 game target
       _js_runtime.py  # JS runtime (core + DOM)
       _js_runtime_phaser.py  # JS runtime (Phaser layer)
-      _js_codegen.py  # AST → JavaScript compiler
+      _js_codegen.py  # AST -> JavaScript compiler
     __main__.py       # CLI entry point + REPL
   examples/           # Example programmes
-  tests/              # Test suite (567 tests)
+  tests/              # Test suite (654 tests)
   tools/              # Build tools (showcase generator)
   dist/               # Generated output (showcase.html)
 ```
 
 ## Licence
 
-Rosh Business Source License (Rosh-BSL). See [LICENSE](../LICENSE).
+Rosh Source-Available Licence (Rosh-SAL). Free to use, modify, and distribute for any purpose. Forking to create a competing language is not permitted. Similar in spirit to the [Functional Source License (FSL)](https://fsl.software/).
+
+See [LICENSE](LICENSE).

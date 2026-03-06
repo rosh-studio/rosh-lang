@@ -13,6 +13,7 @@ import pytest
 from rosh_lang.model import (
     AfterStatement,
     AnimateStatement,
+    BackgroundStatement,
     BlankStatement,
     CommentStatement,
     ConnectStatement,
@@ -1441,3 +1442,24 @@ class TestAfterTerminal:
     def test_after_is_noop(self) -> None:
         """after should not raise in terminal — just silently skip."""
         rt = _run([AfterStatement(delay=2.0, event="wave_2")])
+
+
+class TestBackground:
+    def test_background_colour_sets_state(self) -> None:
+        rt = _run([BackgroundStatement(value="#ff0000")])
+        assert rt.state["_background"] == "#ff0000"
+
+    def test_background_named_colour(self) -> None:
+        rt = _run([BackgroundStatement(value="darkblue")])
+        assert rt.state["_background"] == "darkblue"
+
+    def test_background_image_path(self) -> None:
+        rt = _run([BackgroundStatement(value="sky.png")])
+        assert rt.state["_background"] == "sky.png"
+
+    def test_background_last_wins(self) -> None:
+        rt = _run([
+            BackgroundStatement(value="#ff0000"),
+            BackgroundStatement(value="#00ff00"),
+        ])
+        assert rt.state["_background"] == "#00ff00"

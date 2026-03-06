@@ -458,25 +458,27 @@ wheels = [
 
 [[package]]
 name = "rosh-lang"
-version = "0.5.0"
+version = "0.8.0"
 source = { editable = "." }
 dependencies = [
-    { name = "anthropic" },
     { name = "rich" },
 ]
 
 [package.optional-dependencies]
+ai = [
+    { name = "anthropic" },
+]
 dev = [
     { name = "pytest" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "anthropic", specifier = ">=0.84.0" },
+    { name = "anthropic", marker = "extra == 'ai'", specifier = ">=0.84.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "rich", specifier = ">=13.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["ai", "dev"]
 
 [[package]]
 name = "sniffio"

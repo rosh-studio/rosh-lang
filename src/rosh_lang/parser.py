@@ -15,6 +15,7 @@ from pathlib import Path
 from rosh_lang.model import (
     AfterStatement,
     AnimateStatement,
+    BackgroundStatement,
     BlankStatement,
     CommentStatement,
     ConnectStatement,
@@ -112,6 +113,7 @@ def _parse_line(raw: str, line: int, source: str) -> Statement:
         "animate": _parse_animate,
         "use": _parse_use,
         "after": _parse_after,
+        "background": _parse_background,
     }
 
     handler = dispatch.get(keyword)
@@ -460,6 +462,22 @@ def _parse_animate(line_text: str, line: int, source: str) -> AnimateStatement:
     return AnimateStatement(
         name=name, sheet=sheet, frames=frames, speed=speed, mode=mode, line=line,
     )
+
+
+def _parse_background(line_text: str, line: int, source: str) -> BackgroundStatement:
+    """Parse 'background "#1a1a2e"' or 'background "sky.png"'."""
+    rest = line_text[len("background"):].strip()
+    if not rest:
+        raise ParseError("background requires a colour or image path", line=line, source=source)
+    if rest.startswith('"') and rest.endswith('"'):
+        value = rest[1:-1]
+    elif rest.startswith("'") and rest.endswith("'"):
+        value = rest[1:-1]
+    else:
+        value = rest
+    if not value:
+        raise ParseError("background requires a colour or image path", line=line, source=source)
+    return BackgroundStatement(value=value, line=line)
 
 
 def _parse_if(line_text: str, line: int, source: str) -> IfStatement:

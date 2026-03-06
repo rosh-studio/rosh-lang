@@ -23,6 +23,7 @@ from pathlib import Path
 
 from rosh_lang.model import (
     AnimateStatement,
+    BackgroundStatement,
     PrintStatement,
     Programme,
     SayStatement,
@@ -270,8 +271,9 @@ def _render_static(
 
     # Build HTML
     escaped_output = escape(text_output)
+    canvas_bg = rt.state.get("_background", "#16213e")
 
-    return _html_page(object_divs, escaped_output)
+    return _html_page(object_divs, escaped_output, canvas_bg=canvas_bg)
 
 
 def _render_interactive(
@@ -365,14 +367,34 @@ def _render_interactive(
         script_parts.extend(["", "// ── Initial sync ──", "rosh.syncAll();"])
     script_block = "\n".join(script_parts)
 
-    return _html_page(object_divs, escaped_output, script_block)
+    canvas_bg = rt.state.get("_background", "#16213e")
+
+    return _html_page(object_divs, escaped_output, script_block, canvas_bg=canvas_bg)
 
 
 def _html_page(
-    object_divs: str, escaped_output: str, script: str = ""
+    object_divs: str, escaped_output: str, script: str = "",
+    canvas_bg: str = "#16213e",
 ) -> str:
     """Build the full HTML page shell."""
     script_tag = f"\n  <script>\n{script}\n  </script>" if script else ""
+
+    _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
+    is_image = (
+        any(canvas_bg.lower().endswith(ext) for ext in _IMAGE_EXTS)
+        or canvas_bg.startswith("http://")
+        or canvas_bg.startswith("https://")
+        or canvas_bg.startswith("data:")
+    )
+    if is_image:
+        bg_css = (
+            f"background-image: url('{escape(canvas_bg)}');\n"
+            f"      background-size: cover;\n"
+            f"      background-position: center;\n"
+            f"      background-repeat: no-repeat"
+        )
+    else:
+        bg_css = f"background: {escape(canvas_bg)}"
 
     return f"""\
 <!DOCTYPE html>
@@ -396,7 +418,7 @@ def _html_page(
       width: 100%;
       flex: 1;
       min-height: 60vh;
-      background: #16213e;
+      {bg_css};
       overflow: hidden;
     }}
     #output {{

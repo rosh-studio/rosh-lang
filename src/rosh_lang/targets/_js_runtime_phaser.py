@@ -135,6 +135,27 @@ JS_RUNTIME_PHASER = """\
   }
 
   function syncAll() {
+    // Apply background if changed
+    var bg = rosh.state._background;
+    if (bg && bg !== scene._appliedBg) {
+      if (rosh.state._backgroundType === "image") {
+        // Load image as background — use Phaser loader
+        var bgKey = "_rosh_bg";
+        if (!scene.textures.exists(bgKey)) {
+          var bgImg = new Image();
+          bgImg.onload = function() {
+            scene.textures.addImage(bgKey, bgImg);
+            var bgSprite = scene.add.image(W / 2, H / 2, bgKey);
+            bgSprite.setDisplaySize(W, H);
+            bgSprite.setDepth(-1000);
+          };
+          bgImg.src = bg;
+        }
+      } else {
+        scene.cameras.main.setBackgroundColor(bg);
+      }
+      scene._appliedBg = bg;
+    }
     // Create/update Phaser game objects from rosh.state
     for (var name in rosh.objects) {
       var obj = rosh.get(name);
@@ -298,7 +319,7 @@ JS_RUNTIME_PHASER = """\
       width: W,
       height: H,
       parent: "game-container",
-      backgroundColor: "#16213e",
+      backgroundColor: (rosh.state._backgroundType === "color" && rosh.state._background) ? rosh.state._background : "#16213e",
       scene: [GameScene],
       banner: false
     });

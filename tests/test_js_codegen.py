@@ -572,3 +572,20 @@ class TestEmitAfter:
         prog = parse_string("after 2 send wave_2")
         result = compile_programme(prog)
         assert not result.needs_loop
+
+
+class TestEmitBackground:
+    def test_background_colour(self):
+        prog = parse_string('background "#ff0000"')
+        result = compile_programme(prog)
+        assert 'rosh.setBackground("#ff0000")' in result.init_code
+
+    def test_background_image(self):
+        prog = parse_string('background "sky.png"')
+        result = compile_programme(prog)
+        assert 'rosh.setBackground("sky.png")' in result.init_code
+
+    def test_background_url(self):
+        prog = parse_string('background "https://example.com/bg.jpg"')
+        result = compile_programme(prog)
+        assert 'rosh.setBackground("https://example.com/bg.jpg")' in result.init_code

@@ -135,6 +135,108 @@ def _build_create_prompt(description: str, docs: dict) -> str:
 """
 
 
+def cmd_register(args: list[str]) -> None:
+    """Handle: rosh register — open registration page in browser."""
+    import webbrowser
+    url = f"{CLOUD_BASE}/register"
+    print(f"Opening {url} ...")
+    webbrowser.open(url)
+
+
+def cmd_login(args: list[str]) -> None:
+    """Handle: rosh login — open login page in browser."""
+    import webbrowser
+    url = f"{CLOUD_BASE}/login"
+    print(f"Opening {url} ...")
+    webbrowser.open(url)
+    print("Once logged in, create an API key at Settings > API Keys,")
+    print("then run: rosh config --key rosh_k1_...")
+
+
+def cmd_logout(args: list[str]) -> None:
+    """Handle: rosh logout — clear local API key."""
+    config = _load_config()
+    if config.get("api_key"):
+        del config["api_key"]
+        _save_config(config)
+        print("Logged out. API key removed.")
+    else:
+        print("Not logged in (no API key configured).")
+
+
+def _call_ai(prompt: str) -> str:
+    """Call an AI engine to generate code. Tries engines in order:
+    1. Generic OpenAI-compatible (ROSH_AI_BASE_URL + ROSH_AI_API_KEY)
+    2. Anthropic (ANTHROPIC_API_KEY)
+    3. OpenAI (OPENAI_API_KEY)
+    """
+    import os
+
+    # Option 1: Generic OpenAI-compatible endpoint
+    base_url = os.environ.get("ROSH_AI_BASE_URL", "")
+    ai_key = os.environ.get("ROSH_AI_API_KEY", "")
+    model = os.environ.get("ROSH_AI_MODEL", "")
+    if base_url and ai_key:
+        return _call_openai_compat(prompt, base_url, ai_key, model or "default")
+
+    # Option 2: Anthropic
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        try:
+            import anthropic
+        except ImportError:
+            print("AI generation requires the 'ai' extra:")
+            print("  uv tool install 'rosh-lang[ai]'")
+            sys.exit(1)
+        client = anthropic.Anthropic()
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2048,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return message.content[0].text.strip()  # type: ignore[union-attr]
+
+    # Option 3: OpenAI
+    if os.environ.get("OPENAI_API_KEY"):
+        return _call_openai_compat(
+            prompt, "https://api.openai.com/v1",
+            os.environ["OPENAI_API_KEY"], "gpt-4o-mini"
+        )
+
+    print("No AI engine configured. Set one of:")
+    print("  ANTHROPIC_API_KEY    — Anthropic (Claude)")
+    print("  OPENAI_API_KEY       — OpenAI (GPT)")
+    print("  ROSH_AI_BASE_URL + ROSH_AI_API_KEY — any OpenAI-compatible API")
+    sys.exit(1)
+
+
+def _call_openai_compat(prompt: str, base_url: str, api_key: str, model: str) -> str:
+    """Call any OpenAI-compatible chat completions endpoint."""
+    import json as _json
+    from urllib.request import Request, urlopen
+    from urllib.error import HTTPError
+
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    body = _json.dumps({
+        "model": model,
+        "max_tokens": 2048,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+
+    req = Request(url, data=body, headers={
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+    })
+
+    try:
+        with urlopen(req, timeout=60) as resp:
+            data = _json.loads(resp.read().decode())
+            return data["choices"][0]["message"]["content"].strip()
+    except HTTPError as e:
+        detail = e.read().decode()[:200]
+        print(f"AI engine error {e.code}: {detail}")
+        sys.exit(1)
+
+
 def cmd_config(args: list[str]) -> None:
     """Handle: rosh config --key <key>"""
     if len(args) >= 2 and args[0] == "--key":
@@ -194,29 +296,10 @@ def cmd_create(args: list[str]) -> None:
     print(f"Fetching language reference...")
     docs = _fetch_docs(api_key)
 
-    # Build prompt and call Claude
+    # Build prompt and call AI engine
     print(f"Generating: {description} ({target} target)...")
     prompt = _build_create_prompt(description, docs)
-
-    try:
-        import anthropic
-    except ImportError:
-        print("pip install anthropic  (required for AI generation)")
-        sys.exit(1)
-
-    import os
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("Set ANTHROPIC_API_KEY environment variable for AI generation.")
-        print("Get a key at https://console.anthropic.com/")
-        sys.exit(1)
-
-    client = anthropic.Anthropic()
-    message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=2048,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    code = message.content[0].text.strip()
+    code = _call_ai(prompt)
 
     # Remove markdown fences if present
     if code.startswith("```"):
