@@ -251,6 +251,16 @@ class DoStatement:
     line: int = 0
 
 
+@dataclass
+class RepeatStatement:
+    """repeat 5 / repeat 3 as i — counted loop."""
+
+    count: str  # literal int or state variable name
+    var: str = ""  # optional loop variable ("" = none)
+    body: list[Statement] = field(default_factory=list)
+    line: int = 0
+
+
 # Union of all statement types
 Statement = (
     PrintStatement
@@ -280,6 +290,7 @@ Statement = (
     | BlankStatement
     | DefineStatement
     | DoStatement
+    | RepeatStatement
 )
 
 

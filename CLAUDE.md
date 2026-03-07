@@ -27,7 +27,7 @@ After code changes, reinstall:
 uv tool install --from /path/to/rosh-lang rosh-lang --force
 ```
 
-## Complete Syntax (24 Keywords)
+## Complete Syntax (25 Keywords)
 
 ```
 print "text"                          # output ({var} interpolation)
@@ -69,6 +69,12 @@ define fire_bullet                    # user-defined function
 end
 do fire_bullet                        # call a function
 on keydown when key == " " do fire_bullet  # call from event
+repeat 5                              # counted loop
+  print "hello"
+end
+repeat 3 as i                         # loop with variable (1, 2, 3)
+  print "Round {i}"
+end
 ```
 
 ## Object Properties

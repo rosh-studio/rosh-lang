@@ -32,6 +32,7 @@ from rosh_lang.model import (
     PlayStatement,
     PrintStatement,
     Programme,
+    RepeatStatement,
     SayStatement,
     SendStatement,
     SetStatement,
@@ -143,6 +144,8 @@ class Runtime:
             self.functions[stmt.name] = stmt.body
         elif isinstance(stmt, DoStatement):
             self._exec_do(stmt)
+        elif isinstance(stmt, RepeatStatement):
+            self._exec_repeat(stmt)
         elif isinstance(stmt, (CommentStatement, BlankStatement, EndStatement)):
             pass
         return None
@@ -487,6 +490,41 @@ class Runtime:
                 self.execute(s)
         finally:
             self._call_stack.discard(name)
+
+    _MAX_REPEAT = 10_000
+
+    def _exec_repeat(self, stmt: RepeatStatement) -> None:
+        """Execute a counted repeat loop."""
+        # Resolve count — literal int or state variable
+        try:
+            count = int(stmt.count)
+        except ValueError:
+            val = self._resolve(stmt.count)
+            if isinstance(val, (int, float)):
+                count = int(val)
+            else:
+                return  # non-numeric count — skip silently
+
+        if count <= 0:
+            return
+
+        count = min(count, self._MAX_REPEAT)
+
+        had_var = stmt.var in self.state if stmt.var else False
+        old_val = self.state.get(stmt.var) if stmt.var else None
+
+        try:
+            for i in range(1, count + 1):
+                if stmt.var:
+                    self.state[stmt.var] = i
+                for s in stmt.body:
+                    self.execute(s)
+        finally:
+            if stmt.var:
+                if had_var:
+                    self.state[stmt.var] = old_val
+                else:
+                    self.state.pop(stmt.var, None)
 
     def _exec_use(self, stmt: UseStatement) -> None:
         """Load a widget: find, namespace-prefix, apply config, execute."""

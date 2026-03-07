@@ -1,0 +1,29 @@
+# demo: Repeat Loops
+# description: Counted loops — create objects dynamically, iterate with variables
+# badges: Repeat, Loops
+
+background "#0a1628"
+set _max_output to 8
+
+# Create a row of stars using repeat
+repeat 5 as i
+  print "Star {i} shining!"
+end
+
+print
+
+# Use repeat with arithmetic
+create number total
+set total to 0
+repeat 10
+  set total to total + 1
+end
+print "Counted to {total}"
+
+# Nested repeat — multiplication table
+print
+repeat 3 as row
+  repeat 3 as col
+    print "  {row} x {col}"
+  end
+end

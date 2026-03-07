@@ -34,6 +34,7 @@ from rosh_lang.model import (
     PlayStatement,
     PrintStatement,
     Programme,
+    RepeatStatement,
     SayStatement,
     SendStatement,
     SetStatement,
@@ -79,6 +80,8 @@ def parse_string(text: str, source: str = "<string>") -> Programme:
     statements = _collect_if_blocks(statements, source=source)
     # Post-pass: collect define...end blocks into DefineStatement.body
     statements = _collect_define_blocks(statements, source=source)
+    # Post-pass: collect repeat...end blocks into RepeatStatement.body
+    statements = _collect_repeat_blocks(statements, source=source)
     return Programme(statements=statements, source=source)
 
 
@@ -120,6 +123,7 @@ def _parse_line(raw: str, line: int, source: str) -> Statement:
         "background": _parse_background,
         "define": _parse_define,
         "do": _parse_do,
+        "repeat": _parse_repeat,
     }
 
     handler = dispatch.get(keyword)
@@ -605,6 +609,71 @@ def _parse_do(line_text: str, line: int, source: str) -> DoStatement:
         raise ParseError("do requires a function name", line=line, source=source)
     name = rest.split()[0]
     return DoStatement(name=name, line=line)
+
+
+def _parse_repeat(line_text: str, line: int, source: str) -> RepeatStatement:
+    """Parse 'repeat <count>' or 'repeat <count> as <var>'."""
+    rest = line_text[len("repeat"):].strip()
+    if not rest:
+        raise ParseError("repeat requires a count", line=line, source=source)
+    tokens = rest.split()
+    count = tokens[0]
+    var = ""
+    if len(tokens) >= 3 and tokens[1].lower() == "as":
+        var = tokens[2]
+    return RepeatStatement(count=count, var=var, line=line)
+
+
+def _collect_repeat_blocks(
+    stmts: list[Statement], source: str = ""
+) -> list[Statement]:
+    """Post-pass: collect repeat...end into RepeatStatement with body."""
+    result: list[Statement] = []
+    i = 0
+    while i < len(stmts):
+        stmt = stmts[i]
+        if isinstance(stmt, RepeatStatement):
+            repeat_stmt, i = _collect_one_repeat(stmts, i, source)
+            result.append(repeat_stmt)
+        else:
+            result.append(stmt)
+            i += 1
+    return result
+
+
+def _collect_one_repeat(
+    stmts: list[Statement], start: int, source: str
+) -> tuple[RepeatStatement, int]:
+    """Collect a single repeat...end block starting at index `start`."""
+    repeat_stmt = stmts[start]
+    assert isinstance(repeat_stmt, RepeatStatement)
+    body: list[Statement] = []
+    i = start + 1
+
+    while i < len(stmts):
+        s = stmts[i]
+
+        if isinstance(s, EndStatement):
+            return RepeatStatement(
+                count=repeat_stmt.count,
+                var=repeat_stmt.var,
+                body=body,
+                line=repeat_stmt.line,
+            ), i + 1
+
+        # Nested repeat — recurse
+        if isinstance(s, RepeatStatement):
+            nested, i = _collect_one_repeat(stmts, i, source)
+            body.append(nested)
+            continue
+
+        body.append(s)
+        i += 1
+
+    raise ParseError(
+        "repeat block has no matching end",
+        line=repeat_stmt.line, source=source,
+    )
 
 
 def _collect_define_blocks(

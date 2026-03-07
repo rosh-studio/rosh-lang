@@ -39,7 +39,7 @@ _KEYWORDS = frozenset({
     "print", "create", "set", "when", "end", "use", "on",
     "event", "send", "destroy", "get", "say", "go", "look",
     "connect", "sprite", "sound", "play", "if", "else", "animate",
-    "define", "do", "after", "background",
+    "define", "do", "after", "background", "repeat",
 })
 
 

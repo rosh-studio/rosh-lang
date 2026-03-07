@@ -27,6 +27,7 @@ from rosh_lang.model import (
     PlayStatement,
     PrintStatement,
     Programme,
+    RepeatStatement,
     SayStatement,
     SendStatement,
     SetStatement,
@@ -200,6 +201,8 @@ def _emit_statement(stmt: Statement) -> str:
         return _emit_do(stmt)
     if isinstance(stmt, DefineStatement):
         return _emit_define(stmt)
+    if isinstance(stmt, RepeatStatement):
+        return _emit_repeat(stmt)
     return ""
 
 
@@ -289,6 +292,34 @@ def _emit_do(stmt: DoStatement) -> str:
     """Emit a JS function call."""
     name = _safe_fn_name(stmt.name)
     return f"{name}();"
+
+
+def _emit_repeat(stmt: RepeatStatement) -> str:
+    """Emit a JS for loop from a repeat block."""
+    body_js = _emit_body(stmt.body)
+    count_expr = _escape_js(stmt.count)
+    # If count is a literal int, use directly; otherwise resolve from state
+    try:
+        int(stmt.count)
+        count_js = count_expr
+    except ValueError:
+        count_js = f'(rosh.get("{count_expr}") || 0)'
+
+    if stmt.var:
+        var = _escape_js(stmt.var)
+        return (
+            f"for (var _ri = 1; _ri <= Math.min({count_js}, 10000); _ri++) {{\n"
+            f'  rosh.set("{var}", _ri);\n'
+            f"{body_js}"
+            f"}}\n"
+            f'rosh.set("{var}", undefined);'
+        )
+    else:
+        return (
+            f"for (var _ri = 0; _ri < Math.min({count_js}, 10000); _ri++) {{\n"
+            f"{body_js}"
+            f"}}"
+        )
 
 
 def _safe_fn_name(name: str) -> str:
