@@ -4,15 +4,17 @@
 Creates a seconds number, _timer_total marker, _timer_running flag,
 and a display object. The JS runtime tickTimers() auto-decrements
 seconds each frame and fires timer_done when it reaches zero.
+Supports anchor and theme config.
 """
 
 from __future__ import annotations
 
 from rosh_lang.model import CreateStatement, SetStatement, Statement
+from rosh_lang.widgets import compute_hud_position
 
 METADATA = {
     "widget": "timer",
-    "version": "0.2",
+    "version": "0.3",
     "description": "Countdown timer with auto-tick and done event",
     "config": {
         "total": "60",
@@ -22,20 +24,19 @@ METADATA = {
         "bg": "#444",
         "text_color": "#fff",
         "font_size": "14px",
+        "anchor": "",
+        "theme": "",
+        "format": "ss",
     },
     "licence": "Rosh-BSL",
 }
 
 
-def generate(config: dict[str, str]) -> list[Statement]:
+def generate(config: dict[str, str], user_config: dict[str, str] | None = None) -> list[Statement]:
     """Return a list of unprefixed statements. Loader will prefix them."""
     total = config.get("total", "60")
     running = config.get("running", "1")
-    x = config.get("x", "0.80")
-    y = config.get("y", "0.02")
-    bg = config.get("bg", "#444")
-    text_color = config.get("text_color", "#fff")
-    font_size = config.get("font_size", "14px")
+    x, y, bg, text_color, font_size = compute_hud_position(config, user_config)
 
     return [
         # Timer state

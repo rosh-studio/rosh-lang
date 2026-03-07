@@ -22,7 +22,9 @@ from rosh_lang.model import (
     AfterStatement,
     AnimateStatement,
     CreateStatement,
+    DefineStatement,
     DestroyStatement,
+    DoStatement,
     IfStatement,
     OnStatement,
     PlayStatement,
@@ -41,6 +43,79 @@ from rosh_lang.parser import parse_file
 
 _INTERP_RE = re.compile(r"\{([^}]+)\}")
 _META_RE = re.compile(r"^#\s*(widget|version|description|config|licence):\s*(.+)$")
+
+# ── HUD anchor/theme system ──────────────────────────────────
+
+_HUD_ANCHORS: dict[str, tuple[str, str]] = {
+    "top-left":      ("0.02", "0.02"),
+    "top-center":    ("0.40", "0.02"),
+    "top-right":     ("0.78", "0.02"),
+    "bottom-left":   ("0.02", "0.90"),
+    "bottom-center": ("0.40", "0.90"),
+    "bottom-right":  ("0.78", "0.90"),
+}
+
+_HUD_THEMES: dict[str, dict[str, str]] = {
+    "dark":    {"bg": "#333",    "text_color": "#fff", "font_size": "14px"},
+    "light":   {"bg": "#eee",    "text_color": "#222", "font_size": "14px"},
+    "retro":   {"bg": "#001100", "text_color": "#0f0", "font_size": "14px"},
+    "minimal": {"bg": "transparent", "text_color": "#fff", "font_size": "14px"},
+}
+
+_HUD_STACK_HEIGHT = 0.07  # vertical offset per stacked item
+
+# Tracks how many widgets are at each anchor position (module-level, reset per programme)
+_hud_stack_counts: dict[str, int] = {}
+
+
+def reset_hud_stack() -> None:
+    """Reset the HUD anchor stack counter. Call at the start of each programme."""
+    _hud_stack_counts.clear()
+
+
+def compute_hud_position(
+    config: dict[str, str],
+    user_config: dict[str, str] | None = None,
+) -> tuple[str, str, str, str, str]:
+    """Compute (x, y, bg, text_color, font_size) from anchor/theme config.
+
+    If no anchor is set, returns the explicit x/y from config (backward compatible).
+    user_config, when provided, contains only keys the user explicitly set
+    (allowing theme to override factory defaults while user overrides win).
+    """
+    # Theme defaults — theme overrides factory defaults but user overrides win
+    theme_name = config.get("theme", "")
+    theme = _HUD_THEMES.get(theme_name, {})
+
+    # When user_config is provided (factory path), use it to detect user overrides.
+    # When not provided (direct call), treat config as the user's values.
+    user = user_config if user_config is not None else config
+
+    # Priority: user explicit > theme > factory default (config)
+    bg = user.get("bg", theme.get("bg", config.get("bg", "#333")))
+    text_color = user.get("text_color", theme.get("text_color", config.get("text_color", "#fff")))
+    font_size = user.get("font_size", theme.get("font_size", config.get("font_size", "14px")))
+
+    anchor = config.get("anchor", "")
+    if anchor and anchor in _HUD_ANCHORS:
+        base_x, base_y = _HUD_ANCHORS[anchor]
+        stack_idx = _hud_stack_counts.get(anchor, 0)
+        _hud_stack_counts[anchor] = stack_idx + 1
+
+        # Stack direction: top anchors stack downward, bottom stack upward
+        offset = stack_idx * _HUD_STACK_HEIGHT
+        y_val = float(base_y)
+        if anchor.startswith("bottom"):
+            y_val -= offset
+        else:
+            y_val += offset
+
+        return base_x, f"{y_val:.2f}", bg, text_color, font_size
+
+    # No anchor — use explicit x/y (backward compatible)
+    x = config.get("x", "0.02")
+    y = config.get("y", "0.02")
+    return x, y, bg, text_color, font_size
 
 
 def get_bundled_library_path() -> Path:
@@ -264,8 +339,22 @@ def _load_python_factory(
     merged_config = dict(meta.get("config", {}))
     merged_config.update(config)
 
-    raw_stmts: list[Statement] = generate_fn(merged_config)
-    prefixed = [_prefix_statement(s, name) for s in raw_stmts]
+    # Pass user_config so factories can distinguish user overrides from defaults
+    import inspect
+    sig = inspect.signature(generate_fn)
+    if len(sig.parameters) >= 2:
+        raw_stmts: list[Statement] = generate_fn(merged_config, config)
+    else:
+        raw_stmts = generate_fn(merged_config)
+    # Allow factories to declare external names that bypass prefixing
+    widget_globals = set(getattr(module, "GLOBALS", []))
+    if widget_globals:
+        _GLOBAL_NAMES_EXTRA.update(widget_globals)
+    try:
+        prefixed = [_prefix_statement(s, name) for s in raw_stmts]
+    finally:
+        if widget_globals:
+            _GLOBAL_NAMES_EXTRA.difference_update(widget_globals)
 
     # Apply config overrides as set statements for keys not in METADATA config
     # (e.g. dotted-path overrides like "box.label" or "display.x")
@@ -397,12 +486,29 @@ def _prefix_statement(stmt: Statement, ns: str) -> Statement:
         # Event names stay global (like send), delay unchanged
         return stmt
 
+    if isinstance(stmt, DefineStatement):
+        return DefineStatement(
+            name=_prefix_name(stmt.name, ns),
+            body=[_prefix_statement(s, ns) for s in stmt.body],
+            line=stmt.line,
+        )
+
+    if isinstance(stmt, DoStatement):
+        return DoStatement(
+            name=_prefix_name(stmt.name, ns),
+            line=stmt.line,
+        )
+
     # Comments, blanks, end, event declarations, etc. — pass through
     return stmt
 
 
 # Runtime globals that should never be namespace-prefixed inside widgets.
 _GLOBAL_NAMES = frozenset({"_keys", "_paused", "_max_output", "_scene", "_prev_scene"})
+# Event payload field names that should not be prefixed in conditions
+_PAYLOAD_FIELDS = frozenset({"key", "x", "y", "a", "b", "scene", "name"})
+# Per-widget extra globals (set temporarily during factory prefixing via GLOBALS metadata)
+_GLOBAL_NAMES_EXTRA: set[str] = set()
 
 
 def _prefix_name(name: str, ns: str) -> str:
@@ -418,9 +524,9 @@ def _prefix_name(name: str, ns: str) -> str:
         return ns
     if name.startswith("_self."):
         return f"{ns}.{name[6:]}"
-    # Don't prefix global runtime names
+    # Don't prefix global runtime names or widget-declared globals
     root = name.split(".")[0]
-    if root in _GLOBAL_NAMES:
+    if root in _GLOBAL_NAMES or root in _GLOBAL_NAMES_EXTRA:
         return name
     return f"{ns}.{name}"
 
@@ -497,6 +603,10 @@ def _prefix_on_args(action: str, args: str, ns: str) -> str:
         # Prefix the object name
         return _prefix_name(args.strip(), ns)
 
+    if action == "do":
+        # Prefix the function name
+        return _prefix_name(args.strip(), ns)
+
     return args
 
 
@@ -504,11 +614,16 @@ def _prefix_on_condition(condition: str, ns: str) -> str:
     """Prefix the field name in an on-when condition.
 
     Condition format: "field op value" — prefix the field, keep op and value literal.
+    Event payload fields (key, x, y, a, b, scene, name) are NOT prefixed
+    since they're injected by the runtime during event dispatch.
     """
     parts = condition.split(None, 2)
     if len(parts) < 3:
         return condition
     field, op, value = parts
+    # Don't prefix event payload fields
+    if field in _PAYLOAD_FIELDS:
+        return condition
     return f"{_prefix_name(field, ns)} {op} {value}"
 
 

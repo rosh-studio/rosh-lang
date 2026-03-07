@@ -27,7 +27,7 @@ After code changes, reinstall:
 uv tool install --from /path/to/rosh-lang rosh-lang --force
 ```
 
-## Complete Syntax (22 Keywords)
+## Complete Syntax (24 Keywords)
 
 ```
 print "text"                          # output ({var} interpolation)
@@ -64,6 +64,11 @@ animate obj sheet "run.png" frames 4  # spritesheet animation
 after 3 send timeout                  # delayed event
 background "#1a1a2e"                  # canvas/scene background (colour or image)
 create scene level1                   # scene definition
+define fire_bullet                    # user-defined function
+  set bullet._fire to 1
+end
+do fire_bullet                        # call a function
+on keydown when key == " " do fire_bullet  # call from event
 ```
 
 ## Object Properties
@@ -129,12 +134,13 @@ end
 
 Run: `rosh game.rosh --target web --run`
 
-## Widget Library (23 Widgets)
+## Widget Library (24 Widgets)
 
 | Widget | Type | Config | Purpose |
 |--------|------|--------|---------|
-| `score` | .py | `x y bg text_color font_size` | Score display |
-| `player` | .py | `speed keys move x y width height color clamp_x_min clamp_x_max clamp_y_min clamp_y_max` | Keyboard ship with auto-movement |
+| `score` | .py | `anchor theme label x y bg text_color font_size` | Score display (HUD) |
+| `player` | .py | `speed keys move x y width height color clamp_*` | Keyboard ship with auto-movement |
+| `controller` | .py | `target keys touch touch_style speed move help fire fire_key fire_event clamp` | Universal input (keyboard + touch) |
 | `counter` | .rosh | — | Click counter |
 | `timer` | .py | `total running x y bg text_color font_size` | Auto-tick countdown (fires timer_done) |
 | `health-bar` | .py | `max current x y bg text_color font_size` | Health display |
@@ -160,7 +166,7 @@ Use: `use <widget> [key value ...]` — config pairs override defaults.
 ## Architecture
 
 ```
-model.py          → 21 statement dataclasses + Programme
+model.py          → 23 statement dataclasses + Programme
 parser.py         → text → Programme
 runtime.py        → execute Programme, state dict, events, if/else, scenes
 widgets.py        → widget loader: find, namespace-prefix, configure

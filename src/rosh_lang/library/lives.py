@@ -2,7 +2,7 @@
 """lives — Python widget factory for a lives display.
 
 Creates a count number and a display object with configurable position,
-background, text color, and font size.
+background, text color, and font size. Supports anchor and theme config.
 """
 
 from __future__ import annotations
@@ -14,10 +14,11 @@ from rosh_lang.model import (
     SetStatement,
     Statement,
 )
+from rosh_lang.widgets import compute_hud_position
 
 METADATA = {
     "widget": "lives",
-    "version": "0.2",
+    "version": "0.3",
     "description": "Lives display with count",
     "config": {
         "count": "3",
@@ -27,20 +28,18 @@ METADATA = {
         "bg": "#663333",
         "text_color": "#fff",
         "font_size": "14px",
+        "anchor": "",
+        "theme": "",
     },
     "licence": "Rosh-BSL",
 }
 
 
-def generate(config: dict[str, str]) -> list[Statement]:
+def generate(config: dict[str, str], user_config: dict[str, str] | None = None) -> list[Statement]:
     """Return a list of unprefixed statements. Loader will prefix them."""
     count = config.get("count", "3")
     auto_gameover = config.get("auto_gameover", "1")
-    x = config.get("x", "0.02")
-    y = config.get("y", "0.18")
-    bg = config.get("bg", "#663333")
-    text_color = config.get("text_color", "#fff")
-    font_size = config.get("font_size", "14px")
+    x, y, bg, text_color, font_size = compute_hud_position(config, user_config)
 
     stmts: list[Statement] = [
         CreateStatement(kind="number", name="count"),

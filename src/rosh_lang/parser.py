@@ -20,7 +20,9 @@ from rosh_lang.model import (
     CommentStatement,
     ConnectStatement,
     CreateStatement,
+    DefineStatement,
     DestroyStatement,
+    DoStatement,
     ElseStatement,
     EndStatement,
     EventStatement,
@@ -75,6 +77,8 @@ def parse_string(text: str, source: str = "<string>") -> Programme:
             statements.append(stmt)
     # Post-pass: collect if/else/end blocks into IfStatement trees
     statements = _collect_if_blocks(statements, source=source)
+    # Post-pass: collect define...end blocks into DefineStatement.body
+    statements = _collect_define_blocks(statements, source=source)
     return Programme(statements=statements, source=source)
 
 
@@ -114,6 +118,8 @@ def _parse_line(raw: str, line: int, source: str) -> Statement:
         "use": _parse_use,
         "after": _parse_after,
         "background": _parse_background,
+        "define": _parse_define,
+        "do": _parse_do,
     }
 
     handler = dispatch.get(keyword)
@@ -582,4 +588,75 @@ def _collect_one_if(
     raise ParseError(
         "if block has no matching end",
         line=if_stmt.line, source=source,
+    )
+
+
+def _parse_define(line_text: str, line: int, source: str) -> DefineStatement:
+    rest = line_text[len("define"):].strip()
+    if not rest:
+        raise ParseError("define requires a function name", line=line, source=source)
+    name = rest.split()[0]
+    return DefineStatement(name=name, line=line)
+
+
+def _parse_do(line_text: str, line: int, source: str) -> DoStatement:
+    rest = line_text[len("do"):].strip()
+    if not rest:
+        raise ParseError("do requires a function name", line=line, source=source)
+    name = rest.split()[0]
+    return DoStatement(name=name, line=line)
+
+
+def _collect_define_blocks(
+    stmts: list[Statement], source: str = ""
+) -> list[Statement]:
+    """Post-pass: collect define...end into DefineStatement with body.
+
+    Runs after _collect_if_blocks so if blocks inside define bodies
+    are already nested. Only consumes EndStatements that match a define.
+    """
+    result: list[Statement] = []
+    i = 0
+    while i < len(stmts):
+        stmt = stmts[i]
+        if isinstance(stmt, DefineStatement):
+            define_stmt, i = _collect_one_define(stmts, i, source)
+            result.append(define_stmt)
+        else:
+            result.append(stmt)
+            i += 1
+    return result
+
+
+def _collect_one_define(
+    stmts: list[Statement], start: int, source: str
+) -> tuple[DefineStatement, int]:
+    """Collect a single define...end block starting at index `start`."""
+    define_stmt = stmts[start]
+    assert isinstance(define_stmt, DefineStatement)
+    body: list[Statement] = []
+    i = start + 1
+
+    while i < len(stmts):
+        s = stmts[i]
+
+        if isinstance(s, EndStatement):
+            return DefineStatement(
+                name=define_stmt.name,
+                body=body,
+                line=define_stmt.line,
+            ), i + 1
+
+        # Nested define — recurse
+        if isinstance(s, DefineStatement):
+            nested, i = _collect_one_define(stmts, i, source)
+            body.append(nested)
+            continue
+
+        body.append(s)
+        i += 1
+
+    raise ParseError(
+        "define block has no matching end",
+        line=define_stmt.line, source=source,
     )

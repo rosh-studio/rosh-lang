@@ -4,7 +4,7 @@ A programme is a list of statements. Each statement is a dataclass
 representing one line of Rosh code. The parser produces these;
 the runtime consumes them.
 
-22 keywords + comments + blanks, per BUILDING-ROSH.md Sections 4 & 7.
+24 keywords + comments + blanks, per BUILDING-ROSH.md Sections 4 & 7.
 """
 
 from __future__ import annotations
@@ -234,6 +234,23 @@ class BlankStatement:
     line: int = 0
 
 
+@dataclass
+class DefineStatement:
+    """define fire_bullet ... end — user-defined function."""
+
+    name: str
+    body: list[Statement] = field(default_factory=list)
+    line: int = 0
+
+
+@dataclass
+class DoStatement:
+    """do fire_bullet — call a user-defined function."""
+
+    name: str
+    line: int = 0
+
+
 # Union of all statement types
 Statement = (
     PrintStatement
@@ -261,6 +278,8 @@ Statement = (
     | BackgroundStatement
     | CommentStatement
     | BlankStatement
+    | DefineStatement
+    | DoStatement
 )
 
 

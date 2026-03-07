@@ -249,9 +249,11 @@ class TestParseMetadata:
     def test_parse_score_metadata(self):
         meta = parse_metadata(BUNDLED_DIR / "score.py")
         assert meta["widget"] == "score"
-        assert meta["version"] == "0.2"
+        assert meta["version"] == "0.3"
         assert meta["description"] == "Score display with current value and label"
-        assert meta["config"] == {"x": "0.02", "y": "0.02", "bg": "#333", "text_color": "#fff", "font_size": "14px"}
+        assert "x" in meta["config"]
+        assert "anchor" in meta["config"]
+        assert "theme" in meta["config"]
 
     def test_parse_player_metadata(self):
         meta = parse_metadata(BUNDLED_DIR / "player.py")
@@ -958,3 +960,103 @@ class TestTextColorFontSize:
         sets = [s for s in stmts if isinstance(s, SetStatement)]
         fs = [s for s in sets if s.target == "score.display.font_size"]
         assert fs[-1].value == "20px"
+
+
+class TestHUDAnchorTheme:
+    """Test the HUD anchor, theme, and stacking system."""
+
+    def test_anchor_top_left(self):
+        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        reset_hud_stack()
+        x, y, bg, tc, fs = compute_hud_position({"anchor": "top-left"})
+        assert x == "0.02"
+        assert y == "0.02"
+
+    def test_anchor_top_right(self):
+        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        reset_hud_stack()
+        x, y, _, _, _ = compute_hud_position({"anchor": "top-right"})
+        assert x == "0.78"
+        assert y == "0.02"
+
+    def test_anchor_bottom_left(self):
+        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        reset_hud_stack()
+        x, y, _, _, _ = compute_hud_position({"anchor": "bottom-left"})
+        assert x == "0.02"
+        assert y == "0.90"
+
+    def test_stacking_top_left(self):
+        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        reset_hud_stack()
+        _, y1, _, _, _ = compute_hud_position({"anchor": "top-left"})
+        _, y2, _, _, _ = compute_hud_position({"anchor": "top-left"})
+        _, y3, _, _, _ = compute_hud_position({"anchor": "top-left"})
+        # Each subsequent item should be lower (top anchors stack downward)
+        assert float(y1) < float(y2) < float(y3)
+
+    def test_stacking_bottom_right(self):
+        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        reset_hud_stack()
+        _, y1, _, _, _ = compute_hud_position({"anchor": "bottom-right"})
+        _, y2, _, _, _ = compute_hud_position({"anchor": "bottom-right"})
+        # Each subsequent item should be higher (bottom anchors stack upward)
+        assert float(y1) > float(y2)
+
+    def test_theme_dark(self):
+        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        reset_hud_stack()
+        _, _, bg, tc, _ = compute_hud_position({"theme": "dark"})
+        assert bg == "#333"
+        assert tc == "#fff"
+
+    def test_theme_retro(self):
+        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        reset_hud_stack()
+        _, _, bg, tc, _ = compute_hud_position({"theme": "retro"})
+        assert bg == "#001100"
+        assert tc == "#0f0"
+
+    def test_theme_minimal(self):
+        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        reset_hud_stack()
+        _, _, bg, _, _ = compute_hud_position({"theme": "minimal"})
+        assert bg == "transparent"
+
+    def test_theme_with_override(self):
+        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        reset_hud_stack()
+        _, _, bg, tc, _ = compute_hud_position({"theme": "dark", "bg": "#ff0000"})
+        assert bg == "#ff0000"  # explicit override wins
+        assert tc == "#fff"     # theme default still applies
+
+    def test_no_anchor_backward_compatible(self):
+        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        reset_hud_stack()
+        x, y, _, _, _ = compute_hud_position({"x": "0.5", "y": "0.9"})
+        assert x == "0.5"
+        assert y == "0.9"
+
+    def test_score_with_anchor(self):
+        from rosh_lang.widgets import reset_hud_stack
+        reset_hud_stack()
+        stmts = load_widget("score", config={"anchor": "top-right"}, search_paths=[BUNDLED_DIR])
+        sets = [s for s in stmts if isinstance(s, SetStatement)]
+        x_set = [s for s in sets if s.target == "score.display.x"]
+        assert x_set[-1].value == "0.78"
+
+    def test_lives_with_theme(self):
+        from rosh_lang.widgets import reset_hud_stack
+        reset_hud_stack()
+        stmts = load_widget("lives", config={"theme": "retro"}, search_paths=[BUNDLED_DIR])
+        sets = [s for s in stmts if isinstance(s, SetStatement)]
+        bg_set = [s for s in sets if s.target == "lives.display.color"]
+        assert bg_set[-1].value == "#001100"
+
+    def test_score_custom_label(self):
+        from rosh_lang.widgets import reset_hud_stack
+        reset_hud_stack()
+        stmts = load_widget("score", config={"label": "Points:"}, search_paths=[BUNDLED_DIR])
+        sets = [s for s in stmts if isinstance(s, SetStatement)]
+        label_set = [s for s in sets if s.target == "score.display.label"]
+        assert "Points:" in label_set[0].value

@@ -612,7 +612,7 @@ JS_RUNTIME_DOM = """\
       var _gParts = name.split(".");
       var _gHidden = false;
       for (var _gi = 1; _gi < _gParts.length; _gi++) {
-        var _gParent = get(_gParts.slice(0, _gi).join("."));
+        var _gParent = rosh.get(_gParts.slice(0, _gi).join("."));
         if (_gParent && (_gParent.visible === 0 || _gParent.visible === false)) {
           _gHidden = true;
           break;

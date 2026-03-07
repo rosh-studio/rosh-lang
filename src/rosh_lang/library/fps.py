@@ -2,16 +2,17 @@
 """fps — Python widget factory for an FPS counter.
 
 Creates a frames number and a display object with configurable position,
-background, text color, and font size.
+background, text color, and font size. Supports anchor and theme config.
 """
 
 from __future__ import annotations
 
 from rosh_lang.model import CreateStatement, SetStatement, Statement
+from rosh_lang.widgets import compute_hud_position
 
 METADATA = {
     "widget": "fps",
-    "version": "0.2",
+    "version": "0.3",
     "description": "FPS counter for game loop",
     "config": {
         "x": "0.90",
@@ -19,18 +20,16 @@ METADATA = {
         "bg": "#222",
         "text_color": "#fff",
         "font_size": "14px",
+        "anchor": "",
+        "theme": "",
     },
     "licence": "Rosh-BSL",
 }
 
 
-def generate(config: dict[str, str]) -> list[Statement]:
+def generate(config: dict[str, str], user_config: dict[str, str] | None = None) -> list[Statement]:
     """Return a list of unprefixed statements. Loader will prefix them."""
-    x = config.get("x", "0.90")
-    y = config.get("y", "0.95")
-    bg = config.get("bg", "#222")
-    text_color = config.get("text_color", "#fff")
-    font_size = config.get("font_size", "14px")
+    x, y, bg, text_color, font_size = compute_hud_position(config, user_config)
 
     return [
         CreateStatement(kind="number", name="frames"),

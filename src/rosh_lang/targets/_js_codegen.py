@@ -15,7 +15,9 @@ from rosh_lang.model import (
     BlankStatement,
     CommentStatement,
     CreateStatement,
+    DefineStatement,
     DestroyStatement,
+    DoStatement,
     EndStatement,
     EventStatement,
     GoStatement,
@@ -135,6 +137,12 @@ def compile_programme(
                 handler_lines.append(on_js)
             i += 1
             continue
+        elif isinstance(stmt, DefineStatement):
+            fn_js = _emit_define(stmt)
+            if fn_js:
+                init_lines.append(fn_js)
+            i += 1
+            continue
         elif isinstance(stmt, (CommentStatement, BlankStatement, EndStatement, EventStatement)):
             i += 1
             continue
@@ -188,6 +196,10 @@ def _emit_statement(stmt: Statement) -> str:
         return _emit_after(stmt)
     if isinstance(stmt, BackgroundStatement):
         return _emit_background(stmt)
+    if isinstance(stmt, DoStatement):
+        return _emit_do(stmt)
+    if isinstance(stmt, DefineStatement):
+        return _emit_define(stmt)
     return ""
 
 
@@ -266,6 +278,25 @@ def _emit_background(stmt: BackgroundStatement) -> str:
     return f'rosh.setBackground("{_escape_js(stmt.value)}");'
 
 
+def _emit_define(stmt: DefineStatement) -> str:
+    """Emit a JS function declaration from a define block."""
+    body_js = _emit_body(stmt.body)
+    name = _safe_fn_name(stmt.name)
+    return f"function {name}() {{\n{body_js}}}"
+
+
+def _emit_do(stmt: DoStatement) -> str:
+    """Emit a JS function call."""
+    name = _safe_fn_name(stmt.name)
+    return f"{name}();"
+
+
+def _safe_fn_name(name: str) -> str:
+    """Convert a Rosh function name to a safe JS identifier."""
+    safe = name.replace("-", "_").replace(".", "_")
+    return f"rosh_fn_{safe}"
+
+
 def _emit_on(stmt: OnStatement) -> str:
     """Emit JS for an on-statement — one-line event reactor.
 
@@ -295,14 +326,18 @@ def _emit_on(stmt: OnStatement) -> str:
         body = f'rosh.appendOutput(rosh.interpolate("{_escape_js(text)}"));'
     elif action == "destroy":
         body = f'rosh.destroy("{_escape_js(args.strip())}");'
+    elif action == "do":
+        func_name = args.strip().split()[0] if args.strip() else ""
+        if not func_name:
+            return ""
+        body = f"{_safe_fn_name(func_name)}();"
     else:
         return ""
 
     # Wrap in condition check if present
     if stmt.condition:
-        parts = stmt.condition.split()
-        if len(parts) == 3:
-            field, op, val = parts
+        field, op, val = _parse_condition(stmt.condition)
+        if field:
             js_op = {"=": "===", "==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<="}.get(op, op)
             body = (
                 f'var _v = rosh.get("{_escape_js(field)}"); '
@@ -319,12 +354,27 @@ def _emit_on(stmt: OnStatement) -> str:
 # ── Helpers ───────────────────────────────────────────────────────
 
 
+def _parse_condition(condition: str) -> tuple[str, str, str]:
+    """Parse 'field op value' condition, handling quoted values with spaces.
+
+    Returns (field, op, val) or ("", "", "") if unparseable.
+    """
+    parts = condition.split(None, 2)
+    if len(parts) < 3:
+        return ("", "", "")
+    field, op, val = parts[0], parts[1], parts[2]
+    # Handle quoted values: key == " " → val is '" "'
+    # Rejoin if the value is a quoted string that was split
+    if val.startswith('"') and not val.endswith('"'):
+        val = val  # already joined by split(None, 2)
+    return (field, op, val)
+
+
 def _emit_if(stmt: IfStatement, indent: str = "") -> str:
     """Emit JS for an if/else block."""
-    parts = stmt.condition.split()
-    if len(parts) != 3:
+    field, op, val = _parse_condition(stmt.condition)
+    if not field:
         return ""
-    field, op, val = parts
     js_op = {"=": "===", "==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<="}.get(op, op)
 
     # Coerce value: try number first, then string comparison

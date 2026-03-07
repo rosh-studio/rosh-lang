@@ -24,6 +24,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from rosh_lang.parser import parse_string  # noqa: E402
 from rosh_lang.targets.web import render_html  # noqa: E402
+from rosh_lang.targets.threejs import render_threejs  # noqa: E402
 from rosh_lang.widgets import get_bundled_library_path  # noqa: E402
 
 SHOWCASE_DIR = ROOT / "examples" / "showcase"
@@ -31,13 +32,14 @@ DIST_DIR = ROOT / "dist"
 OUTPUT = DIST_DIR / "showcase.html"
 
 # Metadata regex — # demo:, # description:, # badges:
-_META_RE = re.compile(r"^#\s*(demo|description|badges):\s*(.+)$")
+_META_RE = re.compile(r"^#\s*(demo|description|badges|target):\s*(.+)$")
 
 # Rosh keywords for syntax highlighting
 _KEYWORDS = frozenset({
     "print", "create", "set", "when", "end", "use", "on",
     "event", "send", "destroy", "get", "say", "go", "look",
     "connect", "sprite", "sound", "play", "if", "else", "animate",
+    "define", "do", "after", "background",
 })
 
 
@@ -46,7 +48,7 @@ _KEYWORDS = frozenset({
 
 def _parse_demo_metadata(text: str) -> dict[str, str]:
     """Extract # demo:, # description:, # badges: from source header."""
-    meta: dict[str, str] = {"demo": "", "description": "", "badges": ""}
+    meta: dict[str, str] = {"demo": "", "description": "", "badges": "", "target": ""}
     for line in text.splitlines():
         stripped = line.strip()
         m = _META_RE.match(stripped)
@@ -148,6 +150,10 @@ def _build_demo_card(
             f'">{html.escape(label)}</div>'
         )
 
+    # Three.js demos need allow-same-origin to load CDN scripts
+    target = meta.get("target", "").strip()
+    sandbox = "allow-scripts allow-same-origin" if target == "threejs" else "allow-scripts"
+
     return f"""\
     <div class="demo-card">
       <div class="demo-header">
@@ -157,7 +163,7 @@ def _build_demo_card(
       <div class="demo-body">
         <div class="demo-preview">
           {overlay}
-          <iframe srcdoc="{srcdoc}" sandbox="allow-scripts" loading="lazy"></iframe>
+          <iframe srcdoc="{srcdoc}" sandbox="{sandbox}" loading="lazy"></iframe>
         </div>
         <div class="demo-source">
           <pre><code>{highlighted}</code></pre>
@@ -348,7 +354,11 @@ def main() -> None:
         print(f"  [{i}/{len(demos)}] {name}...", end=" ", flush=True)
 
         programme = parse_string(source, source=str(path))
-        rendered = render_html(programme, search_paths=search_paths)
+        target = meta.get("target", "").strip()
+        if target == "threejs":
+            rendered = render_threejs(programme, search_paths=search_paths)
+        else:
+            rendered = render_html(programme, search_paths=search_paths)
         card = _build_demo_card(source, meta, rendered, i)
         cards.append(card)
 

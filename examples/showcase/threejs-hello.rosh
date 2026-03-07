@@ -1,3 +1,7 @@
+# demo: Three.js Hello
+# description: Spinning 3D cube and sphere — click to change colors. Orbit with mouse drag.
+# badges: Three.js, 3D, Click
+# target: threejs
 # Three.js Hello — spinning cube and sphere
 # Demonstrates 3D primitives, rotation, and click interaction
 

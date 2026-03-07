@@ -19,7 +19,9 @@ from rosh_lang.model import (
     CommentStatement,
     ConnectStatement,
     CreateStatement,
+    DefineStatement,
     DestroyStatement,
+    DoStatement,
     EndStatement,
     EventStatement,
     GetStatement,
@@ -69,9 +71,11 @@ class Runtime:
         self.connections: dict[str, str] = {}
         self.audio_registry: dict[str, str] = {}  # sound_name → description
         self.animation_registry: dict[str, dict[str, Any]] = {}  # name → {sheet, frames, speed, mode}
+        self.functions: dict[str, list[Statement]] = {}
         self.output = output
         self.search_paths = search_paths
         self._send_depth = 0
+        self._call_stack: set[str] = set()
 
     # ── public API ────────────────────────────────────────────
 
@@ -135,6 +139,10 @@ class Runtime:
             pass  # Terminal has no setTimeout — noop
         elif isinstance(stmt, BackgroundStatement):
             self.state["_background"] = stmt.value
+        elif isinstance(stmt, DefineStatement):
+            self.functions[stmt.name] = stmt.body
+        elif isinstance(stmt, DoStatement):
+            self._exec_do(stmt)
         elif isinstance(stmt, (CommentStatement, BlankStatement, EndStatement)):
             pass
         return None
@@ -465,6 +473,21 @@ class Runtime:
             for s in stmt.else_body:
                 self.execute(s)
 
+    def _exec_do(self, stmt: DoStatement) -> None:
+        """Execute a user-defined function by name."""
+        name = stmt.name
+        if name not in self.functions:
+            warnings.warn(f"Function {name!r} not defined")
+            return
+        if name in self._call_stack:
+            raise RuntimeError(f"Recursive call to {name!r} is not allowed")
+        self._call_stack.add(name)
+        try:
+            for s in self.functions[name]:
+                self.execute(s)
+        finally:
+            self._call_stack.discard(name)
+
     def _exec_use(self, stmt: UseStatement) -> None:
         """Load a widget: find, namespace-prefix, apply config, execute."""
         from rosh_lang.widgets import load_widget
@@ -514,6 +537,10 @@ class Runtime:
             self._exec_say(SayStatement(text=args))
         elif action == "print":
             self._exec_print(PrintStatement(text=args))
+        elif action == "do":
+            func_name = args.strip().split()[0] if args.strip() else ""
+            if func_name:
+                self._exec_do(DoStatement(name=func_name))
 
     def _eval_condition(self, condition: str) -> bool:
         """Evaluate a simple condition: field op value."""

@@ -2,16 +2,17 @@
 """health-bar — Python widget factory for a health display.
 
 Creates max, current numbers and a display object with configurable position,
-background, text color, and font size.
+background, text color, and font size. Supports anchor and theme config.
 """
 
 from __future__ import annotations
 
 from rosh_lang.model import CreateStatement, SetStatement, Statement
+from rosh_lang.widgets import compute_hud_position
 
 METADATA = {
     "widget": "health-bar",
-    "version": "0.2",
+    "version": "0.3",
     "description": "Health display with current and max values",
     "config": {
         "max": "100",
@@ -21,20 +22,18 @@ METADATA = {
         "bg": "#2a6e2a",
         "text_color": "#fff",
         "font_size": "14px",
+        "anchor": "",
+        "theme": "",
     },
     "licence": "Rosh-BSL",
 }
 
 
-def generate(config: dict[str, str]) -> list[Statement]:
+def generate(config: dict[str, str], user_config: dict[str, str] | None = None) -> list[Statement]:
     """Return a list of unprefixed statements. Loader will prefix them."""
     max_val = config.get("max", "100")
     current = config.get("current", "100")
-    x = config.get("x", "0.02")
-    y = config.get("y", "0.10")
-    bg = config.get("bg", "#2a6e2a")
-    text_color = config.get("text_color", "#fff")
-    font_size = config.get("font_size", "14px")
+    x, y, bg, text_color, font_size = compute_hud_position(config, user_config)
 
     return [
         CreateStatement(kind="number", name="max"),
