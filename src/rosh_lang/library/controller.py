@@ -7,6 +7,8 @@ Does NOT create objects — purely handles input.
 Usage:
     use controller target player keys arrows touch on speed 0.03
     use controller target ship keys both move x fire on
+    use controller target player mode 3d             # arrows=xz, ,/.=y
+    use controller target player mode 3d up_key . down_key ,
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ METADATA = {
     "config": {
         "target": "",
         "keys": "arrows",
+        "mode": "2d",
         "touch": "off",
         "touch_style": "dpad",
         "speed": "0.02",
@@ -44,6 +47,8 @@ METADATA = {
         "clamp_x_max": "0.88",
         "clamp_y_min": "0.02",
         "clamp_y_max": "0.92",
+        "up_key": ".",
+        "down_key": ",",
     },
     "licence": "Rosh-BSL",
 }
@@ -63,13 +68,23 @@ def generate(config: dict[str, str], user_config: dict[str, str] | None = None) 
     GLOBALS.append(target)
 
     keys = config.get("keys", "arrows")
+    mode = config.get("mode", "2d")
     speed = config.get("speed", "0.02")
-    move = config.get("move", "xy")
-    clamp = config.get("clamp", "on")
+    uc = user_config or {}
+    # In 3D mode: world-space movement, floor clamp, different defaults
+    if mode == "3d":
+        speed = uc.get("speed", speed) if "speed" in uc else "0.1"
+        move = uc["move"] if "move" in uc else "xyz"
+        clamp = uc["clamp"] if "clamp" in uc else "on"
+    else:
+        move = config.get("move", "xy")
+        clamp = config.get("clamp", "on")
     cx_min = config.get("clamp_x_min", "0.02")
     cx_max = config.get("clamp_x_max", "0.88")
     cy_min = config.get("clamp_y_min", "0.02")
     cy_max = config.get("clamp_y_max", "0.92")
+    up_key = config.get("up_key", ".")
+    down_key = config.get("down_key", ",")
     fire = config.get("fire", "off")
     fire_key = config.get("fire_key", '" "')
     fire_event = config.get("fire_event", "fire")
@@ -108,7 +123,7 @@ def generate(config: dict[str, str], user_config: dict[str, str] | None = None) 
     # Movement handlers — when update + if _keys checks
     # These use the TARGET object's properties directly (not _self)
     if move != "none":
-        key_map = _get_key_map(keys, speed, move, target)
+        key_map = _get_key_map(keys, speed, move, target, mode, up_key, down_key)
         if key_map:
             stmts.append(WhenStatement(event="update", args=[]))
             for key_name, target_prop, delta in key_map:
@@ -124,16 +139,27 @@ def generate(config: dict[str, str], user_config: dict[str, str] | None = None) 
 
     # Boundary clamping
     if clamp == "on":
-        if move in ("xy", "x"):
-            stmts.append(OnStatement(
-                event="update", action="set",
-                args=f"{target}.x to clamp {target}.x {cx_min} {cx_max}",
-            ))
-        if move in ("xy", "y"):
-            stmts.append(OnStatement(
-                event="update", action="set",
-                args=f"{target}.y to clamp {target}.y {cy_min} {cy_max}",
-            ))
+        if mode == "3d":
+            # 3D: clamp y >= 0 (floor) by default, no x/z bounds
+            floor_min = uc.get("clamp_y_min", "0")
+            floor_max = uc.get("clamp_y_max", "20")
+            if move in ("xyz", "y"):
+                stmts.append(OnStatement(
+                    event="update", action="set",
+                    args=f"{target}.y to clamp {target}.y {floor_min} {floor_max}",
+                ))
+        else:
+            # 2D: clamp x and y to screen bounds
+            if move in ("xy", "x"):
+                stmts.append(OnStatement(
+                    event="update", action="set",
+                    args=f"{target}.x to clamp {target}.x {cx_min} {cx_max}",
+                ))
+            if move in ("xy", "y"):
+                stmts.append(OnStatement(
+                    event="update", action="set",
+                    args=f"{target}.y to clamp {target}.y {cy_min} {cy_max}",
+                ))
 
     # Fire action
     if fire == "on":
@@ -149,33 +175,70 @@ def generate(config: dict[str, str], user_config: dict[str, str] | None = None) 
 
 
 def _get_key_map(
-    keys: str, speed: str, move: str, target: str
+    keys: str, speed: str, move: str, target: str,
+    mode: str = "2d", up_key: str = ".", down_key: str = ",",
 ) -> list[tuple[str, str, str]]:
-    """Return (key_name, target_property, delta_expr) tuples."""
+    """Return (key_name, target_property, delta_expr) tuples.
+
+    In 2d mode: arrows/wasd control x and y.
+    In 3d mode: arrows/wasd control x and z (ground plane),
+                up_key/down_key control y (vertical).
+    """
     result: list[tuple[str, str, str]] = []
 
-    if keys in ("arrows", "both"):
-        if move in ("xy", "x"):
+    if mode == "3d":
+        # 3D: arrows = x (left/right) and z (forward/back)
+        if keys in ("arrows", "both"):
+            if move in ("xyz", "xz", "x"):
+                result.extend([
+                    ("ArrowLeft", f"{target}.x", f"- {speed}"),
+                    ("ArrowRight", f"{target}.x", f"+ {speed}"),
+                ])
+            if move in ("xyz", "xz", "z"):
+                result.extend([
+                    ("ArrowUp", f"{target}.z", f"- {speed}"),
+                    ("ArrowDown", f"{target}.z", f"+ {speed}"),
+                ])
+        if keys in ("wasd", "both"):
+            if move in ("xyz", "xz", "x"):
+                result.extend([
+                    ("a", f"{target}.x", f"- {speed}"),
+                    ("d", f"{target}.x", f"+ {speed}"),
+                ])
+            if move in ("xyz", "xz", "z"):
+                result.extend([
+                    ("w", f"{target}.z", f"- {speed}"),
+                    ("s", f"{target}.z", f"+ {speed}"),
+                ])
+        # Vertical (y) via up_key/down_key
+        if move in ("xyz", "y"):
             result.extend([
-                ("ArrowLeft", f"{target}.x", f"- {speed}"),
-                ("ArrowRight", f"{target}.x", f"+ {speed}"),
+                (up_key, f"{target}.y", f"+ {speed}"),
+                (down_key, f"{target}.y", f"- {speed}"),
             ])
-        if move in ("xy", "y"):
-            result.extend([
-                ("ArrowUp", f"{target}.y", f"- {speed}"),
-                ("ArrowDown", f"{target}.y", f"+ {speed}"),
-            ])
-
-    if keys in ("wasd", "both"):
-        if move in ("xy", "x"):
-            result.extend([
-                ("a", f"{target}.x", f"- {speed}"),
-                ("d", f"{target}.x", f"+ {speed}"),
-            ])
-        if move in ("xy", "y"):
-            result.extend([
-                ("w", f"{target}.y", f"- {speed}"),
-                ("s", f"{target}.y", f"+ {speed}"),
-            ])
+    else:
+        # 2D: arrows/wasd control x and y
+        if keys in ("arrows", "both"):
+            if move in ("xy", "x"):
+                result.extend([
+                    ("ArrowLeft", f"{target}.x", f"- {speed}"),
+                    ("ArrowRight", f"{target}.x", f"+ {speed}"),
+                ])
+            if move in ("xy", "y"):
+                result.extend([
+                    ("ArrowUp", f"{target}.y", f"- {speed}"),
+                    ("ArrowDown", f"{target}.y", f"+ {speed}"),
+                ])
+        if keys in ("wasd", "both"):
+            if move in ("xy", "x"):
+                result.extend([
+                    ("a", f"{target}.x", f"- {speed}"),
+                    ("d", f"{target}.x", f"+ {speed}"),
+                ])
+            if move in ("xy", "y"):
+                result.extend([
+                    ("w", f"{target}.y", f"- {speed}"),
+                    ("s", f"{target}.y", f"+ {speed}"),
+                ])
 
     return result

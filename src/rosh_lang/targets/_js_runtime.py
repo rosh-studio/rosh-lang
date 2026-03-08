@@ -26,6 +26,11 @@ var rosh = (function() {
 
   // ── State manager ─────────────────────────────────────
   function get(key) {
+    // Special case: _keys.X where X is the literal key name (may contain dots)
+    if (key.indexOf("_keys.") === 0) {
+      var kn = key.slice(6);
+      return state._keys ? state._keys[kn] : undefined;
+    }
     var parts = key.split(".");
     var obj = state;
     for (var i = 0; i < parts.length; i++) {
