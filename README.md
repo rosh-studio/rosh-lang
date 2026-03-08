@@ -1,7 +1,5 @@
 # Rosh
 
-> **DRAFT** — Much of this document describes the intended workflow. Features marked *planned* are not yet implemented.
-
 **One script, many worlds.** A plain-English language that runs on terminal, browser, and game engine.
 
 ```
@@ -60,6 +58,7 @@ echo 'print "hello world"' > hello.rosh
 rosh hello.rosh                          # terminal
 rosh hello.rosh --target web --run       # browser
 rosh hello.rosh --target phaser --run    # Phaser game
+rosh hello.rosh --target threejs --run   # Three.js 3D
 ```
 
 ### 5. AI-Generate a Programme (*planned*)
@@ -140,6 +139,10 @@ rosh new game pong    # creates pong.rosh
 | `play` | `play <sound> [mode]` | `play laser` |
 | `animate` | `animate <obj> sheet "path" frames N` | `animate player sheet "run.png" frames 4` |
 | `after` | `after <seconds> send <event>` | `after 3 send timeout` |
+| `background` | `background "<colour_or_image>"` | `background "#0a0a1e"` |
+| `define` | `define <name>` ... `end` | `define fire_bullet` ... `end` |
+| `do` | `do <name>` | `do fire_bullet` |
+| `repeat` | `repeat <count> [as <var>]` ... `end` | `repeat 5 as i` ... `end` |
 | `create scene` | `create scene <name>` | `create scene level1` |
 
 ### Object Properties
@@ -178,6 +181,10 @@ Coordinates: `0.0`-`1.0` maps to percentage of the canvas. Values `>1.0` are tre
 | `scene_enter` | `scene` | Entered a scene |
 | `scene_exit` | `scene` | Left a scene |
 | `destroy` | `name` | Object destroyed |
+| `timer_done` | `name` | Timer widget finished |
+| `game_start` | — | Game started (via game-lifecycle widget) |
+| `game_over` | — | Game over (via lives widget at 0) |
+| `game_restart` | — | Game restarted |
 
 ### Control Flow
 
@@ -201,6 +208,17 @@ on update set x to x + 0.01
 
 # Conditional listener
 on keydown when key == " " play laser
+
+# User-defined functions
+define fire_bullet
+  set bullet._fire to 1
+end
+do fire_bullet
+
+# Counted loop
+repeat 5 as i
+  print "Round {i}"
+end
 ```
 
 ### Key-Hold State
@@ -228,12 +246,13 @@ use ball walls top-sides
 use hazard count 5 vy 0.3 spawn_rate 0.8
 ```
 
-### Available Widgets (23)
+### Available Widgets (25)
 
 | Widget | Type | Config | Description |
 |--------|------|--------|-------------|
-| `score` | .py | `x y bg text_color font_size` | Score display |
-| `player` | .rosh | `speed` | Keyboard-controlled ship |
+| `score` | .py | `anchor theme label x y bg text_color font_size` | Score display (HUD) |
+| `player` | .py | `speed keys move x y width height color clamp_x_min clamp_x_max` | Keyboard-controlled ship |
+| `controller` | .py | `target keys touch touch_style speed move help fire fire_key fire_event clamp` | Universal input (keyboard + touch) |
 | `counter` | .rosh | — | Click counter |
 | `timer` | .py | `total running x y bg text_color font_size` | Auto-tick countdown (fires timer_done) |
 | `health-bar` | .py | `max current x y bg text_color font_size` | Health display |
@@ -268,6 +287,7 @@ rosh library info bullet
 | Terminal | `--target terminal` (default) | Print to stdout |
 | Web | `--target web` | Self-contained HTML page with CSS divs |
 | Phaser | `--target phaser` | Phaser 3.70.0 game with canvas rendering |
+| Three.js | `--target threejs` | Three.js 3D scene with orbit camera and lighting |
 
 Add `--run` to auto-open the browser:
 
@@ -336,12 +356,104 @@ rosh --version                    Show version
 rosh --help                       Show help
 ```
 
+## MCP Server (AI Tool Integration)
+
+Rosh includes an MCP (Model Context Protocol) server that lets AI tools like Claude Code, Cursor, and Windsurf compile, publish, and manage Rosh programs directly.
+
+### Prerequisites
+
+1. A [rosh.cloud](https://rosh.cloud) account with an API key
+2. Python 3.10+ and [uv](https://docs.astral.sh/uv/)
+
+### Setup
+
+**1. Get the MCP server script**
+
+Clone the repo (if you haven't already):
+
+```bash
+git clone https://github.com/roshstudio/rosh-lang.git
+```
+
+The server script is at `rosh-dev/mcp/rosh_mcp.py`.
+
+**2. Get your API key**
+
+Log in to [rosh.cloud](https://rosh.cloud), go to your profile, and generate an API key.
+
+**3. Configure your AI tool**
+
+Add the following to your tool's MCP config:
+
+**Claude Code** (`<project>/.claude/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "rosh": {
+      "command": "uv",
+      "args": [
+        "run", "--with", "mcp[cli]", "--with", "httpx",
+        "python", "/path/to/rosh-dev/mcp/rosh_mcp.py"
+      ],
+      "env": {
+        "ROSH_API_KEY": "rosh_k1_your_key_here"
+      }
+    }
+  }
+}
+```
+
+**Cursor / Other MCP clients** (check your tool's MCP config location):
+
+```json
+{
+  "mcpServers": {
+    "rosh": {
+      "command": "python",
+      "args": ["/path/to/rosh-dev/mcp/rosh_mcp.py"],
+      "env": {
+        "ROSH_API_KEY": "rosh_k1_your_key_here",
+        "ROSH_API_BASE": "https://rosh.cloud"
+      }
+    }
+  }
+}
+```
+
+For Cursor and similar tools, install the dependencies first: `pip install "mcp[cli]" httpx`
+
+**4. Restart your AI tool** to pick up the new MCP server.
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `rosh_docs` | Get the full Rosh language reference |
+| `rosh_compile` | Compile Rosh code without publishing |
+| `rosh_publish` | Compile and publish a program to rosh.cloud |
+| `rosh_list_programs` | List your published programs |
+| `rosh_get_program` | Get details of a specific program |
+| `rosh_update_program` | Update an existing program |
+| `rosh_delete_program` | Delete a program |
+| `rosh_hide_program` | Hide a program from public view |
+| `rosh_show_program` | Make a hidden program visible again |
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ROSH_API_KEY` | Yes | Your rosh.cloud API key |
+| `ROSH_API_BASE` | No | API base URL (default: `https://rosh.cloud`) |
+
+The server also reads from a `.env` file in the project root if present.
+
 ## Project Structure
 
 ```
 rosh-lang/
   src/rosh_lang/
-    model.py          # Data model (21 statement types)
+    model.py          # Data model (23 statement types)
     parser.py         # Text -> Programme
     runtime.py        # Execute programmes, manage state
     widgets.py        # Widget loader and composition
@@ -350,7 +462,7 @@ rosh-lang/
     sheets.py         # Spritesheet slicer
     assets.py         # Asset file resolver
     scaffolder.py     # rosh new templates
-    library/          # 19 bundled widgets
+    library/          # 25 bundled widgets
     library_cli.py    # rosh library CLI
     targets/
       terminal.py     # Terminal target
@@ -359,9 +471,11 @@ rosh-lang/
       _js_runtime.py  # JS runtime (core + DOM)
       _js_runtime_phaser.py  # JS runtime (Phaser layer)
       _js_codegen.py  # AST -> JavaScript compiler
+      threejs.py      # Three.js 3D target
+      _js_runtime_threejs.py  # JS runtime (Three.js layer)
     __main__.py       # CLI entry point + REPL
   examples/           # Example programmes
-  tests/              # Test suite (654 tests)
+  tests/              # Test suite (747 tests)
   tools/              # Build tools (showcase generator)
   dist/               # Generated output (showcase.html)
 ```
