@@ -62,7 +62,7 @@ def render_threejs(
             audio_data[name] = generate_sound_params(name, desc)
 
     # Compile to JS
-    compiled = compile_programme(programme, search_paths=search_paths)
+    compiled = compile_programme(programme, search_paths=search_paths, target="threejs")
 
     # Build script block
     script_parts = [JS_RUNTIME_CORE, "", "// ── Init ──", compiled.init_code]

@@ -53,6 +53,7 @@ class CompiledProgramme:
 def compile_programme(
     programme: Programme,
     search_paths: list | None = None,
+    target: str = "web",
 ) -> CompiledProgramme:
     """Compile a full Rosh programme into JS code segments."""
     init_lines: list[str] = []
@@ -70,15 +71,20 @@ def compile_programme(
             # Nested use is resolved inside load_widget via _loading guard
             from rosh_lang.widgets import load_widget
 
+            widget_config = dict(stmt.config) if stmt.config else {}
+            # Auto-detect 3D mode for controller widget on threejs target
+            if stmt.name == "controller" and target == "threejs" and "mode" not in widget_config:
+                widget_config["mode"] = "3d"
             widget_stmts = load_widget(
                 stmt.name,
-                config=stmt.config if stmt.config else None,
+                config=widget_config or None,
                 search_paths=search_paths,
             )
             if widget_stmts:
                 sub = compile_programme(
                     Programme(statements=widget_stmts),
                     search_paths=search_paths,
+                    target=target,
                 )
                 if sub.init_code:
                     init_lines.append(sub.init_code)
