@@ -421,7 +421,7 @@ Add the following to your tool's MCP config:
 }
 ```
 
-For Cursor and similar tools, install the dependencies first: `pip install "mcp[cli]" httpx`
+For Cursor and similar tools, install the dependencies first: `uv pip install "mcp[cli]" httpx` (or `pip install "mcp[cli]" httpx`)
 
 **4. Restart your AI tool** to pick up the new MCP server.
 

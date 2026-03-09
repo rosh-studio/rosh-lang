@@ -9,6 +9,7 @@ Usage:
     use controller target ship keys both move x fire on
     use controller target player mode 3d             # arrows=xz, ,/.=y
     use controller target player mode 3d up_key . down_key ,
+    use controller target player mode 3d vertical on # adds up/down touch buttons
 """
 
 from __future__ import annotations
@@ -42,6 +43,9 @@ METADATA = {
         "fire": "off",
         "fire_key": '" "',
         "fire_event": "fire",
+        "fire2": "off",
+        "fire2_key": '"x"',
+        "fire2_event": "fire2",
         "clamp": "on",
         "clamp_x_min": "0.02",
         "clamp_x_max": "0.88",
@@ -49,6 +53,7 @@ METADATA = {
         "clamp_y_max": "0.92",
         "up_key": ".",
         "down_key": ",",
+        "vertical": "off",
     },
     "licence": "Rosh-BSL",
 }
@@ -88,10 +93,14 @@ def generate(config: dict[str, str], user_config: dict[str, str] | None = None) 
     fire = config.get("fire", "off")
     fire_key = config.get("fire_key", '" "')
     fire_event = config.get("fire_event", "fire")
+    fire2 = config.get("fire2", "off")
+    fire2_key = config.get("fire2_key", '"x"')
+    fire2_event = config.get("fire2_event", "fire2")
     touch = config.get("touch", "off")
     touch_style = config.get("touch_style", "dpad")
     help_on = config.get("help", "on")
     help_key = config.get("help_key", "?")
+    vertical = config.get("vertical", "off")
 
     stmts: list[Statement] = []
 
@@ -119,6 +128,18 @@ def generate(config: dict[str, str], user_config: dict[str, str] | None = None) 
         if fire == "on":
             stmts.append(CreateStatement(kind="string", name="_help_fire"))
             stmts.append(SetStatement(target="_help_fire", value=fire_key))
+        if fire2 == "on":
+            stmts.append(CreateStatement(kind="string", name="_fire2_key"))
+            stmts.append(SetStatement(target="_fire2_key", value=fire2_key))
+
+    # Vertical controls config (picked up by touch controls in 3D mode)
+    if vertical == "on":
+        stmts.append(CreateStatement(kind="string", name="_vertical"))
+        stmts.append(SetStatement(target="_vertical", value="on"))
+        stmts.append(CreateStatement(kind="string", name="_vertical_up_key"))
+        stmts.append(SetStatement(target="_vertical_up_key", value=up_key))
+        stmts.append(CreateStatement(kind="string", name="_vertical_down_key"))
+        stmts.append(SetStatement(target="_vertical_down_key", value=down_key))
 
     # Movement handlers — when update + if _keys checks
     # These use the TARGET object's properties directly (not _self)
@@ -169,6 +190,15 @@ def generate(config: dict[str, str], user_config: dict[str, str] | None = None) 
         stmts.append(OnStatement(
             event="keydown", action="send", args=fire_event,
             condition=f"key == \"{clean_key}\"",
+        ))
+
+    # Fire2 action (second button)
+    if fire2 == "on":
+        clean_key2 = fire2_key.strip('"').strip("'")
+        stmts.append(EventStatement(name=fire2_event, payload_fields=[]))
+        stmts.append(OnStatement(
+            event="keydown", action="send", args=fire2_event,
+            condition=f"key == \"{clean_key2}\"",
         ))
 
     return stmts

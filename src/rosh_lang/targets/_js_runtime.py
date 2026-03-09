@@ -807,6 +807,209 @@ JS_RUNTIME_DOM = """\
 })();
 """
 
+# ── Touch controls (shared across all JS targets) ────────────────
+#
+# Auto-detected on touch devices via @media (pointer: coarse).
+# Renders a translucent d-pad that sets _keys state, so all existing
+# controller/keyboard logic works unchanged.
+
+JS_TOUCH_CONTROLS = """\
+
+// ── Touch controls — 8-way joystick + fire buttons ──
+(function() {
+  // Only inject if a controller widget is present
+  if (rosh.get("controller.speed") == null) return;
+
+  var style = document.createElement("style");
+  style.textContent = [
+    ".rosh-tc { display:none; position:fixed; bottom:0; left:0; right:0; height:160px; z-index:9999; touch-action:none; user-select:none; -webkit-user-select:none; pointer-events:none; }",
+    "@media (pointer:coarse) { .rosh-tc { display:block; } }",
+
+    // Joystick base (left side)
+    ".rosh-joy { position:absolute; left:24px; bottom:20px; width:120px; height:120px; background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.25); border-radius:50%; pointer-events:auto; }",
+    ".rosh-joy-thumb { position:absolute; left:50%; top:50%; width:48px; height:48px; margin:-24px 0 0 -24px; background:rgba(99,102,241,0.4); border:1px solid rgba(99,102,241,0.6); border-radius:50%; transition:transform 0.05s; }",
+
+    // Fire buttons (right side)
+    ".rosh-fire { position:absolute; right:24px; bottom:36px; display:flex; gap:12px; pointer-events:auto; }",
+    ".rosh-fire-btn { width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; font-family:system-ui,sans-serif; letter-spacing:0.5px; }",
+    ".rosh-fire-a { background:rgba(239,68,68,0.2); border:2px solid rgba(239,68,68,0.5); color:rgba(239,68,68,0.9); }",
+    ".rosh-fire-b { background:rgba(59,130,246,0.2); border:2px solid rgba(59,130,246,0.5); color:rgba(59,130,246,0.9); }",
+    ".rosh-fire-btn.active { transform:scale(0.9); }",
+    ".rosh-fire-a.active { background:rgba(239,68,68,0.4); }",
+    ".rosh-fire-b.active { background:rgba(59,130,246,0.4); }",
+  ].join("\\n");
+  document.head.appendChild(style);
+
+  // Read controller config
+  var hasFire = rosh.get("controller._help_fire") != null;
+  var fireKey = " ";
+  var helpFire = rosh.get("controller._help_fire");
+  if (helpFire && typeof helpFire === "string") {
+    fireKey = helpFire.replace(/['"]/g, "").trim() || " ";
+  }
+  // Second fire button: check for controller._fire2_key
+  var fire2Key = rosh.get("controller._fire2_key");
+  var hasFire2 = fire2Key != null && fire2Key !== "";
+
+  // Container
+  var container = document.createElement("div");
+  container.className = "rosh-tc";
+
+  // ── Joystick ──
+  var joyBase = document.createElement("div");
+  joyBase.className = "rosh-joy";
+  var joyThumb = document.createElement("div");
+  joyThumb.className = "rosh-joy-thumb";
+  joyBase.appendChild(joyThumb);
+  container.appendChild(joyBase);
+
+  var joyDir = {left: false, right: false, up: false, down: false};
+  var joyTouchId = null;
+  var joyRect = null;
+  var DEADZONE = 15;  // pixels from center before registering direction
+
+  function updateJoystick(touchX, touchY) {
+    if (!joyRect) joyRect = joyBase.getBoundingClientRect();
+    var cx = joyRect.left + joyRect.width / 2;
+    var cy = joyRect.top + joyRect.height / 2;
+    var dx = touchX - cx;
+    var dy = touchY - cy;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    var maxDist = joyRect.width / 2 - 10;
+
+    // Clamp thumb to circle
+    if (dist > maxDist) {
+      dx = dx / dist * maxDist;
+      dy = dy / dist * maxDist;
+    }
+    joyThumb.style.transform = "translate(" + dx + "px," + dy + "px)";
+
+    // 8-way direction from angle (22.5° zones)
+    var prev = {left: joyDir.left, right: joyDir.right, up: joyDir.up, down: joyDir.down};
+    if (dist < DEADZONE) {
+      joyDir.left = joyDir.right = joyDir.up = joyDir.down = false;
+    } else {
+      var angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      joyDir.right = angle > -67.5 && angle < 67.5;
+      joyDir.left  = angle > 112.5 || angle < -112.5;
+      joyDir.down  = angle > 22.5 && angle < 157.5;
+      joyDir.up    = angle > -157.5 && angle < -22.5;
+    }
+
+    // Emit key events for state changes
+    syncKey("ArrowLeft", prev.left, joyDir.left);
+    syncKey("ArrowRight", prev.right, joyDir.right);
+    syncKey("ArrowUp", prev.up, joyDir.up);
+    syncKey("ArrowDown", prev.down, joyDir.down);
+  }
+
+  function resetJoystick() {
+    joyThumb.style.transform = "translate(0,0)";
+    var prev = {left: joyDir.left, right: joyDir.right, up: joyDir.up, down: joyDir.down};
+    joyDir.left = joyDir.right = joyDir.up = joyDir.down = false;
+    syncKey("ArrowLeft", prev.left, false);
+    syncKey("ArrowRight", prev.right, false);
+    syncKey("ArrowUp", prev.up, false);
+    syncKey("ArrowDown", prev.down, false);
+    joyTouchId = null;
+  }
+
+  function syncKey(key, was, is) {
+    if (was === is) return;
+    rosh.state._keys[key] = is ? 1 : 0;
+    rosh.send(is ? "keydown" : "keyup", {key: key});
+  }
+
+  joyBase.addEventListener("touchstart", function(e) {
+    e.preventDefault();
+    if (joyTouchId !== null) return;  // already tracking
+    var t = e.changedTouches[0];
+    joyTouchId = t.identifier;
+    joyRect = joyBase.getBoundingClientRect();
+    updateJoystick(t.clientX, t.clientY);
+  }, {passive: false});
+
+  document.addEventListener("touchmove", function(e) {
+    if (joyTouchId === null) return;
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === joyTouchId) {
+        e.preventDefault();
+        updateJoystick(e.changedTouches[i].clientX, e.changedTouches[i].clientY);
+        return;
+      }
+    }
+  }, {passive: false});
+
+  document.addEventListener("touchend", function(e) {
+    if (joyTouchId === null) return;
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === joyTouchId) {
+        resetJoystick();
+        return;
+      }
+    }
+  });
+  document.addEventListener("touchcancel", function(e) {
+    if (joyTouchId === null) return;
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === joyTouchId) {
+        resetJoystick();
+        return;
+      }
+    }
+  });
+
+  // ── Vertical buttons (3D up/down — uses fire button slots) ──
+  var vertUp = rosh.get("controller._vertical_up_key");
+  var vertDown = rosh.get("controller._vertical_down_key");
+  var hasVertical = rosh.get("controller._vertical") === "on" && vertUp && vertDown;
+
+  // ── Fire buttons (or vertical buttons) ──
+  if (hasFire || hasFire2 || hasVertical) {
+    var fireDiv = document.createElement("div");
+    fireDiv.className = "rosh-fire";
+
+    function makeFireBtn(key, label, cssClass) {
+      var btn = document.createElement("div");
+      btn.className = "rosh-fire-btn " + cssClass;
+      btn.textContent = label;
+      btn.addEventListener("touchstart", function(e) {
+        e.preventDefault();
+        btn.classList.add("active");
+        rosh.state._keys[key] = 1;
+        rosh.send("keydown", {key: key});
+      }, {passive: false});
+      btn.addEventListener("touchend", function(e) {
+        e.preventDefault();
+        btn.classList.remove("active");
+        rosh.state._keys[key] = 0;
+        rosh.send("keyup", {key: key});
+      }, {passive: false});
+      btn.addEventListener("touchcancel", function(e) {
+        btn.classList.remove("active");
+        rosh.state._keys[key] = 0;
+        rosh.send("keyup", {key: key});
+      });
+      return btn;
+    }
+
+    if (hasVertical) {
+      fireDiv.appendChild(makeFireBtn(vertUp, "\\u25B2", "rosh-fire-a"));
+      fireDiv.appendChild(makeFireBtn(vertDown, "\\u25BC", "rosh-fire-b"));
+    }
+    if (hasFire) {
+      fireDiv.appendChild(makeFireBtn(fireKey, "A", "rosh-fire-a"));
+    }
+    if (hasFire2) {
+      fireDiv.appendChild(makeFireBtn(fire2Key, "B", "rosh-fire-b"));
+    }
+    container.appendChild(fireDiv);
+  }
+
+  document.body.appendChild(container);
+})();
+"""
+
 # ── Combined runtime ──────────────────────────────────────────────
 
 JS_RUNTIME = JS_RUNTIME_CORE + JS_RUNTIME_DOM

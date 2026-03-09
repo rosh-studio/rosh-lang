@@ -35,7 +35,7 @@ from rosh_lang.runtime import Runtime
 from rosh_lang.sounds import generate_sound_params
 from rosh_lang.sprites import generate_sprite
 from rosh_lang.targets._js_codegen import compile_programme
-from rosh_lang.targets._js_runtime import JS_RUNTIME
+from rosh_lang.targets._js_runtime import JS_RUNTIME, JS_TOUCH_CONTROLS
 
 COPYRIGHT = f"(c) Rosh Studio 2026 — rosh.cloud"
 
@@ -365,6 +365,7 @@ def _render_interactive(
         script_parts.extend(["", "// ── Start game loop ──", "rosh.startLoop();"])
     else:
         script_parts.extend(["", "// ── Initial sync ──", "rosh.syncAll();"])
+    script_parts.append(JS_TOUCH_CONTROLS)
     script_block = "\n".join(script_parts)
 
     canvas_bg = rt.state.get("_background", "#16213e")

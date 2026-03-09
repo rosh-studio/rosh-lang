@@ -24,7 +24,7 @@ from rosh_lang.model import PrintStatement, Programme, SayStatement
 from rosh_lang.runtime import Runtime
 from rosh_lang.sounds import generate_sound_params
 from rosh_lang.targets._js_codegen import compile_programme
-from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE
+from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE, JS_TOUCH_CONTROLS
 from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_THREEJS
 from rosh_lang.targets.web import _generate_audio_data
 
@@ -80,6 +80,7 @@ def render_threejs(
 
     # Three.js renderer layer (always included — it creates the scene)
     script_parts.extend(["", "// ── Three.js renderer ──", JS_RUNTIME_THREEJS])
+    script_parts.append(JS_TOUCH_CONTROLS)
 
     script_block = "\n".join(script_parts)
 
