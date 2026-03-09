@@ -1,0 +1,74 @@
+# Reference Game — the canonical Rosh game pattern
+# Works on all targets: web, phaser, threejs
+# Run: rosh reference-game.rosh --target web --run
+#      rosh reference-game.rosh --target phaser --run
+#      rosh reference-game.rosh --target threejs --run
+
+# ── Game lifecycle (title → playing → game over → restart) ──
+use game-lifecycle title "Dodge!" subtitle "Press Space to start"
+
+# ── HUD ──
+use score
+use lives count 3
+
+# ── Player (controller handles keyboard + mobile touch) ──
+create object player
+set player.x to 0.45
+set player.y to 0.8
+set player.width to 0.08
+set player.height to 0.08
+set player.color to "#4ade80"
+sprite player "green spaceship"
+
+use controller target player speed 0.03 move x fire on
+
+# ── Falling hazards ──
+use hazard count 5 vy 0.4 color "#ef4444" width 0.06 height 0.06 spawn_rate 0.02 sprite "red asteroid"
+
+# ── Bullet pool + explosion pool ──
+use bullet count 3 vy -0.5 color "#facc15"
+use explosion count 3
+
+# ── Sound effects ──
+sound laser "laser shoot"
+sound boom "explosion hit"
+sound ouch "hit damage"
+
+# ── Fire: controller sends "fire" event, we launch a bullet ──
+when fire
+  set bullet._x to player.x
+  set bullet._y to player.y
+  set bullet._fire to 1
+  play laser
+end
+
+# ── Bullet hits hazard: score + explosion ──
+when collision bullet.* hazard.*
+  set score.value to score.value + 10
+  set explosion._x to b_x
+  set explosion._y to b_y
+  set explosion._fire to 1
+  play boom
+end
+
+# ── Hazard hits player: lose a life ──
+when collision hazard.* player
+  set lives.count to lives.count - 1
+  set explosion._x to player.x
+  set explosion._y to player.y
+  set explosion._fire to 1
+  play ouch
+end
+
+# ── Game over (auto-fired when lives hit 0) ──
+when game_over
+  print "GAME OVER — Score: {score.value}"
+end
+
+# ── Restart: reset state ──
+when game_restart
+  set score.value to 0
+  set lives.count to 3
+  set player.x to 0.45
+  set player.y to 0.8
+end

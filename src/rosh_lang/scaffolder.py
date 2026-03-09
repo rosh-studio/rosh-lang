@@ -39,45 +39,81 @@ print "edit this file and run: rosh {name}.rosh"
 ''',
     ),
     "game": (
-        "A playable game with player, score, and shooting",
+        "A complete game with title screen, gameplay, and game over",
         '''\
 # {name} — a Rosh game
-# Run with: rosh {name}.rosh --target web --run
+# Run: rosh {name}.rosh --target web --run
+#      rosh {name}.rosh --target phaser --run
+#      rosh {name}.rosh --target threejs --run
 # licence: Rosh-BSL
 
-# ── Score ──
+# ── Game lifecycle (title → playing → game over → restart) ──
+use game-lifecycle title "{name}" subtitle "Press Space to start"
+
+# ── HUD ──
 use score
+use lives count 3
 
-# ── Player ──
-use player speed 0.03
-sprite player.ship "green spaceship"
+# ── Player (controller handles keyboard + mobile touch) ──
+create object player
+set player.x to 0.45
+set player.y to 0.8
+set player.width to 0.08
+set player.height to 0.08
+set player.color to "#4ade80"
+sprite player "green spaceship"
 
-# ── Bullet pool ──
-use bullet count 3 vy -0.5 color "#ffff00"
+use controller target player speed 0.03 move x fire on
 
-# ── Enemy ──
-create object enemy
-set enemy.x to 0.45
-set enemy.y to 0.1
-set enemy.width to 0.08
-set enemy.height to 0.06
-set enemy.color to "#ff4444"
-sprite enemy "red alien"
+# ── Falling hazards ──
+use hazard count 5 vy 0.4 color "#ef4444" width 0.06 height 0.06 spawn_rate 0.02 sprite "red asteroid"
+
+# ── Bullet pool + explosion pool ──
+use bullet count 3 vy -0.5 color "#facc15"
+use explosion count 3
 
 # ── Sound effects ──
 sound laser "laser shoot"
-sound hit "explosion hit"
+sound boom "explosion hit"
+sound ouch "hit damage"
 
-# ── Shooting ──
-on keydown when key == " " set bullet._x to player.ship.x
-on keydown when key == " " set bullet._y to player.ship.y
-on keydown when key == " " set bullet._fire to 1
-on keydown when key == " " play laser
+# ── Fire: controller sends "fire" event, we launch a bullet ──
+when fire
+  set bullet._x to player.x
+  set bullet._y to player.y
+  set bullet._fire to 1
+  play laser
+end
 
-# ── Collision ──
-when collision bullet.* enemy
-  set score.value to score.value + 1
-  play hit
+# ── Bullet hits hazard: score + explosion ──
+when collision bullet.* hazard.*
+  set score.value to score.value + 10
+  set explosion._x to b_x
+  set explosion._y to b_y
+  set explosion._fire to 1
+  play boom
+end
+
+# ── Hazard hits player: lose a life ──
+when collision hazard.* player
+  set lives.count to lives.count - 1
+  set explosion._x to player.x
+  set explosion._y to player.y
+  set explosion._fire to 1
+  play ouch
+end
+
+# ── Game over (auto-fired when lives hit 0) ──
+when game_over
+  print "GAME OVER — Score: {{score.value}}"
+end
+
+# ── Restart: reset state ──
+when game_restart
+  set score.value to 0
+  set lives.count to 3
+  set player.x to 0.45
+  set player.y to 0.8
 end
 ''',
     ),
