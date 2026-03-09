@@ -21,6 +21,14 @@ JS_RUNTIME_THREEJS = """\
   var scene, camera, renderer, controls;
   var outputDiv;
 
+  // ── 2D-in-3D detection ────────────────────────────────────
+  // If _view=="2d", objects use 0-1 normalised coords (same as web/phaser).
+  // We map them to a visible plane: x*SCALE, (1-y)*SCALE, z=0.
+  // If _view is not set, auto-detect from object coordinates on first frame.
+  var is2D = false;
+  var _autoDetected = false;
+  var SCALE2D = 10;  // 0-1 maps to 0-10 world units
+
   // ── Color parsing ────────────────────────────────────────
   var colorMap = {
     "red": 0xff0000, "green": 0x00ff00, "blue": 0x0000ff,
@@ -36,6 +44,39 @@ JS_RUNTIME_THREEJS = """\
     }
     if (colorMap[c]) return colorMap[c];
     return 0x444444;
+  }
+
+  // ── Text label sprite factory ───────────────────────────
+  var labelSprites = {};  // name → THREE.Sprite
+
+  function makeLabel(text, textColor, fontSize) {
+    var canvas = document.createElement("canvas");
+    var ctx = canvas.getContext("2d");
+    var size = parseInt(fontSize) || 14;
+    var px = Math.max(size * 3, 42);
+    var font = "bold " + px + "px system-ui, sans-serif";
+    // Measure with correct font
+    ctx.font = font;
+    var tw = ctx.measureText(text).width;
+    canvas.width = Math.ceil(tw + 32);
+    canvas.height = Math.ceil(px * 1.4);
+    // Re-set font after resize (canvas resize clears state)
+    ctx.font = font;
+    ctx.fillStyle = textColor || "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+    var tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    var mat = new THREE.SpriteMaterial({map: tex, transparent: true, depthTest: false});
+    var sprite = new THREE.Sprite(mat);
+    sprite._labelText = text;
+    sprite._labelColor = textColor;
+    // Scale sprite to match text width in world units
+    var aspect = canvas.width / canvas.height;
+    var spriteH = 0.8;
+    sprite.scale.set(spriteH * aspect, spriteH, 1);
+    return sprite;
   }
 
   // ── Geometry factory ─────────────────────────────────────
@@ -80,6 +121,7 @@ JS_RUNTIME_THREEJS = """\
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x16213e);
 
+  // Default: perspective camera for 3D scenes
   camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 1000);
   camera.position.set(0, 5, 10);
   camera.lookAt(0, 0, 0);
@@ -104,9 +146,38 @@ JS_RUNTIME_THREEJS = """\
   directional.position.set(5, 10, 7);
   scene.add(directional);
 
-  // Grid helper
+  // Grid helper (hidden in 2D mode)
   var grid = new THREE.GridHelper(20, 20, 0x444444, 0x333333);
   scene.add(grid);
+
+  // ── Switch to 2D camera ────────────────────────────────────
+  function switchTo2D() {
+    if (is2D) return;
+    is2D = true;
+
+    var cx = SCALE2D / 2;  // center of play area
+    var cz = SCALE2D / 2;
+
+    // 2.5D: perspective camera at a slight angle, fixed position
+    // Gives depth while keeping gameplay clear
+    camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);
+    camera.position.set(cx, 14, SCALE2D + 6);  // above and slightly behind
+    camera.lookAt(cx, 0, cz - 0.5);  // look at centre, slightly above
+
+    // Disable orbit controls in 2D mode (prevents camera confusion)
+    if (controls) {
+      controls.dispose();
+      controls = null;
+    }
+    // Hide grid in 2D mode — add a subtle ground plane instead
+    grid.visible = false;
+    var groundGeo = new THREE.PlaneGeometry(SCALE2D * 1.5, SCALE2D * 1.5);
+    var groundMat = new THREE.MeshStandardMaterial({color: 0x16213e, roughness: 0.9});
+    var ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.set(cx, -0.16, cz);
+    scene.add(ground);
+  }
 
   // Output overlay
   outputDiv = document.createElement("div");
@@ -169,6 +240,47 @@ JS_RUNTIME_THREEJS = """\
 
   // ── Sync state → Three.js objects ────────────────────────
   function syncAll() {
+    // Auto-detect 2D mode on first meaningful frame
+    if (!_autoDetected) {
+      // Check if _view is explicitly set
+      if (rosh.state._view === "2d" || rosh.state._view === "2.5d") {
+        switchTo2D();
+        _autoDetected = true;
+      } else if (rosh.state._view === "orbit") {
+        // 2D game but with orbit controls enabled (game-on-a-table)
+        switchTo2D();
+        if (typeof THREE.OrbitControls !== "undefined") {
+          controls = new THREE.OrbitControls(camera, renderer.domElement);
+          controls.enableDamping = true;
+          controls.dampingFactor = 0.05;
+          controls.target.set(SCALE2D / 2, 0, SCALE2D / 2);
+        }
+        _autoDetected = true;
+      } else if (rosh.state._view === "3d") {
+        _autoDetected = true;  // keep perspective camera
+      } else {
+        // Auto-detect: if objects exist and none have z > 0, and coords are 0-1 range
+        var objCount = 0;
+        var hasExplicitZ = false;
+        var hasNormCoords = false;
+        for (var n in rosh.objects) {
+          var o = rosh.get(n);
+          if (!o || typeof o !== "object") continue;
+          // Skip internal/meta objects (prefixed with _)
+          if (n[0] === "_") continue;
+          objCount++;
+          if (typeof o.z === "number" && o.z > 0.01) hasExplicitZ = true;
+          if (typeof o.x === "number" && o.x >= 0 && o.x <= 1.1) hasNormCoords = true;
+        }
+        if (objCount >= 2 && !hasExplicitZ && hasNormCoords) {
+          switchTo2D();
+          _autoDetected = true;
+        } else if (objCount >= 2) {
+          _autoDetected = true;
+        }
+      }
+    }
+
     // Apply background if changed
     var bg = rosh.state._background;
     if (bg && bg !== scene._appliedBg) {
@@ -217,6 +329,25 @@ JS_RUNTIME_THREEJS = """\
       var h = obj.height != null ? obj.height : 1;
       var d = obj.depth != null ? obj.depth : w;
 
+      // In 2D mode: remap normalised coords to world space
+      // x → x*SCALE (left to right), y → mapped to z*SCALE (top to bottom), height → 0
+      if (is2D) {
+        // Parked pool objects (at -1,-1 or similar negative coords) → move far off-screen
+        if (x < -0.5 || y < -0.5) {
+          x = -100; y = -100; z = -100;
+          w = 0.01; h = 0.01; d = 0.01;
+        } else {
+          var wx = x * SCALE2D;
+          var wz = y * SCALE2D;  // 2D y maps to 3D z (top-down view)
+          x = wx;
+          y = 0;  // flat on ground plane
+          z = wz;
+          w = (obj.width != null ? obj.width : 0.1) * SCALE2D;
+          h = 0.3;  // thin slab height
+          d = (obj.height != null ? obj.height : 0.1) * SCALE2D;
+        }
+      }
+
       var m = meshes[name];
       if (!m) {
         // Check for GLB model
@@ -238,9 +369,9 @@ JS_RUNTIME_THREEJS = """\
         }
       }
 
-      // Update transform
+      // Update transform (coords already remapped if 2D mode)
       m.position.set(x, y, z);
-      m.scale.set(w, h, d);
+      m.scale.set(Math.max(w, 0.01), Math.max(h, 0.01), Math.max(d, 0.01));
 
       // Rotation
       if (obj.rx != null) m.rotation.x = obj.rx;
@@ -260,13 +391,41 @@ JS_RUNTIME_THREEJS = """\
         m._roshModelUrl = obj.model;
         loadModel(name, obj.model, obj);
       }
+
+      // Label text (canvas sprite floating above object)
+      var rawLabel = obj.label != null ? String(obj.label).replace(/^"|"$/g, "") : "";
+      var label = rawLabel ? rosh.interpolate(rawLabel) : "";
+      var textColor = obj.text_color || "#ffffff";
+      var existingLabel = labelSprites[name];
+      if (label) {
+        if (!existingLabel || existingLabel._labelText !== label || existingLabel._labelColor !== textColor) {
+          // Create or recreate label
+          if (existingLabel) scene.remove(existingLabel);
+          var sprite = makeLabel(label, textColor, obj.font_size);
+          scene.add(sprite);
+          labelSprites[name] = sprite;
+        }
+        // Position label above the object
+        var lbl = labelSprites[name];
+        if (lbl) {
+          lbl.position.set(x + Math.max(w, 0.01) / 2, y + Math.max(h, 0.01) + 0.3, z + Math.max(d, 0.01) / 2);
+          lbl.visible = isVisible;
+        }
+      } else if (existingLabel) {
+        scene.remove(existingLabel);
+        delete labelSprites[name];
+      }
     }
 
-    // Remove meshes for destroyed objects
-    for (var d in meshes) {
-      if (!(d in rosh.objects)) {
-        scene.remove(meshes[d]);
-        delete meshes[d];
+    // Remove meshes and labels for destroyed objects
+    for (var dn in meshes) {
+      if (!(dn in rosh.objects)) {
+        scene.remove(meshes[dn]);
+        delete meshes[dn];
+        if (labelSprites[dn]) {
+          scene.remove(labelSprites[dn]);
+          delete labelSprites[dn];
+        }
       }
     }
   }

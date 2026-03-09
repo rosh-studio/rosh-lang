@@ -54,6 +54,7 @@ end
 # ── Hazard hits player: lose a life ──
 when collision hazard.* player
   set lives.count to lives.count - 1
+  send lives.check-lives
   set explosion._x to player.x
   set explosion._y to player.y
   set explosion._fire to 1
@@ -62,11 +63,13 @@ end
 
 # ── Game over (auto-fired when lives hit 0) ──
 when game_over
+  set _paused to 1
   print "GAME OVER — Score: {score.value}"
 end
 
 # ── Restart: reset state ──
 when game_restart
+  set _paused to 0
   set score.value to 0
   set lives.count to 3
   set player.x to 0.45

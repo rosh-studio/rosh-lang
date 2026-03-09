@@ -72,9 +72,8 @@ def compile_programme(
             from rosh_lang.widgets import load_widget
 
             widget_config = dict(stmt.config) if stmt.config else {}
-            # Auto-detect 3D mode for controller widget on threejs target
-            if stmt.name == "controller" and target == "threejs" and "mode" not in widget_config:
-                widget_config["mode"] = "3d"
+            # Note: controller mode 3d must be set explicitly by the user.
+            # 2D games running on threejs target use the 2D-in-3D auto-mapping.
             widget_stmts = load_widget(
                 stmt.name,
                 config=widget_config or None,
