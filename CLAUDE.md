@@ -58,6 +58,7 @@ look                                  # inspect scene
 connect server wss://...              # register connection
 destroy enemy                         # remove object
 sprite ship "blue spaceship"          # procedural pixel art
+sprite ship "https://example.com/ship.png"  # URL sprite (any image)
 sound laser "laser shoot"             # procedural sound
 play laser                            # play sound (once/loop/stop)
 animate obj sheet "run.png" frames 4  # spritesheet animation
@@ -87,7 +88,7 @@ end
 | `height` | float | Size (default 0.1) |
 | `color` | string | Hex or named color |
 | `label` | string | Text on object (empty by default) |
-| `sprite` | string | Triggers procedural sprite generation |
+| `sprite` | string | Procedural sprite description or image URL |
 | `visible` | int | 0 hides, any other shows (cascades to children) |
 | `vx`, `vy` | float | Velocity (per second) |
 | `text_color` | string | Text color (default #fff) |
@@ -203,7 +204,13 @@ targets/
 
 ## Sprite Descriptions
 
-Procedural sprites respond to color keywords (red, blue, green, etc.) and shape keywords (spaceship, alien, ball, bullet, crystal, star). Example: `sprite ship "blue spaceship"` generates a blue spaceship-shaped pixel art.
+Two modes:
+
+1. **Procedural** — description keywords generate 7×9 pixel art. Color keywords (red, blue, green, etc.) and shape keywords (spaceship, alien, ball, bullet, crystal, star). Example: `sprite ship "blue spaceship"`
+
+2. **URL** — any `http://` or `https://` URL loads the image directly. Works on all targets (web, phaser, threejs). Example: `sprite ship "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f680.png"`
+
+URL sprites and procedural sprites can be mixed in the same program. If a URL fails to load, the object falls back to a colored rectangle.
 
 ## Sound Families
 

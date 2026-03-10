@@ -261,14 +261,22 @@ def generate_sprite(name: str, description: str = "") -> str:
     handles upscaling in the browser via nearest-neighbour — crisp
     and guaranteed symmetric.
 
+    If *description* is an HTTP(S) URL, it is returned as-is — the
+    browser will load the image directly from that URL.
+
     Args:
         name: Object name — used as seed for deterministic generation.
         description: Optional description for color hints
-                     (e.g. "blue spaceship", "red alien").
+                     (e.g. "blue spaceship", "red alien") **or** an
+                     image URL (``https://...``).
 
     Returns:
-        A ``data:image/png;base64,...`` string ready for CSS background-image.
+        A ``data:image/png;base64,...`` string or an image URL.
     """
+    # URL pass-through: external image URLs are used directly
+    if description and description.strip().startswith(("http://", "https://")):
+        return description.strip()
+
     # Seed RNG deterministically from the name
     digest = hashlib.md5(name.encode("utf-8")).hexdigest()
     rng = random.Random(digest)

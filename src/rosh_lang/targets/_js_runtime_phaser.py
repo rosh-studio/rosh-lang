@@ -51,10 +51,21 @@ JS_RUNTIME_PHASER = """\
   class GameScene extends Phaser.Scene {
     constructor() { super({ key: "GameScene" }); }
 
+    preload() {
+      // Use Phaser's loader for URL sprites (handles CORS properly)
+      this.load.setCORS("anonymous");
+      for (var name in rosh._spriteData) {
+        var uri = rosh._spriteData[name];
+        if (uri.startsWith("http://") || uri.startsWith("https://")) {
+          this.load.image("spr_" + name, uri);
+        }
+      }
+    }
+
     create() {
       scene = this;
 
-      // Register pre-decoded sprite textures
+      // Register pre-decoded data-URI sprite textures (non-URL ones)
       for (var name in _spriteImages) {
         if (!this.textures.exists("spr_" + name)) {
           this.textures.addImage("spr_" + name, _spriteImages[name]);
@@ -201,6 +212,7 @@ JS_RUNTIME_PHASER = """\
         if (rosh._spriteData[name] && scene.textures.exists(texKey)) {
           s = scene.add.sprite(x, y, texKey);
           s.setDisplaySize(w, h);
+          s._roshSpriteUri = rosh._spriteData[name];  // prevent false frame-change on first tick
         } else {
           s = scene.add.rectangle(x, y, w, h, parseColor(obj.color || "#444"));
         }
@@ -217,6 +229,9 @@ JS_RUNTIME_PHASER = """\
         var newUri = rosh._spriteData[name];
         var newKey = "spr_" + name + "_" + (s._roshTexIdx = (s._roshTexIdx || 0) + 1);
         var tempImg = new Image();
+        if (newUri.startsWith("http://") || newUri.startsWith("https://")) {
+          tempImg.crossOrigin = "anonymous";
+        }
         tempImg.onload = (function(k, sp, nk) {
           return function() {
             if (scene.textures.exists(nk)) return;
@@ -330,6 +345,13 @@ JS_RUNTIME_PHASER = """\
   } else {
     for (var _k in rosh._spriteData) {
       (function(key) {
+        var uri = rosh._spriteData[key];
+        // Skip URL sprites — they're loaded by Phaser's preload()
+        if (uri.startsWith("http://") || uri.startsWith("https://")) {
+          _spritesReady++;
+          if (_spritesReady >= _spritesTotal) startGame();
+          return;
+        }
         var img = new Image();
         img.onload = function() {
           _spriteImages[key] = img;
@@ -340,7 +362,7 @@ JS_RUNTIME_PHASER = """\
           _spritesReady++;
           if (_spritesReady >= _spritesTotal) startGame();
         };
-        img.src = rosh._spriteData[key];
+        img.src = uri;
       })(_k);
     }
   }
