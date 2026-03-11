@@ -89,6 +89,7 @@ end
 | `color` | string | Hex or named color |
 | `label` | string | Text on object (empty by default) |
 | `sprite` | string | Procedural sprite description or image URL |
+| `rotation` | float | Rotation in degrees (0=up, clockwise positive) |
 | `visible` | int | 0 hides, any other shows (cascades to children) |
 | `vx`, `vy` | float | Velocity (per second) |
 | `text_color` | string | Text color (default #fff) |
@@ -211,6 +212,11 @@ Two modes:
 2. **URL** — any `http://` or `https://` URL loads the image directly. Works on all targets (web, phaser, threejs). Example: `sprite ship "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f680.png"`
 
 URL sprites and procedural sprites can be mixed in the same program. If a URL fails to load, the object falls back to a colored rectangle.
+
+**Rendering differences:**
+- Procedural sprites: fill the entire width×height box, pixelated upscaling (crisp edges)
+- URL sprites: `contain` fit (preserves aspect ratio), smooth rendering
+- `rotation` property: degrees, 0=up, clockwise positive (all targets)
 
 ## Sound Families
 

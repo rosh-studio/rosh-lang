@@ -222,7 +222,21 @@ JS_RUNTIME_PHASER = """\
 
       // Update position and size
       s.setPosition(x, y);
-      s.setDisplaySize(w, h);
+      // URL sprites: scale uniformly (contain) to preserve aspect ratio
+      if (s.texture && s.texture.key !== "__DEFAULT" && rosh._spriteData[name] &&
+          (rosh._spriteData[name].indexOf("http") === 0)) {
+        var tw = s.texture.getSourceImage().width || w;
+        var th = s.texture.getSourceImage().height || h;
+        var scale = Math.min(w / tw, h / th);
+        s.setScale(scale);
+      } else {
+        s.setDisplaySize(w, h);
+      }
+
+      // Rotation (degrees, 0 = up, clockwise positive)
+      if (obj.rotation != null) {
+        s.setAngle(obj.rotation);
+      }
 
       // Check if animated sprite frame changed — re-register texture
       if (rosh._spriteData[name] && s._roshSpriteUri !== rosh._spriteData[name]) {

@@ -373,10 +373,14 @@ JS_RUNTIME_THREEJS = """\
       m.position.set(x, y, z);
       m.scale.set(Math.max(w, 0.01), Math.max(h, 0.01), Math.max(d, 0.01));
 
-      // Rotation
+      // Rotation (rx/ry/rz in radians for 3D; rotation in degrees for 2D — 0=up, clockwise)
       if (obj.rx != null) m.rotation.x = obj.rx;
       if (obj.ry != null) m.rotation.y = obj.ry;
       if (obj.rz != null) m.rotation.z = obj.rz;
+      if (obj.rotation != null && obj.rx == null && obj.ry == null && obj.rz == null) {
+        // 2D rotation property: degrees → radians, applied to Y axis in 2.5D (ground plane spin)
+        m.rotation.y = -(obj.rotation * Math.PI / 180);
+      }
 
       // Update color (meshes with material)
       if (m.material && !m._isModel) {

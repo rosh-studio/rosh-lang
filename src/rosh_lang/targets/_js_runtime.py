@@ -652,16 +652,24 @@ JS_RUNTIME_DOM = """\
       }
       div.style.width = cssValue(w);
       div.style.height = cssValue(h);
+      // Rotation (degrees, 0 = up, clockwise positive)
+      if (obj.rotation != null) {
+        div.style.transform = "rotate(" + obj.rotation + "deg)";
+      } else {
+        div.style.transform = "";
+      }
       // Sprite overlay
       var spriteDesc = obj.sprite;
       var spriteUri = rosh._spriteData && rosh._spriteData[name];
       if (spriteUri) {
         div.style.backgroundColor = "transparent";
         div.style.backgroundImage = "url(" + spriteUri + ")";
-        div.style.backgroundSize = "100% 100%";
+        // URL sprites: contain preserves aspect ratio; procedural: fill the box
+        var isUrl = spriteUri.indexOf("http") === 0;
+        div.style.backgroundSize = isUrl ? "contain" : "100% 100%";
         div.style.backgroundRepeat = "no-repeat";
         div.style.backgroundPosition = "center";
-        div.style.imageRendering = "pixelated";
+        div.style.imageRendering = isUrl ? "auto" : "pixelated";
         div.textContent = "";
       } else {
         div.style.backgroundColor = color;
