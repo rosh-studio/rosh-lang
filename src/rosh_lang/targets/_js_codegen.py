@@ -260,7 +260,9 @@ def _emit_sound(stmt: SoundStatement) -> str:
 
 
 def _emit_sprite(stmt: SpriteStatement) -> str:
+    # Ensure the object exists — sprite implies create object
     return (
+        f'rosh.create("object", "{_escape_js(stmt.name)}"); '
         f'rosh.set("{_escape_js(stmt.name)}.sprite", '
         f'"{_escape_js(stmt.description)}");'
     )
