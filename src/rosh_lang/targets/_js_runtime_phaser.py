@@ -207,30 +207,42 @@ JS_RUNTIME_PHASER = """\
 
       var s = sprites[name];
       if (!s) {
-        // Create new: sprite texture or colored rectangle
+        // Create new: sprite texture, circle, or colored rectangle
         var texKey = "spr_" + name;
+        var shp = (obj.shape || "").toLowerCase();
         if (rosh._spriteData[name] && scene.textures.exists(texKey)) {
           s = scene.add.sprite(x, y, texKey);
           s.setDisplaySize(w, h);
           s._roshSpriteUri = rosh._spriteData[name];  // prevent false frame-change on first tick
+        } else if (shp === "circle" || shp === "sphere" || shp === "ball") {
+          var radius = Math.min(w, h) / 2;
+          s = scene.add.circle(x + w / 2, y + h / 2, radius, parseColor(obj.color || "#444"));
+          s._roshCircle = true;
         } else {
           s = scene.add.rectangle(x, y, w, h, parseColor(obj.color || "#444"));
         }
-        s.setOrigin(0, 0);  // top-left origin (matches CSS positioning)
+        if (!s._roshCircle) s.setOrigin(0, 0);  // top-left origin (matches CSS positioning)
         sprites[name] = s;
       }
 
       // Update position and size
-      s.setPosition(x, y);
-      // URL sprites: scale uniformly (contain) to preserve aspect ratio
-      if (s.texture && s.texture.key !== "__DEFAULT" && rosh._spriteData[name] &&
-          (rosh._spriteData[name].indexOf("http") === 0)) {
-        var tw = s.texture.getSourceImage().width || w;
-        var th = s.texture.getSourceImage().height || h;
-        var scale = Math.min(w / tw, h / th);
-        s.setScale(scale);
+      if (s._roshCircle) {
+        var radius = Math.min(w, h) / 2;
+        s.setPosition(x + w / 2, y + h / 2);
+        s.setRadius(radius);
+        s.setFillStyle(parseColor(obj.color || "#444"));
       } else {
-        s.setDisplaySize(w, h);
+        s.setPosition(x, y);
+        // URL sprites: scale uniformly (contain) to preserve aspect ratio
+        if (s.texture && s.texture.key !== "__DEFAULT" && rosh._spriteData[name] &&
+            (rosh._spriteData[name].indexOf("http") === 0)) {
+          var tw = s.texture.getSourceImage().width || w;
+          var th = s.texture.getSourceImage().height || h;
+          var scale = Math.min(w / tw, h / th);
+          s.setScale(scale);
+        } else {
+          s.setDisplaySize(w, h);
+        }
       }
 
       // Rotation (degrees, 0 = up, clockwise positive)

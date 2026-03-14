@@ -82,7 +82,10 @@ JS_RUNTIME_THREEJS = """\
   // ── Geometry factory ─────────────────────────────────────
   function createGeometry(shape) {
     switch ((shape || "cube").toLowerCase()) {
-      case "sphere":   return new THREE.SphereGeometry(0.5, 24, 24);
+      case "sphere":
+      case "circle":
+      case "ball":
+      case "orb":      return new THREE.SphereGeometry(0.5, 24, 24);
       case "cylinder": return new THREE.CylinderGeometry(0.5, 0.5, 1, 24);
       case "cone":     return new THREE.ConeGeometry(0.5, 1, 24);
       case "torus":    return new THREE.TorusGeometry(0.35, 0.15, 16, 32);

@@ -680,7 +680,7 @@ JS_RUNTIME_DOM = """\
       div.style.alignItems = "center";
       div.style.justifyContent = "center";
       div.style.boxSizing = "border-box";
-      div.style.borderRadius = "4px";
+      div.style.borderRadius = (obj.shape === "circle" || obj.shape === "sphere" || obj.shape === "ball") ? "50%" : "4px";
       div.style.color = obj.text_color || "#fff";
       div.style.fontSize = obj.font_size || "14px";
       div.style.fontFamily = "system-ui, sans-serif";
