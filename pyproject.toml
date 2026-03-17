@@ -4,7 +4,7 @@ version = "0.8.0"
 description = "One script, many worlds — a plain-English language for terminal, browser, and game engine"
 requires-python = ">=3.10"
 readme = "README.md"
-license = {text = "Rosh-SAL"}
+license = {text = "Rosh-BSL"}
 authors = [{name = "Roger Dubar"}]
 keywords = ["language", "game", "plain-english", "transpiler", "phaser", "creative-coding"]
 classifiers = [
@@ -25,7 +25,7 @@ dev = ["pytest>=7.0"]
 [project.urls]
 Homepage = "https://rosh.cloud"
 Documentation = "https://rosh.cloud/docs"
-Repository = "https://github.com/roshstudio/rosh-lang"
+Repository = "https://github.com/rosh-studio/rosh-lang"
 
 [project.scripts]
 rosh = "rosh_lang.__main__:main"

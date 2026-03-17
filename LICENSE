@@ -60,20 +60,42 @@ Copyright 2026 Roger Dubar trading as Rosh Studio. All Rights Reserved.
 3. PERMITTED USES
 
 You may use the Licensed Work without requiring a separate Commercial License Agreement
-from Licensor for the following purposes:
+from Licensor for the following purposes. If your use falls into any of these categories,
+you do not need to contact Licensor — just use Rosh.
 
 3.1 Personal Use: Any use of the Licensed Work by an individual for personal,
-    non-commercial purposes.
+    non-commercial purposes, including hobby projects, learning, and creative coding.
 
-3.2 Educational Use: Use by educational institutions, educators, and students for
-    teaching, learning, and non-commercial academic purposes.
+3.2 Educational Use: Use by educational institutions, educators, students, and tutors for
+    teaching, learning, coursework, workshops, and non-commercial academic purposes.
+    This explicitly includes:
+    (a) classroom instruction and curriculum materials;
+    (b) student projects and assessments;
+    (c) coding clubs, bootcamps, and after-school programmes;
+    (d) accessibility and assistive technology research in educational settings.
 
 3.3 Academic Research: Use in academic research, scholarship, and publication, where
-    such use does not generate direct commercial revenue.
+    such use does not generate direct commercial revenue. This includes funded research
+    grants, conference papers, and PhD/Masters projects. Any published work (papers,
+    theses, reports, or presentations) that uses or references the Licensed Work must
+    include the following attribution:
 
-3.4 Non-Profit Use: Use by non-profit organisations and charities registered in any
-    jurisdiction, where such use is consistent with the non-profit's stated mission and
-    does not generate commercial revenue.
+        "Rosh (https://rosh.cloud) by Rosh Studio, licensed under Rosh-BSL."
+
+    We also welcome (but do not require) a notification to info@rosh.cloud so we can
+    track academic adoption and support your work.
+
+3.4 Non-Profit and Community Use: Use by non-profit organisations, charities, community
+    groups, and social enterprises registered in any jurisdiction, where such use is
+    consistent with the organisation's stated mission. This explicitly includes:
+    (a) accessibility programmes and assistive technology initiatives;
+    (b) digital inclusion and community coding workshops;
+    (c) arts, heritage, and cultural organisations;
+    (d) healthcare and therapeutic applications (non-commercial).
+    Any public-facing materials (reports, websites, grant applications) that describe
+    use of the Licensed Work should include the attribution:
+
+        "Built with Rosh (https://rosh.cloud) by Rosh Studio."
 
 3.5 Internal Evaluation: Use by any organisation for the purposes of evaluating the
     Licensed Work for potential future use, provided such evaluation does not constitute
@@ -409,10 +431,10 @@ from Licensor for the following purposes:
 16. GOVERNING LAW
 
 16.1 This License shall be governed by and construed in accordance with the laws of
-     [GOVERNING LAW JURISDICTION], without regard to conflict of law principles.
+     Scotland, United Kingdom, without regard to conflict of law principles.
 
 16.2 Jurisdiction and Venue. You irrevocably consent to the exclusive jurisdiction and
-     venue of the courts located in [GOVERNING LAW JURISDICTION] for resolution of any
+     venue of the courts located in Scotland, United Kingdom for resolution of any
      dispute arising from or related to this License.
 
 17. SEVERABILITY

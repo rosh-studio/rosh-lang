@@ -19,7 +19,7 @@ rosh new game my-game                  # scaffold a starter file
 ## How to Test
 
 ```bash
-cd rosh-lang && uv run pytest -q       # expect 567+ passed
+cd rosh-lang && uv run pytest -q       # expect 747+ passed
 ```
 
 After code changes, reinstall:
@@ -142,7 +142,7 @@ end
 
 Run: `rosh game.rosh --target web --run`
 
-## Widget Library (24 Widgets)
+## Widget Library (22 Widgets)
 
 | Widget | Type | Config | Purpose |
 |--------|------|--------|---------|
@@ -183,7 +183,7 @@ sounds.py         → name + description → Web Audio synthesis params
 sheets.py         → PNG spritesheet → list of frame data URIs
 assets.py         → resolve asset file paths
 scaffolder.py     → rosh new templates
-library/          → 19 bundled widgets
+library/          → 22 bundled widgets
 targets/
   terminal.py     → print to stdout
   web.py          → self-contained HTML page (CSS divs + JS)
