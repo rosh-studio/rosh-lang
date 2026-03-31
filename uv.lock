@@ -472,6 +472,11 @@ dev = [
     { name = "pytest" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "anthropic", marker = "extra == 'ai'", specifier = ">=0.84.0" },
@@ -479,6 +484,9 @@ requires-dist = [
     { name = "rich", specifier = ">=13.0" },
 ]
 provides-extras = ["ai", "dev"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=9.0.2" }]
 
 [[package]]
 name = "sniffio"

@@ -4,7 +4,8 @@ Replaces JS_RUNTIME_DOM / JS_RUNTIME_PHASER when targeting Three.js.
 Plugs into the same JS_RUNTIME_CORE (state, events, interpolation, audio).
 
 Usage:
-    JS_RUNTIME_CORE + JS_RUNTIME_THREEJS  →  Three.js 3D scene in HTML
+    JS_RUNTIME_CORE + JS_RUNTIME_THREEJS               →  Three.js 3D scene
+    JS_RUNTIME_CORE + JS_RUNTIME_THREEJS + JS_VOICE    →  + voice input (V key)
 """
 
 # ── Three.js-specific renderer ──────────────────────────────
