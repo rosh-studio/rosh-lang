@@ -610,6 +610,22 @@ JS_RUNTIME_CONSOLE = """\
   function logErr(t)  { log("Error: " + t, ERROR_C); }
 
   // ── Mini-parser ──────────────────────────────────────────
+  // Normalise: "set box x to 1" → "set box.x to 1"
+  //            "set box.x 1"    → "set box.x to 1"  (to optional)
+  function normalise(cmd) {
+    // "set <obj> <prop> [to] <value>" with space separator → dot notation
+    var spaceSet = cmd.match(/^set\\s+(\\S+)\\s+([a-zA-Z_][\\w]*)\\s+(?:to\\s+)?([^.].*)$/);
+    if (spaceSet && spaceSet[1].indexOf(".") === -1) {
+      cmd = "set " + spaceSet[1] + "." + spaceSet[2] + " to " + spaceSet[3].trim();
+    }
+    // "set <target> <value>" → inject "to" if missing
+    var missingTo = cmd.match(/^set\\s+(\\S+\\.\\S+)\\s+(?!to\\s)(.+)$/);
+    if (missingTo) {
+      cmd = "set " + missingTo[1] + " to " + missingTo[2].trim();
+    }
+    return cmd;
+  }
+
   function execCommand(raw) {
     var cmd = raw.trim();
     if (!cmd) return;
@@ -619,10 +635,25 @@ JS_RUNTIME_CONSOLE = """\
     historyIdx = -1;
 
     logCmd(cmd);
+    cmd = normalise(cmd);
 
     // clear
     if (cmd === "clear") {
       while (logPanel.firstChild) logPanel.removeChild(logPanel.firstChild);
+      return;
+    }
+
+    // help
+    if (cmd === "help" || cmd === "?") {
+      log("  set <obj.prop> <value>    — set box.color to red", "#d1d5db");
+      log("  set <obj> <prop> <value>  — set box color red", "#d1d5db");
+      log("  create object <name>      — create object ball", "#d1d5db");
+      log("  destroy <name>            — destroy ball", "#d1d5db");
+      log("  say <text>                — say hello world", "#d1d5db");
+      log("  print <text>              — print hello", "#d1d5db");
+      log("  look                      — list objects + state", "#d1d5db");
+      log("  clear                     — clear console", "#d1d5db");
+      log("  ArrowUp/Down: history  Escape: close", "#6b7280");
       return;
     }
 
@@ -653,7 +684,7 @@ JS_RUNTIME_CONSOLE = """\
     m = cmd.match(/^print\\s+(.+)$/);
     if (m) { log(m[1].replace(/^"|"$/g, ""), "#e0e0e0"); return; }
 
-    // set <target> to <value>
+    // set <target> to <value>  (dot form, "to" now guaranteed by normalise)
     m = cmd.match(/^set\\s+(\\S+)\\s+to\\s+(.+)$/);
     if (m) {
       var tgt = m[1], rawVal = m[2].trim();
@@ -665,10 +696,11 @@ JS_RUNTIME_CONSOLE = """\
       return;
     }
 
-    // create object|number|string|list <name>
-    m = cmd.match(/^create\\s+(object|number|string|list)\\s+(\\S+)$/);
+    // create [object|number|string|list] <name>  ("object" is default)
+    m = cmd.match(/^create\\s+(?:(object|number|string|list)\\s+)?(\\S+)$/);
     if (m) {
-      try { rosh.create(m[1], m[2]); logOk("  created " + m[1] + " \\"" + m[2] + "\\""); }
+      var kind = m[1] || "object", name = m[2];
+      try { rosh.create(kind, name); logOk("  created " + kind + " \\"" + name + "\\""); }
       catch(e) { logErr(String(e)); }
       return;
     }
@@ -690,7 +722,7 @@ JS_RUNTIME_CONSOLE = """\
       return;
     }
 
-    logErr("unknown command. Try: set / create / destroy / say / print / look / clear");
+    logErr("unknown — type \\"help\\" for commands");
   }
 
   // ── Open / close ─────────────────────────────────────────
