@@ -292,3 +292,93 @@ class TestThreejsCoordinates:
         """_view == '2d' must switch to orthographic/flat camera."""
         from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_THREEJS
         assert '_view === "2d"' in JS_RUNTIME_THREEJS
+
+
+# ── Live console ─────────────────────────────────────────────
+
+
+class TestThreejsConsole:
+    """Live Rosh console — injected into every Three.js output."""
+
+    def test_console_constant_exists(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert JS_RUNTIME_CONSOLE and len(JS_RUNTIME_CONSOLE) > 100
+
+    def test_console_in_rendered_html(self):
+        html = render_threejs(parse_string('print "hello"'))
+        assert "// ── Live console ──" in html
+
+    def test_console_overlay_id(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "rosh-console" in JS_RUNTIME_CONSOLE
+
+    def test_console_toggle_key(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "Backquote" in JS_RUNTIME_CONSOLE
+
+    def test_console_prompt_text(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "rosh>" in JS_RUNTIME_CONSOLE
+
+    def test_console_has_set_parser(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "evalSetValue" in JS_RUNTIME_CONSOLE
+
+    def test_console_has_create_parser(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "rosh.create" in JS_RUNTIME_CONSOLE
+
+    def test_console_has_destroy_parser(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "rosh.destroy" in JS_RUNTIME_CONSOLE
+
+    def test_console_has_say_parser(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert 'rosh.send("say"' in JS_RUNTIME_CONSOLE
+
+    def test_console_has_look_command(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "look" in JS_RUNTIME_CONSOLE
+
+    def test_console_has_clear_command(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "clear" in JS_RUNTIME_CONSOLE
+
+    def test_console_has_history(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "history" in JS_RUNTIME_CONSOLE
+        assert "ArrowUp" in JS_RUNTIME_CONSOLE
+        assert "ArrowDown" in JS_RUNTIME_CONSOLE
+
+    def test_console_keyboard_isolation(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "stopImmediatePropagation" in JS_RUNTIME_CONSOLE
+
+    def test_console_capture_phase(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "}, true)" in JS_RUNTIME_CONSOLE
+
+    def test_console_accent_color(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "#6366f1" in JS_RUNTIME_CONSOLE
+
+    def test_console_output_color(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "#c084fc" in JS_RUNTIME_CONSOLE
+
+    def test_console_disables_orbit_controls(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "getControls" in JS_RUNTIME_CONSOLE
+        assert "enabled" in JS_RUNTIME_CONSOLE
+
+    def test_controls_exposed_on_rosh(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_THREEJS
+        assert "_controls" in JS_RUNTIME_THREEJS
+
+    def test_console_banner_text(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "Rosh console" in JS_RUNTIME_CONSOLE
+
+    def test_console_monospace_font(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "monospace" in JS_RUNTIME_CONSOLE

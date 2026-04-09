@@ -466,6 +466,7 @@ JS_RUNTIME_THREEJS = """\
   }
 
   // ── Expose on rosh ───────────────────────────────────────
+  rosh._controls = function() { return controls; };
   rosh.syncAll = syncAll;
   rosh.appendOutput = function(text) {
     if (outputDiv) {
@@ -511,5 +512,239 @@ JS_RUNTIME_THREEJS = """\
 
   requestAnimationFrame(animate);
   rosh.send("start", {});
+})();
+"""
+
+# ── Live Rosh console overlay ───────────────────────────────────────────────
+#
+# Always injected into Three.js output. Backtick (`) to toggle.
+# Parses and executes Rosh statements live against the running scene.
+# Supported: set / create / destroy / say / print / look / clear
+
+JS_RUNTIME_CONSOLE = """\
+(function() {
+  var ACCENT    = "#6366f1";
+  var OUTPUT_C  = "#c084fc";
+  var ERROR_C   = "#f87171";
+  var SUCCESS_C = "#86efac";
+  var BG        = "rgba(0,0,0,0.93)";
+  var BORDER    = "rgba(99,102,241,0.4)";
+
+  var consoleOpen = false;
+  var history = [];
+  var historyIdx = -1;
+
+  // ── Build DOM ────────────────────────────────────────────
+  var overlay = document.createElement("div");
+  overlay.id = "rosh-console";
+  overlay.style.cssText = [
+    "position:fixed",
+    "bottom:0",
+    "left:0",
+    "right:0",
+    "height:260px",
+    "background:" + BG,
+    "border-top:1px solid " + BORDER,
+    "font-family:\\"SF Mono\\",\\"Fira Code\\",\\"Cascadia Code\\",monospace",
+    "font-size:13px",
+    "z-index:99999",
+    "flex-direction:column"
+  ].join(";");
+  overlay.style.display = "none";
+
+  var logPanel = document.createElement("div");
+  logPanel.style.cssText = [
+    "flex:1",
+    "overflow-y:auto",
+    "padding:8px 12px 4px 12px",
+    "color:" + OUTPUT_C,
+    "line-height:1.6"
+  ].join(";");
+
+  var inputRow = document.createElement("div");
+  inputRow.style.cssText = [
+    "display:flex",
+    "align-items:center",
+    "padding:6px 12px",
+    "border-top:1px solid " + BORDER,
+    "gap:6px"
+  ].join(";");
+
+  var promptEl = document.createElement("span");
+  promptEl.textContent = "rosh>";
+  promptEl.style.cssText = "color:" + ACCENT + ";font-weight:bold;user-select:none;flex-shrink:0;";
+
+  var inputEl = document.createElement("input");
+  inputEl.type = "text";
+  inputEl.autocomplete = "off";
+  inputEl.spellcheck = false;
+  inputEl.placeholder = "type Rosh — set / create / look / clear";
+  inputEl.style.cssText = [
+    "flex:1",
+    "background:transparent",
+    "border:none",
+    "outline:none",
+    "color:#e0e0e0",
+    "font-family:inherit",
+    "font-size:inherit",
+    "caret-color:" + ACCENT
+  ].join(";");
+
+  inputRow.appendChild(promptEl);
+  inputRow.appendChild(inputEl);
+  overlay.appendChild(logPanel);
+  overlay.appendChild(inputRow);
+  document.body.appendChild(overlay);
+
+  // ── Logging ──────────────────────────────────────────────
+  function log(text, color) {
+    var line = document.createElement("div");
+    line.style.color = color || "#e0e0e0";
+    line.style.whiteSpace = "pre-wrap";
+    line.textContent = text;
+    logPanel.appendChild(line);
+    logPanel.scrollTop = logPanel.scrollHeight;
+  }
+  function logCmd(t)  { log("  " + t, "#9ca3af"); }
+  function logOk(t)   { log(t, SUCCESS_C); }
+  function logErr(t)  { log("Error: " + t, ERROR_C); }
+
+  // ── Mini-parser ──────────────────────────────────────────
+  function execCommand(raw) {
+    var cmd = raw.trim();
+    if (!cmd) return;
+
+    if (history[0] !== cmd) history.unshift(cmd);
+    if (history.length > 100) history.pop();
+    historyIdx = -1;
+
+    logCmd(cmd);
+
+    // clear
+    if (cmd === "clear") {
+      while (logPanel.firstChild) logPanel.removeChild(logPanel.firstChild);
+      return;
+    }
+
+    // look
+    if (cmd === "look") {
+      var names = Object.keys(rosh.objects);
+      if (!names.length) {
+        log("  (no objects)", "#9ca3af");
+      } else {
+        names.forEach(function(n) {
+          var obj = rosh.get(n);
+          try { log("  " + n + ": " + JSON.stringify(obj), OUTPUT_C); }
+          catch(e) { log("  " + n + ": [unprintable]", OUTPUT_C); }
+        });
+      }
+      var stateLines = [];
+      for (var k in rosh.state) {
+        if (k[0] === "_") continue;
+        var v = rosh.state[k];
+        if (typeof v !== "object") stateLines.push(k + " = " + v);
+      }
+      if (stateLines.length) log("  state: " + stateLines.join(", "), "#d1d5db");
+      return;
+    }
+
+    // print <text>
+    var m;
+    m = cmd.match(/^print\\s+(.+)$/);
+    if (m) { log(m[1].replace(/^"|"$/g, ""), "#e0e0e0"); return; }
+
+    // set <target> to <value>
+    m = cmd.match(/^set\\s+(\\S+)\\s+to\\s+(.+)$/);
+    if (m) {
+      var tgt = m[1], rawVal = m[2].trim();
+      try {
+        var result = rosh.evalSetValue(tgt, rawVal);
+        rosh.set(tgt, result);
+        logOk("  " + tgt + " = " + JSON.stringify(result));
+      } catch(e) { logErr(String(e)); }
+      return;
+    }
+
+    // create object|number|string|list <name>
+    m = cmd.match(/^create\\s+(object|number|string|list)\\s+(\\S+)$/);
+    if (m) {
+      try { rosh.create(m[1], m[2]); logOk("  created " + m[1] + " \\"" + m[2] + "\\""); }
+      catch(e) { logErr(String(e)); }
+      return;
+    }
+
+    // destroy <name>
+    m = cmd.match(/^destroy\\s+(\\S+)$/);
+    if (m) {
+      try { rosh.destroy(m[1]); logOk("  destroyed \\"" + m[1] + "\\""); }
+      catch(e) { logErr(String(e)); }
+      return;
+    }
+
+    // say <text>
+    m = cmd.match(/^say\\s+(.+)$/);
+    if (m) {
+      var sayText = m[1].replace(/^"|"$/g, "");
+      rosh.send("say", {text: sayText});
+      logOk("  " + sayText);
+      return;
+    }
+
+    logErr("unknown command. Try: set / create / destroy / say / print / look / clear");
+  }
+
+  // ── Open / close ─────────────────────────────────────────
+  function getControls() { return rosh._controls ? rosh._controls() : null; }
+
+  function openConsole() {
+    consoleOpen = true;
+    overlay.style.display = "flex";
+    var ctrl = getControls();
+    if (ctrl) ctrl.enabled = false;
+    inputEl.value = "";
+    historyIdx = -1;
+    inputEl.focus();
+  }
+
+  function closeConsole() {
+    consoleOpen = false;
+    overlay.style.display = "none";
+    var ctrl = getControls();
+    if (ctrl) ctrl.enabled = true;
+    inputEl.blur();
+  }
+
+  // ── Keyboard handling (capture phase) ────────────────────
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "`" || e.code === "Backquote") {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (consoleOpen) closeConsole(); else openConsole();
+      return;
+    }
+    if (!consoleOpen) return;
+    e.stopImmediatePropagation();
+    if (e.key === "Enter") {
+      execCommand(inputEl.value);
+      inputEl.value = "";
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (historyIdx < history.length - 1) { historyIdx++; inputEl.value = history[historyIdx]; }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (historyIdx > 0) { historyIdx--; inputEl.value = history[historyIdx]; }
+      else { historyIdx = -1; inputEl.value = ""; }
+    } else if (e.key === "Escape") {
+      closeConsole();
+    }
+  }, true);
+
+  document.addEventListener("keyup", function(e) {
+    if (consoleOpen) e.stopImmediatePropagation();
+  }, true);
+
+  // ── Banner ───────────────────────────────────────────────
+  log("Rosh console  \\u0060 to close", ACCENT);
+  log("set  create  destroy  say  print  look  clear", "#6b7280");
 })();
 """
