@@ -570,6 +570,21 @@ JS_RUNTIME_DOM = """\
 
   // ── DOM sync ──────────────────────────────────────────
   function syncAll() {
+    // 3D mode: web (CSS/div) target can't render world-unit coordinates.
+    if (rosh.state._view === "3d") {
+      if (!canvas._3dNotice) {
+        canvas.style.backgroundColor = "#0a0a14";
+        canvas.style.display = "flex";
+        canvas.style.alignItems = "center";
+        canvas.style.justifyContent = "center";
+        var notice = document.createElement("div");
+        notice.style.cssText = "color:#c084fc;font-family:monospace;font-size:18px;text-align:center;padding:40px;";
+        notice.textContent = "3D mode — switch target to Three.js";
+        canvas.appendChild(notice);
+        canvas._3dNotice = true;
+      }
+      return;
+    }
     // Apply background if changed
     var bg = rosh.state._background;
     if (bg && bg !== canvas._appliedBg) {

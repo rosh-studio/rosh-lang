@@ -146,6 +146,20 @@ JS_RUNTIME_PHASER = """\
   }
 
   function syncAll() {
+    // 3D mode: Phaser is a 2D engine. Show a helpful message instead of
+    // silently misrendering world-unit coordinates.
+    if (rosh.state._view === "3d") {
+      if (!scene._3dNotice) {
+        scene.cameras.main.setBackgroundColor("#0a0a14");
+        var msg = scene.add.text(W / 2, H / 2,
+          "3D mode — switch target to Three.js",
+          { fontFamily: "monospace", fontSize: "18px", color: "#c084fc",
+            align: "center", wordWrap: { width: W - 60 } }
+        ).setOrigin(0.5, 0.5);
+        scene._3dNotice = msg;
+      }
+      return;
+    }
     // Apply background if changed
     var bg = rosh.state._background;
     if (bg && bg !== scene._appliedBg) {
