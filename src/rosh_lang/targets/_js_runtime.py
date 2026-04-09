@@ -573,10 +573,10 @@ JS_RUNTIME_DOM = """\
     // 3D mode: web (CSS/div) target can't render world-unit coordinates.
     if (rosh.state._view === "3d") {
       if (!canvas._3dNotice) {
-        canvas.style.backgroundColor = "#0a0a14";
-        canvas.style.display = "flex";
-        canvas.style.alignItems = "center";
-        canvas.style.justifyContent = "center";
+        // Remove any pre-rendered object divs (from static Python render)
+        var existing = canvas.querySelectorAll(".rosh-object");
+        for (var i = 0; i < existing.length; i++) existing[i].remove();
+        canvas.style.cssText = "background:#0a0a14;display:flex;align-items:center;justify-content:center;width:100%;height:100%;";
         var notice = document.createElement("div");
         notice.style.cssText = "color:#c084fc;font-family:monospace;font-size:18px;text-align:center;padding:40px;";
         notice.textContent = "3D mode — switch target to Three.js";
