@@ -267,3 +267,28 @@ class TestThreejsStartEvent:
         prog = parse_string('when start\n  print "go"\nend')
         html = render_threejs(prog)
         assert 'rosh.send("start"' in html
+
+
+# ── Coordinate system ────────────────────────────────────────
+
+
+class TestThreejsCoordinates:
+    """Coordinate system: 0-1 normalised is canonical cross-target.
+    `set _view to "3d"` opts into world-unit mode explicitly."""
+
+    def test_single_obj_normalised_triggers_2d_detection(self):
+        """Single object with 0-1 coords should trigger 2D auto-detection
+        (objCount >= 1, not >= 2). Regression: was broken for single objects."""
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_THREEJS
+        # Auto-detection code must use >= 1, not >= 2
+        assert "objCount >= 1" in JS_RUNTIME_THREEJS
+
+    def test_explicit_3d_view_in_runtime(self):
+        """_view == '3d' must keep perspective camera (world-unit mode)."""
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_THREEJS
+        assert '_view === "3d"' in JS_RUNTIME_THREEJS
+
+    def test_explicit_2d_view_in_runtime(self):
+        """_view == '2d' must switch to orthographic/flat camera."""
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_THREEJS
+        assert '_view === "2d"' in JS_RUNTIME_THREEJS

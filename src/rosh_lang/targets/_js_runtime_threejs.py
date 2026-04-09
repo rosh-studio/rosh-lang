@@ -276,10 +276,10 @@ JS_RUNTIME_THREEJS = """\
           if (typeof o.z === "number" && o.z > 0.01) hasExplicitZ = true;
           if (typeof o.x === "number" && o.x >= 0 && o.x <= 1.1) hasNormCoords = true;
         }
-        if (objCount >= 2 && !hasExplicitZ && hasNormCoords) {
+        if (objCount >= 1 && !hasExplicitZ && hasNormCoords) {
           switchTo2D();
           _autoDetected = true;
-        } else if (objCount >= 2) {
+        } else if (objCount >= 1) {
           _autoDetected = true;
         }
       }
