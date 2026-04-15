@@ -626,6 +626,49 @@ JS_RUNTIME_CONSOLE = """\
     return cmd;
   }
 
+  var SHAPES = ["cube","sphere","cylinder","cone","torus","plane"];
+  var COLORS = ["red","green","blue","yellow","cyan","magenta","white","black","orange","purple","pink","gray"];
+  var DEFAULT_COLORS = ["cyan","orange","magenta","yellow","green","pink","purple"];
+  var _createCount = 0;
+
+  function showHelp() {
+    log("  Commands:", "#a78bfa");
+    log("  create <name>             — create ball", "#d1d5db");
+    log("  create <name> as <shape>  — create rock as sphere", "#d1d5db");
+    log("  set <name>.<prop> <value> — set ball.color to red", "#d1d5db");
+    log("  set <name> <prop> <value> — set ball color red", "#d1d5db");
+    log("  destroy <name>            — destroy ball", "#d1d5db");
+    log("  look                      — list all objects", "#d1d5db");
+    log("  say <text>                — say hello", "#d1d5db");
+    log("  clear                     — clear console", "#d1d5db");
+    log("  Shapes: " + SHAPES.join(", "), "#6b7280");
+    log("  Colors: " + COLORS.join(", "), "#6b7280");
+    log("  ArrowUp/Down: history   Escape: close", "#6b7280");
+  }
+
+  function suggestFix(raw) {
+    var t = raw.toLowerCase().trim();
+    // Looks like a set but missing dot?
+    var mSet = raw.match(/^set\\s+(\\S+)\\s+(\\S+)\\s+(.+)$/);
+    if (mSet && mSet[1].indexOf(".") === -1) {
+      log("  Did you mean: set " + mSet[1] + "." + mSet[2] + " to " + mSet[3] + "?", "#fbbf24");
+      return;
+    }
+    // Looks like create but with extra words?
+    if (t.indexOf("create") !== -1) {
+      log("  Try: create <name>  or  create <name> as sphere", "#fbbf24");
+      return;
+    }
+    // Looks like destroy?
+    if (t.indexOf("delete") !== -1 || t.indexOf("remove") !== -1) {
+      var parts = raw.trim().split(/\\s+/);
+      if (parts[1]) log("  Did you mean: destroy " + parts[1] + "?", "#fbbf24");
+      return;
+    }
+    // Generic
+    log("  Type \\"help\\" for a list of commands.", "#6b7280");
+  }
+
   function execCommand(raw) {
     var cmd = raw.trim();
     if (!cmd) return;
@@ -635,59 +678,63 @@ JS_RUNTIME_CONSOLE = """\
     historyIdx = -1;
 
     logCmd(cmd);
-    cmd = normalise(cmd);
+    var normalised = normalise(cmd);
 
     // clear
-    if (cmd === "clear") {
+    if (normalised === "clear") {
       while (logPanel.firstChild) logPanel.removeChild(logPanel.firstChild);
       return;
     }
 
-    // help
-    if (cmd === "help" || cmd === "?") {
-      log("  set <obj.prop> <value>    — set box.color to red", "#d1d5db");
-      log("  set <obj> <prop> <value>  — set box color red", "#d1d5db");
-      log("  create object <name>      — create object ball", "#d1d5db");
-      log("  destroy <name>            — destroy ball", "#d1d5db");
-      log("  say <text>                — say hello world", "#d1d5db");
-      log("  print <text>              — print hello", "#d1d5db");
-      log("  look                      — list objects + state", "#d1d5db");
-      log("  clear                     — clear console", "#d1d5db");
-      log("  ArrowUp/Down: history  Escape: close", "#6b7280");
-      return;
-    }
+    // help / ?
+    if (normalised === "help" || normalised === "?") { showHelp(); return; }
 
     // look
-    if (cmd === "look") {
+    if (normalised === "look") {
       var names = Object.keys(rosh.objects);
       if (!names.length) {
-        log("  (no objects)", "#9ca3af");
+        log("  (no objects yet — try: create box)", "#9ca3af");
       } else {
         names.forEach(function(n) {
           var obj = rosh.get(n);
-          try { log("  " + n + ": " + JSON.stringify(obj), OUTPUT_C); }
-          catch(e) { log("  " + n + ": [unprintable]", OUTPUT_C); }
+          var shape = (obj && obj.shape) || "cube";
+          var color = (obj && obj.color) || "gray";
+          var x = (obj && obj.x != null) ? obj.x.toFixed(1) : "0";
+          var y = (obj && obj.y != null) ? obj.y.toFixed(1) : "0";
+          var z = (obj && obj.z != null) ? obj.z.toFixed(1) : "0";
+          log("  " + n + "  shape=" + shape + " color=" + color + " pos=(" + x + "," + y + "," + z + ")", OUTPUT_C);
         });
       }
-      var stateLines = [];
-      for (var k in rosh.state) {
-        if (k[0] === "_") continue;
-        var v = rosh.state[k];
-        if (typeof v !== "object") stateLines.push(k + " = " + v);
-      }
-      if (stateLines.length) log("  state: " + stateLines.join(", "), "#d1d5db");
       return;
     }
 
     // print <text>
     var m;
-    m = cmd.match(/^print\\s+(.+)$/);
-    if (m) { log(m[1].replace(/^"|"$/g, ""), "#e0e0e0"); return; }
+    m = normalised.match(/^print\\s+(.+)$/);
+    if (m) { log(m[1].replace(/^["']|["']$/g, ""), "#e0e0e0"); return; }
 
-    // set <target> to <value>  (dot form, "to" now guaranteed by normalise)
-    m = cmd.match(/^set\\s+(\\S+)\\s+to\\s+(.+)$/);
+    // say <text>
+    m = normalised.match(/^say\\s+(.+)$/);
+    if (m) {
+      var sayText = m[1].replace(/^["']|["']$/g, "");
+      rosh.send("say", {text: sayText});
+      log("  " + sayText, "#86efac");
+      return;
+    }
+
+    // set <target> to <value>
+    m = normalised.match(/^set\\s+(\\S+)\\s+to\\s+(.+)$/);
     if (m) {
       var tgt = m[1], rawVal = m[2].trim();
+      // Validate object exists for obj.prop targets
+      var dotIdx = tgt.indexOf(".");
+      if (dotIdx !== -1) {
+        var objName = tgt.slice(0, dotIdx);
+        if (!rosh.objects[objName]) {
+          logErr("\\"" + objName + "\\" doesn\\'t exist. Try: create " + objName);
+          return;
+        }
+      }
       try {
         var result = rosh.evalSetValue(tgt, rawVal);
         rosh.set(tgt, result);
@@ -696,33 +743,53 @@ JS_RUNTIME_CONSOLE = """\
       return;
     }
 
-    // create [object|number|string|list] <name>  ("object" is default)
-    m = cmd.match(/^create\\s+(?:(object|number|string|list)\\s+)?(\\S+)$/);
+    // create <name> [as <shape>]
+    m = normalised.match(/^create\\s+(?:(object|number|string|list)\\s+)?(\\S+)(?:\\s+as\\s+(\\S+))?$/);
     if (m) {
-      var kind = m[1] || "object", name = m[2];
-      try { rosh.create(kind, name); logOk("  created " + kind + " \\"" + name + "\\""); }
-      catch(e) { logErr(String(e)); }
+      var kind = m[1] || "object";
+      var name = m[2];
+      var shape = m[3] || "cube";
+      // Validate shape
+      if (SHAPES.indexOf(shape) === -1 && m[3]) {
+        logErr("\\"" + shape + "\\" is not a shape. Shapes: " + SHAPES.join(", "));
+        return;
+      }
+      if (rosh.objects[name]) {
+        logErr("\\"" + name + "\\" already exists. Use set or destroy it first.");
+        return;
+      }
+      try {
+        rosh.create(kind, name);
+        // Spread objects so they don't overlap
+        var spread = _createCount % 5;
+        var xPos = (spread - 2) * 2.5;
+        var color = DEFAULT_COLORS[_createCount % DEFAULT_COLORS.length];
+        _createCount++;
+        rosh.set(name + ".shape", shape);
+        rosh.set(name + ".color", color);
+        rosh.set(name + ".x", xPos);
+        rosh.set(name + ".y", 1);
+        rosh.set(name + ".z", 0);
+        rosh.set(name + ".width", 1);
+        rosh.set(name + ".height", 1);
+        logOk("  created \\"" + name + "\\" — " + shape + ", " + color + ", at x=" + xPos);
+        log("  try: set " + name + ".color to red", "#6b7280");
+      } catch(e) { logErr(String(e)); }
       return;
     }
 
     // destroy <name>
-    m = cmd.match(/^destroy\\s+(\\S+)$/);
+    m = normalised.match(/^destroy\\s+(\\S+)$/);
     if (m) {
+      if (!rosh.objects[m[1]]) { logErr("\\"" + m[1] + "\\" doesn\\'t exist"); return; }
       try { rosh.destroy(m[1]); logOk("  destroyed \\"" + m[1] + "\\""); }
       catch(e) { logErr(String(e)); }
       return;
     }
 
-    // say <text>
-    m = cmd.match(/^say\\s+(.+)$/);
-    if (m) {
-      var sayText = m[1].replace(/^"|"$/g, "");
-      rosh.send("say", {text: sayText});
-      logOk("  " + sayText);
-      return;
-    }
-
-    logErr("unknown — type \\"help\\" for commands");
+    // Unknown — give contextual hint
+    logErr("unknown command");
+    suggestFix(raw);
   }
 
   // ── Open / close ─────────────────────────────────────────
