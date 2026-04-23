@@ -101,7 +101,31 @@ This covers providers like OpenRouter, Ollama, Together, Groq, and any other ser
 
 ```bash
 rosh
+rosh -c 'create object player'
+rosh -i examples/hello.rosh
 ```
+
+The terminal REPL accepts a small amount of interactive sugar and lowers it into normal Rosh before execution. That keeps the language itself strict while making the shell more forgiving.
+
+Examples:
+
+```text
+rosh> create a big red ball
+rosh> make it blue
+rosh> make it smaller
+rosh> move it left
+rosh> put the ball at 40 60
+rosh> examine ball
+```
+
+Current REPL-only conveniences include:
+- natural create phrases like `create a big red ball`
+- pronoun-based follow-ups like `make it blue`
+- simple relative size edits like `make it smaller` / `make it bigger`
+- simple movement phrases like `move it left` and `put the ball at 40 60`
+- aliases like `examine`, `inspect`, `x`, `ls`, and `remove`
+- typo suggestions for misspelled commands
+- tab completion, history, and multiline blocks for `when`, `define`, and `repeat`
 
 ## Scaffold a Project
 
