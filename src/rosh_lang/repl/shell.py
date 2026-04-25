@@ -17,7 +17,13 @@ from rich.theme import Theme
 
 from rosh_lang import __version__
 from rosh_lang.repl.contracts import KernelResponse
-from rosh_lang.repl.kernel import ReplKernel, block_delta, help_rows_for_topic, starts_multiline_block
+from rosh_lang.repl.kernel import (
+    ReplKernel,
+    block_delta,
+    help_rows_for_topic,
+    help_topic,
+    starts_multiline_block,
+)
 from rosh_lang.repl.runtime_adapter import RuntimeAdapter
 from rosh_lang.runtime import Runtime
 
@@ -124,6 +130,19 @@ def _keywords_table(topic: str | None = None) -> Table:
     return table
 
 
+def _render_help_topic(console: Console, topic: str | None) -> None:
+    entry = help_topic(topic)
+    console.print(_keywords_table(topic))
+    if entry is None:
+        return
+    if entry.aliases:
+        console.print(f"[rosh.muted]Aliases:[/] {', '.join(entry.aliases)}")
+    if entry.examples:
+        console.print("[rosh.heading]Examples[/]")
+        for example in entry.examples:
+            console.print(f"  [rosh.keyword]{example}[/]")
+
+
 def _render_response(console: Console, response: KernelResponse) -> None:
     if response.status == "error" and response.error is not None:
         console.print(f"[rosh.error]{response.error.kind.title()}Error:[/] {response.error.message}")
@@ -132,11 +151,15 @@ def _render_response(console: Console, response: KernelResponse) -> None:
                 "  [rosh.warn]Did you mean:[/] "
                 + ", ".join(response.error.suggestions)
             )
+        if response.error.guidance:
+            console.print("  [rosh.muted]Try:[/]")
+            for line in response.error.guidance:
+                console.print(f"    [rosh.keyword]{line}[/]")
         return
 
     if response.view == "help":
         console.print()
-        console.print(_keywords_table(response.help_topic))
+        _render_help_topic(console, response.help_topic)
         console.print()
         return
 

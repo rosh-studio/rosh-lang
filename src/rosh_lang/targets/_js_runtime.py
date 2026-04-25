@@ -505,6 +505,7 @@ var rosh = (function() {
   var mod = {
     state: state,
     objects: objects,
+    handlers: handlers,
     scenes: scenes,
     _spriteData: {},
     _audioData: _audioData,

@@ -37,6 +37,7 @@ class ErrorInfo:
     line: int | None = None
     source: str | None = None
     suggestions: list[str] = field(default_factory=list)
+    guidance: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)

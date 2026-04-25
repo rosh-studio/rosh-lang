@@ -2,33 +2,185 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Final
 
-from rosh_lang.repl.contracts import KernelResponse
+from rosh_lang.repl.contracts import ErrorInfo, KernelResponse
 from rosh_lang.repl.natural import lower_shell_input
 from rosh_lang.repl.runtime_adapter import RuntimeAdapter
 
-HELP_ROWS = [
-    ('print "text"', "Output text ({var} interpolation)"),
-    ("create <kind> <name>", "Create object/number/string/list"),
-    ("set <target> to <value>", "Set a value (arithmetic: score + 1)"),
-    ("get <target>", "Query state"),
-    ("say <text>", "Broadcast text to all sessions"),
-    ("when <event> [then]", "Start event handler block"),
-    ("end", "End handler block"),
-    ("on <event> <action>", "One-line reactive listener"),
-    ("event <name> [fields]", "Declare a named event"),
-    ("send <event> [payload]", "Emit an event"),
-    ("go <scene>", "Navigate to scene"),
-    ("look [target]", "Inspect scene or object"),
-    ("connect <name> <url>", "Register connection"),
-    ("destroy <name>", "Remove object from state"),
-    ('sprite <name> "desc"', "Attach sprite to object"),
-    ('sound <name> "desc"', "Register sound asset"),
-    ("play <sound> [loop|stop]", "Play a sound"),
-    ("define <name>", "Define a reusable function block"),
-    ("do <name>", "Execute a function"),
-    ("repeat <count> [as var]", "Repeat a block multiple times"),
+@dataclass(frozen=True, slots=True)
+class HelpTopic:
+    command: str
+    summary: str
+    usage: str
+    examples: tuple[str, ...] = field(default_factory=tuple)
+    aliases: tuple[str, ...] = field(default_factory=tuple)
+    accepts_no_args: bool = False
+
+
+_HELP_TOPICS: Final[dict[str, HelpTopic]] = {
+    "help": HelpTopic(
+        command="help",
+        summary="Show available commands or detailed help",
+        usage="help [command]",
+        examples=("help", "help set", "help look"),
+        aliases=("?",),
+        accepts_no_args=True,
+    ),
+    "state": HelpTopic(
+        command="state",
+        summary="Show current top-level state",
+        usage="state",
+        examples=("state",),
+        accepts_no_args=True,
+    ),
+    "list": HelpTopic(
+        command="list",
+        summary="Show state, objects, or events",
+        usage="list | list objects | list events",
+        examples=("list", "list objects", "list events"),
+        aliases=("ls", "objects"),
+        accepts_no_args=True,
+    ),
+    "print": HelpTopic(
+        command="print",
+        summary="Output text ({var} interpolation)",
+        usage='print "text"',
+        examples=('print "hello"', 'print "score: {score}"'),
+        accepts_no_args=True,
+    ),
+    "create": HelpTopic(
+        command="create",
+        summary="Create object, number, string, list, or scene",
+        usage="create <kind> <name>",
+        examples=("create object player", "create scene intro"),
+    ),
+    "set": HelpTopic(
+        command="set",
+        summary="Set a value (arithmetic: score + 1)",
+        usage="set <target> to <value>",
+        examples=("set player.color to red", "set score to score + 1"),
+    ),
+    "get": HelpTopic(
+        command="get",
+        summary="Query state or object fields",
+        usage="get <target>",
+        examples=("get player", "get player.color"),
+    ),
+    "say": HelpTopic(
+        command="say",
+        summary="Broadcast text to all sessions",
+        usage='say "text"',
+        examples=('say "welcome"',),
+    ),
+    "when": HelpTopic(
+        command="when",
+        summary="Start event handler block",
+        usage="when <event> [then]",
+        examples=("when click", "when timer then"),
+    ),
+    "end": HelpTopic(
+        command="end",
+        summary="End handler or block",
+        usage="end",
+        examples=("end",),
+        accepts_no_args=True,
+    ),
+    "on": HelpTopic(
+        command="on",
+        summary="One-line reactive listener",
+        usage="on <event> <action>",
+        examples=("on click say \"clicked\"", "on update set player.x to player.x + 1"),
+    ),
+    "event": HelpTopic(
+        command="event",
+        summary="Declare a named event",
+        usage="event <name> [fields]",
+        examples=("event opened", "event damage amount target"),
+    ),
+    "send": HelpTopic(
+        command="send",
+        summary="Emit an event",
+        usage="send <event> [payload]",
+        examples=("send opened", "send damage amount=10 target=player"),
+    ),
+    "go": HelpTopic(
+        command="go",
+        summary="Navigate to scene",
+        usage="go <scene>",
+        examples=("go intro", "go back"),
+    ),
+    "look": HelpTopic(
+        command="look",
+        summary="Inspect scene or object",
+        usage="look [target]",
+        examples=("look", "look player", "look player.color"),
+        aliases=("examine", "inspect", "x"),
+        accepts_no_args=True,
+    ),
+    "connect": HelpTopic(
+        command="connect",
+        summary="Register a connection",
+        usage="connect <name> <url>",
+        examples=("connect world https://rosh.cloud/ws/world/demo",),
+    ),
+    "destroy": HelpTopic(
+        command="destroy",
+        summary="Remove object from state",
+        usage="destroy <name>",
+        examples=("destroy player",),
+        aliases=("delete", "remove"),
+    ),
+    "sprite": HelpTopic(
+        command="sprite",
+        summary="Attach sprite to object",
+        usage='sprite <name> "desc"',
+        examples=('sprite enemy "red alien"',),
+    ),
+    "sound": HelpTopic(
+        command="sound",
+        summary="Register sound asset",
+        usage='sound <name> "desc"',
+        examples=('sound click "soft click"',),
+    ),
+    "play": HelpTopic(
+        command="play",
+        summary="Play a sound",
+        usage="play <sound> [loop|stop]",
+        examples=("play click", "play music loop"),
+    ),
+    "define": HelpTopic(
+        command="define",
+        summary="Define a reusable function block",
+        usage="define <name>",
+        examples=("define greet",),
+    ),
+    "do": HelpTopic(
+        command="do",
+        summary="Execute a function",
+        usage="do <name>",
+        examples=("do greet",),
+    ),
+    "repeat": HelpTopic(
+        command="repeat",
+        summary="Repeat a block multiple times",
+        usage="repeat <count> [as var]",
+        examples=("repeat 3", "repeat 3 as i"),
+    ),
+    "quit": HelpTopic(
+        command="quit",
+        summary="Exit the REPL",
+        usage="quit",
+        examples=("quit",),
+        aliases=("exit",),
+        accepts_no_args=True,
+    ),
+}
+
+_HELP_ROWS: Final[list[tuple[str, str]]] = [
+    (topic.usage, topic.summary)
+    for topic in _HELP_TOPICS.values()
 ]
 
 _EXACT_ALIASES: Final[dict[str, str]] = {
@@ -93,14 +245,21 @@ class ReplKernel:
             return KernelResponse(status="ok", view="help")
 
         if lower.startswith("help "):
+            requested_topic = stripped.split(None, 1)[1].strip().lower()
+            canonical = canonical_help_topic(requested_topic)
             return KernelResponse(
                 status="ok",
                 view="help",
-                help_topic=stripped.split(None, 1)[1].strip().lower(),
+                help_topic=canonical,
             )
 
         # REPL-only convenience: bare identifier behaves like get <identifier>.
         tokens = stripped.split()
+        if len(tokens) == 1:
+            usage_error = usage_error_for_command(tokens[0])
+            if usage_error is not None:
+                return KernelResponse(status="error", error=usage_error)
+
         if len(tokens) == 1 and tokens[0] in self.adapter.runtime.state:
             try:
                 self.current_subject = tokens[0]
@@ -139,11 +298,52 @@ class ReplKernel:
 def help_rows_for_topic(topic: str | None) -> list[tuple[str, str]]:
     """Filter help rows for a specific topic."""
     if not topic:
-        return HELP_ROWS
-    return [
-        row for row in HELP_ROWS
-        if row[0].split()[0].lower() == topic
-    ]
+        return _HELP_ROWS
+    canonical = canonical_help_topic(topic)
+    if canonical is None or canonical not in _HELP_TOPICS:
+        return []
+    entry = _HELP_TOPICS[canonical]
+    return [(entry.usage, entry.summary)]
+
+
+def help_topic(topic: str | None) -> HelpTopic | None:
+    """Return the canonical help topic for a specific command."""
+    if topic is None:
+        return None
+    canonical = canonical_help_topic(topic)
+    if canonical is None:
+        return None
+    return _HELP_TOPICS.get(canonical)
+
+
+def canonical_help_topic(topic: str | None) -> str | None:
+    """Map aliases like 'inspect' to their canonical help topic."""
+    if topic is None:
+        return None
+    lowered = topic.strip().lower()
+    if not lowered:
+        return None
+    if lowered in _HELP_TOPICS:
+        return lowered
+    for canonical, entry in _HELP_TOPICS.items():
+        if lowered in entry.aliases:
+            return canonical
+    return lowered
+
+
+def usage_error_for_command(command: str) -> ErrorInfo | None:
+    """Return a shell-level usage error for single-word incomplete commands."""
+    canonical = canonical_help_topic(command)
+    if canonical is None:
+        return None
+    entry = _HELP_TOPICS.get(canonical)
+    if entry is None or entry.accepts_no_args:
+        return None
+    return ErrorInfo(
+        kind="shell",
+        message=f"{entry.command} needs more information.",
+        guidance=[entry.usage, *entry.examples],
+    )
 
 
 def block_delta(stripped: str) -> int:

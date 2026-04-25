@@ -340,9 +340,45 @@ class TestThreejsConsole:
         from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
         assert "look" in JS_RUNTIME_CONSOLE
 
+    def test_console_has_get_and_list_commands(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "get <target>" in JS_RUNTIME_CONSOLE
+        assert "list | list objects | list events" in JS_RUNTIME_CONSOLE
+
     def test_console_has_clear_command(self):
         from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
         assert "clear" in JS_RUNTIME_CONSOLE
+
+    def test_console_has_shared_aliases(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert '"ls": "list objects"' in JS_RUNTIME_CONSOLE
+        assert '["inspect ", "look "]' in JS_RUNTIME_CONSOLE
+        assert '["remove ", "destroy "]' in JS_RUNTIME_CONSOLE
+
+    def test_console_has_command_specific_help(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "help [command]" in JS_RUNTIME_CONSOLE
+        assert "create <name> | create object <name> | create <name> as <shape>" in JS_RUNTIME_CONSOLE
+        assert 'examples: ["help", "help set", "help look"]' in JS_RUNTIME_CONSOLE
+
+    def test_console_has_natural_language_lowering_examples(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "create a big red ball" in JS_RUNTIME_CONSOLE
+        assert "make" in JS_RUNTIME_CONSOLE
+        assert "move" in JS_RUNTIME_CONSOLE
+
+    def test_console_has_recovery_suggestions(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "Did you mean:" in JS_RUNTIME_CONSOLE
+        assert 'Type "help" for a list of commands.' in JS_RUNTIME_CONSOLE
+
+    def test_console_can_list_registered_events(self):
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE
+        assert "rosh.handlers" in JS_RUNTIME_CONSOLE
+
+    def test_js_runtime_core_exposes_handlers_for_console_inspection(self):
+        from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE
+        assert "handlers: handlers" in JS_RUNTIME_CORE
 
     def test_console_has_history(self):
         from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_CONSOLE

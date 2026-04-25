@@ -155,11 +155,13 @@ class RuntimeAdapter:
                 line=exc.line,
                 source=exc.source,
                 suggestions=suggestions,
+                guidance=self._parse_guidance(exc),
             )
         return ErrorInfo(
             kind="runtime",
             message=str(exc),
             suggestions=self._runtime_suggestions(exc),
+            guidance=self._runtime_guidance(exc),
         )
 
     def _state_items_from_result(self, result: Any) -> list[StateItem]:
@@ -189,7 +191,108 @@ class RuntimeAdapter:
     def _runtime_suggestions(self, exc: Exception) -> list[str]:
         match = re.search(r"Unknown(?: key)?: '([^']+)'", str(exc))
         if not match:
+            match = re.search(r"Unknown: '([^']+)'", str(exc))
+        if not match:
             return []
         target = match.group(1)
         candidates = [key for key in self.runtime.state.keys() if not key.startswith("_")]
+        if "." in target:
+            root, _, leaf = target.partition(".")
+            obj = self.runtime.state.get(root)
+            if isinstance(obj, dict):
+                prop_candidates = [f"{root}.{key}" for key in obj.keys()]
+                prop_matches = difflib.get_close_matches(target, prop_candidates, n=3, cutoff=0.6)
+                if prop_matches:
+                    return prop_matches
+                leaf_matches = difflib.get_close_matches(leaf, list(obj.keys()), n=3, cutoff=0.6)
+                if leaf_matches:
+                    return [f"{root}.{match}" for match in leaf_matches]
         return difflib.get_close_matches(target, candidates, n=3, cutoff=0.6)
+
+    def _parse_guidance(self, exc: ParseError) -> list[str]:
+        message = str(exc)
+        guidance_map = {
+            "create requires": [
+                "create <kind> <name>",
+                "create object player",
+                "create scene intro",
+            ],
+            "set requires": [
+                "set <target> to <value>",
+                "set player.color to red",
+                "set score to score + 1",
+            ],
+            "get requires": [
+                "get <target>",
+                "get player",
+                "get player.color",
+            ],
+            "say requires": [
+                'say "text"',
+                'say "welcome"',
+            ],
+            "send requires": [
+                "send <event> [payload]",
+                "send opened",
+                "send damage amount=10 target=player",
+            ],
+            "event requires": [
+                "event <name> [fields]",
+                "event damage amount target",
+            ],
+            "on requires": [
+                "on <event> <action>",
+                'on click say "clicked"',
+            ],
+            "go requires": [
+                "go <scene>",
+                "go intro",
+            ],
+            "destroy requires": [
+                "destroy <name>",
+                "destroy player",
+            ],
+            "sprite requires": [
+                'sprite <name> "desc"',
+                'sprite enemy "red alien"',
+            ],
+            "sound requires": [
+                'sound <name> "desc"',
+                'sound click "soft click"',
+            ],
+            "play requires": [
+                "play <sound> [loop|stop]",
+                "play click",
+            ],
+            "define requires": [
+                "define <name>",
+                "define greet",
+            ],
+            "do requires": [
+                "do <name>",
+                "do greet",
+            ],
+            "repeat requires": [
+                "repeat <count> [as var]",
+                "repeat 3",
+                "repeat 3 as i",
+            ],
+            "when requires": [
+                "when <event> [then]",
+                "when click",
+            ],
+        }
+        for prefix, guidance in guidance_map.items():
+            if prefix in message:
+                return guidance
+        return []
+
+    def _runtime_guidance(self, exc: Exception) -> list[str]:
+        message = str(exc)
+        if "Unknown key:" in message or "Unknown:" in message:
+            return [
+                "list objects",
+                "look <object>",
+                "get <object>",
+            ]
+        return []

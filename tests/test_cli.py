@@ -6,7 +6,7 @@ import pytest
 
 from rosh_lang import __main__ as cli
 from rosh_lang.repl import shell as repl_shell
-from rosh_lang.repl.kernel import ReplKernel
+from rosh_lang.repl.kernel import ReplKernel, canonical_help_topic, usage_error_for_command
 from rosh_lang.repl.natural import lower_shell_input
 from rosh_lang.repl.runtime_adapter import RuntimeAdapter
 from rosh_lang.runtime import Runtime
@@ -64,6 +64,10 @@ def test_kernel_reports_help_topic() -> None:
     assert response.help_topic == "set"
 
 
+def test_help_alias_maps_to_canonical_topic() -> None:
+    assert canonical_help_topic("inspect") == "look"
+
+
 def test_kernel_maps_examine_alias_to_look() -> None:
     adapter = RuntimeAdapter()
     adapter.runtime.state["player"] = {"x": 1}
@@ -94,6 +98,54 @@ def test_kernel_suggests_keyword_for_typo() -> None:
     assert response.status == "error"
     assert response.error is not None
     assert "create" in response.error.suggestions
+
+
+def test_usage_error_for_incomplete_set_includes_examples() -> None:
+    error = usage_error_for_command("set")
+
+    assert error is not None
+    assert error.kind == "shell"
+    assert error.guidance[0] == "set <target> to <value>"
+
+
+def test_kernel_returns_shell_usage_error_for_incomplete_command() -> None:
+    kernel = ReplKernel(RuntimeAdapter())
+
+    response = kernel.process_line("set")
+
+    assert response.status == "error"
+    assert response.error is not None
+    assert response.error.kind == "shell"
+    assert "set <target> to <value>" in response.error.guidance
+
+
+def test_runtime_adapter_guides_parse_error_for_incomplete_set() -> None:
+    adapter = RuntimeAdapter()
+
+    try:
+        adapter.run_source("set")
+    except Exception as exc:
+        error = adapter.format_error(exc)
+    else:  # pragma: no cover - defensive
+        raise AssertionError("Expected parse error")
+
+    assert error.kind == "parse"
+    assert "set <target> to <value>" in error.guidance
+
+
+def test_runtime_adapter_suggests_property_for_look_typo() -> None:
+    adapter = RuntimeAdapter()
+    adapter.runtime.state["ball"] = {"color": "red"}
+
+    try:
+        adapter.run_source("look ball.colr")
+    except Exception as exc:
+        error = adapter.format_error(exc)
+    else:  # pragma: no cover - defensive
+        raise AssertionError("Expected runtime error")
+
+    assert error.kind == "runtime"
+    assert "ball.color" in error.suggestions
 
 
 def test_natural_lowering_turns_big_red_ball_into_strict_rosh() -> None:
