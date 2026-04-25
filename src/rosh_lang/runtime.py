@@ -49,7 +49,7 @@ _INTERP_RE = re.compile(r"\{([^}]+)\}")
 UNIVERSAL_EVENTS = frozenset({
     "start", "update", "collision", "click", "keydown",
     "keyup", "destroy", "timer", "message",
-    "scene_exit", "scene_enter",
+    "scene_exit", "scene_enter", "say",
 })
 
 # Max send depth to prevent infinite cascading
@@ -308,6 +308,7 @@ class Runtime:
         self.output.write(text + "\n")
         self.state["_last_said"] = text
         self.state["_say_count"] = self.state.get("_say_count", 0) + 1
+        self.send("say", text=text)
 
     def _exec_send_stmt(self, stmt: SendStatement) -> None:
         payload = {k: self._coerce(v) for k, v in stmt.payload.items()}

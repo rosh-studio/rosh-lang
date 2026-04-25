@@ -424,3 +424,60 @@ def test_main_interactive_file_preserves_runtime(
 def test_main_rejects_interactive_with_non_terminal_target() -> None:
     result = cli.main(["example.rosh", "-i", "--target", "web"])
     assert result == 2
+
+
+def test_kernel_say_returns_say_view_with_text() -> None:
+    kernel = ReplKernel(RuntimeAdapter())
+
+    response = kernel.process_line('say "greetings"')
+
+    assert response.status == "ok"
+    assert response.view == "say"
+    assert response.state_items[0].value == "greetings"
+
+
+def test_kernel_look_object_returns_get_view_with_dict_items() -> None:
+    adapter = RuntimeAdapter()
+    adapter.runtime.state["ball"] = {"color": "red", "x": 0.5}
+    kernel = ReplKernel(adapter)
+
+    response = kernel.process_line("look ball")
+
+    assert response.status == "ok"
+    assert response.view == "get"
+    item = response.state_items[0]
+    assert item.key == "ball"
+    assert isinstance(item.value, dict)
+    assert item.value["color"] == "red"
+
+
+def test_kernel_dotted_interpolation_in_print() -> None:
+    from io import StringIO
+
+    rt = Runtime()
+    out = StringIO()
+    rt.output = out
+    adapter = RuntimeAdapter(runtime=rt)
+    kernel = ReplKernel(adapter)
+
+    kernel.process_line("create object ball")
+    kernel.process_line("set ball.color to blue")
+    kernel.process_line('print "color is {ball.color}"')
+
+    assert "color is blue" in out.getvalue()
+
+
+def test_when_say_handler_interpolates_text_payload() -> None:
+    from io import StringIO
+
+    rt = Runtime()
+    out = StringIO()
+    rt.output = out
+    adapter = RuntimeAdapter(runtime=rt)
+    kernel = ReplKernel(adapter)
+
+    kernel.process_line('when say then\n  print "heard: {text}"\nend')
+    kernel.process_line('say "hello world"')
+
+    output = out.getvalue()
+    assert "heard: hello world" in output

@@ -214,13 +214,28 @@ def _render_response(console: Console, response: KernelResponse) -> None:
             console.print("  [rosh.muted](no events)[/]")
         return
 
+    if response.view == "say":
+        text = response.state_items[0].value if response.state_items else ""
+        console.print(f"  [rosh.heading]◆[/] [rosh.value]{text}[/]")
+        return
+
     if response.view == "get":
         for item in response.state_items:
-            console.print(
-                f"  [rosh.key]{item.key}[/] = "
-                f"[rosh.value]{item.value!r}[/] "
-                f"[rosh.type]({item.type})[/]"
-            )
+            if isinstance(item.value, dict) and item.value:
+                console.print(f"  [rosh.key]{item.key}[/]")
+                table = Table(show_header=False, box=None, padding=(0, 2, 0, 4))
+                table.add_column("prop", style="rosh.muted", min_width=14)
+                table.add_column("val", style="rosh.value")
+                for k, v in item.value.items():
+                    if not str(k).startswith("_"):
+                        table.add_row(str(k), str(v))
+                console.print(table)
+            else:
+                console.print(
+                    f"  [rosh.key]{item.key}[/] = "
+                    f"[rosh.value]{item.value!r}[/] "
+                    f"[rosh.type]({item.type})[/]"
+                )
 
 
 def start_repl(runtime: Runtime | None = None) -> None:

@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from rosh_lang.model import GetStatement, LookStatement, Programme, WhenStatement
+from rosh_lang.model import GetStatement, LookStatement, Programme, SayStatement, WhenStatement
 from rosh_lang.parser import ParseError, parse_file, parse_string
 from rosh_lang.repl.contracts import ErrorInfo, EventSnapshot, ObjectItem, StateItem
 from rosh_lang.runtime import Runtime
@@ -77,6 +77,9 @@ class RuntimeAdapter:
         if isinstance(stmt, LookStatement):
             view = "get" if stmt.target else "state"
             return programme, view, self._state_items_from_result(result)
+        if isinstance(stmt, SayStatement):
+            said = self.runtime.state.get("_last_said", "")
+            return programme, "say", [StateItem(key="_said", value=said, type="string")]
         return programme, "none", []
 
     def run_file(self, path: Path | str) -> Programme:
