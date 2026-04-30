@@ -6,8 +6,9 @@ from pathlib import Path
 
 from rosh_lang.parser import parse_string
 from rosh_lang.targets.phaser import render_phaser
+from rosh_lang.widgets import get_bundled_library_path
 
-WIDGETS_DIR = Path(__file__).parent.parent / "examples" / "widgets"
+BUNDLED_WIDGETS_DIR = get_bundled_library_path()
 SHOWCASE_DIR = Path(__file__).parent.parent / "examples" / "showcase"
 
 
@@ -188,7 +189,7 @@ class TestPhaserShowcaseDemos:
             prog = parse_file(demo)
             html = render_phaser(
                 prog,
-                search_paths=[WIDGETS_DIR],
+                search_paths=[BUNDLED_WIDGETS_DIR],
             )
             assert "<!DOCTYPE html>" in html, f"{demo.name} failed"
             assert "Phaser.Game" in html, f"{demo.name} missing Phaser"

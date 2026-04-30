@@ -25,7 +25,7 @@ uv tool install "rosh-lang[ai]"
 
 ## Getting Started
 
-### 1. Register (*planned*)
+### 1. Register
 
 ```bash
 rosh register
@@ -33,7 +33,7 @@ rosh register
 
 Opens [rosh.cloud/register](https://rosh.cloud/register) in your browser. Create an account with email or GitHub. A verification link is sent to your email — click it to activate.
 
-### 2. Log In (*planned*)
+### 2. Log In
 
 ```bash
 rosh login
@@ -61,7 +61,7 @@ rosh hello.rosh --target phaser --run    # Phaser game
 rosh hello.rosh --target threejs --run   # Three.js 3D
 ```
 
-### 5. AI-Generate a Programme (*planned*)
+### 5. AI-Generate a Programme
 
 ```bash
 rosh create "space invaders with power-ups"
@@ -87,7 +87,7 @@ Compiles locally via the API and uploads to rosh.cloud as a published programme.
 | `ANTHROPIC_API_KEY` | Anthropic (Claude) — default engine |
 | `OPENAI_API_KEY` | OpenAI (GPT) |
 
-Rosh also supports any **OpenAI-compatible API** endpoint (*planned*):
+Rosh also supports any **OpenAI-compatible API** endpoint:
 
 ```bash
 export ROSH_AI_BASE_URL=https://your-provider.com/v1
@@ -105,7 +105,7 @@ rosh -c 'create object player'
 rosh -i examples/hello.rosh
 ```
 
-The terminal REPL accepts a small amount of interactive sugar and lowers it into normal Rosh before execution. That keeps the language itself strict while making the shell more forgiving.
+The terminal REPL accepts a small amount of interactive sugar and lowers it into normal Rosh before execution. That keeps the language itself strict while making the shell more forgiving. Files and `rosh -c` use strict Rosh syntax; these natural phrases are for live REPL sessions.
 
 Examples:
 
@@ -370,11 +370,11 @@ rosh <file.rosh> --run            Auto-open browser
 rosh new [template] [name]        Scaffold a starter programme
 rosh library list                 List available widgets
 rosh library info <name>          Show widget details
-rosh register                     Open registration page (planned)
-rosh login                        Authenticate with rosh.cloud (planned)
-rosh logout                       Clear local session (planned)
+rosh register                     Open registration page
+rosh login                        Open login page and API-key instructions
+rosh logout                       Clear local API key
 rosh config --key KEY             Save rosh.cloud API key
-rosh create "description"         AI-generate a programme (planned)
+rosh create "description"         AI-generate a programme
 rosh publish file.rosh            Upload to rosh.cloud
 rosh --version                    Show version
 rosh --help                       Show help
