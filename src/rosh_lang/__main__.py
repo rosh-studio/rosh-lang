@@ -64,7 +64,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--target", "-t",
-        choices=["terminal", "web", "phaser", "threejs"],
+        choices=["terminal", "web", "phaser", "threejs", "scratch"],
         default="terminal",
         help="Output target (default: terminal)",
     )
@@ -191,6 +191,11 @@ def main(argv: list[str] | None = None) -> int:
     elif args.target == "threejs":
         from rosh_lang.targets.threejs import serve_threejs
         serve_threejs(programme, auto_open=args.run)
+    elif args.target == "scratch":
+        from rosh_lang.targets.scratch import render_scratch_sb3
+        out_path = path.with_suffix(".sb3")
+        out_path.write_bytes(render_scratch_sb3(programme))
+        console.print(f"[rosh.brand]Wrote Scratch project:[/] {out_path}")
     else:
         from rosh_lang.targets.terminal import run_terminal
         run_terminal(programme)

@@ -22,6 +22,23 @@ def test_runtime_adapter_get_state_filters_internal_keys() -> None:
     assert [item.key for item in items] == ["player"]
 
 
+def test_cli_scratch_target_writes_sb3(tmp_path: Path) -> None:
+    source = tmp_path / "ball.rosh"
+    source.write_text(
+        "\n".join([
+            "create object ball",
+            "set ball.shape to circle",
+            "set ball.color to red",
+        ]),
+        encoding="utf-8",
+    )
+
+    result = cli.main([str(source), "--target", "scratch"])
+
+    assert result == 0
+    assert (tmp_path / "ball.sb3").exists()
+
+
 def test_runtime_adapter_lists_top_level_dicts_as_objects() -> None:
     adapter = RuntimeAdapter()
     adapter.runtime.state["player"] = {"x": 1, "y": 2}

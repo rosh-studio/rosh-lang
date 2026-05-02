@@ -1,0 +1,14 @@
+background "sky blue"
+create object ball
+set ball.shape to circle
+set ball.color to red
+set ball.x to 0.5
+set ball.y to 0.5
+
+when start
+  say "hello Scratch"
+end
+
+when click ball
+  say "you clicked the ball"
+end
