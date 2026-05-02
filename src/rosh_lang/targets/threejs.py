@@ -33,6 +33,11 @@ ORBIT_CDN = "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/Orb
 GLTF_CDN = "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"
 COPYRIGHT = "(c) Rosh Studio 2026 — rosh.cloud"
 
+# rosh-natural.js — shared NLP layer; inlined at build time so standalone demos
+# (uploaded to R2) carry it without needing the portal as a dependency.
+_ROSH_NATURAL_PATH = Path(__file__).parents[4] / "rosh-portal/static/js/rosh-natural.js"
+ROSH_NATURAL_JS = _ROSH_NATURAL_PATH.read_text() if _ROSH_NATURAL_PATH.exists() else ""
+
 
 # ── HTML generation ───────────────────────────────────────────
 
@@ -137,6 +142,9 @@ def _threejs_html_page(script: str) -> str:
   <script src="{THREEJS_CDN}"></script>
   <script src="{ORBIT_CDN}"></script>
   <script src="{GLTF_CDN}"></script>
+  <script>
+{ROSH_NATURAL_JS}
+  </script>
   <script>
 if (typeof THREE === "undefined") {{
   document.body.innerHTML = '<p style="color:red;padding:20px">Error: Three.js failed to load from CDN</p>';

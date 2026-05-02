@@ -916,6 +916,124 @@ JS_RUNTIME_CONSOLE = """\
     if (consoleOpen) e.stopImmediatePropagation();
   }, true);
 
+  // ── Voice + console-button overlay ───────────────────────
+  (function() {
+    // Console toggle button — reliable fallback for the backtick key
+    var conBtn = document.createElement("button");
+    conBtn.innerHTML = ">_";
+    conBtn.title = "Toggle Rosh console (or press `)";
+    conBtn.style.cssText = "position:fixed;bottom:100px;right:16px;width:48px;height:48px;border-radius:10px;border:2px solid rgba(99,102,241,0.6);background:rgba(0,0,0,0.85);color:#6366f1;font-size:0.85rem;font-family:'SF Mono',monospace;font-weight:bold;cursor:pointer;z-index:99998;display:flex;align-items:center;justify-content:center;transition:all 0.2s;backdrop-filter:blur(4px);padding:0;";
+    conBtn.addEventListener("click", function() { if (consoleOpen) closeConsole(); else openConsole(); });
+    document.body.appendChild(conBtn);
+
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+
+    var micBtn = document.createElement("button");
+    micBtn.innerHTML = "&#x1F3A4;";
+    micBtn.title = "Voice command — tap and speak";
+    micBtn.style.cssText = "position:fixed;bottom:44px;right:16px;width:48px;height:48px;border-radius:50%;border:2px solid rgba(99,102,241,0.6);background:rgba(0,0,0,0.85);color:#6366f1;font-size:1.35rem;cursor:pointer;z-index:99998;display:flex;align-items:center;justify-content:center;transition:all 0.2s;backdrop-filter:blur(4px);padding:0;";
+    document.body.appendChild(micBtn);
+
+    var bubble = document.createElement("div");
+    bubble.style.cssText = "position:fixed;bottom:160px;right:10px;max-width:200px;padding:6px 10px;background:rgba(0,0,0,0.9);border:1px solid rgba(99,102,241,0.4);border-radius:8px;color:#c084fc;font-family:'SF Mono',monospace;font-size:11px;z-index:99998;display:none;word-break:break-word;text-align:right;";
+    document.body.appendChild(bubble);
+
+    var pStyle = document.createElement("style");
+    pStyle.textContent = "@keyframes rosh-mic-pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.4)}50%{box-shadow:0 0 0 10px rgba(239,68,68,0)}}";
+    document.head.appendChild(pStyle);
+
+    var rec = new SR();
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.lang = "en-GB";
+    var listening = false;
+    var bubbleTimer = null;
+
+    function showBubble(text, color) {
+      bubble.textContent = text;
+      bubble.style.color = color || "#c084fc";
+      bubble.style.display = "block";
+      clearTimeout(bubbleTimer);
+      bubbleTimer = setTimeout(function() { bubble.style.display = "none"; }, 3000);
+    }
+
+    function voiceToCommands(raw) {
+      // Use rosh-natural.js if inlined by the build; minimal fallback otherwise
+      if (typeof RoshNatural !== "undefined") {
+        var lines = RoshNatural.normalize(raw).text.split("\\n");
+        var SHAPE_2D_TO_3D = { circle: "sphere", rectangle: "cube" };
+        var cmds = [];
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i].trim();
+          if (!line) continue;
+          if (/^set \\w+\\.[xy] to /.test(line)) continue;
+          var sm = line.match(/^(set \\w+\\.shape to )(\\w+)$/);
+          if (sm) line = sm[1] + (SHAPE_2D_TO_3D[sm[2]] || sm[2]);
+          line = line.replace(/^delete\\b/, "destroy");
+          cmds.push(line);
+        }
+        return cmds.length ? cmds : [RoshNatural.cleanPunctuation(raw)];
+      }
+      // Fallback: strip politeness/articles, basic synonyms
+      var t = raw.trim().toLowerCase().replace(/[.,!?]+$/, "");
+      t = t.replace(/^(please|can you|could you)\\s+/i, "");
+      t = t.replace(/\\b(a|an|the)\\s+/g, "");
+      t = t.replace(/^(make|add|spawn)\\b/, "create");
+      t = t.replace(/^(remove|delete)\\b/, "destroy");
+      t = t.replace(/\\bcolou?r\\b/, "color");
+      return [t];
+    }
+
+    rec.onresult = function(event) {
+      var interim = "", finalText = "";
+      for (var i = event.resultIndex; i < event.results.length; i++) {
+        var t = event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalText += t;
+        else interim = t;
+      }
+      if (interim) showBubble("..." + interim, "#71717a");
+      if (finalText.trim()) {
+        showBubble(finalText.trim(), "#86efac");
+        openConsole();
+        var cmds = voiceToCommands(finalText.trim());
+        cmds.forEach(function(cmd) { execCommand(cmd); });
+        stopListening();
+      }
+    };
+
+    rec.onend = function() { if (listening) { try { rec.start(); } catch(e) {} } };
+
+    rec.onerror = function(event) {
+      if (event.error === "not-allowed") showBubble("Mic access denied", "#f87171");
+      else if (event.error !== "aborted" && event.error !== "no-speech") showBubble("Error: " + event.error, "#f87171");
+      stopListening();
+    };
+
+    function startListening() {
+      listening = true;
+      micBtn.style.borderColor = "#ef4444";
+      micBtn.style.color = "#ef4444";
+      micBtn.style.background = "rgba(239,68,68,0.15)";
+      micBtn.style.animation = "rosh-mic-pulse 1.5s infinite";
+      showBubble("Listening...", "#6366f1");
+      try { rec.start(); } catch(e) {}
+    }
+
+    function stopListening() {
+      listening = false;
+      micBtn.style.borderColor = "rgba(99,102,241,0.6)";
+      micBtn.style.color = "#6366f1";
+      micBtn.style.background = "rgba(0,0,0,0.85)";
+      micBtn.style.animation = "";
+      try { rec.stop(); } catch(e) {}
+    }
+
+    micBtn.addEventListener("click", function() {
+      if (listening) stopListening(); else startListening();
+    });
+  })();
+
   // ── Banner ───────────────────────────────────────────────
   log("Rosh console  \\u0060 to close", ACCENT);
   log("help  list  look  set  create  destroy  clear", "#6b7280");
