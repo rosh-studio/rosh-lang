@@ -1,4 +1,5 @@
 background "sky blue"
+sound pop "short pop"
 create object ball
 set ball.shape to circle
 set ball.color to red
@@ -11,4 +12,26 @@ end
 
 when click ball
   say "you clicked the ball"
+  play pop
+end
+
+when keydown right
+  set ball.x to ball.x + 0.1
+end
+
+when keydown left
+  set ball.x to ball.x - 0.1
+end
+
+when keydown space
+  set ball.y to ball.y - 0.1
+  play pop
+end
+
+when keydown h
+  set ball.visible to false
+end
+
+when keydown s
+  set ball.visible to true
 end

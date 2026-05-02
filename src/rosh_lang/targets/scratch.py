@@ -10,7 +10,10 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import math
 import re
+import struct
+import wave
 import zipfile
 from dataclasses import dataclass, field
 from html import escape
@@ -23,8 +26,10 @@ from rosh_lang.model import (
     EndStatement,
     PrintStatement,
     Programme,
+    PlayStatement,
     SayStatement,
     SetStatement,
+    SoundStatement,
     Statement,
     WhenStatement,
 )
@@ -55,6 +60,7 @@ _COLOR_WORDS = {
 class _Asset:
     name: str
     data: bytes
+    data_format: str = "svg"
 
     @property
     def asset_id(self) -> str:
@@ -62,7 +68,7 @@ class _Asset:
 
     @property
     def md5ext(self) -> str:
-        return f"{self.asset_id}.svg"
+        return f"{self.asset_id}.{self.data_format}"
 
 
 @dataclass
@@ -91,21 +97,24 @@ def build_scratch_project(
     search_paths: list[Any] | None = None,
 ) -> tuple[dict[str, Any], list[_Asset]]:
     """Build the Scratch project.json structure and SVG assets."""
-    top_level, start_body, click_handlers = _split_event_bodies(programme.statements)
+    top_level, start_body, click_handlers, key_handlers = _split_event_bodies(programme.statements)
     rt = Runtime(output=io.StringIO(), search_paths=search_paths)
     rt.run(Programme(statements=top_level, source=programme.source))
 
     background = _find_background(top_level) or rt.state.get("_background", "#ffffff")
     backdrop_asset = _Asset("backdrop", _stage_svg(str(background)))
-    targets: list[dict[str, Any]] = [_stage_target(backdrop_asset, start_body)]
     assets: list[_Asset] = [backdrop_asset]
+    sound_assets = _collect_sound_assets(programme.statements)
+    assets.extend(sound_assets.values())
+    sound_infos = [_sound_info(asset) for asset in sound_assets.values()]
+    targets: list[dict[str, Any]] = [_stage_target(backdrop_asset, sound_infos)]
 
     object_items = _collect_objects(rt.state)
     top_level_setup = _top_level_sprite_setup(top_level)
     sprite_builds: dict[str, _SpriteBuild] = {}
     for index, (name, obj) in enumerate(object_items, start=1):
         asset = _Asset(name, _sprite_svg(name, obj))
-        target = _sprite_target(name, obj, asset, index)
+        target = _sprite_target(name, obj, asset, index, sound_infos)
         sprite_builds[name] = _SpriteBuild(
             target=target,
             asset=asset,
@@ -115,6 +124,7 @@ def build_scratch_project(
 
     _attach_start_scripts(start_body, sprite_builds, targets[0])
     _attach_click_scripts(click_handlers, sprite_builds, targets[0])
+    _attach_key_scripts(key_handlers, sprite_builds, targets[0])
     targets.extend(build.target for build in sprite_builds.values())
 
     return {
@@ -131,10 +141,16 @@ def build_scratch_project(
 
 def _split_event_bodies(
     statements: list[Statement],
-) -> tuple[list[Statement], list[Statement], list[tuple[str, list[Statement]]]]:
+) -> tuple[
+    list[Statement],
+    list[Statement],
+    list[tuple[str, list[Statement]]],
+    list[tuple[str, list[Statement]]],
+]:
     top_level: list[Statement] = []
     start_body: list[Statement] = []
     click_handlers: list[tuple[str, list[Statement]]] = []
+    key_handlers: list[tuple[str, list[Statement]]] = []
     i = 0
     while i < len(statements):
         stmt = statements[i]
@@ -150,10 +166,13 @@ def _split_event_bodies(
             elif stmt.event == "click":
                 target = stmt.args[0] if stmt.args else ""
                 click_handlers.append((target, body))
+            elif stmt.event == "keydown":
+                key = stmt.args[0] if stmt.args else "space"
+                key_handlers.append((key, body))
             continue
         top_level.append(stmt)
         i += 1
-    return top_level, start_body, click_handlers
+    return top_level, start_body, click_handlers, key_handlers
 
 
 def _find_background(statements: list[Statement]) -> str:
@@ -172,7 +191,7 @@ def _top_level_sprite_setup(statements: list[Statement]) -> dict[str, list[State
     return setup
 
 
-def _stage_target(asset: _Asset, _start_body: list[Statement]) -> dict[str, Any]:
+def _stage_target(asset: _Asset, sounds: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "isStage": True,
         "name": "Stage",
@@ -183,7 +202,7 @@ def _stage_target(asset: _Asset, _start_body: list[Statement]) -> dict[str, Any]
         "comments": {},
         "currentCostume": 0,
         "costumes": [_costume(asset.name, asset, STAGE_WIDTH / 2, STAGE_HEIGHT / 2)],
-        "sounds": [],
+        "sounds": sounds,
         "volume": 100,
         "layerOrder": 0,
         "tempo": 60,
@@ -198,6 +217,7 @@ def _sprite_target(
     obj: dict[str, Any],
     asset: _Asset,
     layer_order: int,
+    sounds: list[dict[str, Any]],
 ) -> dict[str, Any]:
     return {
         "isStage": False,
@@ -209,7 +229,7 @@ def _sprite_target(
         "comments": {},
         "currentCostume": 0,
         "costumes": [_costume("costume1", asset, 50, 50)],
-        "sounds": [],
+        "sounds": sounds,
         "volume": 100,
         "layerOrder": layer_order,
         "visible": bool(obj.get("visible", True)),
@@ -299,6 +319,43 @@ def _attach_click_scripts(
             )
 
 
+def _attach_key_scripts(
+    key_handlers: list[tuple[str, list[Statement]]],
+    sprite_builds: dict[str, _SpriteBuild],
+    stage_target: dict[str, Any],
+) -> None:
+    default_sprite = next(iter(sprite_builds), "")
+    for index, (key, body) in enumerate(key_handlers):
+        owner = _infer_script_owner(body, sprite_builds, default_sprite)
+        target = sprite_builds[owner].target if owner else stage_target
+        target["blocks"].update(
+            _script_blocks(
+                body,
+                owner or None,
+                x=480,
+                y=40 + index * 140,
+                hat_opcode="event_whenkeypressed",
+                hat_fields={"KEY_OPTION": [_scratch_key(key), None]},
+                script_key=f"key:{key}:{index}",
+            )
+        )
+
+
+def _infer_script_owner(
+    body: list[Statement],
+    sprite_builds: dict[str, _SpriteBuild],
+    default_sprite: str,
+) -> str:
+    for stmt in body:
+        if isinstance(stmt, SetStatement):
+            owner = stmt.target.split(".", 1)[0]
+            if owner in sprite_builds:
+                return owner
+        if isinstance(stmt, DestroyStatement) and stmt.name in sprite_builds:
+            return stmt.name
+    return default_sprite
+
+
 def _script_blocks(
     statements: list[Statement],
     sprite_name: str | None,
@@ -306,6 +363,7 @@ def _script_blocks(
     x: int,
     y: int,
     hat_opcode: str = "event_whenflagclicked",
+    hat_fields: dict[str, Any] | None = None,
     script_key: str = "start",
 ) -> dict[str, dict[str, Any]]:
     actions: list[tuple[str, dict[str, Any]]] = []
@@ -325,7 +383,7 @@ def _script_blocks(
         "next": first_id,
         "parent": None,
         "inputs": {},
-        "fields": {},
+        "fields": hat_fields or {},
         "shadow": False,
         "topLevel": True,
         "x": x,
@@ -348,6 +406,18 @@ def _script_blocks(
             "shadow": False,
             "topLevel": False,
         }
+        if "sound" in payload:
+            menu_id = _block_id("sound_menu", owner, script_key, str(index))
+            blocks[block_id]["inputs"] = {"SOUND_MENU": [1, menu_id]}
+            blocks[menu_id] = {
+                "opcode": "sound_sounds_menu",
+                "next": None,
+                "parent": block_id,
+                "inputs": {},
+                "fields": {"SOUND_MENU": [payload["sound"], None]},
+                "shadow": True,
+                "topLevel": False,
+            }
         previous_id = block_id
     return blocks
 
@@ -359,6 +429,13 @@ def _statement_action(
     if isinstance(stmt, SetStatement) and sprite_name:
         prop = stmt.target.split(".", 1)[1] if "." in stmt.target else stmt.target
         value = _clean_literal(stmt.value)
+        relative = _relative_change(stmt)
+        if relative and relative[0] == "x":
+            return "motion_changexby", {"inputs": {"DX": _number_input(relative[1])}}
+        if relative and relative[0] == "y":
+            return "motion_changeyby", {"inputs": {"DY": _number_input(relative[1])}}
+        if relative and relative[0] == "size":
+            return "looks_changesizeby", {"inputs": {"CHANGE": _number_input(relative[1])}}
         if prop == "x":
             return "motion_setx", {"inputs": {"X": _number_input(_scratch_x(value))}}
         if prop == "y":
@@ -375,6 +452,27 @@ def _statement_action(
         return "looks_say", {"inputs": {"MESSAGE": _text_input(stmt.text)}}
     if isinstance(stmt, DestroyStatement) and sprite_name and stmt.name == sprite_name:
         return "looks_hide", {}
+    if isinstance(stmt, PlayStatement):
+        return "sound_playuntildone", {"sound": stmt.sound}
+    return None
+
+
+def _relative_change(stmt: SetStatement) -> tuple[str, float] | None:
+    if "." not in stmt.target:
+        return None
+    prop = stmt.target.split(".", 1)[1]
+    raw = stmt.value.strip()
+    match = re.fullmatch(rf"{re.escape(stmt.target)}\s*([+\-])\s*(-?\d+(?:\.\d+)?)", raw)
+    if not match:
+        return None
+    sign = 1 if match.group(1) == "+" else -1
+    amount = sign * float(match.group(2))
+    if prop == "x":
+        return "x", _scratch_delta_x(amount)
+    if prop == "y":
+        return "y", _scratch_delta_y(amount)
+    if prop in {"size", "width", "height"}:
+        return "size", _scratch_delta_size(amount)
     return None
 
 
@@ -384,6 +482,25 @@ def _number_input(value: Any) -> list[Any]:
 
 def _text_input(value: str) -> list[Any]:
     return [1, [10, value]]
+
+
+def _scratch_key(key: str) -> str:
+    aliases = {
+        " ": "space",
+        "spacebar": "space",
+        "arrowup": "up arrow",
+        "up": "up arrow",
+        "arrowdown": "down arrow",
+        "down": "down arrow",
+        "arrowleft": "left arrow",
+        "left": "left arrow",
+        "arrowright": "right arrow",
+        "right": "right arrow",
+        "enter": "enter",
+        "return": "enter",
+    }
+    cleaned = key.strip().lower()
+    return aliases.get(cleaned, cleaned)
 
 
 def _block_id(*parts: str) -> str:
@@ -410,6 +527,20 @@ def _scratch_y(value: Any) -> float:
     return round(value, 3)
 
 
+def _scratch_delta_x(value: Any) -> float:
+    value = _to_float(value, 0)
+    if -1 <= value <= 1:
+        return round(value * STAGE_WIDTH, 3)
+    return round(value, 3)
+
+
+def _scratch_delta_y(value: Any) -> float:
+    value = _to_float(value, 0)
+    if -1 <= value <= 1:
+        return round(value * -STAGE_HEIGHT, 3)
+    return round(value, 3)
+
+
 def _scratch_size(obj: dict[str, Any]) -> float:
     if "size" in obj:
         return _scratch_size_value(obj["size"])
@@ -421,6 +552,13 @@ def _scratch_size(obj: dict[str, Any]) -> float:
 def _scratch_size_value(value: Any) -> float:
     value = _to_float(value, 100)
     if 0 < value <= 2:
+        return round(value * 1000, 3)
+    return round(value, 3)
+
+
+def _scratch_delta_size(value: Any) -> float:
+    value = _to_float(value, 0)
+    if -2 <= value <= 2:
         return round(value * 1000, 3)
     return round(value, 3)
 
@@ -449,6 +587,55 @@ def _stage_svg(background: str) -> bytes:
         "</svg>"
     )
     return svg.encode("utf-8")
+
+
+def _collect_sound_assets(statements: list[Statement]) -> dict[str, _Asset]:
+    assets: dict[str, _Asset] = {}
+    for stmt in statements:
+        if isinstance(stmt, SoundStatement) and stmt.name not in assets:
+            assets[stmt.name] = _Asset(
+                stmt.name,
+                _sound_wav(stmt.name, stmt.description),
+                data_format="wav",
+            )
+    return assets
+
+
+def _sound_info(asset: _Asset) -> dict[str, Any]:
+    return {
+        "name": asset.name,
+        "assetId": asset.asset_id,
+        "dataFormat": "wav",
+        "format": "",
+        "rate": 44100,
+        "sampleCount": 4410,
+        "md5ext": asset.md5ext,
+    }
+
+
+def _sound_wav(name: str, description: str) -> bytes:
+    """Generate a tiny mono WAV so exported Scratch projects have a real sound."""
+    desc = f"{name} {description}".lower()
+    freq = 660
+    if any(word in desc for word in ("low", "boom", "explosion")):
+        freq = 180
+    elif any(word in desc for word in ("laser", "zap", "coin", "pop")):
+        freq = 880
+
+    rate = 44100
+    duration = 0.1
+    frames = int(rate * duration)
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(rate)
+        for i in range(frames):
+            t = i / rate
+            envelope = max(0.0, 1.0 - (i / frames))
+            sample = int(math.sin(2 * math.pi * freq * t) * envelope * 16000)
+            wav.writeframesraw(struct.pack("<h", sample))
+    return buf.getvalue()
 
 
 def _sprite_svg(name: str, obj: dict[str, Any]) -> bytes:
