@@ -24,6 +24,7 @@ from rosh_lang.model import (
     BackgroundStatement,
     DestroyStatement,
     EndStatement,
+    IfStatement,
     PrintStatement,
     Programme,
     PlayStatement,
@@ -31,10 +32,10 @@ from rosh_lang.model import (
     SetStatement,
     SoundStatement,
     Statement,
+    UseStatement,
     WhenStatement,
 )
 from rosh_lang.runtime import Runtime
-from rosh_lang.targets.web import _collect_objects
 
 STAGE_WIDTH = 480
 STAGE_HEIGHT = 360
@@ -53,6 +54,33 @@ _COLOR_WORDS = {
     "red": "#ef4444",
     "white": "#ffffff",
     "yellow": "#facc15",
+}
+
+_SCRATCH_VISUAL_PROPS = {
+    "x",
+    "y",
+    "width",
+    "height",
+    "size",
+    "color",
+    "label",
+    "sprite",
+    "shape",
+    "visible",
+    "direction",
+    "rotation",
+    "rotation_style",
+    "layer",
+    "z_order",
+    "draggable",
+    "volume",
+    "ghost",
+    "brightness",
+    "color_effect",
+    "fisheye",
+    "whirl",
+    "pixelate",
+    "mosaic",
 }
 
 
@@ -97,25 +125,28 @@ def build_scratch_project(
     search_paths: list[Any] | None = None,
 ) -> tuple[dict[str, Any], list[_Asset]]:
     """Build the Scratch project.json structure and SVG assets."""
+    statements = _expand_use_statements(programme.statements, search_paths)
     (
         top_level,
         start_body,
         click_handlers,
         key_handlers,
         collision_handlers,
-    ) = _split_event_bodies(programme.statements)
+        update_handlers,
+    ) = _split_event_bodies(statements)
+    key_handlers.extend(_key_handlers_from_update(update_handlers))
     rt = Runtime(output=io.StringIO(), search_paths=search_paths)
     rt.run(Programme(statements=top_level, source=programme.source))
 
     background = _find_background(top_level) or rt.state.get("_background", "#ffffff")
     backdrop_asset = _Asset("backdrop", _stage_svg(str(background)))
     assets: list[_Asset] = [backdrop_asset]
-    sound_assets = _collect_sound_assets(programme.statements)
+    sound_assets = _collect_sound_assets(statements)
     assets.extend(sound_assets.values())
     sound_infos = [_sound_info(asset) for asset in sound_assets.values()]
     targets: list[dict[str, Any]] = [_stage_target(backdrop_asset, sound_infos)]
 
-    object_items = _collect_objects(rt.state)
+    object_items = _collect_scratch_objects(rt.state)
     top_level_setup = _top_level_sprite_setup(top_level)
     sprite_builds: dict[str, _SpriteBuild] = {}
     for index, (name, obj) in enumerate(object_items, start=1):
@@ -131,6 +162,7 @@ def build_scratch_project(
     _attach_start_scripts(start_body, sprite_builds, targets[0])
     _attach_click_scripts(click_handlers, sprite_builds, targets[0])
     _attach_key_scripts(key_handlers, sprite_builds, targets[0])
+    _attach_update_scripts(update_handlers, sprite_builds, targets[0])
     _attach_collision_scripts(collision_handlers, sprite_builds)
     targets.extend(build.target for build in sprite_builds.values())
 
@@ -146,6 +178,28 @@ def build_scratch_project(
     }, assets
 
 
+def _expand_use_statements(
+    statements: list[Statement],
+    search_paths: list[Any] | None,
+) -> list[Statement]:
+    from rosh_lang.widgets import load_widget, reset_hud_stack
+
+    reset_hud_stack()
+    expanded: list[Statement] = []
+    for stmt in statements:
+        if isinstance(stmt, UseStatement):
+            expanded.extend(
+                load_widget(
+                    stmt.name,
+                    config=stmt.config if stmt.config else None,
+                    search_paths=search_paths,
+                )
+            )
+        else:
+            expanded.append(stmt)
+    return expanded
+
+
 def _split_event_bodies(
     statements: list[Statement],
 ) -> tuple[
@@ -154,12 +208,14 @@ def _split_event_bodies(
     list[tuple[str, list[Statement]]],
     list[tuple[str, list[Statement]]],
     list[tuple[str, str, list[Statement]]],
+    list[list[Statement]],
 ]:
     top_level: list[Statement] = []
     start_body: list[Statement] = []
     click_handlers: list[tuple[str, list[Statement]]] = []
     key_handlers: list[tuple[str, list[Statement]]] = []
     collision_handlers: list[tuple[str, str, list[Statement]]] = []
+    update_handlers: list[list[Statement]] = []
     i = 0
     while i < len(statements):
         stmt = statements[i]
@@ -180,10 +236,40 @@ def _split_event_bodies(
                 key_handlers.append((key, body))
             elif stmt.event == "collision" and len(stmt.args) >= 2:
                 collision_handlers.append((stmt.args[0], stmt.args[1], body))
+            elif stmt.event == "update":
+                update_handlers.append(body)
             continue
         top_level.append(stmt)
         i += 1
-    return top_level, start_body, click_handlers, key_handlers, collision_handlers
+    return (
+        top_level,
+        start_body,
+        click_handlers,
+        key_handlers,
+        collision_handlers,
+        update_handlers,
+    )
+
+
+def _key_handlers_from_update(
+    update_handlers: list[list[Statement]],
+) -> list[tuple[str, list[Statement]]]:
+    key_handlers: list[tuple[str, list[Statement]]] = []
+    for body in update_handlers:
+        for stmt in body:
+            if not isinstance(stmt, IfStatement):
+                continue
+            key = _key_from_pressed_condition(stmt.condition)
+            if key and stmt.then_body:
+                key_handlers.append((key, stmt.then_body))
+    return key_handlers
+
+
+def _key_from_pressed_condition(condition: str) -> str:
+    match = re.fullmatch(r"_keys\.(.+?)\s*==\s*1", condition.strip())
+    if not match:
+        return ""
+    return match.group(1)
 
 
 def _find_background(statements: list[Statement]) -> str:
@@ -191,6 +277,24 @@ def _find_background(statements: list[Statement]) -> str:
         if isinstance(stmt, BackgroundStatement):
             return stmt.value
     return ""
+
+
+def _collect_scratch_objects(state: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    objects: list[tuple[str, dict[str, Any]]] = []
+    for key, value in state.items():
+        if key.startswith("_") or not isinstance(value, dict):
+            continue
+        nested = [
+            (subkey, subval)
+            for subkey, subval in value.items()
+            if isinstance(subval, dict) and (subval.keys() & _SCRATCH_VISUAL_PROPS)
+        ]
+        if nested:
+            for subkey, subval in nested:
+                objects.append((f"{key}.{subkey}", subval))
+        elif value.keys() & _SCRATCH_VISUAL_PROPS:
+            objects.append((key, value))
+    return objects
 
 
 def _top_level_sprite_setup(statements: list[Statement]) -> dict[str, list[Statement]]:
@@ -241,15 +345,15 @@ def _sprite_target(
         "currentCostume": 0,
         "costumes": [_costume("costume1", asset, 50, 50)],
         "sounds": sounds,
-        "volume": 100,
         "layerOrder": layer_order,
         "visible": bool(obj.get("visible", True)),
         "x": _scratch_x(obj.get("x", 0.5)),
         "y": _scratch_y(obj.get("y", 0.5)),
         "size": _scratch_size(obj),
         "direction": float(obj.get("direction", obj.get("rotation", 90))),
-        "draggable": False,
-        "rotationStyle": "all around",
+        "draggable": _is_truthy(obj.get("draggable", False)),
+        "rotationStyle": _rotation_style(str(obj.get("rotation_style", "all around"))),
+        "volume": _scratch_volume(obj.get("volume", 100)),
     }
 
 
@@ -369,6 +473,80 @@ def _attach_collision_scripts(
                 script_key=f"collision:{a}:{b}:{index}",
             )
         )
+
+
+def _attach_update_scripts(
+    update_handlers: list[list[Statement]],
+    sprite_builds: dict[str, _SpriteBuild],
+    stage_target: dict[str, Any],
+) -> None:
+    default_sprite = next(iter(sprite_builds), "")
+    for index, body in enumerate(update_handlers):
+        owner = _infer_script_owner(body, sprite_builds, default_sprite)
+        target = sprite_builds[owner].target if owner else stage_target
+        target["blocks"].update(
+            _forever_script_blocks(
+                body,
+                owner or None,
+                x=920,
+                y=40 + index * 180,
+                script_key=f"update:{index}",
+            )
+        )
+
+
+def _forever_script_blocks(
+    statements: list[Statement],
+    sprite_name: str | None,
+    *,
+    x: int,
+    y: int,
+    script_key: str,
+) -> dict[str, dict[str, Any]]:
+    body = _script_blocks(
+        statements,
+        sprite_name,
+        x=x,
+        y=y,
+        hat_opcode="event_whenflagclicked",
+        script_key=f"{script_key}:body",
+        include_hat=False,
+    )
+    if not body:
+        return {}
+
+    first_body_id = next(
+        block_id for block_id, block in body.items()
+        if block["parent"] is None
+    )
+    owner = sprite_name or "stage"
+    hat_id = _block_id("event_whenflagclicked", owner, script_key, "hat")
+    forever_id = _block_id("control_forever", owner, script_key, "forever")
+    body[first_body_id]["parent"] = forever_id
+
+    return {
+        hat_id: {
+            "opcode": "event_whenflagclicked",
+            "next": forever_id,
+            "parent": None,
+            "inputs": {},
+            "fields": {},
+            "shadow": False,
+            "topLevel": True,
+            "x": x,
+            "y": y,
+        },
+        forever_id: {
+            "opcode": "control_forever",
+            "next": None,
+            "parent": hat_id,
+            "inputs": {"SUBSTACK": [2, first_body_id]},
+            "fields": {},
+            "shadow": False,
+            "topLevel": False,
+        },
+        **body,
+    }
 
 
 def _collision_script_blocks(
@@ -564,6 +742,19 @@ def _statement_action(
             return "motion_pointindirection", {"inputs": {"DIRECTION": _number_input(value)}}
         if prop == "rotation_style":
             return "motion_setrotationstyle", {"fields": {"STYLE": [_rotation_style(value), None]}}
+        if prop in {"layer", "z_order"}:
+            layer = _scratch_layer(value)
+            if layer:
+                return "looks_gotofrontback", {"fields": {"FRONT_BACK": [layer, None]}}
+        if prop == "draggable":
+            return "sensing_setdragmode", {"fields": {"DRAG_MODE": [_drag_mode(value), None]}}
+        if prop == "volume":
+            return "sound_setvolumeto", {"inputs": {"VOLUME": _number_input(_scratch_volume(value))}}
+        if prop in {"ghost", "brightness", "color_effect", "fisheye", "whirl", "pixelate", "mosaic"}:
+            return "looks_seteffectto", {
+                "fields": {"EFFECT": [_scratch_effect(prop), None]},
+                "inputs": {"VALUE": _number_input(value)},
+            }
         if prop in ("size", "width", "height"):
             return "looks_setsizeto", {"inputs": {"SIZE": _number_input(_scratch_size_value(value))}}
         if prop == "visible":
@@ -641,6 +832,35 @@ def _rotation_style(value: str) -> str:
     }
     cleaned = value.strip().lower().replace(" ", "_")
     return aliases.get(cleaned, value)
+
+
+def _scratch_layer(value: str) -> str:
+    aliases = {
+        "front": "front",
+        "top": "front",
+        "forward": "front",
+        "back": "back",
+        "bottom": "back",
+        "behind": "back",
+    }
+    return aliases.get(value.strip().lower(), "")
+
+
+def _drag_mode(value: str) -> str:
+    return "draggable" if _is_truthy(value) else "not draggable"
+
+
+def _scratch_effect(prop: str) -> str:
+    aliases = {
+        "ghost": "GHOST",
+        "brightness": "BRIGHTNESS",
+        "color_effect": "COLOR",
+        "fisheye": "FISHEYE",
+        "whirl": "WHIRL",
+        "pixelate": "PIXELATE",
+        "mosaic": "MOSAIC",
+    }
+    return aliases[prop]
 
 
 def _block_id(*parts: str) -> str:
@@ -721,6 +941,25 @@ def _scratch_delta_size(value: Any) -> float:
     if -2 <= value <= 2:
         return round(value * 1000, 3)
     return round(value, 3)
+
+
+def _scratch_volume(value: Any) -> float:
+    value = _to_float(value, 100)
+    if 0 <= value <= 1:
+        return round(value * 100, 3)
+    return max(0, min(100, round(value, 3)))
+
+
+def _is_truthy(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().strip('"').strip("'").lower() not in {
+            "",
+            "0",
+            "false",
+            "no",
+            "off",
+        }
+    return bool(value)
 
 
 def _to_float(value: Any, default: float) -> float:

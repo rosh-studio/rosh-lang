@@ -5,6 +5,9 @@ set ball.shape to circle
 set ball.color to red
 set ball.x to center
 set ball.y to middle
+set ball.draggable to true
+set ball.volume to 0.5
+use controller target ball keys arrows speed 0.03 move x help off
 create object gem
 set gem.shape to gem
 set gem.color to purple
@@ -12,6 +15,7 @@ set gem.x to right
 set gem.y to top
 
 when start
+  set ball.layer to front
   say "hello Scratch"
 end
 
@@ -24,14 +28,6 @@ when collision ball gem
   say "collected"
   play pop
   destroy gem
-end
-
-when keydown right
-  set ball.x to ball.x + 0.1
-end
-
-when keydown left
-  set ball.x to ball.x - 0.1
 end
 
 when keydown space

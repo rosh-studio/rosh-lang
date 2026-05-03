@@ -154,6 +154,30 @@ def test_build_scratch_project_compiles_keydown_handler_to_key_hat():
     assert "looks_say" in _opcodes(sprite)
 
 
+def test_build_scratch_project_expands_controller_to_key_movement_blocks():
+    programme = parse_string(
+        "create object ship\n"
+        'sprite ship "green spaceship"\n'
+        "set ship.x to center\n"
+        "use controller target ship keys both speed 0.03 move x help off\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    ship = next(t for t in project["targets"] if t["name"] == "ship")
+    blocks = ship["blocks"]
+    key_options = [
+        block["fields"]["KEY_OPTION"][0]
+        for block in blocks.values()
+        if block["opcode"] == "event_whenkeypressed"
+    ]
+    assert "left arrow" in key_options
+    assert "right arrow" in key_options
+    assert "a" in key_options
+    assert "d" in key_options
+    assert "motion_changexby" in _opcodes(ship)
+
+
 def test_build_scratch_project_compiles_relative_motion_to_change_blocks():
     programme = parse_string(
         "create object ball\n"
@@ -171,6 +195,26 @@ def test_build_scratch_project_compiles_relative_motion_to_change_blocks():
     opcodes = _opcodes(sprite)
     assert "motion_changexby" in opcodes
     assert "motion_changeyby" in opcodes
+
+
+def test_build_scratch_project_compiles_update_handler_to_forever_loop():
+    programme = parse_string(
+        "create object ball\n"
+        "set ball.shape to circle\n"
+        "when update\n"
+        "  set ball.x to ball.x + 0.01\n"
+        "  set ball.size to ball.size + 0.01\n"
+        "end\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    ball = next(t for t in project["targets"] if t["name"] == "ball")
+    opcodes = _opcodes(ball)
+    assert "event_whenflagclicked" in opcodes
+    assert "control_forever" in opcodes
+    assert "motion_changexby" in opcodes
+    assert "looks_changesizeby" in opcodes
 
 
 def test_build_scratch_project_compiles_visibility_and_destroy_to_hide_show():
@@ -255,6 +299,34 @@ def test_build_scratch_project_compiles_direction_and_rotation_style():
     opcodes = _opcodes(ship)
     assert "motion_pointindirection" in opcodes
     assert "motion_setrotationstyle" in opcodes
+
+
+def test_build_scratch_project_compiles_common_looks_sensing_and_sound_properties():
+    programme = parse_string(
+        "create object ball\n"
+        "set ball.shape to circle\n"
+        "set ball.layer to front\n"
+        "set ball.draggable to true\n"
+        "set ball.volume to 0.5\n"
+        "when start\n"
+        "  set ball.ghost to 40\n"
+        "  set ball.brightness to 20\n"
+        "  set ball.layer to back\n"
+        "  set ball.draggable to false\n"
+        "  set ball.volume to 75\n"
+        "end\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    ball = next(t for t in project["targets"] if t["name"] == "ball")
+    opcodes = _opcodes(ball)
+    assert ball["draggable"] is True
+    assert ball["volume"] == 50
+    assert "looks_gotofrontback" in opcodes
+    assert "sensing_setdragmode" in opcodes
+    assert "sound_setvolumeto" in opcodes
+    assert "looks_seteffectto" in opcodes
 
 
 def test_build_scratch_project_compiles_named_positions_for_scratch():
