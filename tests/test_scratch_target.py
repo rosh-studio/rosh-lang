@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import zipfile
 from io import BytesIO
+from pathlib import Path
 
-from rosh_lang.parser import parse_string
+from rosh_lang.parser import parse_file, parse_string
 from rosh_lang.targets.scratch import build_scratch_project, render_scratch_sb3
+
+EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
 
 def _project_from_sb3(data: bytes) -> tuple[dict, list[str]]:
@@ -18,6 +21,37 @@ def _project_from_sb3(data: bytes) -> tuple[dict, list[str]]:
 
 def _opcodes(target: dict) -> list[str]:
     return [block["opcode"] for block in target["blocks"].values()]
+
+
+def _assert_block_graph_valid(project: dict) -> None:
+    for target in project["targets"]:
+        blocks = target["blocks"]
+        for block_id, block in blocks.items():
+            next_id = block.get("next")
+            if next_id is not None:
+                assert next_id in blocks, f"{target['name']} block {block_id} has missing next {next_id}"
+                assert blocks[next_id]["parent"] == block_id
+            parent_id = block.get("parent")
+            if parent_id is not None:
+                assert parent_id in blocks, f"{target['name']} block {block_id} has missing parent {parent_id}"
+            for input_value in block.get("inputs", {}).values():
+                _assert_input_references_exist(target["name"], block_id, input_value, blocks)
+
+
+def _assert_input_references_exist(
+    target_name: str,
+    block_id: str,
+    input_value: object,
+    blocks: dict,
+) -> None:
+    if not isinstance(input_value, list):
+        return
+    for part in input_value[1:]:
+        if isinstance(part, str):
+            assert part in blocks, f"{target_name} block {block_id} references missing input {part}"
+            assert blocks[part]["parent"] == block_id
+        elif isinstance(part, list) and part and part[0] in {1, 2, 3}:
+            _assert_input_references_exist(target_name, block_id, part, blocks)
 
 
 def test_render_scratch_sb3_creates_zip_with_project_and_assets():
@@ -44,6 +78,14 @@ def test_render_scratch_sb3_creates_zip_with_project_and_assets():
     assert "event_whenflagclicked" in opcodes
     assert "motion_setx" in opcodes
     assert "motion_sety" in opcodes
+
+
+def test_render_scratch_sample_has_valid_block_graph():
+    programme = parse_file(EXAMPLES / "scratch-ball.rosh")
+
+    project, _names = _project_from_sb3(render_scratch_sb3(programme))
+
+    _assert_block_graph_valid(project)
 
 
 def test_build_scratch_project_compiles_start_set_to_green_flag_blocks():
