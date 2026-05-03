@@ -26,10 +26,12 @@ from rosh_lang.model import (
     DestroyStatement,
     EndStatement,
     IfStatement,
+    OnStatement,
     PrintStatement,
     Programme,
     PlayStatement,
     SayStatement,
+    SendStatement,
     SetStatement,
     SoundStatement,
     Statement,
@@ -84,6 +86,14 @@ _SCRATCH_VISUAL_PROPS = {
     "mosaic",
 }
 
+_SCRATCH_BUILTIN_EVENTS = {
+    "start",
+    "click",
+    "keydown",
+    "collision",
+    "update",
+}
+
 
 @dataclass
 class _Asset:
@@ -134,8 +144,10 @@ def build_scratch_project(
         key_handlers,
         collision_handlers,
         update_handlers,
+        broadcast_handlers,
     ) = _split_event_bodies(statements)
     key_handlers.extend(_key_handlers_from_update(update_handlers))
+    key_handlers.extend(_key_handlers_from_on(top_level))
     rt = Runtime(output=io.StringIO(), search_paths=search_paths)
     rt.run(Programme(statements=top_level, source=programme.source))
 
@@ -146,7 +158,10 @@ def build_scratch_project(
     assets.extend(sound_assets.values())
     sound_infos = [_sound_info(asset) for asset in sound_assets.values()]
     variables = _collect_scratch_variables(rt.state, statements)
-    targets: list[dict[str, Any]] = [_stage_target(backdrop_asset, sound_infos, variables)]
+    broadcasts = _collect_broadcasts(statements)
+    targets: list[dict[str, Any]] = [
+        _stage_target(backdrop_asset, sound_infos, variables, broadcasts)
+    ]
 
     object_items = _collect_scratch_objects(rt.state)
     top_level_setup = _top_level_sprite_setup(top_level)
@@ -166,6 +181,7 @@ def build_scratch_project(
     _attach_key_scripts(key_handlers, sprite_builds, targets[0])
     _attach_update_scripts(update_handlers, sprite_builds, targets[0])
     _attach_collision_scripts(collision_handlers, sprite_builds)
+    _attach_broadcast_scripts(broadcast_handlers, sprite_builds, targets[0])
     targets.extend(build.target for build in sprite_builds.values())
 
     return {
@@ -211,6 +227,7 @@ def _split_event_bodies(
     list[tuple[str, list[Statement]]],
     list[tuple[str, str, list[Statement]]],
     list[list[Statement]],
+    list[tuple[str, list[Statement]]],
 ]:
     top_level: list[Statement] = []
     start_body: list[Statement] = []
@@ -218,6 +235,7 @@ def _split_event_bodies(
     key_handlers: list[tuple[str, list[Statement]]] = []
     collision_handlers: list[tuple[str, str, list[Statement]]] = []
     update_handlers: list[list[Statement]] = []
+    broadcast_handlers: list[tuple[str, list[Statement]]] = []
     i = 0
     while i < len(statements):
         stmt = statements[i]
@@ -240,6 +258,8 @@ def _split_event_bodies(
                 collision_handlers.append((stmt.args[0], stmt.args[1], body))
             elif stmt.event == "update":
                 update_handlers.append(body)
+            elif stmt.event not in _SCRATCH_BUILTIN_EVENTS:
+                broadcast_handlers.append((stmt.event, body))
             continue
         top_level.append(stmt)
         i += 1
@@ -250,6 +270,7 @@ def _split_event_bodies(
         key_handlers,
         collision_handlers,
         update_handlers,
+        broadcast_handlers,
     )
 
 
@@ -272,6 +293,26 @@ def _key_from_pressed_condition(condition: str) -> str:
     if not match:
         return ""
     return match.group(1)
+
+
+def _key_handlers_from_on(statements: list[Statement]) -> list[tuple[str, list[Statement]]]:
+    key_handlers: list[tuple[str, list[Statement]]] = []
+    for stmt in statements:
+        if not isinstance(stmt, OnStatement):
+            continue
+        if stmt.event != "keydown" or stmt.action != "send" or not stmt.args:
+            continue
+        key = _key_from_payload_condition(stmt.condition)
+        if key:
+            key_handlers.append((key, [SendStatement(event=stmt.args)]))
+    return key_handlers
+
+
+def _key_from_payload_condition(condition: str) -> str:
+    match = re.fullmatch(r"key\s*==\s*(.+)", condition.strip())
+    if not match:
+        return ""
+    return _clean_literal(match.group(1).strip())
 
 
 def _find_background(statements: list[Statement]) -> str:
@@ -344,17 +385,31 @@ def _stage_variables(variables: dict[str, Any]) -> dict[str, list[Any]]:
     }
 
 
+def _collect_broadcasts(statements: list[Statement]) -> dict[str, str]:
+    names: set[str] = set()
+    for stmt in statements:
+        if isinstance(stmt, SendStatement):
+            names.add(stmt.event)
+        elif isinstance(stmt, WhenStatement) and stmt.event not in _SCRATCH_BUILTIN_EVENTS:
+            names.add(stmt.event)
+    return {
+        _broadcast_id(name): name
+        for name in sorted(names)
+    }
+
+
 def _stage_target(
     asset: _Asset,
     sounds: list[dict[str, Any]],
     variables: dict[str, Any],
+    broadcasts: dict[str, str],
 ) -> dict[str, Any]:
     return {
         "isStage": True,
         "name": "Stage",
         "variables": _stage_variables(variables),
         "lists": {},
-        "broadcasts": {},
+        "broadcasts": broadcasts,
         "blocks": {},
         "comments": {},
         "currentCostume": 0,
@@ -533,6 +588,28 @@ def _attach_update_scripts(
                 x=920,
                 y=40 + index * 180,
                 script_key=f"update:{index}",
+            )
+        )
+
+
+def _attach_broadcast_scripts(
+    broadcast_handlers: list[tuple[str, list[Statement]]],
+    sprite_builds: dict[str, _SpriteBuild],
+    stage_target: dict[str, Any],
+) -> None:
+    default_sprite = next(iter(sprite_builds), "")
+    for index, (event, body) in enumerate(broadcast_handlers):
+        owner = _infer_script_owner(body, sprite_builds, default_sprite)
+        target = sprite_builds[owner].target if owner else stage_target
+        target["blocks"].update(
+            _script_blocks(
+                body,
+                owner or None,
+                x=1140,
+                y=40 + index * 140,
+                hat_opcode="event_whenbroadcastreceived",
+                hat_fields={"BROADCAST_OPTION": [event, _broadcast_id(event)]},
+                script_key=f"broadcast:{event}:{index}",
             )
         )
 
@@ -803,6 +880,23 @@ def _script_blocks(
                 "shadow": True,
                 "topLevel": False,
             }
+        if "broadcast" in payload:
+            menu_id = _block_id("broadcast_menu", owner, script_key, str(index))
+            blocks[block_id]["inputs"] = {"BROADCAST_INPUT": [1, menu_id]}
+            blocks[menu_id] = {
+                "opcode": "event_broadcast_menu",
+                "next": None,
+                "parent": block_id,
+                "inputs": {},
+                "fields": {
+                    "BROADCAST_OPTION": [
+                        payload["broadcast"],
+                        _broadcast_id(payload["broadcast"]),
+                    ]
+                },
+                "shadow": True,
+                "topLevel": False,
+            }
         previous_id = block_id
     return blocks
 
@@ -880,6 +974,8 @@ def _statement_action(
         return "looks_hide", {}
     if isinstance(stmt, PlayStatement):
         return "sound_playuntildone", {"sound": stmt.sound}
+    if isinstance(stmt, SendStatement):
+        return "event_broadcast", {"broadcast": stmt.event}
     return None
 
 
@@ -1045,7 +1141,11 @@ def _scratch_key(key: str) -> str:
         "enter": "enter",
         "return": "enter",
     }
+    if key == " ":
+        return "space"
     cleaned = key.strip().lower()
+    if not cleaned:
+        return "space"
     return aliases.get(cleaned, cleaned)
 
 
@@ -1101,6 +1201,10 @@ def _block_id(*parts: str) -> str:
 
 def _variable_id(name: str) -> str:
     return _block_id("variable", name)
+
+
+def _broadcast_id(name: str) -> str:
+    return _block_id("broadcast", name)
 
 
 def _scratch_name(name: str) -> str:

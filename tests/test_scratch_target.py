@@ -268,6 +268,56 @@ def test_build_scratch_project_compiles_variables_to_scratch_data_blocks():
     assert "looks_say" in opcodes
 
 
+def test_build_scratch_project_compiles_custom_events_to_broadcast_blocks():
+    programme = parse_string(
+        "create object ball\n"
+        "set ball.shape to circle\n"
+        "when click ball\n"
+        "  send shoot\n"
+        "end\n"
+        "when shoot\n"
+        '  say "bang"\n'
+        "end\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    stage = project["targets"][0]
+    assert "shoot" in stage["broadcasts"].values()
+    ball = next(t for t in project["targets"] if t["name"] == "ball")
+    opcodes = _opcodes(ball)
+    assert "event_broadcast" in opcodes
+    assert "event_broadcast_menu" in opcodes
+    assert "event_whenbroadcastreceived" in opcodes
+    assert "looks_say" in opcodes
+
+
+def test_build_scratch_project_compiles_controller_fire_to_key_broadcast():
+    programme = parse_string(
+        "create object ship\n"
+        'sprite ship "green spaceship"\n'
+        "use controller target ship keys arrows speed 0.03 move x fire on fire_event shoot\n"
+        "when shoot\n"
+        '  say "pew"\n'
+        "end\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    stage = project["targets"][0]
+    assert "shoot" in stage["broadcasts"].values()
+    ship = next(t for t in project["targets"] if t["name"] == "ship")
+    key_options = [
+        block["fields"]["KEY_OPTION"][0]
+        for block in ship["blocks"].values()
+        if block["opcode"] == "event_whenkeypressed"
+    ]
+    assert "space" in key_options
+    opcodes = _opcodes(ship)
+    assert "event_broadcast" in opcodes
+    assert "event_whenbroadcastreceived" in opcodes
+
+
 def test_build_scratch_project_compiles_visibility_and_destroy_to_hide_show():
     programme = parse_string(
         "create object ball\n"
