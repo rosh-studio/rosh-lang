@@ -191,7 +191,7 @@ def build_scratch_project(
 
     return {
         "targets": targets,
-        "monitors": [],
+        "monitors": _variable_monitors(variables),
         "extensions": [],
         "meta": {
             "semver": "3.0.0",
@@ -402,6 +402,28 @@ def _stage_variables(variables: dict[str, Any]) -> dict[str, list[Any]]:
     }
 
 
+def _variable_monitors(variables: dict[str, Any]) -> list[dict[str, Any]]:
+    monitors: list[dict[str, Any]] = []
+    for index, (name, value) in enumerate(sorted(variables.items())):
+        monitors.append({
+            "id": _variable_id(name),
+            "mode": "default",
+            "opcode": "data_variable",
+            "params": {"VARIABLE": name},
+            "spriteName": None,
+            "value": value,
+            "width": 0,
+            "height": 0,
+            "x": 5,
+            "y": 5 + index * 26,
+            "visible": True,
+            "sliderMin": 0,
+            "sliderMax": 100,
+            "isDiscrete": True,
+        })
+    return monitors
+
+
 def _collect_broadcasts(statements: list[Statement]) -> dict[str, str]:
     names: set[str] = set()
     for stmt in statements:
@@ -579,9 +601,12 @@ def _attach_collision_scripts(
     for index, (a, b, body) in enumerate(collision_handlers):
         if a not in sprite_builds or b not in sprite_builds:
             continue
+        owner_body = _collision_body_for_owner(body, a)
+        if not owner_body:
+            owner_body = body
         sprite_builds[a].target["blocks"].update(
             _collision_script_blocks(
-                body,
+                owner_body,
                 owner=a,
                 touching=b,
                 x=700,
@@ -589,6 +614,50 @@ def _attach_collision_scripts(
                 script_key=f"collision:{a}:{b}:{index}",
             )
         )
+        secondary_body = _collision_body_for_owner(body, b)
+        if secondary_body:
+            sprite_builds[b].target["blocks"].update(
+                _collision_script_blocks(
+                    secondary_body,
+                    owner=b,
+                    touching=a,
+                    x=700,
+                    y=40 + index * 180,
+                    script_key=f"collision:{b}:{a}:{index}",
+                )
+            )
+
+
+def _collision_body_for_owner(
+    body: list[Statement],
+    owner: str,
+) -> list[Statement]:
+    result: list[Statement] = []
+    for stmt in body:
+        if isinstance(stmt, SetStatement) and stmt.target.startswith(f"{owner}."):
+            result.append(stmt)
+        elif isinstance(stmt, DestroyStatement) and stmt.name == owner:
+            result.append(stmt)
+        elif isinstance(stmt, IfStatement):
+            then_body = _collision_body_for_owner(stmt.then_body, owner)
+            else_body = _collision_body_for_owner(stmt.else_body, owner)
+            if then_body or else_body:
+                result.append(IfStatement(
+                    condition=stmt.condition,
+                    then_body=then_body,
+                    else_body=else_body,
+                    line=stmt.line,
+                ))
+        elif isinstance(stmt, RepeatStatement):
+            nested_body = _collision_body_for_owner(stmt.body, owner)
+            if nested_body:
+                result.append(RepeatStatement(
+                    count=stmt.count,
+                    var=stmt.var,
+                    body=nested_body,
+                    line=stmt.line,
+                ))
+    return result
 
 
 def _attach_update_scripts(
@@ -1079,6 +1148,30 @@ def _script_blocks(
                 "shadow": True,
                 "topLevel": False,
             }
+        if "goto" in payload:
+            menu_id = _block_id("goto_menu", owner, script_key, str(index))
+            blocks[block_id]["inputs"] = {"TO": [1, menu_id]}
+            blocks[menu_id] = {
+                "opcode": "motion_goto_menu",
+                "next": None,
+                "parent": block_id,
+                "inputs": {},
+                "fields": {"TO": [payload["goto"], None]},
+                "shadow": True,
+                "topLevel": False,
+            }
+        if "towards" in payload:
+            menu_id = _block_id("towards_menu", owner, script_key, str(index))
+            blocks[block_id]["inputs"] = {"TOWARDS": [1, menu_id]}
+            blocks[menu_id] = {
+                "opcode": "motion_pointtowards_menu",
+                "next": None,
+                "parent": block_id,
+                "inputs": {},
+                "fields": {"TOWARDS": [payload["towards"], None]},
+                "shadow": True,
+                "topLevel": False,
+            }
         previous_id = block_id
     return blocks
 
@@ -1137,12 +1230,19 @@ def _statement_action(
             return "motion_changeyby", {"inputs": {"DY": _number_input(relative[1])}}
         if relative and relative[0] == "size":
             return "looks_changesizeby", {"inputs": {"CHANGE": _number_input(relative[1])}}
+        if relative and relative[0] == "direction":
+            opcode = "motion_turnright" if relative[1] >= 0 else "motion_turnleft"
+            return opcode, {"inputs": {"DEGREES": _number_input(abs(relative[1]))}}
         if prop == "x":
             return "motion_setx", {"inputs": {"X": _number_input(_scratch_x(value))}}
         if prop == "y":
             return "motion_sety", {"inputs": {"Y": _number_input(_scratch_y(value))}}
         if prop in ("direction", "rotation"):
             return "motion_pointindirection", {"inputs": {"DIRECTION": _number_input(value)}}
+        if prop in {"go_to", "goto"}:
+            return "motion_goto", {"goto": _motion_target(value)}
+        if prop in {"point_towards", "point_toward"}:
+            return "motion_pointtowards", {"towards": _motion_target(value)}
         if prop == "rotation_style":
             return "motion_setrotationstyle", {"fields": {"STYLE": [_rotation_style(value), None]}}
         if prop in {"layer", "z_order"}:
@@ -1375,6 +1475,8 @@ def _relative_change(stmt: SetStatement) -> tuple[str, float] | None:
         return "y", _scratch_delta_y(amount)
     if prop in {"size", "width", "height"}:
         return "size", _scratch_delta_size(amount)
+    if prop in {"direction", "rotation"}:
+        return "direction", amount
     return None
 
 
@@ -1417,6 +1519,19 @@ def _scratch_key(key: str) -> str:
     if not cleaned:
         return "space"
     return aliases.get(cleaned, cleaned)
+
+
+def _motion_target(value: str) -> str:
+    aliases = {
+        "mouse": "_mouse_",
+        "mouse-pointer": "_mouse_",
+        "mouse_pointer": "_mouse_",
+        "random": "_random_",
+        "random-position": "_random_",
+        "random_position": "_random_",
+    }
+    cleaned = value.strip().strip('"').strip("'").lower().replace(" ", "_")
+    return aliases.get(cleaned, _scratch_name(value))
 
 
 def _rotation_style(value: str) -> str:

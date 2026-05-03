@@ -398,6 +398,8 @@ def test_build_scratch_project_compiles_variables_to_scratch_data_blocks():
     stage = project["targets"][0]
     variable_names = [value[0] for value in stage["variables"].values()]
     assert "score" in variable_names
+    monitor_names = [monitor["params"]["VARIABLE"] for monitor in project["monitors"]]
+    assert "score" in monitor_names
     ball = next(t for t in project["targets"] if t["name"] == "ball")
     opcodes = _opcodes(ball)
     assert "data_changevariableby" in opcodes
@@ -427,12 +429,65 @@ def test_build_scratch_project_exposes_visual_widget_scalars_as_variables():
     variable_names = [value[0] for value in stage["variables"].values()]
     assert "score.value" in variable_names
     assert "controller.speed" not in variable_names
+    monitor_names = [monitor["params"]["VARIABLE"] for monitor in project["monitors"]]
+    assert "score.value" in monitor_names
     ball = next(t for t in project["targets"] if t["name"] == "ball")
     opcodes = _opcodes(ball)
     assert "data_changevariableby" in opcodes
     assert "data_variable" in opcodes
     assert "operator_not" in opcodes
     assert "operator_lt" in opcodes
+
+
+def test_build_scratch_project_compiles_lives_and_coin_components():
+    programme = parse_string(
+        "use lives count 3\n"
+        "use coin x 0.7 y 0.2\n"
+        "create object player\n"
+        "set player.shape to circle\n"
+        "when collision player coin.gem\n"
+        "  set lives.count to lives.count - 1\n"
+        "  destroy coin.gem\n"
+        "end\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    target_names = [target["name"] for target in project["targets"]]
+    assert "lives display" in target_names
+    assert "coin gem" in target_names
+    stage = project["targets"][0]
+    variable_names = [value[0] for value in stage["variables"].values()]
+    assert "lives.count" in variable_names
+    player = next(t for t in project["targets"] if t["name"] == "player")
+    coin = next(t for t in project["targets"] if t["name"] == "coin gem")
+    assert "data_changevariableby" in _opcodes(player)
+    assert "looks_hide" in _opcodes(coin)
+
+
+def test_build_scratch_project_compiles_scratch_native_motion_extras():
+    programme = parse_string(
+        "create object ball\n"
+        "set ball.shape to circle\n"
+        "when click ball\n"
+        "  set ball.direction to ball.direction + 15\n"
+        "  set ball.rotation to ball.rotation - 10\n"
+        "  set ball.go_to to mouse-pointer\n"
+        "  set ball.point_towards to mouse-pointer\n"
+        "end\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    _assert_block_graph_valid(project)
+    ball = next(t for t in project["targets"] if t["name"] == "ball")
+    opcodes = _opcodes(ball)
+    assert "motion_turnright" in opcodes
+    assert "motion_turnleft" in opcodes
+    assert "motion_goto" in opcodes
+    assert "motion_goto_menu" in opcodes
+    assert "motion_pointtowards" in opcodes
+    assert "motion_pointtowards_menu" in opcodes
 
 
 def test_build_scratch_project_compiles_custom_events_to_broadcast_blocks():
