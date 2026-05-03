@@ -673,7 +673,7 @@ def _script_blocks(
 
     blocks: dict[str, dict[str, Any]] = {}
     owner = sprite_name or "stage"
-    first_id = _block_id(actions[0][0], owner, script_key, "0")
+    first_id = _block_id(_block_opcode(actions[0][0]), owner, script_key, "0")
     previous_id: str | None = None
     if include_hat:
         hat_id = _block_id(hat_opcode, owner, script_key, "hat")
@@ -690,13 +690,58 @@ def _script_blocks(
         }
         previous_id = hat_id
     for index, (opcode, payload) in enumerate(actions):
-        block_id = _block_id(opcode, owner, script_key, str(index))
+        block_opcode = _block_opcode(opcode)
+        block_id = _block_id(block_opcode, owner, script_key, str(index))
         next_id = (
-            _block_id(actions[index + 1][0], owner, script_key, str(index + 1))
+            _block_id(
+                _block_opcode(actions[index + 1][0]),
+                owner,
+                script_key,
+                str(index + 1),
+            )
             if index + 1 < len(actions) else None
         )
+        if opcode == "__if__":
+            condition_id, condition_blocks = _condition_blocks(
+                payload["condition"],
+                sprite_name,
+                owner,
+                script_key,
+                index,
+            )
+            substack = _script_blocks(
+                payload["then_body"],
+                sprite_name,
+                x=x,
+                y=y,
+                script_key=f"{script_key}:if:{index}",
+                include_hat=False,
+            )
+            if not condition_id or not substack:
+                continue
+            first_substack_id = next(
+                nested_id for nested_id, nested in substack.items()
+                if nested["parent"] is None
+            )
+            substack[first_substack_id]["parent"] = block_id
+            blocks[block_id] = {
+                "opcode": block_opcode,
+                "next": next_id,
+                "parent": previous_id,
+                "inputs": {
+                    "CONDITION": [2, condition_id],
+                    "SUBSTACK": [2, first_substack_id],
+                },
+                "fields": {},
+                "shadow": False,
+                "topLevel": False,
+            }
+            blocks.update(condition_blocks)
+            blocks.update(substack)
+            previous_id = block_id
+            continue
         blocks[block_id] = {
-            "opcode": opcode,
+            "opcode": block_opcode,
             "next": next_id,
             "parent": previous_id,
             "inputs": payload.get("inputs", {}),
@@ -720,10 +765,23 @@ def _script_blocks(
     return blocks
 
 
+def _block_opcode(opcode: str) -> str:
+    return "control_if" if opcode == "__if__" else opcode
+
+
 def _statement_action(
     stmt: Statement,
     sprite_name: str | None,
 ) -> tuple[str, dict[str, Any]] | None:
+    if isinstance(stmt, IfStatement) and sprite_name:
+        if _condition_parts(stmt.condition, sprite_name) and _has_script_actions(
+            stmt.then_body,
+            sprite_name,
+        ):
+            return "__if__", {
+                "condition": stmt.condition,
+                "then_body": stmt.then_body,
+            }
     if isinstance(stmt, SetStatement) and sprite_name:
         prop = stmt.target.split(".", 1)[1] if "." in stmt.target else stmt.target
         value = _clean_literal(stmt.value)
@@ -770,6 +828,90 @@ def _statement_action(
     if isinstance(stmt, PlayStatement):
         return "sound_playuntildone", {"sound": stmt.sound}
     return None
+
+
+def _has_script_actions(statements: list[Statement], sprite_name: str | None) -> bool:
+    return any(_statement_action(stmt, sprite_name) for stmt in statements)
+
+
+def _condition_blocks(
+    condition: str,
+    sprite_name: str | None,
+    owner: str,
+    script_key: str,
+    index: int,
+) -> tuple[str, dict[str, dict[str, Any]]]:
+    parts = _condition_parts(condition, sprite_name)
+    if not parts:
+        return "", {}
+    prop, op, value = parts
+    operator = {
+        ">": "operator_gt",
+        "<": "operator_lt",
+        "==": "operator_equals",
+        "=": "operator_equals",
+    }[op]
+    operator_id = _block_id(operator, owner, script_key, str(index), "condition")
+    reporter_id = _block_id(prop, owner, script_key, str(index), "reporter")
+    return operator_id, {
+        operator_id: {
+            "opcode": operator,
+            "next": None,
+            "parent": _block_id("control_if", owner, script_key, str(index)),
+            "inputs": {
+                "OPERAND1": [2, reporter_id],
+                "OPERAND2": _comparison_input(prop, value),
+            },
+            "fields": {},
+            "shadow": False,
+            "topLevel": False,
+        },
+        reporter_id: {
+            "opcode": _property_reporter(prop),
+            "next": None,
+            "parent": operator_id,
+            "inputs": {},
+            "fields": {},
+            "shadow": False,
+            "topLevel": False,
+        },
+    }
+
+
+def _condition_parts(
+    condition: str,
+    sprite_name: str | None,
+) -> tuple[str, str, str] | None:
+    if not sprite_name:
+        return None
+    match = re.fullmatch(
+        rf"{re.escape(sprite_name)}\.(x|y|size|direction|rotation)\s*(==|=|>|<)\s*(.+)",
+        condition.strip(),
+    )
+    if not match:
+        return None
+    prop, op, value = match.groups()
+    return prop, op, _clean_literal(value.strip())
+
+
+def _property_reporter(prop: str) -> str:
+    if prop == "x":
+        return "motion_xposition"
+    if prop == "y":
+        return "motion_yposition"
+    if prop == "size":
+        return "looks_size"
+    return "motion_direction"
+
+
+def _comparison_input(prop: str, value: str) -> list[Any]:
+    if prop == "x":
+        return _number_input(_scratch_x(value))
+    if prop == "y":
+        return _number_input(_scratch_y(value))
+    if prop == "size":
+        return _number_input(_scratch_size_value(value))
+    return _number_input(value)
 
 
 def _relative_change(stmt: SetStatement) -> tuple[str, float] | None:

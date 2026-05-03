@@ -217,6 +217,28 @@ def test_build_scratch_project_compiles_update_handler_to_forever_loop():
     assert "looks_changesizeby" in opcodes
 
 
+def test_build_scratch_project_compiles_simple_condition_to_if_block():
+    programme = parse_string(
+        "create object ball\n"
+        "set ball.shape to circle\n"
+        "when update\n"
+        "  if ball.x > 0.8\n"
+        "    set ball.x to left\n"
+        "  end\n"
+        "end\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    ball = next(t for t in project["targets"] if t["name"] == "ball")
+    opcodes = _opcodes(ball)
+    assert "control_forever" in opcodes
+    assert "control_if" in opcodes
+    assert "operator_gt" in opcodes
+    assert "motion_xposition" in opcodes
+    assert "motion_setx" in opcodes
+
+
 def test_build_scratch_project_compiles_visibility_and_destroy_to_hide_show():
     programme = parse_string(
         "create object ball\n"
