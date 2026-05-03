@@ -36,6 +36,10 @@ end
 
 when scored
   say "score up"
+  do pulse
+end
+
+define pulse
   repeat 3
     set ball.size to ball.size + 0.01
   end

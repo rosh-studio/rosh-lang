@@ -23,7 +23,9 @@ from rosh_lang import __version__
 from rosh_lang.model import (
     BackgroundStatement,
     CreateStatement,
+    DefineStatement,
     DestroyStatement,
+    DoStatement,
     EndStatement,
     IfStatement,
     OnStatement,
@@ -183,6 +185,7 @@ def build_scratch_project(
     _attach_update_scripts(update_handlers, sprite_builds, targets[0])
     _attach_collision_scripts(collision_handlers, sprite_builds)
     _attach_broadcast_scripts(broadcast_handlers, sprite_builds, targets[0])
+    _attach_function_scripts(top_level, sprite_builds, targets[0])
     targets.extend(build.target for build in sprite_builds.values())
 
     return {
@@ -615,6 +618,79 @@ def _attach_broadcast_scripts(
         )
 
 
+def _attach_function_scripts(
+    statements: list[Statement],
+    sprite_builds: dict[str, _SpriteBuild],
+    stage_target: dict[str, Any],
+) -> None:
+    default_sprite = next(iter(sprite_builds), "")
+    definitions = [stmt for stmt in statements if isinstance(stmt, DefineStatement)]
+    for index, stmt in enumerate(definitions):
+        owner = _infer_script_owner(stmt.body, sprite_builds, default_sprite)
+        target = sprite_builds[owner].target if owner else stage_target
+        target["blocks"].update(
+            _procedure_definition_blocks(
+                stmt,
+                owner or None,
+                x=1360,
+                y=40 + index * 180,
+            )
+        )
+
+
+def _procedure_definition_blocks(
+    stmt: DefineStatement,
+    sprite_name: str | None,
+    *,
+    x: int,
+    y: int,
+) -> dict[str, dict[str, Any]]:
+    owner = sprite_name or "stage"
+    script_key = f"define:{stmt.name}"
+    body = _script_blocks(
+        stmt.body,
+        sprite_name,
+        x=x,
+        y=y,
+        script_key=f"{script_key}:body",
+        include_hat=False,
+    )
+    definition_id = _block_id("procedures_definition", owner, script_key)
+    prototype_id = _block_id("procedures_prototype", owner, script_key)
+    first_body_id = None
+    if body:
+        first_body_id = next(
+            block_id for block_id, block in body.items()
+            if block["parent"] is None
+        )
+        body[first_body_id]["parent"] = definition_id
+
+    return {
+        definition_id: {
+            "opcode": "procedures_definition",
+            "next": first_body_id,
+            "parent": None,
+            "inputs": {"custom_block": [1, prototype_id]},
+            "fields": {},
+            "shadow": False,
+            "topLevel": True,
+            "x": x,
+            "y": y,
+        },
+        prototype_id: {
+            "opcode": "procedures_prototype",
+            "next": None,
+            "parent": definition_id,
+            "inputs": {},
+            "fields": {},
+            "shadow": True,
+            "topLevel": False,
+            "mutation": _procedure_mutation(stmt.name),
+        },
+        **body,
+    }
+
+
 def _forever_script_blocks(
     statements: list[Statement],
     sprite_name: str | None,
@@ -908,6 +984,8 @@ def _script_blocks(
             "shadow": False,
             "topLevel": False,
         }
+        if "mutation" in payload:
+            blocks[block_id]["mutation"] = payload["mutation"]
         if "sound" in payload:
             menu_id = _block_id("sound_menu", owner, script_key, str(index))
             blocks[block_id]["inputs"] = {"SOUND_MENU": [1, menu_id]}
@@ -1033,6 +1111,8 @@ def _statement_action(
         return "sound_playuntildone", {"sound": stmt.sound}
     if isinstance(stmt, SendStatement):
         return "event_broadcast", {"broadcast": stmt.event}
+    if isinstance(stmt, DoStatement):
+        return "procedures_call", {"mutation": _procedure_mutation(stmt.name)}
     return None
 
 
@@ -1295,6 +1375,18 @@ def _variable_id(name: str) -> str:
 
 def _broadcast_id(name: str) -> str:
     return _block_id("broadcast", name)
+
+
+def _procedure_mutation(name: str) -> dict[str, Any]:
+    return {
+        "tagName": "mutation",
+        "children": [],
+        "proccode": name,
+        "argumentids": "[]",
+        "argumentnames": "[]",
+        "argumentdefaults": "[]",
+        "warp": "false",
+    }
 
 
 def _scratch_name(name: str) -> str:

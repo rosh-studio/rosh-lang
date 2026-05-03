@@ -251,6 +251,7 @@ def test_build_scratch_project_compiles_update_handler_to_forever_loop():
 
     project, _assets = build_scratch_project(programme)
 
+    _assert_block_graph_valid(project)
     ball = next(t for t in project["targets"] if t["name"] == "ball")
     opcodes = _opcodes(ball)
     assert "event_whenflagclicked" in opcodes
@@ -299,6 +300,28 @@ def test_build_scratch_project_compiles_variable_count_repeat():
     assert "control_repeat" in opcodes
     assert "data_variable" in opcodes
     assert "motion_changexby" in opcodes
+
+
+def test_build_scratch_project_compiles_define_do_to_custom_blocks():
+    programme = parse_string(
+        "create object ball\n"
+        "set ball.shape to circle\n"
+        "define jump\n"
+        "  set ball.y to ball.y - 0.1\n"
+        "end\n"
+        "when click ball\n"
+        "  do jump\n"
+        "end\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    ball = next(t for t in project["targets"] if t["name"] == "ball")
+    opcodes = _opcodes(ball)
+    assert "procedures_definition" in opcodes
+    assert "procedures_prototype" in opcodes
+    assert "procedures_call" in opcodes
+    assert "motion_changeyby" in opcodes
 
 
 def test_build_scratch_project_compiles_simple_condition_to_if_block():
