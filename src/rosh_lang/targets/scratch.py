@@ -30,6 +30,7 @@ from rosh_lang.model import (
     PrintStatement,
     Programme,
     PlayStatement,
+    RepeatStatement,
     SayStatement,
     SendStatement,
     SetStatement,
@@ -859,6 +860,37 @@ def _script_blocks(
             blocks.update(substack)
             previous_id = block_id
             continue
+        if opcode == "__repeat__":
+            substack = _script_blocks(
+                payload["body"],
+                sprite_name,
+                x=x,
+                y=y,
+                script_key=f"{script_key}:repeat:{index}",
+                include_hat=False,
+            )
+            if not substack:
+                continue
+            first_substack_id = next(
+                nested_id for nested_id, nested in substack.items()
+                if nested["parent"] is None
+            )
+            substack[first_substack_id]["parent"] = block_id
+            blocks[block_id] = {
+                "opcode": block_opcode,
+                "next": next_id,
+                "parent": previous_id,
+                "inputs": {
+                    "TIMES": _number_input(payload["count"]),
+                    "SUBSTACK": [2, first_substack_id],
+                },
+                "fields": {},
+                "shadow": False,
+                "topLevel": False,
+            }
+            blocks.update(substack)
+            previous_id = block_id
+            continue
         blocks[block_id] = {
             "opcode": block_opcode,
             "next": next_id,
@@ -902,7 +934,11 @@ def _script_blocks(
 
 
 def _block_opcode(opcode: str) -> str:
-    return "control_if" if opcode == "__if__" else opcode
+    aliases = {
+        "__if__": "control_if",
+        "__repeat__": "control_repeat",
+    }
+    return aliases.get(opcode, opcode)
 
 
 def _statement_action(
@@ -917,6 +953,15 @@ def _statement_action(
             return "__if__", {
                 "condition": stmt.condition,
                 "then_body": stmt.then_body,
+            }
+    if isinstance(stmt, RepeatStatement):
+        if _repeat_count(stmt.count) is not None and _has_script_actions(
+            stmt.body,
+            sprite_name,
+        ):
+            return "__repeat__", {
+                "count": _repeat_count(stmt.count),
+                "body": stmt.body,
             }
     if isinstance(stmt, SetStatement) and "." not in stmt.target:
         variable_change = _variable_change(stmt)
@@ -1087,6 +1132,14 @@ def _variable_change(stmt: SetStatement) -> float | None:
         return None
     sign = 1 if match.group(1) == "+" else -1
     return sign * float(match.group(2))
+
+
+def _repeat_count(value: str) -> int | None:
+    try:
+        count = int(value)
+    except ValueError:
+        return None
+    return max(0, count)
 
 
 def _relative_change(stmt: SetStatement) -> tuple[str, float] | None:

@@ -36,6 +36,9 @@ end
 
 when scored
   say "score up"
+  repeat 3
+    set ball.size to ball.size + 0.01
+  end
 end
 
 when update
