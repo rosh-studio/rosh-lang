@@ -1,5 +1,7 @@
 background "sky blue"
 sound pop "short pop"
+create number score
+set score to 0
 create object ball
 set ball.shape to circle
 set ball.color to red
@@ -26,8 +28,15 @@ end
 
 when collision ball gem
   say "collected"
+  set score to score + 1
   play pop
   destroy gem
+end
+
+when update
+  if score > 0
+    set ball.ghost to 20
+  end
 end
 
 when keydown space

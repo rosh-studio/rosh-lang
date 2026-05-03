@@ -239,6 +239,35 @@ def test_build_scratch_project_compiles_simple_condition_to_if_block():
     assert "motion_setx" in opcodes
 
 
+def test_build_scratch_project_compiles_variables_to_scratch_data_blocks():
+    programme = parse_string(
+        "create number score\n"
+        "set score to 0\n"
+        "create object ball\n"
+        "set ball.shape to circle\n"
+        "when click ball\n"
+        "  set score to score + 1\n"
+        "end\n"
+        "when update\n"
+        "  if score > 4\n"
+        '    say "winner"\n'
+        "  end\n"
+        "end\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    stage = project["targets"][0]
+    variable_names = [value[0] for value in stage["variables"].values()]
+    assert "score" in variable_names
+    ball = next(t for t in project["targets"] if t["name"] == "ball")
+    opcodes = _opcodes(ball)
+    assert "data_changevariableby" in opcodes
+    assert "data_variable" in opcodes
+    assert "operator_gt" in opcodes
+    assert "looks_say" in opcodes
+
+
 def test_build_scratch_project_compiles_visibility_and_destroy_to_hide_show():
     programme = parse_string(
         "create object ball\n"

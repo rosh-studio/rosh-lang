@@ -22,6 +22,7 @@ from typing import Any
 from rosh_lang import __version__
 from rosh_lang.model import (
     BackgroundStatement,
+    CreateStatement,
     DestroyStatement,
     EndStatement,
     IfStatement,
@@ -144,7 +145,8 @@ def build_scratch_project(
     sound_assets = _collect_sound_assets(statements)
     assets.extend(sound_assets.values())
     sound_infos = [_sound_info(asset) for asset in sound_assets.values()]
-    targets: list[dict[str, Any]] = [_stage_target(backdrop_asset, sound_infos)]
+    variables = _collect_scratch_variables(rt.state, statements)
+    targets: list[dict[str, Any]] = [_stage_target(backdrop_asset, sound_infos, variables)]
 
     object_items = _collect_scratch_objects(rt.state)
     top_level_setup = _top_level_sprite_setup(top_level)
@@ -306,11 +308,51 @@ def _top_level_sprite_setup(statements: list[Statement]) -> dict[str, list[State
     return setup
 
 
-def _stage_target(asset: _Asset, sounds: list[dict[str, Any]]) -> dict[str, Any]:
+def _collect_scratch_variables(
+    state: dict[str, Any],
+    statements: list[Statement],
+) -> dict[str, Any]:
+    names: dict[str, Any] = {
+        key: value
+        for key, value in state.items()
+        if _is_scratch_variable(key, value)
+    }
+    for stmt in statements:
+        if (
+            isinstance(stmt, CreateStatement)
+            and stmt.kind in {"number", "string"}
+            and "." not in stmt.name
+        ):
+            names.setdefault(stmt.name, 0 if stmt.kind == "number" else "")
+        elif isinstance(stmt, SetStatement) and "." not in stmt.target:
+            names.setdefault(stmt.target, 0)
+    return names
+
+
+def _is_scratch_variable(name: str, value: Any) -> bool:
+    return (
+        not name.startswith("_")
+        and "." not in name
+        and not isinstance(value, (dict, list, tuple, set))
+    )
+
+
+def _stage_variables(variables: dict[str, Any]) -> dict[str, list[Any]]:
+    return {
+        _variable_id(name): [name, value]
+        for name, value in sorted(variables.items())
+    }
+
+
+def _stage_target(
+    asset: _Asset,
+    sounds: list[dict[str, Any]],
+    variables: dict[str, Any],
+) -> dict[str, Any]:
     return {
         "isStage": True,
         "name": "Stage",
-        "variables": {},
+        "variables": _stage_variables(variables),
         "lists": {},
         "broadcasts": {},
         "blocks": {},
@@ -773,7 +815,7 @@ def _statement_action(
     stmt: Statement,
     sprite_name: str | None,
 ) -> tuple[str, dict[str, Any]] | None:
-    if isinstance(stmt, IfStatement) and sprite_name:
+    if isinstance(stmt, IfStatement):
         if _condition_parts(stmt.condition, sprite_name) and _has_script_actions(
             stmt.then_body,
             sprite_name,
@@ -782,6 +824,17 @@ def _statement_action(
                 "condition": stmt.condition,
                 "then_body": stmt.then_body,
             }
+    if isinstance(stmt, SetStatement) and "." not in stmt.target:
+        variable_change = _variable_change(stmt)
+        if variable_change is not None:
+            return "data_changevariableby", {
+                "fields": {"VARIABLE": [stmt.target, _variable_id(stmt.target)]},
+                "inputs": {"VALUE": _number_input(variable_change)},
+            }
+        return "data_setvariableto", {
+            "fields": {"VARIABLE": [stmt.target, _variable_id(stmt.target)]},
+            "inputs": {"VALUE": _literal_input(_clean_literal(stmt.value))},
+        }
     if isinstance(stmt, SetStatement) and sprite_name:
         prop = stmt.target.split(".", 1)[1] if "." in stmt.target else stmt.target
         value = _clean_literal(stmt.value)
@@ -853,6 +906,13 @@ def _condition_blocks(
     }[op]
     operator_id = _block_id(operator, owner, script_key, str(index), "condition")
     reporter_id = _block_id(prop, owner, script_key, str(index), "reporter")
+    reporter_opcode = _property_reporter(prop)
+    variable_id = _variable_id(prop)
+    reporter_fields = (
+        {"VARIABLE": [prop, variable_id]}
+        if reporter_opcode == "data_variable"
+        else {}
+    )
     return operator_id, {
         operator_id: {
             "opcode": operator,
@@ -867,11 +927,11 @@ def _condition_blocks(
             "topLevel": False,
         },
         reporter_id: {
-            "opcode": _property_reporter(prop),
+            "opcode": reporter_opcode,
             "next": None,
             "parent": operator_id,
             "inputs": {},
-            "fields": {},
+            "fields": reporter_fields,
             "shadow": False,
             "topLevel": False,
         },
@@ -882,16 +942,22 @@ def _condition_parts(
     condition: str,
     sprite_name: str | None,
 ) -> tuple[str, str, str] | None:
-    if not sprite_name:
-        return None
+    if sprite_name:
+        match = re.fullmatch(
+            rf"{re.escape(sprite_name)}\.(x|y|size|direction|rotation)\s*(==|=|>|<)\s*(.+)",
+            condition.strip(),
+        )
+        if match:
+            prop, op, value = match.groups()
+            return prop, op, _clean_literal(value.strip())
     match = re.fullmatch(
-        rf"{re.escape(sprite_name)}\.(x|y|size|direction|rotation)\s*(==|=|>|<)\s*(.+)",
+        r"([A-Za-z_][A-Za-z0-9_-]*)\s*(==|=|>|<)\s*(.+)",
         condition.strip(),
     )
-    if not match:
-        return None
-    prop, op, value = match.groups()
-    return prop, op, _clean_literal(value.strip())
+    if match:
+        prop, op, value = match.groups()
+        return prop, op, _clean_literal(value.strip())
+    return None
 
 
 def _property_reporter(prop: str) -> str:
@@ -901,7 +967,9 @@ def _property_reporter(prop: str) -> str:
         return "motion_yposition"
     if prop == "size":
         return "looks_size"
-    return "motion_direction"
+    if prop in {"direction", "rotation"}:
+        return "motion_direction"
+    return "data_variable"
 
 
 def _comparison_input(prop: str, value: str) -> list[Any]:
@@ -911,7 +979,18 @@ def _comparison_input(prop: str, value: str) -> list[Any]:
         return _number_input(_scratch_y(value))
     if prop == "size":
         return _number_input(_scratch_size_value(value))
-    return _number_input(value)
+    if prop in {"direction", "rotation"}:
+        return _number_input(value)
+    return _literal_input(value)
+
+
+def _variable_change(stmt: SetStatement) -> float | None:
+    raw = stmt.value.strip()
+    match = re.fullmatch(rf"{re.escape(stmt.target)}\s*([+\-])\s*(-?\d+(?:\.\d+)?)", raw)
+    if not match:
+        return None
+    sign = 1 if match.group(1) == "+" else -1
+    return sign * float(match.group(2))
 
 
 def _relative_change(stmt: SetStatement) -> tuple[str, float] | None:
@@ -939,6 +1018,16 @@ def _number_input(value: Any) -> list[Any]:
 
 def _text_input(value: str) -> list[Any]:
     return [1, [10, value]]
+
+
+def _literal_input(value: Any) -> list[Any]:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return _text_input(str(value))
+    if numeric.is_integer():
+        return _number_input(int(numeric))
+    return _number_input(numeric)
 
 
 def _scratch_key(key: str) -> str:
@@ -1008,6 +1097,10 @@ def _scratch_effect(prop: str) -> str:
 def _block_id(*parts: str) -> str:
     raw = ":".join(parts)
     return "rosh_" + hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _variable_id(name: str) -> str:
+    return _block_id("variable", name)
 
 
 def _scratch_name(name: str) -> str:
