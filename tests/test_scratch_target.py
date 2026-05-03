@@ -406,6 +406,35 @@ def test_build_scratch_project_compiles_variables_to_scratch_data_blocks():
     assert "looks_say" in opcodes
 
 
+def test_build_scratch_project_exposes_visual_widget_scalars_as_variables():
+    programme = parse_string(
+        "use score label Score:\n"
+        "create object ball\n"
+        "set ball.shape to circle\n"
+        "when click ball\n"
+        "  set score.value to score.value + 1\n"
+        "end\n"
+        "when update\n"
+        "  if score.value >= 5\n"
+        "    set ball.ghost to 20\n"
+        "  end\n"
+        "end\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    stage = project["targets"][0]
+    variable_names = [value[0] for value in stage["variables"].values()]
+    assert "score.value" in variable_names
+    assert "controller.speed" not in variable_names
+    ball = next(t for t in project["targets"] if t["name"] == "ball")
+    opcodes = _opcodes(ball)
+    assert "data_changevariableby" in opcodes
+    assert "data_variable" in opcodes
+    assert "operator_not" in opcodes
+    assert "operator_lt" in opcodes
+
+
 def test_build_scratch_project_compiles_custom_events_to_broadcast_blocks():
     programme = parse_string(
         "create object ball\n"

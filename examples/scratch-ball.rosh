@@ -1,7 +1,6 @@
 background "sky blue"
 sound pop "short pop"
-create number score
-set score to 0
+use score label "Score:"
 create object ball
 set ball.shape to circle
 set ball.color to red
@@ -29,7 +28,7 @@ end
 
 when collision ball gem
   say "collected"
-  set score to score + 1
+  set score.value to score.value + 1
   send scored
   play pop
   destroy gem
@@ -47,7 +46,7 @@ define pulse
 end
 
 when update
-  if score > 0
+  if score.value > 0
     set ball.ghost to 20
   end
 end

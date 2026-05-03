@@ -372,13 +372,25 @@ def _collect_scratch_variables(
             names.setdefault(stmt.name, 0 if stmt.kind == "number" else "")
         elif isinstance(stmt, SetStatement) and "." not in stmt.target:
             names.setdefault(stmt.target, 0)
+    for key, value in state.items():
+        if key.startswith("_") or not isinstance(value, dict):
+            continue
+        has_visual_child = any(
+            isinstance(subval, dict) and (subval.keys() & _SCRATCH_VISUAL_PROPS)
+            for subval in value.values()
+        )
+        if not has_visual_child:
+            continue
+        for subkey, subval in value.items():
+            dotted = f"{key}.{subkey}"
+            if _is_scratch_variable(dotted, subval):
+                names.setdefault(dotted, subval)
     return names
 
 
 def _is_scratch_variable(name: str, value: Any) -> bool:
     return (
         not name.startswith("_")
-        and "." not in name
         and not isinstance(value, (dict, list, tuple, set))
     )
 
@@ -848,6 +860,18 @@ def _infer_script_owner(
                 return owner
         if isinstance(stmt, DestroyStatement) and stmt.name in sprite_builds:
             return stmt.name
+        if isinstance(stmt, IfStatement):
+            owner = _infer_script_owner(stmt.then_body + stmt.else_body, sprite_builds, "")
+            if owner:
+                return owner
+        if isinstance(stmt, RepeatStatement):
+            owner = _infer_script_owner(stmt.body, sprite_builds, "")
+            if owner:
+                return owner
+        if isinstance(stmt, DefineStatement):
+            owner = _infer_script_owner(stmt.body, sprite_builds, "")
+            if owner:
+                return owner
     return default_sprite
 
 
@@ -1092,7 +1116,7 @@ def _statement_action(
             }
     if isinstance(stmt, AfterStatement):
         return "__after__", {"delay": stmt.delay, "event": stmt.event}
-    if isinstance(stmt, SetStatement) and "." not in stmt.target:
+    if isinstance(stmt, SetStatement) and _is_variable_set_target(stmt.target, sprite_name):
         variable_change = _variable_change(stmt)
         if variable_change is not None:
             return "data_changevariableby", {
@@ -1161,6 +1185,15 @@ def _statement_action(
 
 def _has_script_actions(statements: list[Statement], sprite_name: str | None) -> bool:
     return any(_statement_action(stmt, sprite_name) for stmt in statements)
+
+
+def _is_variable_set_target(target: str, sprite_name: str | None) -> bool:
+    if "." not in target:
+        return True
+    if sprite_name and (target == sprite_name or target.startswith(f"{sprite_name}.")):
+        return False
+    prop = target.rsplit(".", 1)[1]
+    return prop not in _SCRATCH_VISUAL_PROPS
 
 
 def _condition_blocks(
@@ -1251,7 +1284,7 @@ def _condition_parts(
             prop, op, value = match.groups()
             return prop, op, _clean_literal(value.strip())
     match = re.fullmatch(
-        r"([A-Za-z_][A-Za-z0-9_-]*)\s*(>=|<=|!=|==|=|>|<)\s*(.+)",
+        r"([A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)?)\s*(>=|<=|!=|==|=|>|<)\s*(.+)",
         condition.strip(),
     )
     if match:
