@@ -279,6 +279,28 @@ def test_build_scratch_project_compiles_repeat_to_repeat_block():
     assert "motion_changexby" in opcodes
 
 
+def test_build_scratch_project_compiles_variable_count_repeat():
+    programme = parse_string(
+        "create number turns\n"
+        "set turns to 3\n"
+        "create object ball\n"
+        "set ball.shape to circle\n"
+        "when click ball\n"
+        "  repeat turns\n"
+        "    set ball.x to ball.x + 0.01\n"
+        "  end\n"
+        "end\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    ball = next(t for t in project["targets"] if t["name"] == "ball")
+    opcodes = _opcodes(ball)
+    assert "control_repeat" in opcodes
+    assert "data_variable" in opcodes
+    assert "motion_changexby" in opcodes
+
+
 def test_build_scratch_project_compiles_simple_condition_to_if_block():
     programme = parse_string(
         "create object ball\n"

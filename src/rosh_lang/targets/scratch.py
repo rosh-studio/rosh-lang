@@ -861,6 +861,13 @@ def _script_blocks(
             previous_id = block_id
             continue
         if opcode == "__repeat__":
+            times_input, times_blocks = _repeat_times_blocks(
+                payload["count"],
+                owner,
+                script_key,
+                index,
+                block_id,
+            )
             substack = _script_blocks(
                 payload["body"],
                 sprite_name,
@@ -881,13 +888,14 @@ def _script_blocks(
                 "next": next_id,
                 "parent": previous_id,
                 "inputs": {
-                    "TIMES": _number_input(payload["count"]),
+                    "TIMES": times_input,
                     "SUBSTACK": [2, first_substack_id],
                 },
                 "fields": {},
                 "shadow": False,
                 "topLevel": False,
             }
+            blocks.update(times_blocks)
             blocks.update(substack)
             previous_id = block_id
             continue
@@ -1138,12 +1146,37 @@ def _variable_change(stmt: SetStatement) -> float | None:
     return sign * float(match.group(2))
 
 
-def _repeat_count(value: str) -> int | None:
+def _repeat_count(value: str) -> int | str | None:
     try:
         count = int(value)
     except ValueError:
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", value):
+            return value
         return None
     return max(0, count)
+
+
+def _repeat_times_blocks(
+    count: int | str,
+    owner: str,
+    script_key: str,
+    index: int,
+    parent_id: str,
+) -> tuple[list[Any], dict[str, dict[str, Any]]]:
+    if isinstance(count, int):
+        return _number_input(count), {}
+    reporter_id = _block_id("repeat_count", owner, script_key, str(index))
+    return [2, reporter_id], {
+        reporter_id: {
+            "opcode": "data_variable",
+            "next": None,
+            "parent": parent_id,
+            "inputs": {},
+            "fields": {"VARIABLE": [count, _variable_id(count)]},
+            "shadow": False,
+            "topLevel": False,
+        }
+    }
 
 
 def _relative_change(stmt: SetStatement) -> tuple[str, float] | None:
