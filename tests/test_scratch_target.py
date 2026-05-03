@@ -423,6 +423,28 @@ def test_render_scratch_sb3_includes_generated_wav_for_play_sound():
     assert "sound_sounds_menu" in opcodes
 
 
+def test_build_scratch_project_compiles_play_modes_to_sound_blocks():
+    programme = parse_string(
+        'sound music "soft loop"\n'
+        "create object ball\n"
+        "set ball.shape to circle\n"
+        "when click ball\n"
+        "  play music loop\n"
+        "end\n"
+        "when keydown s\n"
+        "  play music stop\n"
+        "end\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    ball = next(t for t in project["targets"] if t["name"] == "ball")
+    opcodes = _opcodes(ball)
+    assert "sound_play" in opcodes
+    assert "sound_stopallsounds" in opcodes
+    assert "sound_sounds_menu" in opcodes
+
+
 def test_build_scratch_project_compiles_collision_to_touching_loop():
     programme = parse_string(
         "create object player\n"

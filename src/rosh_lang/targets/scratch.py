@@ -1018,6 +1018,10 @@ def _statement_action(
     if isinstance(stmt, DestroyStatement) and sprite_name and stmt.name == sprite_name:
         return "looks_hide", {}
     if isinstance(stmt, PlayStatement):
+        if stmt.mode == "stop":
+            return "sound_stopallsounds", {}
+        if stmt.mode == "loop":
+            return "sound_play", {"sound": stmt.sound}
         return "sound_playuntildone", {"sound": stmt.sound}
     if isinstance(stmt, SendStatement):
         return "event_broadcast", {"broadcast": stmt.event}
