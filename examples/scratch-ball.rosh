@@ -3,8 +3,13 @@ sound pop "short pop"
 create object ball
 set ball.shape to circle
 set ball.color to red
-set ball.x to 0.5
-set ball.y to 0.5
+set ball.x to center
+set ball.y to middle
+create object gem
+set gem.shape to gem
+set gem.color to purple
+set gem.x to right
+set gem.y to top
 
 when start
   say "hello Scratch"
@@ -13,6 +18,12 @@ end
 when click ball
   say "you clicked the ball"
   play pop
+end
+
+when collision ball gem
+  say "collected"
+  play pop
+  destroy gem
 end
 
 when keydown right

@@ -214,3 +214,75 @@ def test_render_scratch_sb3_includes_generated_wav_for_play_sound():
     opcodes = _opcodes(sprite)
     assert "sound_playuntildone" in opcodes
     assert "sound_sounds_menu" in opcodes
+
+
+def test_build_scratch_project_compiles_collision_to_touching_loop():
+    programme = parse_string(
+        "create object player\n"
+        "set player.shape to circle\n"
+        "set player.color to blue\n"
+        "create object gem\n"
+        "set gem.shape to gem\n"
+        "set gem.color to purple\n"
+        "when collision player gem\n"
+        '  say "collected"\n'
+        "  destroy gem\n"
+        "end\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    player = next(t for t in project["targets"] if t["name"] == "player")
+    opcodes = _opcodes(player)
+    assert "control_forever" in opcodes
+    assert "control_if" in opcodes
+    assert "sensing_touchingobject" in opcodes
+    assert "sensing_touchingobjectmenu" in opcodes
+    assert "looks_say" in opcodes
+
+
+def test_build_scratch_project_compiles_direction_and_rotation_style():
+    programme = parse_string(
+        "create object ship\n"
+        'sprite ship "green spaceship"\n'
+        "set ship.direction to 45\n"
+        'set ship.rotation_style to "left-right"\n'
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    ship = next(t for t in project["targets"] if t["name"] == "ship")
+    opcodes = _opcodes(ship)
+    assert "motion_pointindirection" in opcodes
+    assert "motion_setrotationstyle" in opcodes
+
+
+def test_build_scratch_project_compiles_named_positions_for_scratch():
+    programme = parse_string(
+        "create object ball\n"
+        "set ball.shape to circle\n"
+        "set ball.color to red\n"
+        "set ball.x to left\n"
+        "set ball.y to top\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    ball = next(t for t in project["targets"] if t["name"] == "ball")
+    assert ball["x"] == -200
+    assert ball["y"] == 140
+
+
+def test_render_scratch_sb3_generates_richer_costume_svg_for_spaceship():
+    programme = parse_string(
+        "create object ship\n"
+        'sprite ship "green spaceship"\n'
+    )
+
+    _project, names = _project_from_sb3(render_scratch_sb3(programme))
+
+    with zipfile.ZipFile(BytesIO(render_scratch_sb3(programme))) as zf:
+        svg_names = [name for name in names if name.endswith(".svg")]
+        svg_text = "\n".join(zf.read(name).decode("utf-8") for name in svg_names)
+    assert "polygon" in svg_text
+    assert "circle" in svg_text

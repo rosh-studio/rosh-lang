@@ -97,7 +97,13 @@ def build_scratch_project(
     search_paths: list[Any] | None = None,
 ) -> tuple[dict[str, Any], list[_Asset]]:
     """Build the Scratch project.json structure and SVG assets."""
-    top_level, start_body, click_handlers, key_handlers = _split_event_bodies(programme.statements)
+    (
+        top_level,
+        start_body,
+        click_handlers,
+        key_handlers,
+        collision_handlers,
+    ) = _split_event_bodies(programme.statements)
     rt = Runtime(output=io.StringIO(), search_paths=search_paths)
     rt.run(Programme(statements=top_level, source=programme.source))
 
@@ -125,6 +131,7 @@ def build_scratch_project(
     _attach_start_scripts(start_body, sprite_builds, targets[0])
     _attach_click_scripts(click_handlers, sprite_builds, targets[0])
     _attach_key_scripts(key_handlers, sprite_builds, targets[0])
+    _attach_collision_scripts(collision_handlers, sprite_builds)
     targets.extend(build.target for build in sprite_builds.values())
 
     return {
@@ -146,11 +153,13 @@ def _split_event_bodies(
     list[Statement],
     list[tuple[str, list[Statement]]],
     list[tuple[str, list[Statement]]],
+    list[tuple[str, str, list[Statement]]],
 ]:
     top_level: list[Statement] = []
     start_body: list[Statement] = []
     click_handlers: list[tuple[str, list[Statement]]] = []
     key_handlers: list[tuple[str, list[Statement]]] = []
+    collision_handlers: list[tuple[str, str, list[Statement]]] = []
     i = 0
     while i < len(statements):
         stmt = statements[i]
@@ -169,10 +178,12 @@ def _split_event_bodies(
             elif stmt.event == "keydown":
                 key = stmt.args[0] if stmt.args else "space"
                 key_handlers.append((key, body))
+            elif stmt.event == "collision" and len(stmt.args) >= 2:
+                collision_handlers.append((stmt.args[0], stmt.args[1], body))
             continue
         top_level.append(stmt)
         i += 1
-    return top_level, start_body, click_handlers, key_handlers
+    return top_level, start_body, click_handlers, key_handlers, collision_handlers
 
 
 def _find_background(statements: list[Statement]) -> str:
@@ -341,6 +352,113 @@ def _attach_key_scripts(
         )
 
 
+def _attach_collision_scripts(
+    collision_handlers: list[tuple[str, str, list[Statement]]],
+    sprite_builds: dict[str, _SpriteBuild],
+) -> None:
+    for index, (a, b, body) in enumerate(collision_handlers):
+        if a not in sprite_builds or b not in sprite_builds:
+            continue
+        sprite_builds[a].target["blocks"].update(
+            _collision_script_blocks(
+                body,
+                owner=a,
+                touching=b,
+                x=700,
+                y=40 + index * 180,
+                script_key=f"collision:{a}:{b}:{index}",
+            )
+        )
+
+
+def _collision_script_blocks(
+    statements: list[Statement],
+    *,
+    owner: str,
+    touching: str,
+    x: int,
+    y: int,
+    script_key: str,
+) -> dict[str, dict[str, Any]]:
+    body = _script_blocks(
+        statements,
+        owner,
+        x=x,
+        y=y,
+        hat_opcode="event_whenflagclicked",
+        script_key=f"{script_key}:body",
+        include_hat=False,
+    )
+    if not body:
+        return {}
+
+    first_body_id = next(
+        block_id for block_id, block in body.items()
+        if block["parent"] is None
+    )
+    hat_id = _block_id("event_whenflagclicked", owner, script_key, "hat")
+    forever_id = _block_id("control_forever", owner, script_key, "forever")
+    if_id = _block_id("control_if", owner, script_key, "if")
+    touching_id = _block_id("sensing_touchingobject", owner, script_key, "touching")
+    menu_id = _block_id("sensing_touchingobjectmenu", owner, script_key, "menu")
+
+    body[first_body_id]["parent"] = if_id
+
+    return {
+        hat_id: {
+            "opcode": "event_whenflagclicked",
+            "next": forever_id,
+            "parent": None,
+            "inputs": {},
+            "fields": {},
+            "shadow": False,
+            "topLevel": True,
+            "x": x,
+            "y": y,
+        },
+        forever_id: {
+            "opcode": "control_forever",
+            "next": None,
+            "parent": hat_id,
+            "inputs": {"SUBSTACK": [2, if_id]},
+            "fields": {},
+            "shadow": False,
+            "topLevel": False,
+        },
+        if_id: {
+            "opcode": "control_if",
+            "next": None,
+            "parent": forever_id,
+            "inputs": {
+                "CONDITION": [2, touching_id],
+                "SUBSTACK": [2, first_body_id],
+            },
+            "fields": {},
+            "shadow": False,
+            "topLevel": False,
+        },
+        touching_id: {
+            "opcode": "sensing_touchingobject",
+            "next": None,
+            "parent": if_id,
+            "inputs": {"TOUCHINGOBJECTMENU": [1, menu_id]},
+            "fields": {},
+            "shadow": False,
+            "topLevel": False,
+        },
+        menu_id: {
+            "opcode": "sensing_touchingobjectmenu",
+            "next": None,
+            "parent": touching_id,
+            "inputs": {},
+            "fields": {"TOUCHINGOBJECTMENU": [_scratch_name(touching), None]},
+            "shadow": True,
+            "topLevel": False,
+        },
+        **body,
+    }
+
+
 def _infer_script_owner(
     body: list[Statement],
     sprite_builds: dict[str, _SpriteBuild],
@@ -365,6 +483,7 @@ def _script_blocks(
     hat_opcode: str = "event_whenflagclicked",
     hat_fields: dict[str, Any] | None = None,
     script_key: str = "start",
+    include_hat: bool = True,
 ) -> dict[str, dict[str, Any]]:
     actions: list[tuple[str, dict[str, Any]]] = []
     for stmt in statements:
@@ -376,21 +495,22 @@ def _script_blocks(
 
     blocks: dict[str, dict[str, Any]] = {}
     owner = sprite_name or "stage"
-    hat_id = _block_id(hat_opcode, owner, script_key, "hat")
     first_id = _block_id(actions[0][0], owner, script_key, "0")
-    blocks[hat_id] = {
-        "opcode": hat_opcode,
-        "next": first_id,
-        "parent": None,
-        "inputs": {},
-        "fields": hat_fields or {},
-        "shadow": False,
-        "topLevel": True,
-        "x": x,
-        "y": y,
-    }
-
-    previous_id = hat_id
+    previous_id: str | None = None
+    if include_hat:
+        hat_id = _block_id(hat_opcode, owner, script_key, "hat")
+        blocks[hat_id] = {
+            "opcode": hat_opcode,
+            "next": first_id,
+            "parent": None,
+            "inputs": {},
+            "fields": hat_fields or {},
+            "shadow": False,
+            "topLevel": True,
+            "x": x,
+            "y": y,
+        }
+        previous_id = hat_id
     for index, (opcode, payload) in enumerate(actions):
         block_id = _block_id(opcode, owner, script_key, str(index))
         next_id = (
@@ -440,6 +560,10 @@ def _statement_action(
             return "motion_setx", {"inputs": {"X": _number_input(_scratch_x(value))}}
         if prop == "y":
             return "motion_sety", {"inputs": {"Y": _number_input(_scratch_y(value))}}
+        if prop in ("direction", "rotation"):
+            return "motion_pointindirection", {"inputs": {"DIRECTION": _number_input(value)}}
+        if prop == "rotation_style":
+            return "motion_setrotationstyle", {"fields": {"STYLE": [_rotation_style(value), None]}}
         if prop in ("size", "width", "height"):
             return "looks_setsizeto", {"inputs": {"SIZE": _number_input(_scratch_size_value(value))}}
         if prop == "visible":
@@ -503,6 +627,22 @@ def _scratch_key(key: str) -> str:
     return aliases.get(cleaned, cleaned)
 
 
+def _rotation_style(value: str) -> str:
+    aliases = {
+        "all": "all around",
+        "all_around": "all around",
+        "around": "all around",
+        "left-right": "left-right",
+        "leftright": "left-right",
+        "horizontal": "left-right",
+        "none": "don't rotate",
+        "dont_rotate": "don't rotate",
+        "fixed": "don't rotate",
+    }
+    cleaned = value.strip().lower().replace(" ", "_")
+    return aliases.get(cleaned, value)
+
+
 def _block_id(*parts: str) -> str:
     raw = ":".join(parts)
     return "rosh_" + hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
@@ -514,6 +654,16 @@ def _scratch_name(name: str) -> str:
 
 
 def _scratch_x(value: Any) -> float:
+    if isinstance(value, str):
+        named = {
+            "left": -200,
+            "centre": 0,
+            "center": 0,
+            "middle": 0,
+            "right": 200,
+        }.get(value.strip().lower())
+        if named is not None:
+            return named
     value = _to_float(value, 0.5)
     if 0 <= value <= 1:
         return round((value * STAGE_WIDTH) - (STAGE_WIDTH / 2), 3)
@@ -521,6 +671,16 @@ def _scratch_x(value: Any) -> float:
 
 
 def _scratch_y(value: Any) -> float:
+    if isinstance(value, str):
+        named = {
+            "top": 140,
+            "centre": 0,
+            "center": 0,
+            "middle": 0,
+            "bottom": -140,
+        }.get(value.strip().lower())
+        if named is not None:
+            return named
     value = _to_float(value, 0.5)
     if 0 <= value <= 1:
         return round((STAGE_HEIGHT / 2) - (value * STAGE_HEIGHT), 3)
@@ -650,6 +810,29 @@ def _sprite_svg(name: str, obj: dict[str, Any]) -> bytes:
         body = f'<polygon points="50,12 88,86 12,86" fill="{fill}"/>'
     elif shape in {"star"}:
         body = f'<polygon points="50,9 61,37 91,37 67,56 76,88 50,70 24,88 33,56 9,37 39,37" fill="{fill}"/>'
+    elif shape in {"spaceship", "ship", "rocket"}:
+        body = (
+            f'<polygon points="50,6 82,88 50,72 18,88" fill="{fill}"/>'
+            '<circle cx="50" cy="40" r="9" fill="#dbeafe"/>'
+            '<polygon points="35,76 24,96 44,86" fill="#f97316"/>'
+            '<polygon points="65,76 76,96 56,86" fill="#f97316"/>'
+        )
+    elif shape in {"alien", "monster", "invader"}:
+        body = (
+            f'<rect x="20" y="28" width="60" height="46" rx="16" fill="{fill}"/>'
+            '<circle cx="38" cy="48" r="7" fill="#111"/>'
+            '<circle cx="62" cy="48" r="7" fill="#111"/>'
+            f'<rect x="30" y="75" width="10" height="16" rx="4" fill="{fill}"/>'
+            f'<rect x="60" y="75" width="10" height="16" rx="4" fill="{fill}"/>'
+        )
+    elif shape in {"gem", "crystal", "diamond"}:
+        body = (
+            f'<polygon points="50,8 86,34 70,88 30,88 14,34" fill="{fill}"/>'
+            '<polyline points="14,34 50,48 86,34" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="4"/>'
+            '<line x1="50" y1="8" x2="50" y2="88" stroke="#ffffff" stroke-opacity="0.35" stroke-width="4"/>'
+        )
+    elif shape in {"bullet", "projectile", "arrow"}:
+        body = f'<polygon points="82,50 26,20 38,50 26,80" fill="{fill}"/>'
     else:
         body = f'<rect x="14" y="18" width="72" height="64" rx="8" fill="{fill}"/>'
 
@@ -690,7 +873,12 @@ def _color_from_description(desc: str) -> str:
 
 def _shape_from_description(desc: str) -> str:
     words = set(re.findall(r"[a-zA-Z]+", desc.lower()))
-    for shape in ("circle", "sphere", "ball", "orb", "triangle", "star", "rectangle", "square"):
+    for shape in (
+        "circle", "sphere", "ball", "orb", "triangle", "star",
+        "rectangle", "square", "spaceship", "ship", "rocket",
+        "alien", "monster", "invader", "gem", "crystal", "diamond",
+        "bullet", "projectile", "arrow",
+    ):
         if shape in words:
             return shape
     return "rectangle"
