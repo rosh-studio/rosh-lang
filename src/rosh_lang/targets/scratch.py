@@ -1131,13 +1131,16 @@ def _condition_blocks(
     if not parts:
         return "", {}
     prop, op, value = parts
-    operator = {
+    comparison_operator = {
         ">": "operator_gt",
         "<": "operator_lt",
         "==": "operator_equals",
         "=": "operator_equals",
+        ">=": "operator_lt",
+        "<=": "operator_gt",
+        "!=": "operator_equals",
     }[op]
-    operator_id = _block_id(operator, owner, script_key, str(index), "condition")
+    operator_id = _block_id(comparison_operator, owner, script_key, str(index), "condition")
     reporter_id = _block_id(prop, owner, script_key, str(index), "reporter")
     reporter_opcode = _property_reporter(prop)
     variable_id = _variable_id(prop)
@@ -1146,11 +1149,13 @@ def _condition_blocks(
         if reporter_opcode == "data_variable"
         else {}
     )
-    return operator_id, {
+    comparison_block = {
         operator_id: {
-            "opcode": operator,
+            "opcode": comparison_operator,
             "next": None,
-            "parent": _block_id("control_if", owner, script_key, str(index)),
+            "parent": _block_id("control_if", owner, script_key, str(index))
+            if op not in {">=", "<=", "!="}
+            else _block_id("operator_not", owner, script_key, str(index), "condition"),
             "inputs": {
                 "OPERAND1": [2, reporter_id],
                 "OPERAND2": _comparison_input(prop, value),
@@ -1159,6 +1164,8 @@ def _condition_blocks(
             "shadow": False,
             "topLevel": False,
         },
+    }
+    reporter_block = {
         reporter_id: {
             "opcode": reporter_opcode,
             "next": None,
@@ -1169,6 +1176,23 @@ def _condition_blocks(
             "topLevel": False,
         },
     }
+    if op not in {">=", "<=", "!="}:
+        return operator_id, {**comparison_block, **reporter_block}
+
+    not_id = _block_id("operator_not", owner, script_key, str(index), "condition")
+    return not_id, {
+        not_id: {
+            "opcode": "operator_not",
+            "next": None,
+            "parent": _block_id("control_if", owner, script_key, str(index)),
+            "inputs": {"OPERAND": [2, operator_id]},
+            "fields": {},
+            "shadow": False,
+            "topLevel": False,
+        },
+        **comparison_block,
+        **reporter_block,
+    }
 
 
 def _condition_parts(
@@ -1177,14 +1201,14 @@ def _condition_parts(
 ) -> tuple[str, str, str] | None:
     if sprite_name:
         match = re.fullmatch(
-            rf"{re.escape(sprite_name)}\.(x|y|size|direction|rotation)\s*(==|=|>|<)\s*(.+)",
+            rf"{re.escape(sprite_name)}\.(x|y|size|direction|rotation)\s*(>=|<=|!=|==|=|>|<)\s*(.+)",
             condition.strip(),
         )
         if match:
             prop, op, value = match.groups()
             return prop, op, _clean_literal(value.strip())
     match = re.fullmatch(
-        r"([A-Za-z_][A-Za-z0-9_-]*)\s*(==|=|>|<)\s*(.+)",
+        r"([A-Za-z_][A-Za-z0-9_-]*)\s*(>=|<=|!=|==|=|>|<)\s*(.+)",
         condition.strip(),
     )
     if match:

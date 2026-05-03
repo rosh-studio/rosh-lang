@@ -346,6 +346,37 @@ def test_build_scratch_project_compiles_simple_condition_to_if_block():
     assert "motion_setx" in opcodes
 
 
+def test_build_scratch_project_compiles_negated_condition_operators():
+    programme = parse_string(
+        "create number score\n"
+        "set score to 0\n"
+        "create object ball\n"
+        "set ball.shape to circle\n"
+        "when update\n"
+        "  if ball.x >= 0.8\n"
+        "    set ball.x to left\n"
+        "  end\n"
+        "  if ball.y <= 0.2\n"
+        "    set ball.y to bottom\n"
+        "  end\n"
+        "  if score != 0\n"
+        '    say "score"\n'
+        "  end\n"
+        "end\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    _assert_block_graph_valid(project)
+    ball = next(t for t in project["targets"] if t["name"] == "ball")
+    opcodes = _opcodes(ball)
+    assert opcodes.count("operator_not") == 3
+    assert "operator_lt" in opcodes
+    assert "operator_gt" in opcodes
+    assert "operator_equals" in opcodes
+    assert "data_variable" in opcodes
+
+
 def test_build_scratch_project_compiles_variables_to_scratch_data_blocks():
     programme = parse_string(
         "create number score\n"
