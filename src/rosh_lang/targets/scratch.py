@@ -14,6 +14,7 @@ import math
 import re
 import struct
 import wave
+import warnings
 import zipfile
 from dataclasses import dataclass, field
 from html import escape
@@ -547,29 +548,34 @@ def _attach_click_scripts(
     sprite_builds: dict[str, _SpriteBuild],
     stage_target: dict[str, Any],
 ) -> None:
+    y_offsets: dict[str, int] = {}
     for index, (target, body) in enumerate(click_handlers):
         if target and target in sprite_builds:
+            y = y_offsets.get(target, 40)
             sprite_builds[target].target["blocks"].update(
                 _script_blocks(
                     body,
                     target,
                     x=260,
-                    y=40 + index * 140,
+                    y=y,
                     hat_opcode="event_whenthisspriteclicked",
                     script_key=f"click:{target}:{index}",
                 )
             )
+            y_offsets[target] = y + _estimate_script_height(body)
         elif not target:
+            y = y_offsets.get("stage", 40)
             stage_target["blocks"].update(
                 _script_blocks(
                     body,
                     None,
                     x=260,
-                    y=40 + index * 140,
+                    y=y,
                     hat_opcode="event_whenstageclicked",
                     script_key=f"click:stage:{index}",
                 )
             )
+            y_offsets["stage"] = y + _estimate_script_height(body)
 
 
 def _attach_key_scripts(
@@ -578,54 +584,68 @@ def _attach_key_scripts(
     stage_target: dict[str, Any],
 ) -> None:
     default_sprite = next(iter(sprite_builds), "")
+    y_offsets: dict[str, int] = {}
     for index, (key, body) in enumerate(key_handlers):
         owner = _infer_script_owner(body, sprite_builds, default_sprite)
         target = sprite_builds[owner].target if owner else stage_target
+        owner_key = owner or "stage"
+        y = y_offsets.get(owner_key, 40)
         target["blocks"].update(
             _script_blocks(
                 body,
                 owner or None,
                 x=480,
-                y=40 + index * 140,
+                y=y,
                 hat_opcode="event_whenkeypressed",
                 hat_fields={"KEY_OPTION": [_scratch_key(key), None]},
                 script_key=f"key:{key}:{index}",
             )
         )
+        y_offsets[owner_key] = y + _estimate_script_height(body)
 
 
 def _attach_collision_scripts(
     collision_handlers: list[tuple[str, str, list[Statement]]],
     sprite_builds: dict[str, _SpriteBuild],
 ) -> None:
+    y_offsets: dict[str, int] = {}
     for index, (a, b, body) in enumerate(collision_handlers):
         if a not in sprite_builds or b not in sprite_builds:
+            missing = a if a not in sprite_builds else b
+            warnings.warn(
+                f"Scratch export: collision handler references unknown sprite {missing!r} - skipped",
+                stacklevel=2,
+            )
             continue
         owner_body = _collision_body_for_owner(body, a)
         if not owner_body:
             owner_body = body
+        y_a = y_offsets.get(a, 40)
         sprite_builds[a].target["blocks"].update(
             _collision_script_blocks(
                 owner_body,
                 owner=a,
                 touching=b,
                 x=700,
-                y=40 + index * 180,
+                y=y_a,
                 script_key=f"collision:{a}:{b}:{index}",
             )
         )
+        y_offsets[a] = y_a + _estimate_script_height(owner_body) + 96
         secondary_body = _collision_body_for_owner(body, b)
         if secondary_body:
+            y_b = y_offsets.get(b, 40)
             sprite_builds[b].target["blocks"].update(
                 _collision_script_blocks(
                     secondary_body,
                     owner=b,
                     touching=a,
                     x=700,
-                    y=40 + index * 180,
+                    y=y_b,
                     script_key=f"collision:{b}:{a}:{index}",
                 )
             )
+            y_offsets[b] = y_b + _estimate_script_height(secondary_body) + 96
 
 
 def _collision_body_for_owner(
@@ -666,18 +686,22 @@ def _attach_update_scripts(
     stage_target: dict[str, Any],
 ) -> None:
     default_sprite = next(iter(sprite_builds), "")
+    y_offsets: dict[str, int] = {}
     for index, body in enumerate(update_handlers):
         owner = _infer_script_owner(body, sprite_builds, default_sprite)
         target = sprite_builds[owner].target if owner else stage_target
+        owner_key = owner or "stage"
+        y = y_offsets.get(owner_key, 40)
         target["blocks"].update(
             _forever_script_blocks(
                 body,
                 owner or None,
                 x=920,
-                y=40 + index * 180,
+                y=y,
                 script_key=f"update:{index}",
             )
         )
+        y_offsets[owner_key] = y + _estimate_script_height(body) + 48
 
 
 def _attach_broadcast_scripts(
@@ -686,20 +710,24 @@ def _attach_broadcast_scripts(
     stage_target: dict[str, Any],
 ) -> None:
     default_sprite = next(iter(sprite_builds), "")
+    y_offsets: dict[str, int] = {}
     for index, (event, body) in enumerate(broadcast_handlers):
         owner = _infer_script_owner(body, sprite_builds, default_sprite)
         target = sprite_builds[owner].target if owner else stage_target
+        owner_key = owner or "stage"
+        y = y_offsets.get(owner_key, 40)
         target["blocks"].update(
             _script_blocks(
                 body,
                 owner or None,
                 x=1140,
-                y=40 + index * 140,
+                y=y,
                 hat_opcode="event_whenbroadcastreceived",
                 hat_fields={"BROADCAST_OPTION": [event, _broadcast_id(event)]},
                 script_key=f"broadcast:{event}:{index}",
             )
         )
+        y_offsets[owner_key] = y + _estimate_script_height(body)
 
 
 def _attach_function_scripts(
@@ -709,17 +737,21 @@ def _attach_function_scripts(
 ) -> None:
     default_sprite = next(iter(sprite_builds), "")
     definitions = [stmt for stmt in statements if isinstance(stmt, DefineStatement)]
+    y_offsets: dict[str, int] = {}
     for index, stmt in enumerate(definitions):
         owner = _infer_script_owner(stmt.body, sprite_builds, default_sprite)
         target = sprite_builds[owner].target if owner else stage_target
+        owner_key = owner or "stage"
+        y = y_offsets.get(owner_key, 40)
         target["blocks"].update(
             _procedure_definition_blocks(
                 stmt,
                 owner or None,
                 x=1360,
-                y=40 + index * 180,
+                y=y,
             )
         )
+        y_offsets[owner_key] = y + _estimate_script_height(stmt.body) + 48
 
 
 def _procedure_definition_blocks(
@@ -1198,6 +1230,12 @@ def _statement_action(
                 "condition": stmt.condition,
                 "then_body": stmt.then_body,
             }
+        if not _condition_parts(stmt.condition, sprite_name):
+            warnings.warn(
+                f"Scratch export: cannot compile condition {stmt.condition!r} - if block skipped"
+                " (only simple comparisons like 'x > 0.5' are supported)",
+                stacklevel=2,
+            )
     if isinstance(stmt, RepeatStatement):
         if _repeat_count(stmt.count) is not None and _has_script_actions(
             stmt.body,
@@ -1281,6 +1319,22 @@ def _statement_action(
     if isinstance(stmt, DoStatement):
         return "procedures_call", {"mutation": _procedure_mutation(stmt.name)}
     return None
+
+
+def _estimate_script_height(statements: list[Statement], with_hat: bool = True) -> int:
+    """Estimate compiled block stack height in pixels to avoid layout overlaps."""
+    BLOCK_PX = 48
+    count = 1 if with_hat else 0
+    for stmt in statements:
+        if isinstance(stmt, IfStatement):
+            count += 1 + _estimate_script_height(stmt.then_body, False) // BLOCK_PX
+        elif isinstance(stmt, RepeatStatement):
+            count += 1 + _estimate_script_height(stmt.body, False) // BLOCK_PX
+        elif isinstance(stmt, AfterStatement):
+            count += 2
+        else:
+            count += 1
+    return count * BLOCK_PX + 40
 
 
 def _has_script_actions(statements: list[Statement], sprite_name: str | None) -> bool:
