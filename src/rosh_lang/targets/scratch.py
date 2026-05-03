@@ -21,6 +21,7 @@ from typing import Any
 
 from rosh_lang import __version__
 from rosh_lang.model import (
+    AfterStatement,
     BackgroundStatement,
     CreateStatement,
     DefineStatement,
@@ -393,6 +394,8 @@ def _collect_broadcasts(statements: list[Statement]) -> dict[str, str]:
     names: set[str] = set()
     for stmt in statements:
         if isinstance(stmt, SendStatement):
+            names.add(stmt.event)
+        elif isinstance(stmt, AfterStatement):
             names.add(stmt.event)
         elif isinstance(stmt, WhenStatement) and stmt.event not in _SCRATCH_BUILTIN_EVENTS:
             names.add(stmt.event)
@@ -975,6 +978,43 @@ def _script_blocks(
             blocks.update(substack)
             previous_id = block_id
             continue
+        if opcode == "__after__":
+            broadcast_id = _block_id("event_broadcast", owner, script_key, str(index), "broadcast")
+            menu_id = _block_id("broadcast_menu", owner, script_key, str(index))
+            blocks[block_id] = {
+                "opcode": block_opcode,
+                "next": broadcast_id,
+                "parent": previous_id,
+                "inputs": {"DURATION": _number_input(payload["delay"])},
+                "fields": {},
+                "shadow": False,
+                "topLevel": False,
+            }
+            blocks[broadcast_id] = {
+                "opcode": "event_broadcast",
+                "next": next_id,
+                "parent": block_id,
+                "inputs": {"BROADCAST_INPUT": [1, menu_id]},
+                "fields": {},
+                "shadow": False,
+                "topLevel": False,
+            }
+            blocks[menu_id] = {
+                "opcode": "event_broadcast_menu",
+                "next": None,
+                "parent": broadcast_id,
+                "inputs": {},
+                "fields": {
+                    "BROADCAST_OPTION": [
+                        payload["event"],
+                        _broadcast_id(payload["event"]),
+                    ]
+                },
+                "shadow": True,
+                "topLevel": False,
+            }
+            previous_id = broadcast_id
+            continue
         blocks[block_id] = {
             "opcode": block_opcode,
             "next": next_id,
@@ -1023,6 +1063,7 @@ def _block_opcode(opcode: str) -> str:
     aliases = {
         "__if__": "control_if",
         "__repeat__": "control_repeat",
+        "__after__": "control_wait",
     }
     return aliases.get(opcode, opcode)
 
@@ -1049,6 +1090,8 @@ def _statement_action(
                 "count": _repeat_count(stmt.count),
                 "body": stmt.body,
             }
+    if isinstance(stmt, AfterStatement):
+        return "__after__", {"delay": stmt.delay, "event": stmt.event}
     if isinstance(stmt, SetStatement) and "." not in stmt.target:
         variable_change = _variable_change(stmt)
         if variable_change is not None:

@@ -456,6 +456,30 @@ def test_build_scratch_project_compiles_controller_fire_to_key_broadcast():
     assert "event_whenbroadcastreceived" in opcodes
 
 
+def test_build_scratch_project_compiles_after_to_wait_then_broadcast():
+    programme = parse_string(
+        "create object ball\n"
+        "set ball.shape to circle\n"
+        "when click ball\n"
+        "  after 0.5 send scored\n"
+        "end\n"
+        "when scored\n"
+        '  say "later"\n'
+        "end\n"
+    )
+
+    project, _assets = build_scratch_project(programme)
+
+    _assert_block_graph_valid(project)
+    stage = project["targets"][0]
+    assert "scored" in stage["broadcasts"].values()
+    ball = next(t for t in project["targets"] if t["name"] == "ball")
+    opcodes = _opcodes(ball)
+    assert "control_wait" in opcodes
+    assert "event_broadcast" in opcodes
+    assert "event_whenbroadcastreceived" in opcodes
+
+
 def test_build_scratch_project_compiles_visibility_and_destroy_to_hide_show():
     programme = parse_string(
         "create object ball\n"

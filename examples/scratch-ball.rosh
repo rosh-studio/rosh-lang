@@ -23,6 +23,7 @@ end
 
 when click ball
   say "you clicked the ball"
+  after 0.5 send scored
   play pop
 end
 
