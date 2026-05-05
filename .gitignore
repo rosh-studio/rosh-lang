@@ -32,3 +32,4 @@ uv.lock
 
 # Generated
 *.rosh.html
+*.sb3

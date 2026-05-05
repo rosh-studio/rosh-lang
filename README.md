@@ -17,7 +17,7 @@ Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/).
 uv tool install rosh-lang
 
 # From GitHub (available now)
-uv tool install git+https://github.com/roshstudio/rosh-lang
+uv tool install git+https://github.com/rosh-studio/rosh-lang
 
 # With AI generation support
 uv tool install "rosh-lang[ai]"
@@ -270,7 +270,7 @@ use ball walls top-sides
 use hazard count 5 vy 0.3 spawn_rate 0.8
 ```
 
-### Available Widgets (25)
+### Available Widgets (22)
 
 | Widget | Type | Config | Description |
 |--------|------|--------|-------------|
@@ -312,6 +312,7 @@ rosh library info bullet
 | Web | `--target web` | Self-contained HTML page with CSS divs |
 | Phaser | `--target phaser` | Phaser 3.70.0 game with canvas rendering |
 | Three.js | `--target threejs` | Three.js 3D scene with orbit camera and lighting |
+| Scratch | `--target scratch` | Scratch 3 `.sb3` export (open in Scratch or TurboWarp) |
 
 Add `--run` to auto-open the browser:
 
@@ -364,8 +365,9 @@ Run: `rosh shooter.rosh --target web --run`
 ```
 rosh                              Start REPL
 rosh <file.rosh>                  Run programme (terminal)
-rosh <file.rosh> --target web     Render as HTML
-rosh <file.rosh> --target phaser  Render as Phaser game
+rosh <file.rosh> --target web      Render as HTML
+rosh <file.rosh> --target phaser   Render as Phaser game
+rosh <file.rosh> --target scratch  Export as Scratch .sb3
 rosh <file.rosh> --run            Auto-open browser
 rosh new [template] [name]        Scaffold a starter programme
 rosh library list                 List available widgets
@@ -396,7 +398,7 @@ Rosh includes an MCP (Model Context Protocol) server that lets AI tools like Cla
 Clone the repo (if you haven't already):
 
 ```bash
-git clone https://github.com/roshstudio/rosh-lang.git
+git clone https://github.com/rosh-studio/rosh-lang.git
 ```
 
 The server script is at `rosh-dev/mcp/rosh_mcp.py`.
@@ -477,7 +479,7 @@ The server also reads from a `.env` file in the project root if present.
 ```
 rosh-lang/
   src/rosh_lang/
-    model.py          # Data model (23 statement types)
+    model.py          # Data model (28 statement types)
     parser.py         # Text -> Programme
     runtime.py        # Execute programmes, manage state
     widgets.py        # Widget loader and composition
@@ -486,7 +488,7 @@ rosh-lang/
     sheets.py         # Spritesheet slicer
     assets.py         # Asset file resolver
     scaffolder.py     # rosh new templates
-    library/          # 25 bundled widgets
+    library/          # 22 bundled widgets
     library_cli.py    # rosh library CLI
     targets/
       terminal.py     # Terminal target
@@ -497,15 +499,21 @@ rosh-lang/
       _js_codegen.py  # AST -> JavaScript compiler
       threejs.py      # Three.js 3D target
       _js_runtime_threejs.py  # JS runtime (Three.js layer)
+      scratch.py      # Scratch 3 .sb3 export target
     __main__.py       # CLI entry point + REPL
   examples/           # Example programmes
-  tests/              # Test suite (747 tests)
+  tests/              # Test suite (853 tests)
   tools/              # Build tools (showcase generator)
   dist/               # Generated output (showcase.html)
 ```
 
 ## Licence
 
-Rosh Source-Available Licence (Rosh-SAL). Free to use, modify, and distribute for any purpose. Forking to create a competing language is not permitted. Similar in spirit to the [Functional Source License (FSL)](https://fsl.software/).
+**[Rosh Business Source License v0.2 (Rosh-BSL)](LICENSE)**  
+Copyright 2026 Roger Dubar / Rosh Studio
 
-See [LICENSE](LICENSE).
+Free for personal use, education, open-source projects, and non-commercial research.
+Commercial use (SaaS, products, paid services) requires a separate licence — contact
+[rosh.cloud](https://rosh.cloud) or read the [LICENSE](LICENSE) file for full terms.
+
+Converts automatically to **Apache 2.0 on 2029-05-02**.
