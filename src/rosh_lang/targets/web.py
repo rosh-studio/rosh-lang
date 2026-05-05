@@ -21,7 +21,7 @@ from typing import Any
 from rosh_lang import __version__
 from pathlib import Path
 
-from rosh_lang.model import (
+from rosh_lang.core.model import (
     AnimateStatement,
     BackgroundStatement,
     PrintStatement,
@@ -31,9 +31,9 @@ from rosh_lang.model import (
     UseStatement,
     WhenStatement,
 )
-from rosh_lang.runtime import Runtime
-from rosh_lang.sounds import generate_sound_params
-from rosh_lang.sprites import generate_sprite
+from rosh_lang.core.runtime import Runtime
+from rosh_lang.media.sounds import generate_sound_params
+from rosh_lang.media.sprites import generate_sprite
 from rosh_lang.targets._js_codegen import compile_programme
 from rosh_lang.targets._js_runtime import JS_RUNTIME, JS_TOUCH_CONTROLS
 
@@ -96,8 +96,8 @@ def _generate_animation_data(
 
     Returns: {name: {frames: [uri...], speed: N, mode: "loop"}}
     """
-    from rosh_lang.assets import resolve_asset
-    from rosh_lang.sheets import slice_spritesheet
+    from rosh_lang.media.assets import resolve_asset
+    from rosh_lang.media.sheets import slice_spritesheet
 
     anim_data: dict[str, dict[str, Any]] = {}
 
@@ -130,8 +130,8 @@ def _process_animate(
     source_dir: Path | None = None,
 ) -> None:
     """Process a single AnimateStatement into animation data."""
-    from rosh_lang.assets import resolve_asset
-    from rosh_lang.sheets import slice_spritesheet
+    from rosh_lang.media.assets import resolve_asset
+    from rosh_lang.media.sheets import slice_spritesheet
 
     sheet_path = resolve_asset(
         stmt.sheet, search_paths=search_paths, source_dir=source_dir,

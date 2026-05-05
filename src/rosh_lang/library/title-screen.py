@@ -7,7 +7,7 @@ title, subtitle, background, text color, and font size.
 
 from __future__ import annotations
 
-from rosh_lang.model import CreateStatement, SetStatement, Statement
+from rosh_lang.core.model import CreateStatement, SetStatement, Statement
 
 METADATA = {
     "widget": "title-screen",

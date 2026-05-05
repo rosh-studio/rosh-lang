@@ -8,7 +8,7 @@ a new hazard at a random x position every _spawn_rate seconds.
 
 from __future__ import annotations
 
-from rosh_lang.model import (
+from rosh_lang.core.model import (
     CreateStatement,
     SetStatement,
     SpriteStatement,

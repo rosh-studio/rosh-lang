@@ -6,7 +6,7 @@ from __future__ import annotations
 import hashlib
 import random
 
-from rosh_lang.model import CreateStatement, SetStatement, Statement
+from rosh_lang.core.model import CreateStatement, SetStatement, Statement
 
 METADATA = {
     "widget": "starfield",

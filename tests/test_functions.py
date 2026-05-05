@@ -6,9 +6,9 @@ import io
 
 import pytest
 
-from rosh_lang.model import DefineStatement, DoStatement, PrintStatement, SetStatement
-from rosh_lang.parser import ParseError, parse_string
-from rosh_lang.runtime import Runtime
+from rosh_lang.core.model import DefineStatement, DoStatement, PrintStatement, SetStatement
+from rosh_lang.core.parser import ParseError, parse_string
+from rosh_lang.core.runtime import Runtime
 from rosh_lang.targets._js_codegen import compile_programme
 
 

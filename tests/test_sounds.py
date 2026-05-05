@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from rosh_lang.sounds import generate_sound_params
+from rosh_lang.media.sounds import generate_sound_params
 
 
 # ── Preset matching ──────────────────────────────────────────

@@ -7,7 +7,7 @@ boundary clamping. Replaces the common 8-line boilerplate pattern.
 
 from __future__ import annotations
 
-from rosh_lang.model import (
+from rosh_lang.core.model import (
     CreateStatement,
     EndStatement,
     IfStatement,

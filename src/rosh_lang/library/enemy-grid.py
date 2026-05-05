@@ -7,7 +7,7 @@ When drift > 0, generates drift state + edge-reversal + per-enemy movement.
 
 from __future__ import annotations
 
-from rosh_lang.model import (
+from rosh_lang.core.model import (
     CreateStatement,
     OnStatement,
     SetStatement,

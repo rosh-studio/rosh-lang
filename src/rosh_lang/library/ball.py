@@ -7,7 +7,7 @@ Supports wall modes: "all" (default), "top-sides" (no bottom), "sides" (horizont
 
 from __future__ import annotations
 
-from rosh_lang.model import (
+from rosh_lang.core.model import (
     CreateStatement,
     OnStatement,
     SetStatement,

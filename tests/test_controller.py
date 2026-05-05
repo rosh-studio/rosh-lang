@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
-from rosh_lang.model import (
+from rosh_lang.core.model import (
     CreateStatement,
     EventStatement,
     IfStatement,
@@ -13,9 +13,9 @@ from rosh_lang.model import (
     SetStatement,
     WhenStatement,
 )
-from rosh_lang.parser import parse_string
-from rosh_lang.runtime import Runtime
-from rosh_lang.widgets import load_widget
+from rosh_lang.core.parser import parse_string
+from rosh_lang.core.runtime import Runtime
+from rosh_lang.core.widgets import load_widget
 
 BUNDLED_DIR = Path(__file__).parent.parent / "src" / "rosh_lang" / "library"
 

@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from rosh_lang.sheets import slice_spritesheet
+from rosh_lang.media.assets import get_bundled_assets_path
+from rosh_lang.media.sheets import slice_spritesheet
 
 
 def _make_test_png(width: int, height: int, color: tuple[int, int, int, int] = (255, 0, 0, 255)) -> bytes:
@@ -97,7 +98,7 @@ class TestSliceSpritesheet:
 
     def test_real_spritesheet(self) -> None:
         """Test with the bundled player-sheet.png if available."""
-        sheet_path = Path(__file__).resolve().parent.parent / "src" / "rosh_lang" / "assets" / "player-sheet.png"
+        sheet_path = get_bundled_assets_path() / "player-sheet.png"
         if not sheet_path.exists():
             pytest.skip("player-sheet.png not found")
 

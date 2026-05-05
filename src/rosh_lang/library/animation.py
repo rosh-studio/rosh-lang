@@ -7,7 +7,7 @@ Usage:
 
 from __future__ import annotations
 
-from rosh_lang.model import AnimateStatement, Statement
+from rosh_lang.core.model import AnimateStatement, Statement
 
 METADATA = {
     "widget": "animation",

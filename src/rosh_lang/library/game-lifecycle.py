@@ -8,7 +8,7 @@ and Space key to start/restart.
 
 from __future__ import annotations
 
-from rosh_lang.model import (
+from rosh_lang.core.model import (
     CreateStatement,
     OnStatement,
     SetStatement,

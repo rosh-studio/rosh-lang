@@ -7,10 +7,10 @@ import re
 from pathlib import Path
 from typing import Any
 
-from rosh_lang.model import GetStatement, LookStatement, Programme, SayStatement, WhenStatement
-from rosh_lang.parser import ParseError, parse_file, parse_string
+from rosh_lang.core.model import GetStatement, LookStatement, Programme, SayStatement, WhenStatement
+from rosh_lang.core.parser import ParseError, parse_file, parse_string
 from rosh_lang.repl.contracts import ErrorInfo, EventSnapshot, ObjectItem, StateItem
-from rosh_lang.runtime import Runtime
+from rosh_lang.core.runtime import Runtime
 
 _COMMAND_CANDIDATES = (
     "state",

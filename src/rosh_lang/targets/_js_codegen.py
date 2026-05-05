@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from rosh_lang.model import (
+from rosh_lang.core.model import (
     AfterStatement,
     AnimateStatement,
     BackgroundStatement,
@@ -37,7 +37,7 @@ from rosh_lang.model import (
     UseStatement,
     WhenStatement,
 )
-from rosh_lang.sounds import generate_sound_params
+from rosh_lang.media.sounds import generate_sound_params
 
 
 @dataclass
@@ -69,7 +69,7 @@ def compile_programme(
         if isinstance(stmt, UseStatement):
             # Expand widget and compile its statements
             # Nested use is resolved inside load_widget via _loading guard
-            from rosh_lang.widgets import load_widget
+            from rosh_lang.core.widgets import load_widget
 
             widget_config = dict(stmt.config) if stmt.config else {}
             # Note: controller mode 3d must be set explicitly by the user.

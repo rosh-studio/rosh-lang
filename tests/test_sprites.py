@@ -6,7 +6,7 @@ import base64
 import struct
 import zlib
 
-from rosh_lang.sprites import generate_sprite, _LOGICAL_W, _LOGICAL_H
+from rosh_lang.media.sprites import generate_sprite, _LOGICAL_W, _LOGICAL_H
 
 
 # ── PNG validity ─────────────────────────────────────────────

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rosh_lang.parser import parse_string
+from rosh_lang.core.parser import parse_string
 from rosh_lang.targets.threejs import render_threejs
 
 WIDGETS_DIR = Path(__file__).parent.parent / "examples" / "widgets"

@@ -21,9 +21,9 @@ from typing import Any
 
 from pathlib import Path
 
-from rosh_lang.model import PrintStatement, Programme, SayStatement
-from rosh_lang.runtime import Runtime
-from rosh_lang.sounds import generate_sound_params
+from rosh_lang.core.model import PrintStatement, Programme, SayStatement
+from rosh_lang.core.runtime import Runtime
+from rosh_lang.media.sounds import generate_sound_params
 from rosh_lang.targets._js_codegen import compile_programme
 from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE, JS_TOUCH_CONTROLS
 from rosh_lang.targets._js_runtime_phaser import JS_RUNTIME_PHASER

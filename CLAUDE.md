@@ -174,16 +174,17 @@ Use: `use <widget> [key value ...]` — config pairs override defaults.
 ## Architecture
 
 ```
-model.py          → 23 statement dataclasses + Programme
-parser.py         → text → Programme
-runtime.py        → execute Programme, state dict, events, if/else, scenes
-widgets.py        → widget loader: find, namespace-prefix, configure
-sprites.py        → name + description → data:image/png;base64 (7×9 grid)
-sounds.py         → name + description → Web Audio synthesis params
-sheets.py         → PNG spritesheet → list of frame data URIs
-assets.py         → resolve asset file paths
-scaffolder.py     → rosh new templates
-library/          → 22 bundled widgets
+core/model.py     → statement dataclasses + Programme
+core/parser.py    → text → Programme
+core/runtime.py   → execute Programme, state dict, events, if/else, scenes
+core/widgets.py   → widget loader: find, namespace-prefix, configure
+media/sprites.py  → name + description → data:image/png;base64 (7×9 grid)
+media/sounds.py   → name + description → Web Audio synthesis params
+media/sheets.py   → PNG spritesheet → list of frame data URIs
+media/assets.py   → resolve asset file paths
+cli/scaffolder.py → rosh new templates
+cli/cloud.py      → rosh.cloud login/create/publish commands
+library/          → bundled widgets
 targets/
   terminal.py     → print to stdout
   web.py          → self-contained HTML page (CSS divs + JS)

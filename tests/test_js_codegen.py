@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from rosh_lang.parser import parse_string
+from rosh_lang.core.parser import parse_string
 from rosh_lang.targets._js_codegen import compile_programme
 
 

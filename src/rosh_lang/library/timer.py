@@ -9,8 +9,8 @@ Supports anchor and theme config.
 
 from __future__ import annotations
 
-from rosh_lang.model import CreateStatement, SetStatement, Statement
-from rosh_lang.widgets import compute_hud_position
+from rosh_lang.core.model import CreateStatement, SetStatement, Statement
+from rosh_lang.core.widgets import compute_hud_position
 
 METADATA = {
     "widget": "timer",

@@ -8,7 +8,7 @@ Reuses the same tickPools() mechanism as bullet.
 
 from __future__ import annotations
 
-from rosh_lang.model import (
+from rosh_lang.core.model import (
     CreateStatement,
     OnStatement,
     SetStatement,

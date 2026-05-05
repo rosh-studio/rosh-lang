@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.theme import Theme
 
 from rosh_lang import __version__
-from rosh_lang.parser import ParseError, parse_file
+from rosh_lang.core.parser import ParseError, parse_file
 from rosh_lang.repl import start_repl
 from rosh_lang.repl.runtime_adapter import RuntimeAdapter
 
@@ -86,49 +86,49 @@ def main(argv: list[str] | None = None) -> int:
 
     # "rosh library ..." — handle before argparse
     if argv[0] == "library":
-        from rosh_lang.library_cli import library_main
+        from rosh_lang.cli.library_cli import library_main
         library_main(argv[1:])
         return 0
 
     # "rosh new ..." — handle before argparse
     if argv[0] == "new":
-        from rosh_lang.scaffolder import scaffold
+        from rosh_lang.cli.scaffolder import scaffold
         scaffold(argv[1:])
         return 0
 
     # "rosh register" — open registration page
     if argv[0] == "register":
-        from rosh_lang.cloud import cmd_register
+        from rosh_lang.cli.cloud import cmd_register
         cmd_register(argv[1:])
         return 0
 
     # "rosh login" — authenticate with rosh.cloud
     if argv[0] == "login":
-        from rosh_lang.cloud import cmd_login
+        from rosh_lang.cli.cloud import cmd_login
         cmd_login(argv[1:])
         return 0
 
     # "rosh logout" — clear local session
     if argv[0] == "logout":
-        from rosh_lang.cloud import cmd_logout
+        from rosh_lang.cli.cloud import cmd_logout
         cmd_logout(argv[1:])
         return 0
 
     # "rosh create ..." — AI generation
     if argv[0] == "create":
-        from rosh_lang.cloud import cmd_create
+        from rosh_lang.cli.cloud import cmd_create
         cmd_create(argv[1:])
         return 0
 
     # "rosh publish ..." — upload to rosh.cloud
     if argv[0] == "publish":
-        from rosh_lang.cloud import cmd_publish
+        from rosh_lang.cli.cloud import cmd_publish
         cmd_publish(argv[1:])
         return 0
 
     # "rosh config ..." — API key management
     if argv[0] == "config":
-        from rosh_lang.cloud import cmd_config
+        from rosh_lang.cli.cloud import cmd_config
         cmd_config(argv[1:])
         return 0
 

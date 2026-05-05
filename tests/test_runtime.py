@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from rosh_lang.model import (
+from rosh_lang.core.model import (
     AfterStatement,
     AnimateStatement,
     BackgroundStatement,
@@ -35,7 +35,7 @@ from rosh_lang.model import (
     SpriteStatement,
     WhenStatement,
 )
-from rosh_lang.runtime import Runtime, run
+from rosh_lang.core.runtime import Runtime, run
 
 
 def _run(stmts: list, *, output: io.StringIO | None = None) -> Runtime:
@@ -935,7 +935,7 @@ WIDGETS_DIR = Path(__file__).parent.parent / "examples" / "widgets"
 
 class TestUseExecution:
     def test_use_loads_widget_state(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string("use score")
         buf = io.StringIO()
         rt = Runtime(output=buf, search_paths=[WIDGETS_DIR])
@@ -945,7 +945,7 @@ class TestUseExecution:
         assert rt.state["score"]["value"] == 0
 
     def test_use_namespaces_objects(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string("use score")
         buf = io.StringIO()
         rt = Runtime(output=buf, search_paths=[WIDGETS_DIR])
@@ -953,7 +953,7 @@ class TestUseExecution:
         assert isinstance(rt.state["score"]["display"], dict)
 
     def test_use_config_override(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string("use player speed 0.05")
         buf = io.StringIO()
         rt = Runtime(output=buf, search_paths=[WIDGETS_DIR])
@@ -961,7 +961,7 @@ class TestUseExecution:
         assert rt.state["player"]["speed"] == 0.05
 
     def test_use_then_set(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string("use score\nset score.value to 42")
         buf = io.StringIO()
         rt = Runtime(output=buf, search_paths=[WIDGETS_DIR])
@@ -969,7 +969,7 @@ class TestUseExecution:
         assert rt.state["score"]["value"] == 42
 
     def test_use_then_print_interpolation(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             "use score\n"
             "set score.value to 42\n"
@@ -981,7 +981,7 @@ class TestUseExecution:
         assert "Score: 42" in buf.getvalue()
 
     def test_use_missing_widget_warns_and_continues(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string('use nonexistent\nprint "still runs"')
         buf = io.StringIO()
         rt = Runtime(output=buf, search_paths=[WIDGETS_DIR])
@@ -990,7 +990,7 @@ class TestUseExecution:
         assert "still runs" in buf.getvalue()
 
     def test_use_multiple_widgets(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string("use score\nuse player")
         buf = io.StringIO()
         rt = Runtime(output=buf, search_paths=[WIDGETS_DIR])
@@ -1001,7 +1001,7 @@ class TestUseExecution:
         assert isinstance(rt.state["player"]["ship"], dict)
 
     def test_use_widget_with_when_handler(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string("use counter")
         buf = io.StringIO()
         rt = Runtime(output=buf, search_paths=[WIDGETS_DIR])
@@ -1011,7 +1011,7 @@ class TestUseExecution:
         assert "click" in rt.handlers
 
     def test_use_widget_handler_fires(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string("use counter")
         buf = io.StringIO()
         rt = Runtime(output=buf, search_paths=[WIDGETS_DIR])
@@ -1031,21 +1031,21 @@ EXAMPLES = Path(__file__).parent.parent / "examples"
 
 class TestRunFile:
     def test_run_hello_rosh(self) -> None:
-        from rosh_lang.parser import parse_file
+        from rosh_lang.core.parser import parse_file
         buf = io.StringIO()
         prog = parse_file(EXAMPLES / "hello.rosh")
         run(prog, output=buf)
         assert buf.getvalue() == "hello world\n"
 
     def test_run_counter_rosh(self) -> None:
-        from rosh_lang.parser import parse_file
+        from rosh_lang.core.parser import parse_file
         buf = io.StringIO()
         prog = parse_file(EXAMPLES / "counter.rosh")
         run(prog, output=buf)
         assert buf.getvalue() == "Count is: 1\n"
 
     def test_run_player_rosh(self) -> None:
-        from rosh_lang.parser import parse_file
+        from rosh_lang.core.parser import parse_file
         buf = io.StringIO()
         prog = parse_file(EXAMPLES / "player.rosh")
         run(prog, output=buf)
@@ -1067,7 +1067,7 @@ class TestConvenienceRun:
 
 class TestCheckpointProgrammes:
     def test_checkpoint1_from_text(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create number score\n'
             'set score to 42\n'
@@ -1078,7 +1078,7 @@ class TestCheckpointProgrammes:
         assert buf.getvalue() == "Score: 42\n"
 
     def test_checkpoint2_from_text(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create string status\n'
             'event alarm\n'
@@ -1091,7 +1091,7 @@ class TestCheckpointProgrammes:
         assert buf.getvalue() == "Status: triggered\n"
 
     def test_arithmetic_from_text(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create number score\n'
             'set score to 10\n'
@@ -1107,7 +1107,7 @@ class TestIfExecution:
     """Tests for if/else execution."""
 
     def test_if_true_branch(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create number score\n'
             'set score to 20\n'
@@ -1120,7 +1120,7 @@ class TestIfExecution:
         assert buf.getvalue() == "high\n"
 
     def test_if_false_skips(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create number score\n'
             'set score to 5\n'
@@ -1133,7 +1133,7 @@ class TestIfExecution:
         assert buf.getvalue() == ""
 
     def test_if_else_true(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create number score\n'
             'set score to 20\n'
@@ -1148,7 +1148,7 @@ class TestIfExecution:
         assert buf.getvalue() == "high\n"
 
     def test_if_else_false(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create number score\n'
             'set score to 5\n'
@@ -1163,7 +1163,7 @@ class TestIfExecution:
         assert buf.getvalue() == "low\n"
 
     def test_if_equals_string(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create string status\n'
             'set status to "ready"\n'
@@ -1176,7 +1176,7 @@ class TestIfExecution:
         assert buf.getvalue() == "go\n"
 
     def test_if_inside_when(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create number score\n'
             'set score to 20\n'
@@ -1195,7 +1195,7 @@ class TestIfExecution:
         assert buf.getvalue() == "high\n"
 
     def test_if_nested(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create number x\n'
             'set x to 5\n'
@@ -1212,7 +1212,7 @@ class TestIfExecution:
         assert buf.getvalue() == "both positive\n"
 
     def test_if_with_set(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create number lives\n'
             'set lives to 0\n'
@@ -1229,7 +1229,7 @@ class TestIfExecution:
         assert rt.state["status"] == "gameover"
 
     def test_if_dotted_field(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create object player\n'
             'set player.health to 0\n'
@@ -1242,7 +1242,7 @@ class TestIfExecution:
         assert buf.getvalue() == "dead\n"
 
     def test_else_if_first_branch(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create number x\n'
             'set x to 10\n'
@@ -1259,7 +1259,7 @@ class TestIfExecution:
         assert buf.getvalue() == "big\n"
 
     def test_else_if_middle_branch(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create number x\n'
             'set x to 4\n'
@@ -1276,7 +1276,7 @@ class TestIfExecution:
         assert buf.getvalue() == "medium\n"
 
     def test_else_if_last_branch(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create number x\n'
             'set x to 1\n'
@@ -1297,7 +1297,7 @@ class TestSceneExecution:
     """Tests for scene (go/look) execution."""
 
     def test_create_scene(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string('create scene lobby')
         buf = io.StringIO()
         rt = Runtime(output=buf)
@@ -1305,7 +1305,7 @@ class TestSceneExecution:
         assert "lobby" in rt.scenes
 
     def test_set_scene_description(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create scene lobby\n'
             'set lobby.description to "A grand entrance hall"\n'
@@ -1316,7 +1316,7 @@ class TestSceneExecution:
         assert rt.scenes["lobby"]["description"] == "A grand entrance hall"
 
     def test_go_scene(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create scene lobby\n'
             'go lobby\n'
@@ -1327,7 +1327,7 @@ class TestSceneExecution:
         assert rt.state["_scene"] == "lobby"
 
     def test_go_back(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create scene lobby\n'
             'create scene corridor\n'
@@ -1341,7 +1341,7 @@ class TestSceneExecution:
         assert rt.state["_scene"] == "lobby"
 
     def test_go_fires_events(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create scene lobby\n'
             'create scene corridor\n'
@@ -1357,7 +1357,7 @@ class TestSceneExecution:
         assert rt.state["log"] == "entered"
 
     def test_scene_exits_restriction(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create scene lobby\n'
             'set lobby.exits to "corridor"\n'
@@ -1372,7 +1372,7 @@ class TestSceneExecution:
             rt.run(prog)
 
     def test_look_outputs_scene(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create scene lobby\n'
             'set lobby.description to "A grand hall"\n'
@@ -1386,7 +1386,7 @@ class TestSceneExecution:
         assert "A grand hall" in buf.getvalue()
 
     def test_scene_overrides_state(self) -> None:
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         prog = parse_string(
             'create scene lobby\n'
             'set lobby.music to "jazz"\n'

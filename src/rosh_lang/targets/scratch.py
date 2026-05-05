@@ -21,7 +21,7 @@ from html import escape
 from typing import Any
 
 from rosh_lang import __version__
-from rosh_lang.model import (
+from rosh_lang.core.model import (
     AfterStatement,
     BackgroundStatement,
     CreateStatement,
@@ -43,7 +43,7 @@ from rosh_lang.model import (
     UseStatement,
     WhenStatement,
 )
-from rosh_lang.runtime import Runtime
+from rosh_lang.core.runtime import Runtime
 
 STAGE_WIDTH = 480
 STAGE_HEIGHT = 360
@@ -206,7 +206,7 @@ def _expand_use_statements(
     statements: list[Statement],
     search_paths: list[Any] | None,
 ) -> list[Statement]:
-    from rosh_lang.widgets import load_widget, reset_hud_stack
+    from rosh_lang.core.widgets import load_widget, reset_hud_stack
 
     reset_hud_stack()
     expanded: list[Statement] = []

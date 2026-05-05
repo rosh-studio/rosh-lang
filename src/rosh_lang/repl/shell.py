@@ -25,7 +25,7 @@ from rosh_lang.repl.kernel import (
     starts_multiline_block,
 )
 from rosh_lang.repl.runtime_adapter import RuntimeAdapter
-from rosh_lang.runtime import Runtime
+from rosh_lang.core.runtime import Runtime
 
 _THEME = Theme({
     "rosh.keyword": "bold cyan",

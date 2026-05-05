@@ -479,17 +479,22 @@ The server also reads from a `.env` file in the project root if present.
 ```
 rosh-lang/
   src/rosh_lang/
-    model.py          # Data model (28 statement types)
-    parser.py         # Text -> Programme
-    runtime.py        # Execute programmes, manage state
-    widgets.py        # Widget loader and composition
-    sprites.py        # Procedural pixel-art generator
-    sounds.py         # Procedural sound generator
-    sheets.py         # Spritesheet slicer
-    assets.py         # Asset file resolver
-    scaffolder.py     # rosh new templates
+    core/
+      model.py        # Data model (28 statement types)
+      parser.py       # Text -> Programme
+      runtime.py      # Execute programmes, manage state
+      widgets.py      # Widget loader and composition
+    cli/
+      cloud.py        # rosh.cloud commands
+      scaffolder.py   # rosh new templates
+      library_cli.py  # rosh library CLI
+    media/
+      assets.py       # Asset file resolver
+      sprites.py      # Procedural pixel-art generator
+      sounds.py       # Procedural sound generator
+      sheets.py       # Spritesheet slicer
+      assets/         # Bundled media assets
     library/          # 22 bundled widgets
-    library_cli.py    # rosh library CLI
     targets/
       terminal.py     # Terminal target
       web.py          # Web target (HTML + CSS + JS)
@@ -500,6 +505,9 @@ rosh-lang/
       threejs.py      # Three.js 3D target
       _js_runtime_threejs.py  # JS runtime (Three.js layer)
       scratch.py      # Scratch 3 .sb3 export target
+    repl/             # Interactive shell kernel and natural command lowering
+    model.py          # Compatibility shim for rosh_lang.core.model
+    parser.py         # Compatibility shim for rosh_lang.core.parser
     __main__.py       # CLI entry point + REPL
   examples/           # Example programmes
   tests/              # Test suite (853 tests)

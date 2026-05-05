@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from rosh_lang.model import (
+from rosh_lang.core.model import (
     AfterStatement,
     CreateStatement,
     DestroyStatement,
@@ -21,8 +21,8 @@ from rosh_lang.model import (
     SpriteStatement,
     WhenStatement,
 )
-from rosh_lang.parser import parse_string
-from rosh_lang.widgets import (
+from rosh_lang.core.parser import parse_string
+from rosh_lang.core.widgets import (
     find_widget,
     get_bundled_library_path,
     load_widget,
@@ -473,7 +473,7 @@ class TestPythonWidgetFactory:
 
     def test_load_factory_generates_statements(self, tmp_path: Path):
         self._write_factory(tmp_path, "boxes", """\
-from rosh_lang.model import CreateStatement, SetStatement
+from rosh_lang.core.model import CreateStatement, SetStatement
 
 METADATA = {
     "widget": "boxes",
@@ -499,7 +499,7 @@ def generate(config):
 
     def test_factory_config_override(self, tmp_path: Path):
         self._write_factory(tmp_path, "items", """\
-from rosh_lang.model import CreateStatement
+from rosh_lang.core.model import CreateStatement
 
 METADATA = {"config": {"count": "2"}}
 
@@ -534,7 +534,7 @@ def generate(config):
     def test_factory_prefixing_applied(self, tmp_path: Path):
         """Factory output gets namespace-prefixed like .rosh widgets."""
         self._write_factory(tmp_path, "pfx", """\
-from rosh_lang.model import SetStatement
+from rosh_lang.core.model import SetStatement
 
 METADATA = {}
 
@@ -773,7 +773,7 @@ class TestCoinWidget:
 class TestAfterWidgetPrefix:
     def test_after_event_not_prefixed(self):
         """after event names should stay global (not prefixed) — like send."""
-        from rosh_lang.widgets import _prefix_statement
+        from rosh_lang.core.widgets import _prefix_statement
 
         stmt = AfterStatement(delay=2.0, event="wave_2")
         result = _prefix_statement(stmt, "game")
@@ -931,17 +931,17 @@ class TestPrefixRandomClamp:
     """Verify that random and clamp values survive widget prefixing."""
 
     def test_prefix_random_bare(self):
-        from rosh_lang.widgets import _prefix_set_value
+        from rosh_lang.core.widgets import _prefix_set_value
         result = _prefix_set_value("x", "random", "ns")
         assert result == "random"
 
     def test_prefix_random_range(self):
-        from rosh_lang.widgets import _prefix_set_value
+        from rosh_lang.core.widgets import _prefix_set_value
         result = _prefix_set_value("x", "random 0.1 0.9", "ns")
         assert result == "random 0.1 0.9"
 
     def test_prefix_clamp(self):
-        from rosh_lang.widgets import _prefix_set_value
+        from rosh_lang.core.widgets import _prefix_set_value
         result = _prefix_set_value("x", "clamp paddle.x 0.02 0.8", "ns")
         assert result == "clamp ns.paddle.x 0.02 0.8"
 
@@ -966,28 +966,28 @@ class TestHUDAnchorTheme:
     """Test the HUD anchor, theme, and stacking system."""
 
     def test_anchor_top_left(self):
-        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        from rosh_lang.core.widgets import compute_hud_position, reset_hud_stack
         reset_hud_stack()
         x, y, bg, tc, fs = compute_hud_position({"anchor": "top-left"})
         assert x == "0.02"
         assert y == "0.02"
 
     def test_anchor_top_right(self):
-        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        from rosh_lang.core.widgets import compute_hud_position, reset_hud_stack
         reset_hud_stack()
         x, y, _, _, _ = compute_hud_position({"anchor": "top-right"})
         assert x == "0.78"
         assert y == "0.02"
 
     def test_anchor_bottom_left(self):
-        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        from rosh_lang.core.widgets import compute_hud_position, reset_hud_stack
         reset_hud_stack()
         x, y, _, _, _ = compute_hud_position({"anchor": "bottom-left"})
         assert x == "0.02"
         assert y == "0.90"
 
     def test_stacking_top_left(self):
-        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        from rosh_lang.core.widgets import compute_hud_position, reset_hud_stack
         reset_hud_stack()
         _, y1, _, _, _ = compute_hud_position({"anchor": "top-left"})
         _, y2, _, _, _ = compute_hud_position({"anchor": "top-left"})
@@ -996,7 +996,7 @@ class TestHUDAnchorTheme:
         assert float(y1) < float(y2) < float(y3)
 
     def test_stacking_bottom_right(self):
-        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        from rosh_lang.core.widgets import compute_hud_position, reset_hud_stack
         reset_hud_stack()
         _, y1, _, _, _ = compute_hud_position({"anchor": "bottom-right"})
         _, y2, _, _, _ = compute_hud_position({"anchor": "bottom-right"})
@@ -1004,41 +1004,41 @@ class TestHUDAnchorTheme:
         assert float(y1) > float(y2)
 
     def test_theme_dark(self):
-        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        from rosh_lang.core.widgets import compute_hud_position, reset_hud_stack
         reset_hud_stack()
         _, _, bg, tc, _ = compute_hud_position({"theme": "dark"})
         assert bg == "#333"
         assert tc == "#fff"
 
     def test_theme_retro(self):
-        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        from rosh_lang.core.widgets import compute_hud_position, reset_hud_stack
         reset_hud_stack()
         _, _, bg, tc, _ = compute_hud_position({"theme": "retro"})
         assert bg == "#001100"
         assert tc == "#0f0"
 
     def test_theme_minimal(self):
-        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        from rosh_lang.core.widgets import compute_hud_position, reset_hud_stack
         reset_hud_stack()
         _, _, bg, _, _ = compute_hud_position({"theme": "minimal"})
         assert bg == "transparent"
 
     def test_theme_with_override(self):
-        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        from rosh_lang.core.widgets import compute_hud_position, reset_hud_stack
         reset_hud_stack()
         _, _, bg, tc, _ = compute_hud_position({"theme": "dark", "bg": "#ff0000"})
         assert bg == "#ff0000"  # explicit override wins
         assert tc == "#fff"     # theme default still applies
 
     def test_no_anchor_backward_compatible(self):
-        from rosh_lang.widgets import compute_hud_position, reset_hud_stack
+        from rosh_lang.core.widgets import compute_hud_position, reset_hud_stack
         reset_hud_stack()
         x, y, _, _, _ = compute_hud_position({"x": "0.5", "y": "0.9"})
         assert x == "0.5"
         assert y == "0.9"
 
     def test_score_with_anchor(self):
-        from rosh_lang.widgets import reset_hud_stack
+        from rosh_lang.core.widgets import reset_hud_stack
         reset_hud_stack()
         stmts = load_widget("score", config={"anchor": "top-right"}, search_paths=[BUNDLED_DIR])
         sets = [s for s in stmts if isinstance(s, SetStatement)]
@@ -1046,7 +1046,7 @@ class TestHUDAnchorTheme:
         assert x_set[-1].value == "0.78"
 
     def test_lives_with_theme(self):
-        from rosh_lang.widgets import reset_hud_stack
+        from rosh_lang.core.widgets import reset_hud_stack
         reset_hud_stack()
         stmts = load_widget("lives", config={"theme": "retro"}, search_paths=[BUNDLED_DIR])
         sets = [s for s in stmts if isinstance(s, SetStatement)]
@@ -1054,7 +1054,7 @@ class TestHUDAnchorTheme:
         assert bg_set[-1].value == "#001100"
 
     def test_score_custom_label(self):
-        from rosh_lang.widgets import reset_hud_stack
+        from rosh_lang.core.widgets import reset_hud_stack
         reset_hud_stack()
         stmts = load_widget("score", config={"label": "Points:"}, search_paths=[BUNDLED_DIR])
         sets = [s for s in stmts if isinstance(s, SetStatement)]

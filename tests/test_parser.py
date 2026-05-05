@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from rosh_lang.model import (
+from rosh_lang.core.model import (
     AfterStatement,
     AnimateStatement,
     BackgroundStatement,
@@ -36,7 +36,7 @@ from rosh_lang.model import (
     UseStatement,
     WhenStatement,
 )
-from rosh_lang.parser import ParseError, parse_file, parse_string
+from rosh_lang.core.parser import ParseError, parse_file, parse_string
 
 
 # ── Group 1: print, create, set, when/end ─────────────────────
@@ -700,7 +700,7 @@ class TestIf:
         prog = parse_string(code)
         # when/end are still flat — collected at runtime
         # But the if/else/end inside should be collected by parser
-        from rosh_lang.model import WhenStatement, EndStatement
+        from rosh_lang.core.model import WhenStatement, EndStatement
         assert isinstance(prog.statements[0], WhenStatement)
         assert isinstance(prog.statements[1], IfStatement)
         assert isinstance(prog.statements[2], EndStatement)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rosh_lang.parser import parse_string
+from rosh_lang.core.parser import parse_string
 from rosh_lang.targets.web import render_html
 
 WIDGETS_DIR = Path(__file__).parent.parent / "examples" / "widgets"
@@ -858,7 +858,7 @@ class TestTextColorFontSize:
 
 class TestBackground:
     def test_static_background_colour(self):
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         from rosh_lang.targets.web import render_html
         html = render_html(parse_string('background "#ff0000"'))
         assert "#ff0000" in html
@@ -866,14 +866,14 @@ class TestBackground:
         assert "background: #16213e" not in html
 
     def test_static_background_image(self):
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         from rosh_lang.targets.web import render_html
         html = render_html(parse_string('background "sky.png"'))
         assert "sky.png" in html
         assert "background-image" in html
 
     def test_default_background(self):
-        from rosh_lang.parser import parse_string
+        from rosh_lang.core.parser import parse_string
         from rosh_lang.targets.web import render_html
         html = render_html(parse_string('print "hello"'))
         assert "#16213e" in html

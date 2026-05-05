@@ -8,7 +8,7 @@ Boundary cleanup on-statements recycle bullets that leave the canvas.
 
 from __future__ import annotations
 
-from rosh_lang.model import (
+from rosh_lang.core.model import (
     CreateStatement,
     SetStatement,
     SoundStatement,

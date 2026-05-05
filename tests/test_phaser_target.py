@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rosh_lang.parser import parse_string
+from rosh_lang.core.parser import parse_string
 from rosh_lang.targets.phaser import render_phaser
-from rosh_lang.widgets import get_bundled_library_path
+from rosh_lang.core.widgets import get_bundled_library_path
 
 BUNDLED_WIDGETS_DIR = get_bundled_library_path()
 SHOWCASE_DIR = Path(__file__).parent.parent / "examples" / "showcase"
@@ -180,7 +180,7 @@ class TestPhaserShowcaseDemos:
     """All 9 showcase demos should compile to Phaser HTML without error."""
 
     def test_all_showcase_demos_compile(self):
-        from rosh_lang.parser import parse_file
+        from rosh_lang.core.parser import parse_file
 
         demos = sorted(SHOWCASE_DIR.glob("*.rosh"))
         assert len(demos) >= 9, f"Expected >=9 demos, found {len(demos)}"

@@ -7,7 +7,7 @@ import zipfile
 from io import BytesIO
 from pathlib import Path
 
-from rosh_lang.parser import parse_file, parse_string
+from rosh_lang.core.parser import parse_file, parse_string
 from rosh_lang.targets.scratch import build_scratch_project, render_scratch_sb3
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"

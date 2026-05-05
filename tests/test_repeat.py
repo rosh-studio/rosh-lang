@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import io
 
-from rosh_lang.model import RepeatStatement, PrintStatement
-from rosh_lang.parser import parse_string
-from rosh_lang.runtime import Runtime
+from rosh_lang.core.model import RepeatStatement, PrintStatement
+from rosh_lang.core.parser import parse_string
+from rosh_lang.core.runtime import Runtime
 
 
 # ── Parser tests ──────────────────────────────────────────────

@@ -9,7 +9,7 @@ from rosh_lang.repl import shell as repl_shell
 from rosh_lang.repl.kernel import ReplKernel, canonical_help_topic, usage_error_for_command
 from rosh_lang.repl.natural import lower_shell_input
 from rosh_lang.repl.runtime_adapter import RuntimeAdapter
-from rosh_lang.runtime import Runtime
+from rosh_lang.core.runtime import Runtime
 
 
 def test_runtime_adapter_get_state_filters_internal_keys() -> None:
