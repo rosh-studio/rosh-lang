@@ -19,7 +19,7 @@ rosh new game my-game                  # scaffold a starter file
 ## How to Test
 
 ```bash
-cd rosh-lang && uv run pytest -q       # expect 747+ passed
+cd rosh-lang && uv run pytest -q       # expect the full suite to pass
 ```
 
 After code changes, reinstall:
@@ -27,7 +27,7 @@ After code changes, reinstall:
 uv tool install --from /path/to/rosh-lang rosh-lang --force
 ```
 
-## Complete Syntax (25 Keywords)
+## Complete Syntax Forms
 
 ```
 print "text"                          # output ({var} interpolation)
@@ -98,7 +98,7 @@ end
 
 ## Events
 
-`start`, `update` (dt), `click` (x,y), `click_<name>` (x,y), `keydown` (key), `keyup` (key), `collision` (a,b), `scene_enter` (scene), `scene_exit` (scene), `destroy` (name), `timer_done` (name), `game_start`, `game_over`, `game_restart`.
+`start`, `update` (dt), `click` (x,y), `click_<name>` (x,y), `keydown` (key), `keyup` (key), `collision` (a,b), `scene_enter` (scene), `scene_exit` (scene), `destroy` (name), `timer_done` (name), `game_start`, `game-over`, `game_over`, `game_restart`.
 
 Key-hold: `_keys.ArrowLeft == 1` inside `when update`.
 
@@ -189,19 +189,22 @@ targets/
   terminal.py     → print to stdout
   web.py          → self-contained HTML page (CSS divs + JS)
   phaser.py       → Phaser 3.70.0 game (canvas rendering)
+  threejs.py      → Three.js 3D scene
+  scratch.py      → Scratch 3 .sb3 export
   _js_runtime.py  → JS_RUNTIME_CORE (state, events) + JS_RUNTIME_DOM (CSS sync)
   _js_runtime_phaser.py → JS_RUNTIME_PHASER (Phaser renderer, replaces DOM)
+  _js_runtime_threejs.py → JS_RUNTIME_THREEJS (Three.js renderer)
   _js_codegen.py  → compile Programme → JavaScript
 ```
 
 ## Rules
 
-1. **Don't add keywords** unless specced in `BUILDING-ROSH.md`
+1. **Don't add keywords** unless they are documented in the public syntax reference or agreed in an issue first
 2. **Test after every change**: `cd rosh-lang && uv run pytest -q`
 3. **Rebuild showcase** after completing build steps: `cd rosh-lang && uv run python tools/build_showcase.py`
 4. **Licence**: Rosh-BSL. All widgets must declare `# licence: Rosh-BSL`
-5. **Spec before code**: check `BUILDING-ROSH.md` before implementing
-6. **Commits**: `type: Short description` + `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
+5. **Spec before code**: check the README and https://rosh.cloud/docs/syntax before implementing language behavior
+6. **Commits**: use `type: Short description`, with types like `feat`, `fix`, `docs`, `test`, `refactor`, or `chore`
 7. **Reinstall after changes**: `uv tool install --from .../rosh-lang rosh-lang --force`
 
 ## Sprite Descriptions

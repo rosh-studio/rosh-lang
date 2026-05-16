@@ -47,7 +47,7 @@ Then run with `rosh`.
 
 ## What Requires Discussion First
 
-- **New keywords** — all keywords must be specced in `BUILDING-ROSH.md` before implementation
+- **New keywords** — language additions must be discussed and documented in the public syntax reference before implementation
 - **New targets** — adding a new compilation target (e.g. Unity, Godot) is a significant change
 - **Architecture changes** — changes to the parser, model, or code generation pipeline
 

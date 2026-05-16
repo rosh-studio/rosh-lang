@@ -13,15 +13,21 @@ That's a complete programme. Run it targeting the terminal, it prints. Target th
 Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-# From PyPI (when published)
-uv tool install rosh-lang
-
-# From GitHub (available now)
+# From GitHub (current pre-release)
 uv tool install git+https://github.com/rosh-studio/rosh-lang
 
-# With AI generation support
+# From PyPI (after public package release)
+uv tool install rosh-lang
+
+# With Anthropic support (after public package release)
 uv tool install "rosh-lang[ai]"
 ```
+
+## Documentation
+
+- Full docs: [rosh.cloud/docs](https://rosh.cloud/docs)
+- Getting started: [rosh.cloud/docs/getting-started](https://rosh.cloud/docs/getting-started)
+- Syntax reference: [rosh.cloud/docs/syntax](https://rosh.cloud/docs/syntax)
 
 ## Getting Started
 
@@ -39,17 +45,17 @@ Opens [rosh.cloud/register](https://rosh.cloud/register) in your browser. Create
 rosh login
 ```
 
-Opens [rosh.cloud/login](https://rosh.cloud/login) in your browser. Once authenticated, a session token is saved locally to `~/.rosh/config.json`. You stay logged in until you run `rosh logout`.
+Opens [rosh.cloud/login](https://rosh.cloud/login) in your browser. After logging in, create an API key from Settings > API Keys.
 
 ### 3. Configure
 
-To deploy to `rosh.cloud` from your command line, you must generate an API key and register it as follows:
+To use API-backed commands such as `rosh create` or `rosh publish`, save that key locally:
 
 ```bash
 rosh config --key rosh_k1_your_key_here
 ```
 
-Saves your rosh.cloud API key to `~/.rosh/config.json`.
+Saves your rosh.cloud API key to `~/.rosh/config.json`. You stay configured until you run `rosh logout`.
 
 ### 4. Write and Run
 
@@ -80,7 +86,7 @@ Compiles locally via the API and uploads to rosh.cloud as a published programme.
 
 ## AI Engine Configuration
 
-`rosh create` needs an AI engine to generate programmes. Configure one with environment variables:
+`rosh create` needs a rosh.cloud API key for the language reference plus an AI engine for generation. Run `rosh config --key ...`, then configure an AI provider with environment variables:
 
 | Variable | Description |
 |----------|-------------|
@@ -181,7 +187,8 @@ Objects are created with `create object <name>` and configured with `set`:
 | `height` | float | Height | 0.1 |
 | `color` | string | Background color (hex or name) | #444 |
 | `label` | string | Text displayed on the object | (none) |
-| `sprite` | string | Sprite description for procedural generation | none |
+| `sprite` | string | Sprite description or image URL | none |
+| `rotation` | float | Rotation in degrees (0=up, clockwise) | 0 |
 | `visible` | int | 0 hides the object, any other shows | 1 |
 | `vx` | float | Horizontal velocity (per second) | none |
 | `vy` | float | Vertical velocity (per second) | none |
@@ -207,8 +214,9 @@ Coordinates: `0.0`-`1.0` maps to percentage of the canvas. Values `>1.0` are tre
 | `destroy` | `name` | Object destroyed |
 | `timer_done` | `name` | Timer widget finished |
 | `game_start` | — | Game started (via game-lifecycle widget) |
-| `game_over` | — | Game over (via lives widget at 0) |
-| `game_restart` | — | Game restarted |
+| `game-over` | — | Lives reached zero (sent by `lives` widget) |
+| `game_over` | — | Game-over phase entered (sent by `game-lifecycle` widget) |
+| `game_restart` | — | Game restarted (via game-lifecycle widget) |
 
 ### Control Flow
 
@@ -280,7 +288,7 @@ use hazard count 5 vy 0.3 spawn_rate 0.8
 | `counter` | .rosh | — | Click counter |
 | `timer` | .py | `total running x y bg text_color font_size` | Auto-tick countdown (fires timer_done) |
 | `health-bar` | .py | `max current x y bg text_color font_size` | Health display |
-| `lives` | .py | `count x y bg text_color font_size` | Lives counter |
+| `lives` | .py | `count auto_gameover x y bg text_color font_size` | Lives counter |
 | `button` | .rosh | — | Clickable button |
 | `label` | .py | `text x y bg text_color font_size` | Text label with interpolation |
 | `fps` | .py | `x y bg text_color font_size` | FPS counter |
@@ -367,6 +375,7 @@ rosh                              Start REPL
 rosh <file.rosh>                  Run programme (terminal)
 rosh <file.rosh> --target web      Render as HTML
 rosh <file.rosh> --target phaser   Render as Phaser game
+rosh <file.rosh> --target threejs  Render as Three.js 3D scene
 rosh <file.rosh> --target scratch  Export as Scratch .sb3
 rosh <file.rosh> --run            Auto-open browser
 rosh new [template] [name]        Scaffold a starter programme
@@ -382,46 +391,24 @@ rosh --version                    Show version
 rosh --help                       Show help
 ```
 
-## MCP Server (AI Tool Integration)
+## MCP Server
 
-Rosh includes an MCP (Model Context Protocol) server that lets AI tools like Claude Code, Cursor, and Windsurf compile, publish, and manage Rosh programs directly.
+Rosh has a separate MCP server package for AI tools that can compile, publish, browse, and moderate programmes through the rosh.cloud API.
 
-### Prerequisites
-
-1. A [rosh.cloud](https://rosh.cloud) account with an API key
-2. Python 3.10+ and [uv](https://docs.astral.sh/uv/)
-
-### Setup
-
-**1. Get the MCP server script**
-
-Clone the repo (if you haven't already):
+Install and run it with `uvx`:
 
 ```bash
-git clone https://github.com/rosh-studio/rosh-lang.git
+ROSH_API_KEY=rosh_k1_your_key_here uvx rosh-mcp
 ```
 
-The server script is at `rosh-dev/mcp/rosh_mcp.py`.
-
-**2. Get your API key**
-
-Log in to [rosh.cloud](https://rosh.cloud), go to your profile, and generate an API key.
-
-**3. Configure your AI tool**
-
-Add the following to your tool's MCP config:
-
-**Claude Code** (`<project>/.claude/mcp.json`):
+Example MCP config:
 
 ```json
 {
   "mcpServers": {
     "rosh": {
-      "command": "uv",
-      "args": [
-        "run", "--with", "mcp[cli]", "--with", "httpx",
-        "python", "/path/to/rosh-dev/mcp/rosh_mcp.py"
-      ],
+      "command": "uvx",
+      "args": ["rosh-mcp"],
       "env": {
         "ROSH_API_KEY": "rosh_k1_your_key_here"
       }
@@ -430,49 +417,7 @@ Add the following to your tool's MCP config:
 }
 ```
 
-**Cursor / Other MCP clients** (check your tool's MCP config location):
-
-```json
-{
-  "mcpServers": {
-    "rosh": {
-      "command": "python",
-      "args": ["/path/to/rosh-dev/mcp/rosh_mcp.py"],
-      "env": {
-        "ROSH_API_KEY": "rosh_k1_your_key_here",
-        "ROSH_API_BASE": "https://rosh.cloud"
-      }
-    }
-  }
-}
-```
-
-For Cursor and similar tools, install the dependencies first: `uv pip install "mcp[cli]" httpx` (or `pip install "mcp[cli]" httpx`)
-
-**4. Restart your AI tool** to pick up the new MCP server.
-
-### Available Tools
-
-| Tool | Description |
-|------|-------------|
-| `rosh_docs` | Get the full Rosh language reference |
-| `rosh_compile` | Compile Rosh code without publishing |
-| `rosh_publish` | Compile and publish a program to rosh.cloud |
-| `rosh_list_programs` | List your published programs |
-| `rosh_get_program` | Get details of a specific program |
-| `rosh_update_program` | Update an existing program |
-| `rosh_delete_program` | Delete a program |
-| `rosh_hide_program` | Hide a program from public view |
-| `rosh_show_program` | Make a hidden program visible again |
-
-### Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `ROSH_API_KEY` | Yes | Your rosh.cloud API key |
-| `ROSH_API_BASE` | No | API base URL (default: `https://rosh.cloud`) |
-
-The server also reads from a `.env` file in the project root if present.
+Canonical MCP package: [github.com/rosh-studio/rosh-mcp](https://github.com/rosh-studio/rosh-mcp)
 
 ## Project Structure
 
