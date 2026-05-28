@@ -21,6 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 ai = ["anthropic>=0.84.0"]
 dev = ["pytest>=7.0"]
+world = ["websockets>=13.0"]
 
 [project.urls]
 Homepage = "https://rosh.cloud"

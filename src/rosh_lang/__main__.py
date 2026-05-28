@@ -64,7 +64,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--target", "-t",
-        choices=["terminal", "web", "phaser", "threejs", "scratch"],
+        choices=["terminal", "web", "phaser", "threejs", "scratch", "world"],
         default="terminal",
         help="Output target (default: terminal)",
     )
@@ -72,6 +72,20 @@ def _build_parser() -> argparse.ArgumentParser:
         "--run", "-r",
         action="store_true",
         help="Auto-open browser (web target only)",
+    )
+    parser.add_argument(
+        "--url",
+        help="rosh-world WS URL (world target only; overrides connect world ... in script)",
+    )
+    parser.add_argument(
+        "--world-key",
+        dest="world_key",
+        help="rosh-world API key (world target; overrides ROSH_WORLD_KEY env var)",
+    )
+    parser.add_argument(
+        "--actor",
+        default="rosh-agent",
+        help="Actor name to join as (world target only)",
     )
     return parser
 
@@ -182,7 +196,22 @@ def main(argv: list[str] | None = None) -> int:
         console.print(f"[rosh.error]ParseError:[/] {e}")
         return 1
 
-    if args.target == "web":
+    if args.target == "world":
+        from rosh_lang.targets.world import run_world, WorldError
+        try:
+            run_world(
+                programme,
+                url=args.url or "",
+                api_key=args.world_key or "",
+                actor=args.actor,
+            )
+        except WorldError as exc:
+            console.print(f"[rosh.error]WorldError:[/] {exc}")
+            return 1
+        except ValueError as exc:
+            console.print(f"[rosh.error]Error:[/] {exc}")
+            return 1
+    elif args.target == "web":
         from rosh_lang.targets.web import serve_web
         serve_web(programme, auto_open=args.run)
     elif args.target == "phaser":
