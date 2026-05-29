@@ -26,6 +26,7 @@ from rosh_lang.core.model import (
     ElseStatement,
     EndStatement,
     EventStatement,
+    ExtensionCommandStatement,
     GetStatement,
     GoStatement,
     IfStatement,
@@ -56,14 +57,14 @@ class ParseError(Exception):
         self.source = source
 
 
-def parse_file(path: Path | str) -> Programme:
+def parse_file(path: Path | str, *, allow_extensions: bool = False) -> Programme:
     """Parse a .rosh file into a Programme."""
     path = Path(path)
     text = path.read_text(encoding="utf-8")
-    return parse_string(text, source=str(path))
+    return parse_string(text, source=str(path), allow_extensions=allow_extensions)
 
 
-def parse_string(text: str, source: str = "<string>") -> Programme:
+def parse_string(text: str, source: str = "<string>", *, allow_extensions: bool = False) -> Programme:
     """Parse a string of Rosh code into a Programme."""
     statements: list[Statement] = []
     for i, raw_line in enumerate(text.splitlines(), start=1):
@@ -72,9 +73,9 @@ def parse_string(text: str, source: str = "<string>") -> Programme:
         if stripped.lower().startswith("else ") and stripped[5:].strip().lower().startswith("if "):
             statements.append(ElseStatement(line=i))
             if_part = stripped[5:].strip()
-            statements.append(_parse_line(if_part, line=i, source=source))
+            statements.append(_parse_line(if_part, line=i, source=source, allow_extensions=allow_extensions))
         else:
-            stmt = _parse_line(raw_line, line=i, source=source)
+            stmt = _parse_line(raw_line, line=i, source=source, allow_extensions=allow_extensions)
             statements.append(stmt)
     # Post-pass: collect if/else/end blocks into IfStatement trees
     statements = _collect_if_blocks(statements, source=source)
@@ -85,7 +86,7 @@ def parse_string(text: str, source: str = "<string>") -> Programme:
     return Programme(statements=statements, source=source)
 
 
-def _parse_line(raw: str, line: int, source: str) -> Statement:
+def _parse_line(raw: str, line: int, source: str, *, allow_extensions: bool = False) -> Statement:
     """Parse a single line of Rosh code."""
     stripped = raw.strip()
 
@@ -128,7 +129,10 @@ def _parse_line(raw: str, line: int, source: str) -> Statement:
 
     handler = dispatch.get(keyword)
     if handler is None:
-        raise ParseError(f"Unknown keyword: {keyword!r}", line=line, source=source)
+        if allow_extensions:
+            rest = stripped[len(keyword):].strip()
+            return ExtensionCommandStatement(verb=keyword, args=rest, line=line)
+        raise ParseError(f"Unknown keyword: '{keyword}'", line=line, source=source)
     return handler(stripped, line, source)
 
 

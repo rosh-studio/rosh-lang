@@ -191,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        programme = parse_file(path)
+        programme = parse_file(path, allow_extensions=(args.target == "world"))
     except ParseError as e:
         console.print(f"[rosh.error]ParseError:[/] {e}")
         return 1

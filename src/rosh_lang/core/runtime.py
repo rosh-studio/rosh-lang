@@ -25,6 +25,7 @@ from rosh_lang.core.model import (
     EndStatement,
     EventStatement,
     GetStatement,
+    ExtensionCommandStatement,
     GoStatement,
     IfStatement,
     LookStatement,
@@ -148,6 +149,8 @@ class Runtime:
             self._exec_repeat(stmt)
         elif isinstance(stmt, (CommentStatement, BlankStatement, EndStatement)):
             pass
+        elif isinstance(stmt, ExtensionCommandStatement):
+            raise KeyError(f"Unknown command: '{stmt.verb}'")
         return None
 
     def send(self, event: str, **payload: Any) -> None:

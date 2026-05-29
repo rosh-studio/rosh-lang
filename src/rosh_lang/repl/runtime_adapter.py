@@ -192,12 +192,17 @@ class RuntimeAdapter:
         return difflib.get_close_matches(keyword, _COMMAND_CANDIDATES, n=3, cutoff=0.6)
 
     def _runtime_suggestions(self, exc: Exception) -> list[str]:
-        match = re.search(r"Unknown(?: key)?: '([^']+)'", str(exc))
+        match = re.search(r"Unknown(?: key| command)?: '([^']+)'", str(exc))
         if not match:
             match = re.search(r"Unknown: '([^']+)'", str(exc))
         if not match:
             return []
         target = match.group(1)
+        # For unknown commands, search keywords first
+        if "Unknown command" in str(exc):
+            kw_matches = difflib.get_close_matches(target, _COMMAND_CANDIDATES, n=3, cutoff=0.6)
+            if kw_matches:
+                return kw_matches
         candidates = [key for key in self.runtime.state.keys() if not key.startswith("_")]
         if "." in target:
             root, _, leaf = target.partition(".")

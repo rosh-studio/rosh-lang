@@ -261,6 +261,20 @@ class RepeatStatement:
     line: int = 0
 
 
+@dataclass
+class ExtensionCommandStatement:
+    """An unknown verb dispatched to the active world extension registry.
+
+    Produced by the parser for any unrecognised keyword followed by optional
+    arguments. The world target maps this to a WS extension command.
+    Examples: note "text", idea "thought", sign "text" title "Header"
+    """
+
+    verb: str
+    args: str = ""  # raw argument string, quotes preserved
+    line: int = 0
+
+
 # Union of all statement types
 Statement = (
     PrintStatement
@@ -291,6 +305,7 @@ Statement = (
     | DefineStatement
     | DoStatement
     | RepeatStatement
+    | ExtensionCommandStatement
 )
 
 

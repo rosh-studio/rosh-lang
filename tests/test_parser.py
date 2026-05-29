@@ -779,17 +779,31 @@ class TestIf:
 
 
 class TestErrors:
-    def test_unknown_keyword(self) -> None:
+    def test_unknown_keyword_raises_parse_error(self) -> None:
         with pytest.raises(ParseError, match="Unknown keyword"):
             parse_string("frobnicate everything")
 
-    def test_error_includes_line_number(self) -> None:
-        with pytest.raises(ParseError, match=":2:"):
-            parse_string('print "hello"\nfrobnicate')
+    def test_unknown_keyword_with_allow_extensions_produces_statement(self) -> None:
+        from rosh_lang.core.model import ExtensionCommandStatement
+        prog = parse_string("frobnicate everything", allow_extensions=True)
+        assert len(prog.statements) == 1
+        stmt = prog.statements[0]
+        assert isinstance(stmt, ExtensionCommandStatement)
+        assert stmt.verb == "frobnicate"
+        assert stmt.args == "everything"
 
-    def test_error_includes_source(self) -> None:
-        with pytest.raises(ParseError, match="test.rosh"):
-            parse_string("frobnicate", source="test.rosh")
+    def test_extension_statement_preserves_line_number(self) -> None:
+        from rosh_lang.core.model import ExtensionCommandStatement
+        prog = parse_string('print "hello"\nfrobnicate', allow_extensions=True)
+        ext_stmt = next(s for s in prog.statements if isinstance(s, ExtensionCommandStatement))
+        assert ext_stmt.line == 2
+
+    def test_extension_statement_has_correct_verb_and_args(self) -> None:
+        from rosh_lang.core.model import ExtensionCommandStatement
+        prog = parse_string('note "test note"', allow_extensions=True)
+        assert isinstance(prog.statements[0], ExtensionCommandStatement)
+        assert prog.statements[0].verb == "note"
+        assert prog.statements[0].args == '"test note"'
 
 
 # ── Animate ────────────────────────────────────────────────

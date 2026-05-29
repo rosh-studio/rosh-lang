@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shlex
 import sys
 from typing import Any
 
@@ -17,6 +18,7 @@ from rosh_lang.core.model import (
     ConnectStatement,
     CreateStatement,
     DestroyStatement,
+    ExtensionCommandStatement,
     GoStatement,
     LookStatement,
     PrintStatement,
@@ -25,6 +27,32 @@ from rosh_lang.core.model import (
     SetStatement,
     Statement,
 )
+
+
+def _parse_ext_args(args: str) -> dict[str, str]:
+    """Parse extension command args into a dict for WS dispatch.
+
+    Handles:
+      "text"                    → {text: "text"}
+      "text" key "value"        → {text: "text", key: "value"}
+      "text with spaces" k v    → {text: "text with spaces", k: "v"}
+
+    First token is always ``text``; subsequent pairs are ``key value``.
+    Uses shlex for proper quote handling.
+    """
+    result: dict[str, str] = {}
+    try:
+        tokens = shlex.split(args)
+    except ValueError:
+        tokens = args.split() if args else []
+    if not tokens:
+        return result
+    result["text"] = tokens[0]
+    i = 1
+    while i + 1 < len(tokens):
+        result[tokens[i]] = tokens[i + 1]
+        i += 2
+    return result
 
 
 def _strip_quotes(s: str) -> str:
@@ -106,7 +134,11 @@ class WorldRuntime:
                 "Install with: pip install websockets"
             )
 
-        async with connect(self.ws_url) as ws:
+        ws_url = self.ws_url
+        if self.api_key:
+            sep = "&" if "?" in ws_url else "?"
+            ws_url = f"{ws_url}{sep}api_key={self.api_key}"
+        async with connect(ws_url) as ws:
             self._ws = ws
             await self._run_with_ws(programme)
 
@@ -161,7 +193,7 @@ class WorldRuntime:
             if "." in stmt.target:
                 obj_name, key = stmt.target.split(".", 1)
                 value = _strip_quotes(str(stmt.value))
-                cmd: dict[str, Any] = {"cmd": "set", "key": key, "value": value}
+                cmd: dict[str, Any] = {"cmd": "set", "key": key, "value": value, "target": obj_name}
                 uuid = self._name_to_uuid.get(obj_name)
                 if uuid:
                     cmd["uuid"] = uuid
@@ -177,6 +209,12 @@ class WorldRuntime:
 
         elif isinstance(stmt, PrintStatement):
             self.output.write(stmt.text + "\n")
+
+        elif isinstance(stmt, ExtensionCommandStatement):
+            cmd_args = _parse_ext_args(stmt.args)
+            resp = await self._send(cmd=stmt.verb, **cmd_args)
+            if resp.get("type") == "error":
+                raise WorldError(f"{stmt.verb}: {resp.get('message')}")
 
         elif isinstance(stmt, ConnectStatement):
             pass  # URL already resolved at start; mid-script reconnect deferred
