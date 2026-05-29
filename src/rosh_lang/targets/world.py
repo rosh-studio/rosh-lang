@@ -219,6 +219,10 @@ class WorldRuntime:
         elif isinstance(stmt, ConnectStatement):
             pass  # URL already resolved at start; mid-script reconnect deferred
 
+        else:
+            verb = type(stmt).__name__.replace("Statement", "").lower()
+            self.output.write(f"[world] warning: '{verb}' not supported by world target\n")
+
 
 def run_world(
     programme: Programme,
