@@ -66,8 +66,20 @@ def parse_file(path: Path | str, *, allow_extensions: bool = False) -> Programme
 
 def parse_string(text: str, source: str = "<string>", *, allow_extensions: bool = False) -> Programme:
     """Parse a string of Rosh code into a Programme."""
-    statements: list[Statement] = []
+    from rosh_lang.core.normalise import normalise
+    # Normalise each line; a single line may expand to multiple canonical lines
+    expanded_lines: list[tuple[int, str]] = []
     for i, raw_line in enumerate(text.splitlines(), start=1):
+        result = normalise(raw_line)
+        parts = result.splitlines()
+        if parts:
+            for expanded in parts:
+                expanded_lines.append((i, expanded))
+        else:
+            expanded_lines.append((i, raw_line))
+
+    statements: list[Statement] = []
+    for i, raw_line in expanded_lines:
         stripped = raw_line.strip()
         # "else if ..." → ElseStatement + IfStatement (same line number)
         if stripped.lower().startswith("else ") and stripped[5:].strip().lower().startswith("if "):
