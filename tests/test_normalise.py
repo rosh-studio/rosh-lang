@@ -42,6 +42,11 @@ class TestFuzzyColor:
         assert fuzzy_color("xyzzy unknown stuff") is None
         assert fuzzy_color("") is None
 
+    def test_ported_semantics(self):
+        assert fuzzy_color("thunderstorm") == "gray"
+        assert fuzzy_color("golden") == "gold"
+        assert fuzzy_color("straw") == "yellow"
+
 
 # ---------------------------------------------------------------------------
 # normalise — destroy aliases
@@ -115,6 +120,11 @@ class TestTurnVerb:
     def test_turn_into_material(self):
         assert normalise("turn campfire into stone") == "set campfire.material to stone"
 
+    def test_turn_into_multi_word_material(self):
+        result = normalise("turn ball into dark wood")
+        assert "set ball.material to wood" in result
+        assert "set ball.material_desc to dark wood" in result
+
     def test_turn_invisible(self):
         assert normalise("turn campfire invisible") == "set campfire.opacity to 0"
 
@@ -146,7 +156,8 @@ class TestSetColorProse:
 
     def test_material_prose_expands(self):
         result = normalise("set tree.material to cracked ancient bark wood")
-        assert "set tree.material to cracked" in result
+        # Last word is the material noun; adjectives are stored in _desc
+        assert "set tree.material to wood" in result
         assert "set tree.material_desc to cracked ancient bark wood" in result
 
 

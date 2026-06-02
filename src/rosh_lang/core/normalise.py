@@ -57,6 +57,7 @@ COLOR_SEMANTICS: dict[str, str] = {
     "amethyst": "purple", "lavender": "purple",
     "coral_noun": "pink", "salmon": "pink",
     "rainbow": "rainbow",
+    "thunderstorm": "gray", "golden": "gold", "straw": "yellow",
 }
 
 _ARTICLES: frozenset[str] = frozenset({"a", "an", "the"})
@@ -158,10 +159,14 @@ def normalise(line: str) -> str:
         if len(rest) >= 2:
             obj = rest[0]
             last = rest[-1].lower()
-            # "turn X into <material>"
+            # "turn X into <material>" — last word is the material noun
             if len(rest) >= 3 and rest[1].lower() == "into":
-                material = rest[2]
-                return f"set {obj}.material to {material}"
+                material_words = rest[2:]
+                material = material_words[-1].lower()
+                lines = [f"set {obj}.material to {material}"]
+                if len(material_words) > 1:
+                    lines.append(f"set {obj}.material_desc to {' '.join(material_words)}")
+                return "\n".join(lines)
             # "turn X invisible/transparent/visible"
             if last in _OPACITY_WORDS:
                 return f"set {obj}.opacity to {_OPACITY_WORDS[last]}"
@@ -197,9 +202,9 @@ def normalise(line: str) -> str:
             obj, _, desc = m2.group(1), m2.group(2), m2.group(3).strip()
             words = desc.split()
             if len(words) > 1:
-                # Use first word as material value; store full description
+                # Last word is the material noun; earlier words are adjectives
                 return (
-                    f"set {obj}.material to {words[0].lower()}\n"
+                    f"set {obj}.material to {words[-1].lower()}\n"
                     f"set {obj}.material_desc to {desc}"
                 )
 
