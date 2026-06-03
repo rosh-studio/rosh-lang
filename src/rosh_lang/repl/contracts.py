@@ -43,9 +43,11 @@ class ErrorInfo:
 @dataclass(slots=True)
 class KernelResponse:
     status: Literal["ok", "noop", "exit", "error"] = "ok"
-    view: Literal["none", "state", "objects", "events", "help", "get"] = "none"
+    view: Literal["none", "state", "objects", "events", "help", "get", "say"] = "none"
     state_items: list[StateItem] = field(default_factory=list)
     object_items: list[ObjectItem] = field(default_factory=list)
     event_snapshot: EventSnapshot | None = None
     help_topic: str | None = None
     error: ErrorInfo | None = None
+    planned_rosh: str = ""
+    planner_notes: str = ""

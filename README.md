@@ -86,6 +86,15 @@ Compiles locally via the API and uploads to rosh.cloud as a published programme.
 
 ## AI Engine Configuration
 
+Rosh has two AI-backed surfaces:
+
+- `rosh create "..."` generates a new programme from a prompt.
+- the optional REPL intent planner can turn broad live-session intent into strict Rosh when ordinary parsing and deterministic natural lowering cannot handle it.
+
+Both surfaces keep Rosh code inspectable: AI output is compiled or parsed back into normal `.rosh` before it is accepted.
+
+### `rosh create`
+
 `rosh create` needs a rosh.cloud API key for the language reference plus an AI engine for generation. Run `rosh config --key ...`, then configure an AI provider with environment variables:
 
 | Variable | Description |
@@ -102,6 +111,40 @@ export ROSH_AI_MODEL=model-name
 ```
 
 This covers providers like OpenRouter, Ollama, Together, Groq, and any other service that implements the OpenAI chat completions protocol.
+
+### REPL Intent Planner
+
+The terminal REPL can optionally fall back to an AI intent planner for broad commands such as:
+
+```text
+rosh> imagine a moonlit clearing with a campfire
+```
+
+The planner is deliberately above the parser/runtime:
+
+1. strict Rosh runs first
+2. deterministic natural phrases run next
+3. only broad unknown input can call the planner
+4. generated text must parse as normal Rosh before execution
+
+It is off unless an AI provider, model, and API key are configured:
+
+```bash
+export ROSH_AI=1
+export ROSH_AI_PROVIDER=anthropic
+export ROSH_AI_MODEL=claude-sonnet-4-20250514
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+You can also set planner preferences inside a REPL session using ordinary Rosh state:
+
+```rosh
+set _ai.enabled to true
+set _ai.provider to anthropic
+set _ai.model to claude-sonnet-4-20250514
+```
+
+Keep API keys in environment variables rather than `.rosh` files. The planner currently runs in the terminal REPL only; browser demos and the shared homepage world continue to use their deterministic command pipelines.
 
 ## Interactive REPL
 
@@ -132,6 +175,7 @@ Current REPL-only conveniences include:
 - aliases like `examine`, `inspect`, `x`, `ls`, and `remove`
 - typo suggestions for misspelled commands
 - tab completion, history, and multiline blocks for `when`, `define`, and `repeat`
+- optional AI intent planning for broad unknown commands when `ROSH_AI`, provider, model, and API key are configured
 
 ## Scaffold a Project
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Final
 
+from rosh_lang.intent.planner import IntentPlanner
 from rosh_lang.repl.contracts import ErrorInfo, KernelResponse
 from rosh_lang.repl.natural import lower_shell_input
 from rosh_lang.repl.runtime_adapter import RuntimeAdapter
@@ -278,6 +279,9 @@ class ReplKernel:
             _programme, view, items = self.adapter.run_source(stripped)
         except Exception as exc:
             error = self.adapter.format_error(exc)
+            planned = self._try_intent_fallback(line, stripped, error)
+            if planned is not None:
+                return planned
             return KernelResponse(status="error", error=error)
 
         self._remember_subject(stripped, lowered.subject)
@@ -285,6 +289,37 @@ class ReplKernel:
         if items:
             return KernelResponse(status="ok", view=view, state_items=items)
         return KernelResponse(status="ok")
+
+    def _try_intent_fallback(
+        self,
+        original: str,
+        stripped: str,
+        error: ErrorInfo,
+    ) -> KernelResponse | None:
+        if not _should_try_intent(stripped, error):
+            return None
+
+        planner = IntentPlanner.from_state(self.adapter.runtime.state)
+        if not planner.available:
+            return None
+
+        plan = planner.plan(original.strip(), state=self.adapter.runtime.state)
+        if plan is None:
+            return None
+
+        try:
+            _programme, view, items = self.adapter.run_source(plan.rosh, source="<intent>")
+        except Exception:
+            return None
+
+        self._remember_subject(plan.rosh, None)
+        return KernelResponse(
+            status="ok",
+            view=view,
+            state_items=items,
+            planned_rosh=plan.rosh,
+            planner_notes=plan.notes,
+        )
 
     def _remember_subject(self, stripped: str, lowered_subject: str | None) -> None:
         if lowered_subject is not None:
@@ -385,3 +420,18 @@ def _infer_subject(stripped: str) -> str | None:
     if len(tokens) >= 2 and tokens[0].lower() == "set":
         return tokens[1].split(".", 1)[0]
     return None
+
+
+def _should_try_intent(stripped: str, error: ErrorInfo) -> bool:
+    if "\n" in stripped:
+        return False
+    if error.kind != "parse":
+        return False
+    if error.guidance:
+        return False
+    if error.suggestions:
+        return False
+    lower = stripped.lower()
+    if lower.startswith(("help", "list", "state", "quit", "exit")):
+        return False
+    return "unknown keyword" in error.message.lower()

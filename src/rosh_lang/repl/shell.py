@@ -163,6 +163,13 @@ def _render_response(console: Console, response: KernelResponse) -> None:
         console.print()
         return
 
+    if response.planned_rosh:
+        console.print("[rosh.muted]Planned Rosh:[/]")
+        for line in response.planned_rosh.splitlines():
+            console.print(f"  [rosh.keyword]{line}[/]")
+        if response.planner_notes:
+            console.print(f"[rosh.muted]{response.planner_notes}[/]")
+
     if response.view == "state":
         if not response.state_items:
             console.print("  [rosh.muted](empty)[/]")
