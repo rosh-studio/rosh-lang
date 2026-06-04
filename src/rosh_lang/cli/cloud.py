@@ -10,6 +10,7 @@ Commands:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -28,12 +29,14 @@ def _load_config() -> dict:
 
 def _save_config(config: dict) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_DIR.chmod(0o700)
+    CONFIG_FILE.touch(mode=0o600, exist_ok=True)
+    CONFIG_FILE.chmod(0o600)
     CONFIG_FILE.write_text(json.dumps(config, indent=2))
 
 
 def _get_api_key() -> str:
     """Get API key from config or environment."""
-    import os
     key = os.environ.get("ROSH_API_KEY", "") or _load_config().get("api_key", "")
     if not key:
         print("No API key configured. Run: rosh config --key rosh_k1_...")
@@ -171,8 +174,6 @@ def _call_ai(prompt: str) -> str:
     2. Anthropic (ANTHROPIC_API_KEY)
     3. OpenAI (OPENAI_API_KEY)
     """
-    import os
-
     # Option 1: Generic OpenAI-compatible endpoint
     base_url = os.environ.get("ROSH_AI_BASE_URL", "")
     ai_key = os.environ.get("ROSH_AI_API_KEY", "")

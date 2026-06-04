@@ -154,10 +154,10 @@ Run: `rosh game.rosh --target web --run`
 | `health-bar` | .py | `max current x y bg text_color font_size` | Health display |
 | `lives` | .py | `count auto_gameover x y bg text_color font_size` | Lives counter (auto game-over at 0) |
 | `button` | .rosh | — | Clickable button |
-| `label` | .py | `text x y bg text_color font_size` | Text label |
+| `label` | .rosh | `text x y bg text_color font_size` | Text label |
 | `fps` | .py | `x y bg text_color font_size` | FPS counter |
-| `message` | .py | `text x y bg text_color font_size` | Overlay message |
-| `title-screen` | .py | `title subtitle bg text_color font_size` | Title screen |
+| `message` | .rosh | `text x y bg text_color font_size` | Overlay message |
+| `title-screen` | .rosh | `title subtitle bg text_color font_size` | Title screen |
 | `coin` | .rosh | — | Collectible |
 | `grid` | .py | `rows cols size gap color` | Cell grid |
 | `enemy-grid` | .py | `rows cols size gap color` | Enemy formation |
@@ -165,7 +165,7 @@ Run: `rosh game.rosh --target web --run`
 | `bullet` | .py | `count vx vy color` | Pooled projectiles |
 | `explosion` | .py | `count color` | Pooled explosions |
 | `animation` | .py | `target sheet frames speed mode` | Spritesheet |
-| `game-lifecycle` | .py | `title subtitle bg text_color font_size` | Title → playing → over flow |
+| `game-lifecycle` | .rosh | `title subtitle bg text_color font_size` | Title → playing → over flow |
 | `ball` | .py | `x y size color vx vy walls` | Bouncing ball with wall bounce |
 | `hazard` | .py | `count vx vy color width height sprite spawn_rate` | Auto-spawning obstacle pool |
 

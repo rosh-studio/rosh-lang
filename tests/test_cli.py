@@ -5,11 +5,26 @@ from pathlib import Path
 import pytest
 
 from rosh_lang import __main__ as cli
+from rosh_lang.cli import cloud
 from rosh_lang.repl import shell as repl_shell
 from rosh_lang.repl.kernel import ReplKernel, canonical_help_topic, usage_error_for_command
 from rosh_lang.repl.natural import lower_shell_input
 from rosh_lang.repl.runtime_adapter import RuntimeAdapter
 from rosh_lang.core.runtime import Runtime
+
+
+def test_cloud_config_is_saved_with_private_permissions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_dir = tmp_path / ".rosh"
+    config_file = config_dir / "config.json"
+    monkeypatch.setattr(cloud, "CONFIG_DIR", config_dir)
+    monkeypatch.setattr(cloud, "CONFIG_FILE", config_file)
+
+    cloud._save_config({"api_key": "rosh_k1_test"})
+
+    assert config_dir.stat().st_mode & 0o777 == 0o700
+    assert config_file.stat().st_mode & 0o777 == 0o600
 
 
 def test_runtime_adapter_get_state_filters_internal_keys() -> None:

@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --dev --frozen
+      - run: uv run pytest -q
+
+  release-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv build --no-sources
+      - name: Reject private or generated release files
+        run: |
+          if tar -tf dist/rosh_lang-*.tar.gz | grep -E '(\.uv-cache|\.venv|\.pytest_cache|test-verify|\.env|\.sb3|rosh-dev|rosh-corporate)'; then
+            echo "Unexpected file found in source distribution"
+            exit 1
+          fi
+      - run: uv tool run --from dist/rosh_lang-*.whl rosh --version

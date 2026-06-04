@@ -29,7 +29,9 @@ Thumbs.db
 
 # UV
 uv.lock
+.uv-cache/
 
 # Generated
 *.rosh.html
 *.sb3
+test-verify.rosh

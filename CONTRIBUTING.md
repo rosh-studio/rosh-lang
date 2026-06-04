@@ -29,6 +29,9 @@ uv run pytest -q
 
 All tests must pass before submitting a pull request.
 
+The standalone public repository also builds wheel and source-distribution
+artifacts in CI to prevent local caches or generated files entering a release.
+
 ### Installing Locally
 
 ```bash
@@ -44,6 +47,7 @@ Then run with `rosh`.
 - **Widget improvements** — enhancements to existing widgets in `src/rosh_lang/library/`
 - **Documentation** — improvements to README, inline comments, or examples
 - **Test coverage** — new test cases for edge cases or uncovered paths
+- **Editor support** — syntax and snippet updates in `editor/vscode/`
 
 ## What Requires Discussion First
 

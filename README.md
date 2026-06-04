@@ -29,6 +29,8 @@ uv tool install "rosh-lang[ai]"
 - Getting started: [rosh.cloud/docs/getting-started](https://rosh.cloud/docs/getting-started)
 - Syntax reference: [rosh.cloud/docs/syntax](https://rosh.cloud/docs/syntax)
 
+The documentation is public and does not require a Rosh account.
+
 ## Getting Started
 
 ### 1. Register
@@ -186,6 +188,21 @@ Current REPL-only conveniences include:
 - typo suggestions for misspelled commands
 - tab completion, history, and multiline blocks for `when`, `define`, and `repeat`
 - optional AI intent planning for broad unknown commands when `ROSH_AI`, provider, model, and API key are configured
+
+## VS Code
+
+The repository includes the official Rosh VS Code extension in
+[`editor/vscode/`](editor/vscode/). It provides syntax highlighting, folding,
+bracket matching, and snippets for current Rosh syntax.
+
+Install it from a source checkout:
+
+```bash
+cd editor/vscode
+./install.sh
+```
+
+Reload VS Code after installation.
 
 ## Scaffold a Project
 
@@ -493,7 +510,7 @@ Canonical MCP package: [github.com/rosh-studio/rosh-mcp](https://github.com/rosh
 rosh-lang/
   src/rosh_lang/
     core/
-      model.py        # Data model (28 statement types)
+      model.py        # Data model (32 statement types)
       parser.py       # Text -> Programme
       runtime.py      # Execute programmes, manage state
       widgets.py      # Widget loader and composition
@@ -519,11 +536,13 @@ rosh-lang/
       _js_runtime_threejs.py  # JS runtime (Three.js layer)
       scratch.py      # Scratch 3 .sb3 export target
     repl/             # Interactive shell kernel and natural command lowering
+    intent/           # Optional AI-backed intent planning
     model.py          # Compatibility shim for rosh_lang.core.model
     parser.py         # Compatibility shim for rosh_lang.core.parser
     __main__.py       # CLI entry point + REPL
   examples/           # Example programmes
-  tests/              # Test suite (853 tests)
+  tests/              # Test suite (1,197 tests)
+  editor/vscode/      # Official VS Code language extension
   tools/              # Build tools (showcase generator)
   dist/               # Generated output (showcase.html)
 ```

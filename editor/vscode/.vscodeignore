@@ -1,0 +1,4 @@
+.gitignore
+.vscodeignore
+install.sh
+*.vsix

@@ -1,0 +1,58 @@
+{
+  "name": "rosh",
+  "displayName": "Rosh Language",
+  "description": "Syntax highlighting and snippets for the Rosh plain-English programming language",
+  "version": "0.8.0",
+  "publisher": "rosh-studio",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "rosh",
+    "plain-english",
+    "game",
+    "creative-coding",
+    "accessibility"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "rosh",
+        "aliases": [
+          "Rosh",
+          "rosh"
+        ],
+        "extensions": [
+          ".rosh"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "rosh",
+        "scopeName": "source.rosh",
+        "path": "./syntaxes/rosh.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "rosh",
+        "path": "./snippets/rosh.json"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rosh-studio/rosh-lang",
+    "directory": "editor/vscode"
+  },
+  "homepage": "https://rosh.cloud",
+  "bugs": {
+    "url": "https://github.com/rosh-studio/rosh-lang/issues"
+  }
+}
