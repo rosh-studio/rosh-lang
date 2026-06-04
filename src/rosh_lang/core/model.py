@@ -265,6 +265,34 @@ class RepeatStatement:
 
 
 @dataclass
+class AddStatement:
+    """add visitor to visitors"""
+
+    item: str   # raw value — resolved at runtime
+    target: str  # list name
+    line: int = 0
+
+
+@dataclass
+class RemoveStatement:
+    """remove visitor from visitors"""
+
+    item: str   # raw value — resolved at runtime
+    target: str  # list name
+    line: int = 0
+
+
+@dataclass
+class ForEachStatement:
+    """for each visitor in visitors ... end"""
+
+    var: str
+    target: str
+    body: list[Statement] = field(default_factory=list)
+    line: int = 0
+
+
+@dataclass
 class ExtensionCommandStatement:
     """An unknown verb dispatched to the active world extension registry.
 
@@ -308,6 +336,9 @@ Statement = (
     | DefineStatement
     | DoStatement
     | RepeatStatement
+    | AddStatement
+    | RemoveStatement
+    | ForEachStatement
     | ExtensionCommandStatement
 )
 

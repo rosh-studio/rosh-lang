@@ -122,9 +122,13 @@ def normalise(line: str) -> str:
     head = tokens[0].lower()
 
     # -- destroy aliases: delete/remove -> destroy -------------------------
+    # BUT: "remove X from Y" is a collection operation — leave it alone.
     if head in _DESTROY_VERBS and head != "destroy":
         rest = stripped[len(head):].strip()
-        return f"destroy {rest}" if rest else stripped
+        if head == "remove" and " from " in rest:
+            pass  # collection remove — fall through unchanged
+        else:
+            return f"destroy {rest}" if rest else stripped
 
     # -- colour verb: colour/paint X <description> -------------------------
     if head in _COLOUR_VERBS:
@@ -209,10 +213,12 @@ def normalise(line: str) -> str:
                 )
 
     # -- create aliases: build/put/place -> create -------------------------
+    # BUT: "add X to Y" is a collection operation — leave it alone.
     if head in _CREATE_VERBS and head != "create":
         rest = stripped[len(head):].strip()
-        # Only rewrite if it doesn't already look like a strict create
-        if not rest.lower().startswith("object "):
+        if head == "add" and " to " in rest:
+            pass  # collection add — fall through unchanged
+        elif not rest.lower().startswith("object "):
             return f"create {rest}"
 
     return stripped

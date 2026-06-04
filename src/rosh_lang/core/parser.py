@@ -13,6 +13,7 @@ import shlex
 from pathlib import Path
 
 from rosh_lang.core.model import (
+    AddStatement,
     AfterStatement,
     AnimateStatement,
     BackgroundStatement,
@@ -27,6 +28,7 @@ from rosh_lang.core.model import (
     EndStatement,
     EventStatement,
     ExtensionCommandStatement,
+    ForEachStatement,
     GetStatement,
     GoStatement,
     IfStatement,
@@ -35,6 +37,7 @@ from rosh_lang.core.model import (
     PlayStatement,
     PrintStatement,
     Programme,
+    RemoveStatement,
     RepeatStatement,
     SayStatement,
     SendStatement,
@@ -95,6 +98,8 @@ def parse_string(text: str, source: str = "<string>", *, allow_extensions: bool 
     statements = _collect_define_blocks(statements, source=source)
     # Post-pass: collect repeat...end blocks into RepeatStatement.body
     statements = _collect_repeat_blocks(statements, source=source)
+    # Post-pass: collect for each...end blocks into ForEachStatement.body
+    statements = _collect_foreach_blocks(statements, source=source)
     return Programme(statements=statements, source=source)
 
 
@@ -137,6 +142,9 @@ def _parse_line(raw: str, line: int, source: str, *, allow_extensions: bool = Fa
         "define": _parse_define,
         "do": _parse_do,
         "repeat": _parse_repeat,
+        "add": _parse_add,
+        "remove": _parse_remove,
+        "for": _parse_for,
     }
 
     handler = dispatch.get(keyword)
@@ -736,6 +744,106 @@ def _collect_one_repeat(
     raise ParseError(
         "repeat block has no matching end",
         line=repeat_stmt.line, source=source,
+    )
+
+
+def _parse_add(line_text: str, line: int, source: str) -> AddStatement:
+    """Parse 'add <item> to <list>'."""
+    rest = line_text[len("add"):].strip()
+    tokens = rest.split()
+    lowers = [t.lower() for t in tokens]
+    if "to" not in lowers:
+        raise ParseError("add requires: add <item> to <list>", line=line, source=source)
+    to_idx = lowers.index("to")
+    item = " ".join(tokens[:to_idx])
+    target = " ".join(tokens[to_idx + 1:])
+    if not item or not target:
+        raise ParseError("add requires: add <item> to <list>", line=line, source=source)
+    return AddStatement(item=item, target=target, line=line)
+
+
+def _parse_remove(line_text: str, line: int, source: str) -> RemoveStatement:
+    """Parse 'remove <item> from <list>'."""
+    rest = line_text[len("remove"):].strip()
+    tokens = rest.split()
+    lowers = [t.lower() for t in tokens]
+    if "from" not in lowers:
+        raise ParseError("remove requires: remove <item> from <list>", line=line, source=source)
+    from_idx = lowers.index("from")
+    item = " ".join(tokens[:from_idx])
+    target = " ".join(tokens[from_idx + 1:])
+    if not item or not target:
+        raise ParseError("remove requires: remove <item> from <list>", line=line, source=source)
+    return RemoveStatement(item=item, target=target, line=line)
+
+
+def _parse_for(line_text: str, line: int, source: str) -> ForEachStatement:
+    """Parse 'for each <var> in <list>'."""
+    rest = line_text[len("for"):].strip()
+    tokens = rest.split()
+    lowers = [t.lower() for t in tokens]
+    if len(tokens) < 4 or lowers[0] != "each" or "in" not in lowers[2:]:
+        raise ParseError(
+            "for requires: for each <var> in <list>", line=line, source=source
+        )
+    in_idx = lowers.index("in", 2)
+    var = " ".join(tokens[1:in_idx])
+    target = " ".join(tokens[in_idx + 1:])
+    if not var or not target:
+        raise ParseError(
+            "for requires: for each <var> in <list>", line=line, source=source
+        )
+    return ForEachStatement(var=var, target=target, line=line)
+
+
+def _collect_foreach_blocks(
+    stmts: list[Statement], source: str = ""
+) -> list[Statement]:
+    """Post-pass: collect for each...end into ForEachStatement with body."""
+    result: list[Statement] = []
+    i = 0
+    while i < len(stmts):
+        stmt = stmts[i]
+        if isinstance(stmt, ForEachStatement):
+            foreach_stmt, i = _collect_one_foreach(stmts, i, source)
+            result.append(foreach_stmt)
+        else:
+            result.append(stmt)
+            i += 1
+    return result
+
+
+def _collect_one_foreach(
+    stmts: list[Statement], start: int, source: str
+) -> tuple[ForEachStatement, int]:
+    """Collect a single for each...end block."""
+    foreach_stmt = stmts[start]
+    assert isinstance(foreach_stmt, ForEachStatement)
+    body: list[Statement] = []
+    i = start + 1
+
+    while i < len(stmts):
+        s = stmts[i]
+
+        if isinstance(s, EndStatement):
+            return ForEachStatement(
+                var=foreach_stmt.var,
+                target=foreach_stmt.target,
+                body=body,
+                line=foreach_stmt.line,
+            ), i + 1
+
+        if isinstance(s, ForEachStatement):
+            nested, i = _collect_one_foreach(stmts, i, source)
+            body.append(nested)
+            continue
+
+        body.append(s)
+        i += 1
+
+    raise ParseError(
+        "for each block has no matching end",
+        line=foreach_stmt.line, source=source,
     )
 
 

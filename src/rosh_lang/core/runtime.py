@@ -12,6 +12,7 @@ import warnings
 from typing import Any, TextIO
 
 from rosh_lang.core.model import (
+    AddStatement,
     AfterStatement,
     AnimateStatement,
     BackgroundStatement,
@@ -24,6 +25,7 @@ from rosh_lang.core.model import (
     DoStatement,
     EndStatement,
     EventStatement,
+    ForEachStatement,
     GetStatement,
     ExtensionCommandStatement,
     GoStatement,
@@ -33,6 +35,7 @@ from rosh_lang.core.model import (
     PlayStatement,
     PrintStatement,
     Programme,
+    RemoveStatement,
     RepeatStatement,
     SayStatement,
     SendStatement,
@@ -155,6 +158,12 @@ class Runtime:
             self._exec_do(stmt)
         elif isinstance(stmt, RepeatStatement):
             self._exec_repeat(stmt)
+        elif isinstance(stmt, AddStatement):
+            self._exec_add(stmt)
+        elif isinstance(stmt, RemoveStatement):
+            self._exec_remove(stmt)
+        elif isinstance(stmt, ForEachStatement):
+            self._exec_foreach(stmt)
         elif isinstance(stmt, (CommentStatement, BlankStatement, EndStatement)):
             pass
         elif isinstance(stmt, ExtensionCommandStatement):
@@ -280,6 +289,14 @@ class Runtime:
 
     def _exec_get(self, stmt: GetStatement) -> list[dict[str, Any]]:
         target = stmt.target.strip()
+
+        # get count of <list>
+        if target.startswith("count of "):
+            list_name = target[len("count of "):].strip()
+            lst = self._resolve(list_name)
+            count = len(lst) if isinstance(lst, list) else 0
+            self.state["_count"] = count
+            return [{"key": "_count", "value": count}]
 
         # get all / get all <type>
         if target.startswith("all"):
@@ -575,6 +592,47 @@ class Runtime:
                 else:
                     self.state.pop(stmt.var, None)
 
+    _MAX_FOREACH = 10_000
+
+    def _exec_add(self, stmt: AddStatement) -> None:
+        """Append an item to a list."""
+        item = self._eval_set_value(stmt.item, stmt.item)
+        lst = self._resolve(stmt.target)
+        if not isinstance(lst, list):
+            warnings.warn(f"add: {stmt.target!r} is not a list")
+            return
+        lst.append(item)
+
+    def _exec_remove(self, stmt: RemoveStatement) -> None:
+        """Remove first occurrence of an item from a list (no-op if not found)."""
+        item = self._eval_set_value(stmt.item, stmt.item)
+        lst = self._resolve(stmt.target)
+        if not isinstance(lst, list):
+            return
+        try:
+            lst.remove(item)
+        except ValueError:
+            pass
+
+    def _exec_foreach(self, stmt: ForEachStatement) -> None:
+        """Iterate over a list, binding each item to var."""
+        lst = self._resolve(stmt.target)
+        if not isinstance(lst, list):
+            warnings.warn(f"for each: {stmt.target!r} is not a list")
+            return
+        _MISSING = object()
+        saved = self.state.get(stmt.var, _MISSING)
+        try:
+            for item in list(lst)[: self._MAX_FOREACH]:
+                self.state[stmt.var] = item
+                for s in stmt.body:
+                    self.execute(s)
+        finally:
+            if saved is _MISSING:
+                self.state.pop(stmt.var, None)
+            else:
+                self.state[stmt.var] = saved
+
     def _exec_use(self, stmt: UseStatement) -> None:
         """Load a widget: find, namespace-prefix, apply config, execute."""
         from rosh_lang.core.widgets import load_widget
@@ -662,8 +720,14 @@ class Runtime:
     def _eval_set_value(self, target: str, raw: str) -> Any:
         """Evaluate the value for a set statement.
 
-        Order: quoted string → random → clamp → arithmetic → int → float → raw string.
+        Order: quoted string → count-of → random → clamp → arithmetic → int → float → raw string.
         """
+        # count of <list>: set n to count of visitors
+        if raw.startswith("count of "):
+            list_name = raw[len("count of "):].strip()
+            lst = self._resolve(list_name)
+            return len(lst) if isinstance(lst, list) else 0
+
         # Quoted string
         if (raw.startswith('"') and raw.endswith('"')) or \
            (raw.startswith("'") and raw.endswith("'")):
@@ -958,6 +1022,12 @@ def _stmt_to_dict(stmt: Statement) -> dict[str, Any]:
         if stmt.var:
             d["variable"] = stmt.var
         return d
+    if isinstance(stmt, AddStatement):
+        return {"type": "add", "item": stmt.item, "target": stmt.target}
+    if isinstance(stmt, RemoveStatement):
+        return {"type": "remove", "item": stmt.item, "target": stmt.target}
+    if isinstance(stmt, ForEachStatement):
+        return {"type": "foreach", "var": stmt.var, "target": stmt.target}
     if isinstance(stmt, EndStatement):
         return {"type": "end"}
     if isinstance(stmt, ConnectStatement):
