@@ -142,9 +142,12 @@ def parse_metadata(path: Path) -> dict[str, Any]:
 
     For .py factory files, imports the module and reads the METADATA dict.
 
-    Returns dict with keys: widget, version, description, config, licence.
+    Returns dict with keys: widget, version, description, config, licence, provides, requires, exposes.
     """
-    meta: dict[str, Any] = {"widget": path.stem, "version": "", "description": "", "config": {}, "licence": ""}
+    meta: dict[str, Any] = {
+        "widget": path.stem, "version": "", "description": "", "config": {}, "licence": "",
+        "provides": [], "requires": [], "exposes": [],
+    }
 
     if path.suffix == ".py":
         return _parse_python_metadata(path, meta)
@@ -190,6 +193,9 @@ def _parse_python_metadata(path: Path, meta: dict[str, Any]) -> dict[str, Any]:
             meta[key] = raw[key]
     if "config" in raw and isinstance(raw["config"], dict):
         meta["config"] = raw["config"]
+    for key in ("provides", "requires", "exposes"):
+        if key in raw and isinstance(raw[key], list):
+            meta[key] = raw[key]
     return meta
 
 

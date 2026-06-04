@@ -28,6 +28,9 @@ METADATA = {
         "theme": "",
         "format": "ss",
     },
+    "provides": ["timer_done"],
+    "requires": [],
+    "exposes": ["seconds", "_timer_running"],
     "licence": "Rosh-BSL",
 }
 

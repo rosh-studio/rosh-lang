@@ -31,6 +31,9 @@ METADATA = {
         "anchor": "",
         "theme": "",
     },
+    "provides": ["game-over"],
+    "requires": [],
+    "exposes": ["count"],
     "licence": "Rosh-BSL",
 }
 

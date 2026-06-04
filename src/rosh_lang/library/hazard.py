@@ -29,6 +29,9 @@ METADATA = {
         "sprite": "",
         "spawn_rate": "0.8",
     },
+    "provides": [],
+    "requires": [],
+    "exposes": ["_fire"],
     "licence": "Rosh-BSL",
 }
 

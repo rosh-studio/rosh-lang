@@ -27,6 +27,9 @@ METADATA = {
         "sprite": "",
         "drift": "0",
     },
+    "provides": [],
+    "requires": [],
+    "exposes": [],
     "licence": "Rosh-BSL",
 }
 

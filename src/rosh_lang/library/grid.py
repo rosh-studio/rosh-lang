@@ -10,6 +10,9 @@ METADATA = {
     "version": "0.2",
     "description": "Grid layout — creates N×M positioned cells",
     "config": {"rows": "3", "cols": "3", "spacing": "0.1", "color": "#333"},
+    "provides": [],
+    "requires": [],
+    "exposes": [],
     "licence": "Rosh-BSL",
 }
 

@@ -13,6 +13,9 @@ METADATA = {
     "version": "0.1",
     "description": "Random positioned background dots for visual polish",
     "config": {"count": "15"},
+    "provides": [],
+    "requires": [],
+    "exposes": [],
     "licence": "Rosh-BSL",
 }
 

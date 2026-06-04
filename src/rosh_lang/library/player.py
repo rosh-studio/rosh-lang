@@ -35,6 +35,9 @@ METADATA = {
         "clamp_y_min": "0.02",
         "clamp_y_max": "0.92",
     },
+    "provides": [],
+    "requires": [],
+    "exposes": ["ship"],
     "licence": "Rosh-BSL",
 }
 

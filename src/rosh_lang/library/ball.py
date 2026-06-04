@@ -28,6 +28,9 @@ METADATA = {
         "vy": "0.35",
         "walls": "all",
     },
+    "provides": [],
+    "requires": [],
+    "exposes": ["ball"],
     "licence": "Rosh-BSL",
 }
 

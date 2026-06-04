@@ -20,6 +20,9 @@ METADATA = {
         "text_color": "#fff",
         "font_size": "14px",
     },
+    "provides": [],
+    "requires": [],
+    "exposes": [],
     "licence": "Rosh-BSL",
 }
 

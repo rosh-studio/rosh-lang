@@ -55,6 +55,9 @@ METADATA = {
         "down_key": ",",
         "vertical": "off",
     },
+    "provides": ["fire", "fire2"],
+    "requires": [],
+    "exposes": [],
     "licence": "Rosh-BSL",
 }
 

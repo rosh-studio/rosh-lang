@@ -26,6 +26,9 @@ METADATA = {
         "text_color": "#fff",
         "font_size": "14px",
     },
+    "provides": ["game_start", "game_restart"],
+    "requires": ["game_over"],
+    "exposes": ["phase"],
     "licence": "Rosh-BSL",
 }
 

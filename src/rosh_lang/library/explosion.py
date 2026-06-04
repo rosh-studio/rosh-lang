@@ -25,6 +25,9 @@ METADATA = {
         "count": "3",
         "color": "#ff4444",
     },
+    "provides": [],
+    "requires": [],
+    "exposes": ["_fire", "_x", "_y"],
     "licence": "Rosh-BSL",
 }
 

@@ -324,6 +324,111 @@ class TestParseMetadata:
         meta = parse_metadata(widget)
         assert meta["config"] == {"a": "1", "b": "2", "c": "3"}
 
+    def test_interface_fields_present_by_default(self):
+        """parse_metadata always returns provides/requires/exposes even for .rosh files."""
+        meta = parse_metadata(BUNDLED_DIR / "score.py")
+        assert "provides" in meta
+        assert "requires" in meta
+        assert "exposes" in meta
+
+    def test_interface_fields_are_lists(self):
+        meta = parse_metadata(BUNDLED_DIR / "score.py")
+        assert isinstance(meta["provides"], list)
+        assert isinstance(meta["requires"], list)
+        assert isinstance(meta["exposes"], list)
+
+    def test_rosh_file_gets_empty_interface_fields(self, tmp_path: Path):
+        """A plain .rosh widget with no METADATA gets empty lists for interface fields."""
+        widget = tmp_path / "bare.rosh"
+        widget.write_text('print "hello"')
+        meta = parse_metadata(widget)
+        assert meta["provides"] == []
+        assert meta["requires"] == []
+        assert meta["exposes"] == []
+
+
+# ── Phase 1b: component interface metadata ───────────────────────────
+
+
+class TestComponentInterfaceMetadata:
+    """All bundled Python factory components must declare provides/requires/exposes."""
+
+    ALL_PY_WIDGETS = [
+        p.stem for p in BUNDLED_DIR.glob("*.py") if not p.name.startswith("_")
+    ]
+
+    def test_all_py_widgets_have_provides(self):
+        for name in self.ALL_PY_WIDGETS:
+            meta = parse_metadata(BUNDLED_DIR / f"{name}.py")
+            assert "provides" in meta, f"{name}: missing 'provides'"
+            assert isinstance(meta["provides"], list), f"{name}: 'provides' must be a list"
+
+    def test_all_py_widgets_have_requires(self):
+        for name in self.ALL_PY_WIDGETS:
+            meta = parse_metadata(BUNDLED_DIR / f"{name}.py")
+            assert "requires" in meta, f"{name}: missing 'requires'"
+            assert isinstance(meta["requires"], list), f"{name}: 'requires' must be a list"
+
+    def test_all_py_widgets_have_exposes(self):
+        for name in self.ALL_PY_WIDGETS:
+            meta = parse_metadata(BUNDLED_DIR / f"{name}.py")
+            assert "exposes" in meta, f"{name}: missing 'exposes'"
+            assert isinstance(meta["exposes"], list), f"{name}: 'exposes' must be a list"
+
+    def test_score_exposes_value(self):
+        meta = parse_metadata(BUNDLED_DIR / "score.py")
+        assert "value" in meta["exposes"]
+
+    def test_timer_provides_timer_done(self):
+        meta = parse_metadata(BUNDLED_DIR / "timer.py")
+        assert "timer_done" in meta["provides"]
+
+    def test_timer_exposes_seconds(self):
+        meta = parse_metadata(BUNDLED_DIR / "timer.py")
+        assert "seconds" in meta["exposes"]
+
+    def test_lives_provides_game_over(self):
+        meta = parse_metadata(BUNDLED_DIR / "lives.py")
+        assert "game-over" in meta["provides"]
+
+    def test_lives_exposes_count(self):
+        meta = parse_metadata(BUNDLED_DIR / "lives.py")
+        assert "count" in meta["exposes"]
+
+    def test_game_lifecycle_provides_game_start(self):
+        meta = parse_metadata(BUNDLED_DIR / "game-lifecycle.py")
+        assert "game_start" in meta["provides"]
+
+    def test_game_lifecycle_requires_game_over(self):
+        meta = parse_metadata(BUNDLED_DIR / "game-lifecycle.py")
+        assert "game_over" in meta["requires"]
+
+    def test_game_lifecycle_exposes_phase(self):
+        meta = parse_metadata(BUNDLED_DIR / "game-lifecycle.py")
+        assert "phase" in meta["exposes"]
+
+    def test_controller_provides_fire_events(self):
+        meta = parse_metadata(BUNDLED_DIR / "controller.py")
+        assert "fire" in meta["provides"]
+        assert "fire2" in meta["provides"]
+
+    def test_bullet_exposes_fire_flag(self):
+        meta = parse_metadata(BUNDLED_DIR / "bullet.py")
+        assert "_fire" in meta["exposes"]
+
+    def test_health_bar_exposes_current_and_max(self):
+        meta = parse_metadata(BUNDLED_DIR / "health-bar.py")
+        assert "current" in meta["exposes"]
+        assert "max" in meta["exposes"]
+
+    def test_player_exposes_ship(self):
+        meta = parse_metadata(BUNDLED_DIR / "player.py")
+        assert "ship" in meta["exposes"]
+
+    def test_ball_exposes_ball(self):
+        meta = parse_metadata(BUNDLED_DIR / "ball.py")
+        assert "ball" in meta["exposes"]
+
 
 # ── Nested use ──────────────────────────────────────────────────────
 

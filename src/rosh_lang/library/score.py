@@ -24,6 +24,9 @@ METADATA = {
         "theme": "",
         "label": "Score:",
     },
+    "provides": [],
+    "requires": [],
+    "exposes": ["value"],
     "licence": "Rosh-BSL",
 }
 

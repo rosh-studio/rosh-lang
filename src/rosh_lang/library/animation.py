@@ -20,6 +20,9 @@ METADATA = {
         "speed": "8",
         "mode": "loop",
     },
+    "provides": [],
+    "requires": [],
+    "exposes": [],
     "licence": "Rosh-BSL",
 }
 

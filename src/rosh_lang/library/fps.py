@@ -23,6 +23,9 @@ METADATA = {
         "anchor": "",
         "theme": "",
     },
+    "provides": [],
+    "requires": [],
+    "exposes": ["frames"],
     "licence": "Rosh-BSL",
 }
 
