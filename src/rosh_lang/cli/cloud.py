@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
@@ -19,6 +20,8 @@ from urllib.error import HTTPError, URLError
 CONFIG_DIR = Path.home() / ".rosh"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 CLOUD_BASE = "https://rosh.cloud"
+_TRANSIENT_HTTP_ERRORS = {502, 503, 504, 522, 524}
+_GET_ATTEMPTS = 3
 
 
 def _load_config() -> dict:
@@ -58,19 +61,42 @@ def _api_request(method: str, path: str, data: dict | None = None, api_key: str 
     body = json.dumps(data).encode() if data else None
     req = Request(url, data=body, headers=headers, method=method)
 
-    try:
-        with urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read().decode())
-    except HTTPError as e:
+    attempts = _GET_ATTEMPTS if method == "GET" else 1
+    for attempt in range(1, attempts + 1):
         try:
-            detail = json.loads(e.read().decode())
-            print(f"Error {e.code}: {detail.get('detail', detail)}")
-        except Exception:
-            print(f"Error {e.code}: {e.reason}")
-        sys.exit(1)
-    except URLError as e:
-        print(f"Connection error: {e.reason}")
-        sys.exit(1)
+            with urlopen(req, timeout=30) as resp:
+                return json.loads(resp.read().decode())
+        except HTTPError as e:
+            if e.code in _TRANSIENT_HTTP_ERRORS and attempt < attempts:
+                print(f"Temporary error {e.code}; retrying ({attempt}/{attempts - 1})...")
+                time.sleep(attempt)
+                continue
+            detail = _http_error_detail(e)
+            if e.code in _TRANSIENT_HTTP_ERRORS:
+                noun = "attempt" if attempts == 1 else "attempts"
+                detail = f"rosh.cloud temporarily unavailable after {attempts} {noun}"
+            print(f"Error {e.code}: {detail}")
+            sys.exit(1)
+        except URLError as e:
+            if attempt < attempts:
+                print(f"Connection error; retrying ({attempt}/{attempts - 1})...")
+                time.sleep(attempt)
+                continue
+            print(f"Connection error after {attempts} attempts: {e.reason}")
+            sys.exit(1)
+
+    raise AssertionError("unreachable")
+
+
+def _http_error_detail(error: HTTPError) -> str:
+    """Return a useful message for JSON and non-JSON HTTP errors."""
+    try:
+        detail = json.loads(error.read().decode())
+    except Exception:
+        return str(error.reason or "unknown error")
+    if isinstance(detail, dict):
+        return str(detail.get("detail") or detail.get("message") or error.reason or detail)
+    return str(detail)
 
 
 def _fetch_docs(api_key: str) -> dict:

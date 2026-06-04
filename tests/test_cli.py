@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import io
+import json
 from pathlib import Path
+from urllib.error import HTTPError
 
 import pytest
 
@@ -11,6 +14,20 @@ from rosh_lang.repl.kernel import ReplKernel, canonical_help_topic, usage_error_
 from rosh_lang.repl.natural import lower_shell_input
 from rosh_lang.repl.runtime_adapter import RuntimeAdapter
 from rosh_lang.core.runtime import Runtime
+
+
+class _FakeResponse:
+    def __init__(self, data: dict) -> None:
+        self.data = data
+
+    def __enter__(self) -> "_FakeResponse":
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return json.dumps(self.data).encode()
 
 
 def test_cloud_config_is_saved_with_private_permissions(
@@ -25,6 +42,48 @@ def test_cloud_config_is_saved_with_private_permissions(
 
     assert config_dir.stat().st_mode & 0o777 == 0o700
     assert config_file.stat().st_mode & 0o777 == 0o600
+
+
+def test_cloud_get_retries_transient_http_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    responses: list[object] = [
+        HTTPError("https://rosh.cloud/api/v1/docs", 522, None, {}, io.BytesIO(b"")),
+        _FakeResponse({"version": "0.8.0"}),
+    ]
+
+    def next_response(*_args: object, **_kwargs: object) -> object:
+        response = responses.pop(0)
+        if isinstance(response, BaseException):
+            raise response
+        return response
+
+    monkeypatch.setattr(cloud, "urlopen", next_response)
+    monkeypatch.setattr(cloud.time, "sleep", lambda _seconds: None)
+
+    result = cloud._fetch_docs("rosh_k1_test")
+
+    assert result == {"version": "0.8.0"}
+    assert "Temporary error 522; retrying" in capsys.readouterr().out
+
+
+def test_cloud_post_does_not_retry_transient_http_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls = 0
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        raise HTTPError("https://rosh.cloud/api/v1/programs", 522, None, {}, io.BytesIO(b""))
+
+    monkeypatch.setattr(cloud, "urlopen", fail)
+
+    with pytest.raises(SystemExit):
+        cloud._api_request("POST", "/api/v1/programs", {"title": "test"})
+
+    assert calls == 1
+    assert "Error 522: rosh.cloud temporarily unavailable after 1 attempt" in capsys.readouterr().out
 
 
 def test_runtime_adapter_get_state_filters_internal_keys() -> None:
