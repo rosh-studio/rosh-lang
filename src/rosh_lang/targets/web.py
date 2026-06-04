@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import http.server
 import io
+import re
 import socketserver
 import webbrowser
 from html import escape
@@ -374,6 +375,41 @@ def _render_interactive(
     return _html_page(object_divs, escaped_output, script_block, canvas_bg=canvas_bg)
 
 
+_BG_DEFAULT = "#16213e"
+_HEX_RE = re.compile(r"^#[0-9a-fA-F]{3,8}$")
+_NAMED_RE = re.compile(r"^[a-zA-Z]{1,30}$")
+_RGB_RE = re.compile(r"^rgba?\([\d\s,.%/]+\)$")
+_HSL_RE = re.compile(r"^hsla?\([\d\s,.%/]+\)$")
+_URL_UNSAFE = re.compile(r"""['"<>{|}\\^`\[\]\x00-\x1f]""")
+_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
+
+
+def _sanitize_background(value: str) -> str:
+    """Return value if it is a safe CSS background value, else return the default.
+
+    Prevents CSS injection via } ; { when the value lands in a <style> block,
+    and prevents single-quote injection in url('...').
+    Accepted forms: hex colour, named colour, rgb/rgba/hsl/hsla, http/https URL,
+    data: URI, local image file path.
+    """
+    v = value.strip()
+    if not v:
+        return _BG_DEFAULT
+    if _HEX_RE.match(v):
+        return v
+    if _NAMED_RE.match(v):
+        return v
+    if _RGB_RE.match(v) or _HSL_RE.match(v):
+        return v
+    if v.startswith("data:image/"):
+        return v
+    is_url = v.startswith("http://") or v.startswith("https://")
+    is_local_image = any(v.lower().endswith(ext) for ext in _IMAGE_EXTS)
+    if (is_url or is_local_image) and not _URL_UNSAFE.search(v):
+        return v
+    return _BG_DEFAULT
+
+
 def _html_page(
     object_divs: str, escaped_output: str, script: str = "",
     canvas_bg: str = "#16213e",
@@ -381,22 +417,22 @@ def _html_page(
     """Build the full HTML page shell."""
     script_tag = f"\n  <script>\n{script}\n  </script>" if script else ""
 
-    _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
+    safe_bg = _sanitize_background(canvas_bg)
     is_image = (
-        any(canvas_bg.lower().endswith(ext) for ext in _IMAGE_EXTS)
-        or canvas_bg.startswith("http://")
-        or canvas_bg.startswith("https://")
-        or canvas_bg.startswith("data:")
+        any(safe_bg.lower().endswith(ext) for ext in _IMAGE_EXTS)
+        or safe_bg.startswith("http://")
+        or safe_bg.startswith("https://")
+        or safe_bg.startswith("data:")
     )
     if is_image:
         bg_css = (
-            f"background-image: url('{escape(canvas_bg)}');\n"
+            f"background-image: url('{safe_bg}');\n"
             f"      background-size: cover;\n"
             f"      background-position: center;\n"
             f"      background-repeat: no-repeat"
         )
     else:
-        bg_css = f"background: {escape(canvas_bg)}"
+        bg_css = f"background: {safe_bg}"
 
     return f"""\
 <!DOCTYPE html>

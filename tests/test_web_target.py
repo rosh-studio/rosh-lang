@@ -881,3 +881,68 @@ class TestBackground:
     def test_setbackground_in_js_runtime(self):
         from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE
         assert "setBackground" in JS_RUNTIME_CORE
+
+
+# ── Background sanitizer ──────────────────────────────────────────
+
+
+class TestSanitizeBackground:
+    """_sanitize_background must reject values that would inject CSS."""
+
+    from rosh_lang.targets.web import _sanitize_background as _san
+    _san = staticmethod(_san)
+
+    def test_hex_short(self):
+        assert self._san("#abc") == "#abc"
+
+    def test_hex_full(self):
+        assert self._san("#1a2b3c") == "#1a2b3c"
+
+    def test_hex_with_alpha(self):
+        assert self._san("#1a2b3cff") == "#1a2b3cff"
+
+    def test_named_colour(self):
+        assert self._san("red") == "red"
+        assert self._san("transparent") == "transparent"
+
+    def test_rgb(self):
+        assert self._san("rgb(255, 0, 0)") == "rgb(255, 0, 0)"
+
+    def test_rgba(self):
+        assert self._san("rgba(0,0,0,0.5)") == "rgba(0,0,0,0.5)"
+
+    def test_https_image_url(self):
+        url = "https://example.com/bg.jpg"
+        assert self._san(url) == url
+
+    def test_data_uri(self):
+        uri = "data:image/png;base64,abc123"
+        assert self._san(uri) == uri
+
+    def test_local_image(self):
+        assert self._san("sky.png") == "sky.png"
+
+    def test_css_injection_close_brace(self):
+        """} would close the #canvas rule and start a new selector."""
+        assert self._san("red } * { color: red") == "#16213e"
+
+    def test_css_injection_semicolon(self):
+        assert self._san("red; color: red") == "#16213e"
+
+    def test_css_injection_open_brace(self):
+        assert self._san("red { display: none") == "#16213e"
+
+    def test_url_single_quote_injection(self):
+        """Single quote in a URL value would break url('...')."""
+        assert self._san("https://example.com/x'.jpg") == "#16213e"
+
+    def test_empty_string_returns_default(self):
+        assert self._san("") == "#16213e"
+
+    def test_css_injection_in_rendered_html(self):
+        """End-to-end: injected background must not appear in rendered HTML."""
+        from rosh_lang.core.parser import parse_string
+        from rosh_lang.targets.web import render_html
+        html = render_html(parse_string('background "red } * { color: red"'))
+        assert "} * {" not in html
+        assert "#16213e" in html
