@@ -27,5 +27,10 @@ def build_user_prompt(
         "",
         f"Current Rosh state:\n{state_summary}",
         "",
-        f"Available bundled components:\n{component_summary}",
+        (
+            "Available bundled components (name: description "
+            "[config: keys, provides: events emitted, requires: events needed, "
+            "exposes: state accessible via name.key]):\n"
+            + component_summary
+        ),
     ])

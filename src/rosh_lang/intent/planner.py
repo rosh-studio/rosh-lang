@@ -53,7 +53,7 @@ class IntentPlanner:
         prompt = build_user_prompt(
             intent,
             state_summary=_summarise_state(state),
-            component_summary=_summarise_components(components or _default_components()),
+            component_summary=_summarise_components(components),
         )
         try:
             raw = self.provider.complete(system=SYSTEM_PROMPT, prompt=prompt)
@@ -105,19 +105,53 @@ def _summarise_state(state: Mapping[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _summarise_components(components: list[str]) -> str:
-    if not components:
-        return "(none)"
-    return "\n".join(f"- {name}" for name in components)
+def _summarise_components(components: list[str] | None = None) -> str:
+    """Return a component manifest for the AI planner.
 
+    If components is provided it is treated as a name filter; otherwise all
+    bundled components are discovered and their provides/requires/exposes
+    metadata is included so the planner can reason about component contracts
+    without reading source.
+    """
+    from rosh_lang.core.widgets import get_bundled_library_path, parse_metadata
 
-def _default_components() -> list[str]:
-    return [
-        "score",
-        "lives",
-        "player",
-        "controller",
-        "coin",
-        "hazard",
-        "game-lifecycle",
-    ]
+    library = get_bundled_library_path()
+    name_filter = set(components) if components else None
+
+    lines: list[str] = []
+    for path in sorted(library.iterdir()):
+        if path.suffix not in (".rosh", ".py"):
+            continue
+        if path.name.startswith("_"):
+            continue
+        name = path.stem
+        if name_filter and name not in name_filter:
+            continue
+        try:
+            meta = parse_metadata(path)
+        except Exception:
+            continue
+
+        desc = meta.get("description", "")
+        provides = meta.get("provides", [])
+        requires = meta.get("requires", [])
+        exposes = meta.get("exposes", [])
+        config_keys = list(meta.get("config", {}).keys())
+
+        parts = [f"- {name}"]
+        if desc:
+            parts.append(f": {desc}")
+        detail: list[str] = []
+        if config_keys:
+            detail.append(f"config: {' '.join(config_keys)}")
+        if provides:
+            detail.append(f"provides: {' '.join(provides)}")
+        if requires:
+            detail.append(f"requires: {' '.join(requires)}")
+        if exposes:
+            detail.append(f"exposes: {' '.join(exposes)}")
+        if detail:
+            parts.append(f" [{', '.join(detail)}]")
+        lines.append("".join(parts))
+
+    return "\n".join(lines) if lines else "(none)"
