@@ -94,14 +94,16 @@ when collision bullet.* hazard.*
   play boom
 end
 
-# ── Hazard hits player: lose a life ──
+# ── Hazard hits player: lose a life (only while playing) ──
 when collision hazard.* player
-  set lives.count to lives.count - 1
-  send check-lives
-  set explosion._x to player.x
-  set explosion._y to player.y
-  set explosion._fire to 1
-  play ouch
+  if game-lifecycle.phase == "playing"
+    set lives.count to lives.count - 1
+    send check-lives
+    set explosion._x to player.x
+    set explosion._y to player.y
+    set explosion._fire to 1
+    play ouch
+  end
 end
 
 # ── Game over (auto-fired when lives hit 0) ──
