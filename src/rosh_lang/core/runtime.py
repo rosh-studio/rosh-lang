@@ -696,6 +696,10 @@ class Runtime:
             self._exec_say(SayStatement(text=args))
         elif action == "print":
             self._exec_print(PrintStatement(text=args))
+        elif action == "destroy":
+            name = args.strip()
+            if name:
+                self._exec_destroy(DestroyStatement(name=name))
         elif action == "do":
             func_name = args.strip().split()[0] if args.strip() else ""
             if func_name:
@@ -703,10 +707,10 @@ class Runtime:
 
     def _eval_condition(self, condition: str) -> bool:
         """Evaluate a simple condition: field op value."""
-        parts = condition.split()
+        parts = condition.split(None, 2)
         if len(parts) != 3:
             return False
-        field, op, raw_value = parts
+        field, op, raw_value = parts[0], parts[1], parts[2]
         current = self._resolve(field)
 
         # nothing comparisons: work whether or not field is in state

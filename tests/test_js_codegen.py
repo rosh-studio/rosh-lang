@@ -90,10 +90,15 @@ class TestEmitSend:
 
 
 class TestEmitSay:
-    def test_say(self):
+    def test_say_uses_rosh_say(self):
         prog = parse_string("say hello world")
         result = compile_programme(prog)
-        assert 'rosh.appendOutput(rosh.interpolate("hello world"))' in result.init_code
+        assert 'rosh.say(rosh.interpolate("hello world"))' in result.init_code
+
+    def test_say_does_not_use_append_output_directly(self):
+        prog = parse_string("say hello world")
+        result = compile_programme(prog)
+        assert 'rosh.appendOutput(rosh.interpolate("hello world"))' not in result.init_code
 
 
 # ── compile_programme ─────────────────────────────────────────────
@@ -320,10 +325,11 @@ class TestOnStatement:
         assert "Ouch!" in result.handler_code
 
     def test_on_say(self):
-        """on hit say 'Ouch!' → same as print in JS."""
+        """on hit say 'Ouch!' → rosh.say() in JS (fires say event, tracks _last_said)."""
         prog = parse_string('event hit\non hit say "Ouch!"')
         result = compile_programme(prog)
-        assert "rosh.appendOutput" in result.handler_code
+        assert "rosh.say" in result.handler_code
+        assert "Ouch!" in result.handler_code
 
     def test_on_destroy(self):
         """on explode destroy enemy → JS handler with destroy."""

@@ -660,6 +660,19 @@ class TestSayExecution:
         rt = _run([SayStatement(text="Broadcast")])
         assert _output(rt) == "Broadcast\n"
 
+    def test_say_fires_say_event(self) -> None:
+        buf = io.StringIO()
+        rt = _run(
+            [
+                WhenStatement(event="say"),
+                PrintStatement(text="say fired"),
+                EndStatement(),
+                SayStatement(text="hello"),
+            ],
+            output=buf,
+        )
+        assert "say fired" in buf.getvalue()
+
 
 class TestEventExecution:
     def test_event_declares(self) -> None:
@@ -836,6 +849,35 @@ class TestOnExecution:
         )
         rt.execute_send("test")
         assert buf.getvalue() == "first\nsecond\n"
+
+    def test_on_condition_quoted_space(self) -> None:
+        """on keydown when key == ' ' — quoted space must not split into 4 tokens."""
+        rt = _run([
+            CreateStatement(kind="string", name="fired"),
+            EventStatement(name="keydown", payload_fields=["key"]),
+            OnStatement(event="keydown", action="set", args='fired to "yes"', condition='key == " "'),
+        ])
+        rt.execute_send("keydown", key=" ")
+        assert rt.state["fired"] == "yes"
+
+    def test_on_condition_quoted_space_wrong_key_does_not_fire(self) -> None:
+        rt = _run([
+            CreateStatement(kind="string", name="fired"),
+            EventStatement(name="keydown", payload_fields=["key"]),
+            OnStatement(event="keydown", action="set", args='fired to "yes"', condition='key == " "'),
+        ])
+        rt.execute_send("keydown", key="a")
+        assert rt.state["fired"] == ""
+
+    def test_on_destroy_action(self) -> None:
+        rt = _run([
+            CreateStatement(kind="object", name="enemy"),
+            EventStatement(name="hit", payload_fields=[]),
+            OnStatement(event="hit", action="destroy", args="enemy"),
+        ])
+        assert "enemy" in rt.state
+        rt.execute_send("hit")
+        assert "enemy" not in rt.state
 
 
 # ══════════════════════════════════════════════════════════════

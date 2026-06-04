@@ -576,6 +576,13 @@ var rosh = (function() {
     send("scene_enter", {scene: target});
   }
 
+  function say(text) {
+    mod.appendOutput(text);
+    set("_last_said", text);
+    set("_say_count", (get("_say_count") || 0) + 1);
+    send("say", {text: text});
+  }
+
   var mod = {
     state: state,
     objects: objects,
@@ -597,6 +604,7 @@ var rosh = (function() {
     interpolate: interpolate,
     on: on,
     send: send,
+    say: say,
     playAudio: playAudio,
     registerSound: registerSound,
     registerAnimation: registerAnimation,

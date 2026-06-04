@@ -218,6 +218,8 @@ def _emit_statement(stmt: Statement) -> str:
         return _emit_remove(stmt)
     if isinstance(stmt, ForEachStatement):
         return _emit_foreach(stmt)
+    if isinstance(stmt, LookStatement):
+        return "/* look: terminal-only, no-op in JS */"
     return ""
 
 
@@ -253,7 +255,7 @@ def _emit_send(stmt: SendStatement) -> str:
 
 
 def _emit_say(stmt: SayStatement) -> str:
-    return f'rosh.appendOutput(rosh.interpolate("{_escape_js(stmt.text)}"));'
+    return f'rosh.say(rosh.interpolate("{_escape_js(stmt.text)}"));'
 
 
 def _emit_play(stmt: PlayStatement) -> str:
@@ -416,7 +418,13 @@ def _emit_on(stmt: OnStatement) -> str:
         )
     elif action == "send":
         body = f'rosh.send("{_escape_js(args.strip())}");'
-    elif action in ("say", "print"):
+    elif action == "say":
+        text = args.strip()
+        if (text.startswith('"') and text.endswith('"')) or \
+           (text.startswith("'") and text.endswith("'")):
+            text = text[1:-1]
+        body = f'rosh.say(rosh.interpolate("{_escape_js(text)}"));'
+    elif action == "print":
         text = args.strip()
         if (text.startswith('"') and text.endswith('"')) or \
            (text.startswith("'") and text.endswith("'")):
