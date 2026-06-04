@@ -695,8 +695,19 @@ class Runtime:
             return False
         field, op, raw_value = parts
         current = self._resolve(field)
+
+        # nothing comparisons: work whether or not field is in state
+        if raw_value.lower() in ("nothing", "none"):
+            if op == "==":
+                return current is None
+            if op == "!=":
+                return current is not None
+            return False
+
+        # All other comparisons: missing field means condition fails
         if current is None:
             return False
+
         target_val = self._coerce(raw_value)
         try:
             if op == ">":
@@ -720,8 +731,12 @@ class Runtime:
     def _eval_set_value(self, target: str, raw: str) -> Any:
         """Evaluate the value for a set statement.
 
-        Order: quoted string → count-of → random → clamp → arithmetic → int → float → raw string.
+        Order: nothing → quoted string → count-of → random → clamp → arithmetic → int → float → raw string.
         """
+        # nothing: explicit absence value
+        if raw.lower() in ("nothing", "none"):
+            return None
+
         # count of <list>: set n to count of visitors
         if raw.startswith("count of "):
             list_name = raw[len("count of "):].strip()
@@ -886,10 +901,25 @@ class Runtime:
             key = match.group(1)
             val = self._resolve(key)
             if val is None:
-                return match.group(0)
+                # Explicitly set to nothing → empty string
+                # Genuinely missing → keep template text for error visibility
+                return "" if self._key_exists(key) else match.group(0)
             return str(val)
 
         return _INTERP_RE.sub(_replace, text)
+
+    def _key_exists(self, key: str) -> bool:
+        """Return True if key exists in state (even if its value is None)."""
+        parts = key.split(".")
+        obj: Any = self.state
+        for i, part in enumerate(parts):
+            if isinstance(obj, dict) and part in obj:
+                if i == len(parts) - 1:
+                    return True
+                obj = obj[part]
+            else:
+                return False
+        return False
 
     def _resolve(self, key: str) -> Any | None:
         """Look up a dotted key in state. Returns None if missing."""

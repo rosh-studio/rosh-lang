@@ -102,9 +102,12 @@ var rosh = (function() {
   }
 
   // ── Expression evaluator ──────────────────────────────
-  // Mirrors runtime.py _eval_set_value: quoted → random → clamp → arithmetic → int → float → raw
+  // Mirrors runtime.py _eval_set_value: nothing → quoted → random → clamp → arithmetic → int → float → raw
   function evalSetValue(target, raw) {
     if (typeof raw !== "string") return raw;
+
+    // nothing: explicit absence
+    if (raw.toLowerCase() === "nothing" || raw.toLowerCase() === "none") return null;
 
     // Quoted string
     if ((raw[0] === '"' && raw[raw.length-1] === '"') ||

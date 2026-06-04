@@ -300,3 +300,56 @@ class TestCollectionsIntegration:
             "for each n in nums\n  do double n=n\nend"
         )
         assert output == "doubled: 3\ndoubled: 7\n"
+
+
+# ── Phase 2d: Missing/optional values ─────────────────────────
+
+
+class TestPhase2dNothingValues:
+    def test_set_to_nothing(self):
+        rt, _ = _run("create number score\nset score to 100\nset score to nothing")
+        assert rt.state["score"] is None
+
+    def test_nothing_interpolates_empty(self):
+        _, output = _run("set label to nothing\nprint {label}")
+        assert output == "\n"
+
+    def test_missing_key_interpolates_literal(self):
+        _, output = _run("print {missing_key}")
+        assert output == "{missing_key}\n"
+
+    def test_condition_x_eq_nothing_when_unset(self):
+        _, output = _run("if x == nothing\n  print absent\nend")
+        assert output == "absent\n"
+
+    def test_condition_x_eq_nothing_when_set_to_nothing(self):
+        _, output = _run("set x to nothing\nif x == nothing\n  print cleared\nend")
+        assert output == "cleared\n"
+
+    def test_condition_x_eq_nothing_when_set(self):
+        _, output = _run("set x to 5\nif x == nothing\n  print absent\nend")
+        assert output == ""
+
+    def test_condition_x_neq_nothing_when_set(self):
+        _, output = _run("set x to 5\nif x != nothing\n  print present\nend")
+        assert output == "present\n"
+
+    def test_condition_x_neq_nothing_when_unset(self):
+        _, output = _run("if x != nothing\n  print present\nend")
+        assert output == ""
+
+    def test_default_value_pattern(self):
+        _, output = _run(
+            "if label == nothing\n  set label to Default\nend\n"
+            "print {label}"
+        )
+        assert output == "Default\n"
+
+    def test_nothing_in_set_value(self):
+        rt, _ = _run("set x to nothing")
+        assert rt.state["x"] is None
+
+    def test_nothing_false_comparison(self):
+        """nothing == 5 is False"""
+        _, output = _run("if nothing == 5\n  print yes\nend")
+        assert output == ""

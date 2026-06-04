@@ -324,13 +324,13 @@ class TestRuntimeParameterisedFunctions:
         assert "x" not in rt.state
 
     def test_missing_arg_binds_none(self):
-        """Missing arg binds None; {name} interpolation falls through to raw text."""
+        """Missing arg binds nothing; {name} interpolates to empty string."""
         code = (
             "define show with name\n  print {name}\nend\n"
             "do show"
         )
         _, output = self._run(code)
-        assert output == "{name}\n"
+        assert output == "\n"  # name exists in state as None → empty string
 
     def test_no_arg_call_still_works(self):
         code = "define fire\n  print bang\nend\ndo fire"
