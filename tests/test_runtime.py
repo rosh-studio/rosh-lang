@@ -810,6 +810,95 @@ class TestLookExecution:
         with pytest.raises(KeyError, match="Unknown"):
             rt.execute(LookStatement(target="ghost"))
 
+    def test_look_programme_returns_list(self) -> None:
+        rt = _run([
+            CreateStatement(kind="number", name="score"),
+            SetStatement(target="score", value="0"),
+        ])
+        result = rt.execute(LookStatement(target="programme"))
+        assert isinstance(result, list)
+        assert len(result) == 2
+
+    def test_look_programme_types(self) -> None:
+        rt = _run([
+            CreateStatement(kind="number", name="score"),
+            SetStatement(target="score", value="0"),
+        ])
+        result = rt.execute(LookStatement(target="programme"))
+        types = [d["type"] for d in result]
+        assert types == ["create", "set"]
+
+    def test_look_programme_create_fields(self) -> None:
+        rt = _run([CreateStatement(kind="object", name="ball")])
+        result = rt.execute(LookStatement(target="programme"))
+        assert result[0] == {"type": "create", "kind": "object", "name": "ball"}
+
+    def test_look_programme_set_fields(self) -> None:
+        rt = _run([
+            CreateStatement(kind="number", name="x"),
+            SetStatement(target="x", value="42"),
+        ])
+        result = rt.execute(LookStatement(target="programme"))
+        assert result[1]["type"] == "set"
+        assert result[1]["target"] == "x"
+        assert result[1]["value"] == "42"
+
+    def test_look_programme_filters_blanks_and_comments(self) -> None:
+        rt = _run([
+            BlankStatement(),
+            CommentStatement(text="# hello"),
+            CreateStatement(kind="number", name="n"),
+        ])
+        result = rt.execute(LookStatement(target="programme"))
+        assert len(result) == 1
+        assert result[0]["type"] == "create"
+
+    def test_look_programme_when_handler(self) -> None:
+        rt = _run([
+            WhenStatement(event="click"),
+            PrintStatement(text="hit"),
+            EndStatement(),
+        ])
+        result = rt.execute(LookStatement(target="programme"))
+        types = [d["type"] for d in result]
+        assert "when" in types
+
+    def test_look_programme_writes_summary_to_output(self) -> None:
+        buf = io.StringIO()
+        rt = Runtime(output=buf)
+        rt.run(Programme(statements=[
+            CreateStatement(kind="number", name="score"),
+            SetStatement(target="score", value="0"),
+        ]))
+        rt.execute(LookStatement(target="programme"))
+        out = buf.getvalue()
+        assert "programme" in out
+        assert "create" in out
+        assert "set" in out
+
+    def test_look_programme_no_programme_loaded(self) -> None:
+        buf = io.StringIO()
+        rt = Runtime(output=buf)
+        result = rt.execute(LookStatement(target="programme"))
+        assert result == []
+        assert "no programme" in buf.getvalue()
+
+    def test_look_programme_use_stmt(self) -> None:
+        from rosh_lang.core.model import UseStatement
+        rt = _run([UseStatement(name="score", config={"label": "Points"})])
+        result = rt.execute(LookStatement(target="programme"))
+        assert result[0]["type"] == "use"
+        assert result[0]["widget"] == "score"
+
+    def test_look_programme_send_stmt(self) -> None:
+        rt = _run([
+            EventStatement(name="scored", payload_fields=[]),
+            SendStatement(event="scored", payload={}),
+        ])
+        result = rt.execute(LookStatement(target="programme"))
+        send = next(d for d in result if d["type"] == "send")
+        assert send["event"] == "scored"
+
 
 # ══════════════════════════════════════════════════════════════
 # Group 4: connect, destroy

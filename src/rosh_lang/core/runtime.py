@@ -78,11 +78,16 @@ class Runtime:
         self.search_paths = search_paths
         self._send_depth = 0
         self._call_stack: set[str] = set()
+        self._programme: Programme | None = None
+        self._run_depth = 0
 
     # ── public API ────────────────────────────────────────────
 
     def run(self, programme: Programme) -> None:
         """Execute a programme statement by statement."""
+        if self._run_depth == 0:
+            self._programme = programme
+        self._run_depth += 1
         stmts = programme.statements
         i = 0
         while i < len(stmts):
@@ -98,6 +103,7 @@ class Runtime:
                 continue
             self.execute(stmt)
             i += 1
+        self._run_depth -= 1
 
     def execute(self, stmt: Statement) -> Any:
         """Execute a single statement. Returns result for get."""
@@ -371,6 +377,9 @@ class Runtime:
     def _exec_look(self, stmt: LookStatement) -> list[dict[str, Any]]:
         target = stmt.target.strip() if stmt.target else ""
 
+        if target == "programme":
+            return self._look_programme()
+
         if target:
             # Look at specific object/field
             val = self._resolve(target)
@@ -410,6 +419,22 @@ class Runtime:
                     self.output.write(f"Exits: {', '.join(exits)}\n")
 
         return result
+
+    def _look_programme(self) -> list[dict[str, Any]]:
+        """Return the current programme's statements as structured data."""
+        if self._programme is None:
+            self.output.write("programme: no programme loaded\n")
+            return []
+        stmts = self._programme.statements
+        result = [_stmt_to_dict(s) for s in stmts]
+        semantic = [d for d in result if d["type"] not in ("blank", "comment")]
+        self.output.write(f"programme ({len(stmts)} statements)\n")
+        for i, rd in enumerate(result, 1):
+            if rd["type"] in ("blank", "comment"):
+                continue
+            summary = _stmt_summary(rd)
+            self.output.write(f"  {i:>3}  {rd['type']:<12}{summary}\n")
+        return semantic
 
     def _exec_connect(self, stmt: ConnectStatement) -> None:
         if not stmt.name:
@@ -780,6 +805,165 @@ def _type_name(val: Any) -> str:
     if isinstance(val, list):
         return "list"
     return type(val).__name__
+
+
+def _stmt_to_dict(stmt: Statement) -> dict[str, Any]:
+    """Convert a statement to an inspectable dict for look programme."""
+    if isinstance(stmt, SetStatement):
+        return {"type": "set", "target": stmt.target, "value": stmt.value}
+    if isinstance(stmt, CreateStatement):
+        d: dict[str, Any] = {"type": "create", "kind": stmt.kind, "name": stmt.name}
+        if stmt.parent:
+            d["parent"] = stmt.parent
+        return d
+    if isinstance(stmt, PrintStatement):
+        return {"type": "print", "text": stmt.text}
+    if isinstance(stmt, SayStatement):
+        return {"type": "say", "text": stmt.text}
+    if isinstance(stmt, WhenStatement):
+        d = {"type": "when", "event": stmt.event}
+        if stmt.args:
+            d["args"] = stmt.args
+        return d
+    if isinstance(stmt, OnStatement):
+        d = {"type": "on", "event": stmt.event, "action": stmt.action, "args": stmt.args}
+        if stmt.condition:
+            d["condition"] = stmt.condition
+        return d
+    if isinstance(stmt, SendStatement):
+        d = {"type": "send", "event": stmt.event}
+        if stmt.payload:
+            d["payload"] = stmt.payload
+        return d
+    if isinstance(stmt, EventStatement):
+        return {"type": "event", "name": stmt.name, "fields": stmt.payload_fields}
+    if isinstance(stmt, UseStatement):
+        d = {"type": "use", "widget": stmt.name}
+        if stmt.alias:
+            d["alias"] = stmt.alias
+        if stmt.config:
+            d["config"] = stmt.config
+        return d
+    if isinstance(stmt, GoStatement):
+        return {"type": "go", "target": stmt.target}
+    if isinstance(stmt, LookStatement):
+        d = {"type": "look"}
+        if stmt.target:
+            d["target"] = stmt.target
+        return d
+    if isinstance(stmt, GetStatement):
+        return {"type": "get", "target": stmt.target}
+    if isinstance(stmt, DestroyStatement):
+        return {"type": "destroy", "name": stmt.name}
+    if isinstance(stmt, SpriteStatement):
+        return {"type": "sprite", "name": stmt.name, "description": stmt.description}
+    if isinstance(stmt, SoundStatement):
+        return {"type": "sound", "name": stmt.name, "description": stmt.description}
+    if isinstance(stmt, PlayStatement):
+        d = {"type": "play", "name": stmt.sound}
+        if stmt.mode:
+            d["mode"] = stmt.mode
+        return d
+    if isinstance(stmt, BackgroundStatement):
+        return {"type": "background", "value": stmt.value}
+    if isinstance(stmt, AfterStatement):
+        return {"type": "after", "seconds": stmt.delay, "event": stmt.event}
+    if isinstance(stmt, AnimateStatement):
+        return {"type": "animate", "name": stmt.name, "sheet": stmt.sheet,
+                "frames": stmt.frames, "speed": stmt.speed, "mode": stmt.mode}
+    if isinstance(stmt, IfStatement):
+        return {"type": "if", "condition": stmt.condition}
+    if isinstance(stmt, DefineStatement):
+        return {"type": "define", "name": stmt.name}
+    if isinstance(stmt, DoStatement):
+        return {"type": "do", "name": stmt.name}
+    if isinstance(stmt, RepeatStatement):
+        d = {"type": "repeat", "count": stmt.count}
+        if stmt.var:
+            d["variable"] = stmt.var
+        return d
+    if isinstance(stmt, EndStatement):
+        return {"type": "end"}
+    if isinstance(stmt, ConnectStatement):
+        d = {"type": "connect", "name": stmt.name}
+        if stmt.url:
+            d["url"] = stmt.url
+        return d
+    if isinstance(stmt, (CommentStatement, BlankStatement)):
+        return {"type": "comment" if isinstance(stmt, CommentStatement) else "blank"}
+    if isinstance(stmt, ExtensionCommandStatement):
+        return {"type": "extension", "keyword": stmt.verb, "args": stmt.args}
+    return {"type": type(stmt).__name__.lower().replace("statement", "")}
+
+
+def _stmt_summary(d: dict[str, Any]) -> str:
+    """One-line human-readable summary of a statement dict."""
+    t = d.get("type", "")
+    if t == "set":
+        return f"{d['target']} → {d['value']}"
+    if t == "create":
+        s = f"{d['kind']} {d['name']}"
+        if d.get("parent"):
+            s += f" from {d['parent']}"
+        return s
+    if t in ("print", "say"):
+        return d.get("text", "")[:40]
+    if t == "when":
+        s = d["event"]
+        if d.get("args"):
+            s += " " + " ".join(str(a) for a in d["args"])
+        return s
+    if t == "on":
+        s = f"{d['event']} → {d['action']} {d.get('args', '')}"
+        if d.get("condition"):
+            s += f" if {d['condition']}"
+        return s
+    if t == "send":
+        s = d["event"]
+        if d.get("payload"):
+            s += " " + str(d["payload"])
+        return s
+    if t == "event":
+        return d["name"]
+    if t == "use":
+        s = d["widget"]
+        if d.get("alias"):
+            s += f" as {d['alias']}"
+        return s
+    if t in ("go", "get"):
+        return d.get("target", "")
+    if t in ("destroy", "define", "do"):
+        return d.get("name", "")
+    if t in ("sprite", "sound"):
+        return f"{d['name']} \"{d.get('description', '')}\""
+    if t == "play":
+        s = d["name"]
+        if d.get("mode"):
+            s += f" {d['mode']}"
+        return s
+    if t == "look":
+        return d.get("target", "")
+    if t == "background":
+        return d.get("value", "")
+    if t == "after":
+        return f"{d['seconds']}s → {d['event']}"
+    if t == "animate":
+        return f"{d['name']} sheet={d['sheet']}"
+    if t == "if":
+        return d.get("condition", "")
+    if t == "repeat":
+        s = str(d.get("count", ""))
+        if d.get("variable"):
+            s += f" as {d['variable']}"
+        return s
+    if t == "connect":
+        s = d.get("name", "")
+        if d.get("url"):
+            s += f" {d['url']}"
+        return s
+    if t == "extension":
+        return f"{d.get('keyword', '')} {d.get('args', '')}".strip()
+    return ""
 
 
 def run(programme: Programme, output: TextIO = sys.stdout) -> Runtime:
