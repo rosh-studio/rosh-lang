@@ -1133,8 +1133,8 @@ class TestLookExecution:
         rt.run(parse_string("use lives"))
         rt.execute(LookStatement(target="components"))
         output = buf.getvalue()
-        assert "game-over" in output   # in provides
-        assert "count" in output        # in exposes
+        assert "game_over" in output   # in provides
+        assert "count" in output       # in exposes
 
     def test_look_components_multiple(self) -> None:
         from rosh_lang.core.widgets import get_bundled_library_path

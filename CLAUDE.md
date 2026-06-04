@@ -98,7 +98,7 @@ end
 
 ## Events
 
-`start`, `update` (dt), `click` (x,y), `click_<name>` (x,y), `keydown` (key), `keyup` (key), `collision` (a,b), `scene_enter` (scene), `scene_exit` (scene), `destroy` (name), `timer_done` (name), `game_start`, `game-over`, `game_over`, `game_restart`.
+`start`, `update` (dt), `click` (x,y), `click_<name>` (x,y), `keydown` (key), `keyup` (key), `collision` (a,b), `scene_enter` (scene), `scene_exit` (scene), `destroy` (name), `timer_done` (name), `game_start`, `game_over`, `game_restart`.
 
 Key-hold: `_keys.ArrowLeft == 1` inside `when update`.
 
@@ -134,8 +134,8 @@ when collision bullet.* enemy
   play hit
 end
 
-# game-over auto-fires when lives.count hits 0
-when game-over
+# game_over auto-fires when lives.count hits 0
+when game_over
   print "GAME OVER — Score: {score.value}"
 end
 ```

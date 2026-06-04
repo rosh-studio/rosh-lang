@@ -503,7 +503,7 @@ class TestComponentInterfaceMetadata:
 
     def test_lives_provides_game_over(self):
         meta = parse_metadata(BUNDLED_DIR / "lives.py")
-        assert "game-over" in meta["provides"]
+        assert "game_over" in meta["provides"]
 
     def test_lives_exposes_count(self):
         meta = parse_metadata(BUNDLED_DIR / "lives.py")
@@ -1218,11 +1218,11 @@ class TestPlayerWidget:
 
 class TestLivesWidget:
     def test_auto_gameover_default(self):
-        """Lives widget should generate check-lives → game-over by default."""
+        """Lives widget should generate check-lives → game_over by default."""
         stmts = load_widget("lives", search_paths=[BUNDLED_DIR])
         ons = [s for s in stmts if isinstance(s, OnStatement)]
         assert any(
-            o.event == "check-lives" and "game-over" in o.args and "lives.count <= 0" in o.condition
+            o.event == "check-lives" and "game_over" in o.args and "lives.count <= 0" in o.condition
             for o in ons
         )
 
@@ -1394,10 +1394,10 @@ class TestProvidesContract:
     """Python factories auto-declare their provided events; .rosh components validate theirs."""
 
     def test_lives_auto_declares_game_over(self):
-        """use lives must auto-declare event game-over so send game-over doesn't raise."""
+        """use lives must auto-declare event game_over so send game_over doesn't raise."""
         stmts = load_widget("lives", search_paths=[BUNDLED_DIR])
         events = [s for s in stmts if isinstance(s, EventStatement)]
-        assert any(e.name == "game-over" for e in events)
+        assert any(e.name == "game_over" for e in events)
 
     def test_timer_auto_declares_timer_done(self):
         stmts = load_widget("timer", search_paths=[BUNDLED_DIR])
@@ -1412,14 +1412,14 @@ class TestProvidesContract:
         assert "fire2" in event_names
 
     def test_declared_event_runs_without_error(self):
-        """After loading lives, send game-over must not raise (event is now declared)."""
+        """After loading lives, send game_over must not raise (event is now declared)."""
         from rosh_lang.core.runtime import Runtime
         import io
         stmts = load_widget("lives", search_paths=[BUNDLED_DIR])
         rt = Runtime(output=io.StringIO())
         rt.run(Programme(statements=stmts))
-        # Should not raise — game-over is now declared by the provides auto-declaration
-        rt.send("game-over")
+        # Should not raise — game_over is now declared by the provides auto-declaration
+        rt.send("game_over")
 
     def test_rosh_component_provides_validates_body(self):
         """game-lifecycle.rosh provides game_start/game_restart — both declared in body."""

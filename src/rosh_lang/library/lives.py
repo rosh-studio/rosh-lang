@@ -31,7 +31,7 @@ METADATA = {
         "anchor": "",
         "theme": "",
     },
-    "provides": ["game-over"],
+    "provides": ["game_over"],
     "requires": [],
     "exposes": ["count"],
     "licence": "Rosh-BSL",
@@ -58,11 +58,11 @@ def generate(config: dict[str, str], user_config: dict[str, str] | None = None) 
         SetStatement(target="display.font_size", value=font_size),
     ]
 
-    # Auto game-over: when count hits 0, send game-over event
+    # Auto game-over: when count hits 0, send game_over event
     if auto_gameover == "1":
         stmts.append(EventStatement(name="check-lives", payload_fields=[]))
         stmts.append(OnStatement(
-            event="check-lives", action="send", args="game-over",
+            event="check-lives", action="send", args="game_over",
             condition="count <= 0",
         ))
 
