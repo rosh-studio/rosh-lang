@@ -21,11 +21,16 @@ def build_user_prompt(
     *,
     state_summary: str,
     component_summary: str,
+    target_summary: str = "",
 ) -> str:
-    return "\n".join([
+    parts = [
         f"User intent:\n{intent}",
         "",
         f"Current Rosh state:\n{state_summary}",
+    ]
+    if target_summary:
+        parts += ["", f"Active target capability:\n{target_summary}"]
+    parts += [
         "",
         (
             "Available bundled components (name: description "
@@ -33,4 +38,5 @@ def build_user_prompt(
             "exposes: state accessible via name.key]):\n"
             + component_summary
         ),
-    ])
+    ]
+    return "\n".join(parts)

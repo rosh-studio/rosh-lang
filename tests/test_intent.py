@@ -198,7 +198,7 @@ def test_kernel_uses_intent_planner_for_unknown_broad_intent(
         def from_state(cls, _state: dict[str, object]) -> "FakePlanner":
             return cls()
 
-        def plan(self, intent: str, *, state: dict[str, object]) -> IntentPlan:
+        def plan(self, intent: str, *, state: dict[str, object], target: str = "terminal", **_kw) -> IntentPlan:
             assert intent == "imagine a moonlit clearing"
             return IntentPlan(
                 original=intent,
@@ -248,3 +248,74 @@ def test_kernel_does_not_use_intent_planner_for_keyword_typo(
     assert response.status == "error"
     assert response.error is not None
     assert "create" in response.error.suggestions
+
+
+# ── Target capability manifest ────────────────────────────────────
+
+
+def test_summarise_target_terminal() -> None:
+    from rosh_lang.intent.planner import _summarise_target
+    summary = _summarise_target("terminal")
+    assert "terminal" in summary
+    assert "after" in summary        # listed as no-op
+    assert "get" in summary          # supported
+
+
+def test_summarise_target_web() -> None:
+    from rosh_lang.intent.planner import _summarise_target
+    summary = _summarise_target("web")
+    assert "get" in summary          # listed as absent
+    assert "after" in summary        # listed as supported
+
+
+def test_summarise_target_world() -> None:
+    from rosh_lang.intent.planner import _summarise_target
+    summary = _summarise_target("world")
+    assert "world" in summary
+    assert "when" in summary         # listed as absent in world
+
+
+def test_summarise_target_unknown() -> None:
+    from rosh_lang.intent.planner import _summarise_target
+    summary = _summarise_target("unknown-target")
+    assert "unknown" in summary.lower() or "capability profile unknown" in summary
+
+
+def test_build_user_prompt_includes_target() -> None:
+    from rosh_lang.intent.prompts import build_user_prompt
+    prompt = build_user_prompt(
+        "create a planet",
+        state_summary="(empty)",
+        component_summary="- score",
+        target_summary="Target: web\n  Supported: print say",
+    )
+    assert "Target: web" in prompt
+    assert "create a planet" in prompt
+
+
+def test_build_user_prompt_omits_target_when_empty() -> None:
+    from rosh_lang.intent.prompts import build_user_prompt
+    prompt = build_user_prompt(
+        "create a planet",
+        state_summary="(empty)",
+        component_summary="- score",
+    )
+    assert "Active target" not in prompt
+
+
+def test_planner_passes_target_to_prompt() -> None:
+    """plan() with target='web' produces a prompt that mentions the web target."""
+    from rosh_lang.intent.planner import IntentPlanner, IntentPlan
+
+    captured: list[str] = []
+
+    class CapturingProvider:
+        def complete(self, *, system: str, prompt: str) -> str:
+            captured.append(prompt)
+            return '{"rosh": "create object box", "notes": ""}'
+
+    planner = IntentPlanner(provider=CapturingProvider())
+    planner.plan("make a box", state={}, target="web")
+    assert captured, "provider was never called"
+    assert "Target: web" in captured[0]
+    assert "absent" in captured[0].lower()   # web lists get/connect/look as absent

@@ -303,7 +303,11 @@ class ReplKernel:
         if not planner.available:
             return None
 
-        plan = planner.plan(original.strip(), state=self.adapter.runtime.state)
+        plan = planner.plan(
+            original.strip(),
+            state=self.adapter.runtime.state,
+            target="terminal",
+        )
         if plan is None:
             return None
 

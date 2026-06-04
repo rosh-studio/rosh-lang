@@ -46,6 +46,7 @@ class IntentPlanner:
         *,
         state: Mapping[str, Any],
         components: list[str] | None = None,
+        target: str = "terminal",
     ) -> IntentPlan | None:
         if self.provider is None:
             return None
@@ -54,6 +55,7 @@ class IntentPlanner:
             intent,
             state_summary=_summarise_state(state),
             component_summary=_summarise_components(components),
+            target_summary=_summarise_target(target),
         )
         try:
             raw = self.provider.complete(system=SYSTEM_PROMPT, prompt=prompt)
@@ -102,6 +104,91 @@ def _summarise_state(state: Mapping[str, Any]) -> str:
             lines.append(f"{key}: object {{{fields}}}")
         else:
             lines.append(f"{key}: {value!r}")
+    return "\n".join(lines)
+
+
+_TARGET_CAPS: dict[str, dict[str, str]] = {
+    "terminal": {
+        "supported": (
+            "print say create set destroy send event on when if repeat "
+            "for-each add remove define do look get connect go"
+        ),
+        "no-op": "after sprite sound play animate background",
+        "absent": "",
+        "notes": (
+            "after/sprite/sound/play/animate parse without error but produce no effect. "
+            "get and look return state data. connect stores a named URL."
+        ),
+    },
+    "web": {
+        "supported": (
+            "print say create set destroy send event on when if repeat "
+            "for-each add remove define do go after sprite sound play animate background"
+        ),
+        "no-op": "",
+        "absent": "get connect look",
+        "notes": (
+            "Full interactive runtime. after fires setTimeout. "
+            "get/connect/look have no JS equivalent — omit them."
+        ),
+    },
+    "phaser": {
+        "supported": (
+            "print say create set destroy send event on when if repeat "
+            "for-each add remove define do go after sprite sound play animate background"
+        ),
+        "no-op": "",
+        "absent": "get connect look",
+        "notes": "Same as web but renders with Phaser 3. get/connect/look absent.",
+    },
+    "threejs": {
+        "supported": (
+            "print say create set destroy send event on when if repeat "
+            "for-each add remove define do go after sprite sound play animate background"
+        ),
+        "no-op": "",
+        "absent": "get connect look",
+        "notes": "Same as web but renders in Three.js 3D. get/connect/look absent.",
+    },
+    "scratch": {
+        "supported": (
+            "print say create set destroy send on when if repeat "
+            "define do go sound play background"
+        ),
+        "no-op": "",
+        "absent": "event for-each add remove get connect look after animate sprite",
+        "notes": (
+            "Scratch export. event/for-each/add/remove/animate/sprite absent. "
+            "Custom events cannot be declared. No scene or collection operations."
+        ),
+    },
+    "world": {
+        "supported": "print say create set destroy go look connect",
+        "no-op": "",
+        "absent": (
+            "when on if repeat for-each add remove define do event send after "
+            "sprite sound play animate background"
+        ),
+        "notes": (
+            "World target is highly restricted — only 8 statements are supported. "
+            "No event handlers, no conditionals, no loops, no components."
+        ),
+    },
+}
+
+
+def _summarise_target(target: str) -> str:
+    """Return a one-paragraph description of what the active target supports."""
+    info = _TARGET_CAPS.get(target.lower())
+    if info is None:
+        return f"Target '{target}' — capability profile unknown; use conservative Rosh."
+    lines = [f"Target: {target}"]
+    lines.append(f"  Supported: {info['supported']}")
+    if info["no-op"]:
+        lines.append(f"  No-op (parse OK, no effect): {info['no-op']}")
+    if info["absent"]:
+        lines.append(f"  Absent (do not use): {info['absent']}")
+    lines.append(f"  Note: {info['notes']}")
     return "\n".join(lines)
 
 
