@@ -97,6 +97,7 @@ end
 # ── Hazard hits player: lose a life ──
 when collision hazard.* player
   set lives.count to lives.count - 1
+  send check-lives
   set explosion._x to player.x
   set explosion._y to player.y
   set explosion._fire to 1
