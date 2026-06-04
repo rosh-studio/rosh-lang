@@ -74,6 +74,7 @@ class Runtime:
         self.audio_registry: dict[str, str] = {}  # sound_name → description
         self.animation_registry: dict[str, dict[str, Any]] = {}  # name → {sheet, frames, speed, mode}
         self.functions: dict[str, list[Statement]] = {}
+        self._function_params: dict[str, list[str]] = {}
         self.output = output
         self.search_paths = search_paths
         self._send_depth = 0
@@ -149,6 +150,7 @@ class Runtime:
             self.state["_background"] = stmt.value
         elif isinstance(stmt, DefineStatement):
             self.functions[stmt.name] = stmt.body
+            self._function_params[stmt.name] = stmt.params
         elif isinstance(stmt, DoStatement):
             self._exec_do(stmt)
         elif isinstance(stmt, RepeatStatement):
@@ -506,19 +508,37 @@ class Runtime:
                 self.execute(s)
 
     def _exec_do(self, stmt: DoStatement) -> None:
-        """Execute a user-defined function by name."""
+        """Execute a user-defined function, binding named args as local state."""
         name = stmt.name
         if name not in self.functions:
             warnings.warn(f"Function {name!r} not defined")
             return
         if name in self._call_stack:
             raise RuntimeError(f"Recursive call to {name!r} is not allowed")
+
+        # Bind params: save current state values, set to resolved arg values
+        params = self._function_params.get(name, [])
+        _MISSING = object()
+        saved: dict[str, Any] = {}
+        for param in params:
+            saved[param] = self.state.get(param, _MISSING)
+            if param in stmt.args:
+                self.state[param] = self._eval_set_value(param, stmt.args[param])
+            else:
+                self.state[param] = None
+
         self._call_stack.add(name)
         try:
             for s in self.functions[name]:
                 self.execute(s)
         finally:
             self._call_stack.discard(name)
+            # Restore saved state
+            for param, prev in saved.items():
+                if prev is _MISSING:
+                    self.state.pop(param, None)
+                else:
+                    self.state[param] = prev
 
     _MAX_REPEAT = 10_000
 
@@ -695,6 +715,11 @@ class Runtime:
             return True
         if raw.lower() == "false":
             return False
+
+        # Variable reference: resolve name or dotted name from state (scalars only)
+        resolved = self._resolve(raw)
+        if resolved is not None and not isinstance(resolved, dict):
+            return resolved
 
         return raw
 
@@ -919,9 +944,15 @@ def _stmt_to_dict(stmt: Statement) -> dict[str, Any]:
     if isinstance(stmt, IfStatement):
         return {"type": "if", "condition": stmt.condition}
     if isinstance(stmt, DefineStatement):
-        return {"type": "define", "name": stmt.name}
+        d = {"type": "define", "name": stmt.name}
+        if stmt.params:
+            d["params"] = stmt.params
+        return d
     if isinstance(stmt, DoStatement):
-        return {"type": "do", "name": stmt.name}
+        d = {"type": "do", "name": stmt.name}
+        if stmt.args:
+            d["args"] = stmt.args
+        return d
     if isinstance(stmt, RepeatStatement):
         d = {"type": "repeat", "count": stmt.count}
         if stmt.var:

@@ -217,3 +217,165 @@ class TestJSCodegenFunctions:
         code = "define fire-bullet\n  print fire\nend\ndo fire-bullet"
         result = compile_programme(parse_string(code))
         assert "rosh_fn_fire_bullet()" in result.init_code
+
+
+# ── Phase 2b: Parameterised functions ────────────────────────
+
+
+class TestParserDefineWithParams:
+    def test_define_with_single_param(self):
+        prog = parse_string("define greet with name\n  print hello\nend")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, DefineStatement)
+        assert stmt.name == "greet"
+        assert stmt.params == ["name"]
+
+    def test_define_with_multiple_params(self):
+        prog = parse_string("define multiply with a b\n  set result to a * b\nend")
+        stmt = prog.statements[0]
+        assert stmt.params == ["a", "b"]
+
+    def test_define_no_params_unchanged(self):
+        prog = parse_string("define fire_bullet\n  print bang\nend")
+        stmt = prog.statements[0]
+        assert stmt.params == []
+
+    def test_do_with_args(self):
+        prog = parse_string("do greet name=Alice")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, DoStatement)
+        assert stmt.name == "greet"
+        assert stmt.args == {"name": "Alice"}
+
+    def test_do_with_multiple_args(self):
+        prog = parse_string("do multiply a=6 b=7")
+        stmt = prog.statements[0]
+        assert stmt.args == {"a": "6", "b": "7"}
+
+    def test_do_with_quoted_arg(self):
+        prog = parse_string('do greet name="Alice Smith"')
+        stmt = prog.statements[0]
+        assert stmt.args == {"name": '"Alice Smith"'}
+
+    def test_do_no_args_unchanged(self):
+        prog = parse_string("do fire_bullet")
+        stmt = prog.statements[0]
+        assert stmt.args == {}
+
+
+class TestRuntimeParameterisedFunctions:
+    def _run(self, code: str) -> tuple[Runtime, str]:
+        out = io.StringIO()
+        rt = Runtime(output=out)
+        rt.run(parse_string(code))
+        return rt, out.getvalue()
+
+    def test_param_bound_during_call(self):
+        code = (
+            "define greet with name\n  print hello {name}\nend\n"
+            "do greet name=Alice"
+        )
+        _, output = self._run(code)
+        assert output == "hello Alice\n"
+
+    def test_arithmetic_with_params(self):
+        code = (
+            "define multiply with a b\n  set result to a * b\nend\n"
+            "do multiply a=6 b=7\n"
+            "print {result}"
+        )
+        _, output = self._run(code)
+        assert output == "42\n"
+
+    def test_literal_string_arg(self):
+        code = (
+            'define greet with name\n  print hi {name}\nend\n'
+            'do greet name="Bob Smith"'
+        )
+        _, output = self._run(code)
+        assert output == "hi Bob Smith\n"
+
+    def test_variable_as_arg(self):
+        code = (
+            "create number x\nset x to 5\n"
+            "define double with n\n  set result to n * 2\nend\n"
+            "do double n=x\n"
+            "print {result}"
+        )
+        _, output = self._run(code)
+        assert output == "10\n"
+
+    def test_state_restored_after_call(self):
+        code = (
+            "set price to 99\n"
+            "define calc with price\n  set result to price * 2\nend\n"
+            "do calc price=5\n"
+            "print {price}"
+        )
+        _, output = self._run(code)
+        assert output == "99\n"
+
+    def test_state_removed_if_not_preset(self):
+        code = (
+            "define calc with x\n  set result to x + 1\nend\n"
+            "do calc x=10"
+        )
+        rt, _ = self._run(code)
+        assert "x" not in rt.state
+
+    def test_missing_arg_binds_none(self):
+        """Missing arg binds None; {name} interpolation falls through to raw text."""
+        code = (
+            "define show with name\n  print {name}\nend\n"
+            "do show"
+        )
+        _, output = self._run(code)
+        assert output == "{name}\n"
+
+    def test_no_arg_call_still_works(self):
+        code = "define fire\n  print bang\nend\ndo fire"
+        _, output = self._run(code)
+        assert output == "bang\n"
+
+    def test_multiple_calls_different_args(self):
+        code = (
+            "define greet with name\n  print hello {name}\nend\n"
+            "do greet name=Alice\n"
+            "do greet name=Bob"
+        )
+        _, output = self._run(code)
+        assert output == "hello Alice\nhello Bob\n"
+
+    def test_params_in_look_programme(self):
+        code = "define calc with a b\n  set result to a + b\nend"
+        rt, _ = self._run(code)
+        # _programme stores the programme that was run; check define has params
+        prog = rt._programme
+        assert prog is not None
+        define_stmt = prog.statements[0]
+        assert isinstance(define_stmt, DefineStatement)
+        assert define_stmt.params == ["a", "b"]
+
+
+class TestJSCodegenParameterisedFunctions:
+    def test_define_with_params_emits_arg_binding(self):
+        code = "define multiply with a b\n  set result to a * b\nend"
+        result = compile_programme(parse_string(code))
+        assert "function rosh_fn_multiply(_a)" in result.init_code
+        assert '"a"' in result.init_code
+        assert '"b"' in result.init_code
+
+    def test_do_with_args_emits_object_call(self):
+        code = (
+            "define multiply with a b\n  set result to a * b\nend\n"
+            "do multiply a=6 b=7"
+        )
+        result = compile_programme(parse_string(code))
+        assert "rosh_fn_multiply({" in result.init_code
+        assert '"a"' in result.init_code
+        assert '"b"' in result.init_code
+
+    def test_no_arg_define_unchanged(self):
+        code = "define fire\n  print bang\nend"
+        result = compile_programme(parse_string(code))
+        assert "function rosh_fn_fire()" in result.init_code

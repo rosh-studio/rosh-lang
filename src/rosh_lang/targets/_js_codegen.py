@@ -292,13 +292,38 @@ def _emit_define(stmt: DefineStatement) -> str:
     """Emit a JS function declaration from a define block."""
     body_js = _emit_body(stmt.body)
     name = _safe_fn_name(stmt.name)
-    return f"function {name}() {{\n{body_js}}}"
+    if not stmt.params:
+        return f"function {name}() {{\n{body_js}}}"
+    # Parameterised function: save/bind/restore state around body
+    param_keys = [_escape_js(p) for p in stmt.params]
+    save_lines = "\n".join(
+        f'  _sv["{k}"] = rosh.get("{k}"); '
+        f'rosh.set("{k}", (_a["{k}"] !== undefined ? _a["{k}"] : null));'
+        for k in param_keys
+    )
+    restore_expr = ", ".join(f'"{k}"' for k in param_keys)
+    return (
+        f"function {name}(_a) {{\n"
+        f"  _a = _a || {{}}; var _sv = {{}};\n"
+        f"{save_lines}\n"
+        f"{body_js}"
+        f"  [{restore_expr}].forEach(function(k) {{\n"
+        f"    var p = _sv[k]; if (p == null) {{ delete rosh.state[k]; }} else {{ rosh.set(k, p); }}\n"
+        f"  }});\n"
+        f"}}"
+    )
 
 
 def _emit_do(stmt: DoStatement) -> str:
-    """Emit a JS function call."""
+    """Emit a JS function call, passing resolved arg values."""
     name = _safe_fn_name(stmt.name)
-    return f"{name}();"
+    if not stmt.args:
+        return f"{name}();"
+    arg_pairs = ", ".join(
+        f'"{_escape_js(k)}": rosh.evalSetValue("{_escape_js(k)}", "{_escape_js(v)}")'
+        for k, v in stmt.args.items()
+    )
+    return f"{name}({{{arg_pairs}}});"
 
 
 def _emit_repeat(stmt: RepeatStatement) -> str:

@@ -620,8 +620,12 @@ def _parse_define(line_text: str, line: int, source: str) -> DefineStatement:
     rest = line_text[len("define"):].strip()
     if not rest:
         raise ParseError("define requires a function name", line=line, source=source)
-    name = rest.split()[0]
-    return DefineStatement(name=name, line=line)
+    tokens = rest.split()
+    name = tokens[0]
+    params: list[str] = []
+    if len(tokens) > 1 and tokens[1].lower() == "with":
+        params = tokens[2:]
+    return DefineStatement(name=name, params=params, line=line)
 
 
 def _parse_do(line_text: str, line: int, source: str) -> DoStatement:
@@ -629,7 +633,45 @@ def _parse_do(line_text: str, line: int, source: str) -> DoStatement:
     if not rest:
         raise ParseError("do requires a function name", line=line, source=source)
     name = rest.split()[0]
-    return DoStatement(name=name, line=line)
+    args = _parse_do_args(rest[len(name):].strip())
+    return DoStatement(name=name, args=args, line=line)
+
+
+def _parse_do_args(text: str) -> dict[str, str]:
+    """Parse 'k1=v1 k2="v2 with spaces"' into a dict.
+
+    Values may be quoted strings (preserving quotes for _eval_set_value) or
+    bare tokens. Quoted values may contain spaces.
+    """
+    args: dict[str, str] = {}
+    i = 0
+    while i < len(text):
+        while i < len(text) and text[i] == " ":
+            i += 1
+        if i >= len(text):
+            break
+        eq = text.find("=", i)
+        if eq == -1:
+            break
+        key = text[i:eq].strip()
+        i = eq + 1
+        if i < len(text) and text[i] in ('"', "'"):
+            quote = text[i]
+            i += 1
+            start = i
+            while i < len(text) and text[i] != quote:
+                i += 1
+            value = quote + text[start:i] + quote
+            if i < len(text):
+                i += 1
+        else:
+            start = i
+            while i < len(text) and text[i] != " ":
+                i += 1
+            value = text[start:i]
+        if key:
+            args[key] = value
+    return args
 
 
 def _parse_repeat(line_text: str, line: int, source: str) -> RepeatStatement:
@@ -733,6 +775,7 @@ def _collect_one_define(
         if isinstance(s, EndStatement):
             return DefineStatement(
                 name=define_stmt.name,
+                params=define_stmt.params,
                 body=body,
                 line=define_stmt.line,
             ), i + 1

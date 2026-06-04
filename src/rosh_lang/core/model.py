@@ -237,18 +237,20 @@ class BlankStatement:
 
 @dataclass
 class DefineStatement:
-    """define fire_bullet ... end — user-defined function."""
+    """define fire_bullet ... end / define f with p1 p2 — user-defined function."""
 
     name: str
+    params: list[str] = field(default_factory=list)
     body: list[Statement] = field(default_factory=list)
     line: int = 0
 
 
 @dataclass
 class DoStatement:
-    """do fire_bullet — call a user-defined function."""
+    """do fire_bullet / do f p1=v1 p2=v2 — call a user-defined function."""
 
     name: str
+    args: dict[str, str] = field(default_factory=dict)
     line: int = 0
 
 
