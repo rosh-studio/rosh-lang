@@ -351,12 +351,15 @@ def _emit_repeat(stmt: RepeatStatement) -> str:
 
     if stmt.var:
         var = _escape_js(stmt.var)
+        # Use a name-scoped save slot so nested repeat-as loops don't clobber each other.
+        safe = var.replace(".", "_").replace("-", "_")
         return (
+            f'var _had_{safe} = rosh.has("{var}"), _prev_{safe} = rosh.get("{var}");\n'
             f"for (var _ri = 1; _ri <= Math.min({count_js}, 10000); _ri++) {{\n"
             f'  rosh.set("{var}", _ri);\n'
             f"{body_js}"
             f"}}\n"
-            f'rosh.unset("{var}");'
+            f'if (_had_{safe}) {{ rosh.set("{var}", _prev_{safe}); }} else {{ rosh.unset("{var}"); }}'
         )
     else:
         return (

@@ -225,8 +225,9 @@ def find_widget(name: str, search_paths: list[Path] | None = None) -> Path | Non
                 resolved = candidate.resolve()
             except OSError:
                 continue
-            # Guard against path traversal: resolved path must stay under base
-            if not str(resolved).startswith(str(resolved_base) + "/") and resolved != resolved_base:
+            # Guard against path traversal: resolved path must stay under base.
+            # is_relative_to() is platform-correct (works on Windows paths too).
+            if not resolved.is_relative_to(resolved_base):
                 warnings.warn(
                     f"Widget name '{name}' resolves outside search path — skipping"
                 )

@@ -677,12 +677,34 @@ class TestEscapeJs:
 
 
 class TestRepeatVarCleanup:
-    def test_repeat_with_var_uses_unset(self):
-        """After a repeat-as loop, JS should unset the variable (not set to undefined)."""
+    def test_repeat_with_var_saves_and_restores(self):
+        """JS repeat-as must save the prior value and restore it after the loop."""
         prog = parse_string('repeat 3 as i\n  print "{i}"\nend')
         result = compile_programme(prog)
+        # Save/restore pattern must be present
+        assert 'rosh.has("i")' in result.init_code
+        assert 'rosh.get("i")' in result.init_code
+        # Restore branch
+        assert 'rosh.set("i"' in result.init_code
+        # Delete branch (when variable did not exist before loop)
         assert 'rosh.unset("i")' in result.init_code
         assert 'rosh.set("i", undefined)' not in result.init_code
+
+    def test_repeat_var_save_slot_is_name_scoped(self):
+        """Nested repeat-as loops must not clobber each other's save slots."""
+        prog = parse_string(
+            'repeat 2 as outer\n'
+            '  repeat 2 as inner\n'
+            '    print "{outer}.{inner}"\n'
+            '  end\n'
+            'end'
+        )
+        result = compile_programme(prog)
+        # Each var gets its own save slot
+        assert '_had_outer' in result.init_code
+        assert '_had_inner' in result.init_code
+        assert '_prev_outer' in result.init_code
+        assert '_prev_inner' in result.init_code
 
     def test_repeat_without_var_no_unset(self):
         prog = parse_string('repeat 3\n  print "hi"\nend')
