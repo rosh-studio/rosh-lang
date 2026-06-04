@@ -504,8 +504,13 @@ def _emit_if(stmt: IfStatement, indent: str = "") -> str:
             js_val = "true"
         elif val.lower() == "false":
             js_val = "false"
+        elif (val.startswith('"') and val.endswith('"')) or \
+             (val.startswith("'") and val.endswith("'")):
+            # Already a quoted string literal — use the inner value escaped,
+            # matching _emit_on which passes val directly without re-wrapping.
+            js_val = f'"{_escape_js(val[1:-1])}"'
         else:
-        # String comparison — quote the value
+            # Unquoted identifier or literal — treat as string
             js_val = f'"{_escape_js(val)}"'
 
     lines = [f'{indent}if (rosh.get("{_escape_js(field)}") {js_op} {js_val}) {{']
