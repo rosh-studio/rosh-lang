@@ -218,12 +218,21 @@ def find_widget(name: str, search_paths: list[Path] | None = None) -> Path | Non
 
     # 1. Exact match — .rosh first, then .py factory
     for base in paths:
-        candidate_rosh = base / f"{name}.rosh"
-        if candidate_rosh.is_file():
-            return candidate_rosh
-        candidate_py = base / f"{name}.py"
-        if candidate_py.is_file():
-            return candidate_py
+        resolved_base = base.resolve()
+        for ext in (".rosh", ".py"):
+            candidate = base / f"{name}{ext}"
+            try:
+                resolved = candidate.resolve()
+            except OSError:
+                continue
+            # Guard against path traversal: resolved path must stay under base
+            if not str(resolved).startswith(str(resolved_base) + "/") and resolved != resolved_base:
+                warnings.warn(
+                    f"Widget name '{name}' resolves outside search path — skipping"
+                )
+                continue
+            if candidate.is_file():
+                return candidate
 
     # 2. Fuzzy match — collect all available widgets
     available = _list_available(paths)

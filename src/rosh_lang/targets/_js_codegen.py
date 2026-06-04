@@ -356,7 +356,7 @@ def _emit_repeat(stmt: RepeatStatement) -> str:
             f'  rosh.set("{var}", _ri);\n'
             f"{body_js}"
             f"}}\n"
-            f'rosh.set("{var}", undefined);'
+            f'rosh.unset("{var}");'
         )
     else:
         return (
@@ -601,11 +601,16 @@ def _wrap_key_filter(key: str, body_js: str) -> str:
 
 
 def _escape_js(s: str) -> str:
-    """Escape a string for embedding in a JS string literal."""
+    """Escape a string for embedding in a JS string literal inside a <script> block.
+
+    '</' is replaced with '<\\/' so that '</script>' in a string value
+    cannot break out of the enclosing <script> tag (XSS vector).
+    """
     return (
         s.replace("\\", "\\\\")
         .replace('"', '\\"')
         .replace("'", "\\'")
         .replace("\n", "\\n")
         .replace("\r", "\\r")
+        .replace("</", "<\\/")
     )

@@ -79,6 +79,29 @@ class TestFindWidget:
         assert result is not None
         assert result.parent == dir1
 
+    def test_path_traversal_blocked(self, tmp_path: Path):
+        """Widget names like ../../evil must not escape the search path."""
+        widgets_dir = tmp_path / "widgets"
+        widgets_dir.mkdir()
+        # Place a "malicious" widget one level above the search path
+        evil = tmp_path / "evil.rosh"
+        evil.write_text('print "pwned"')
+
+        with pytest.warns(UserWarning):
+            result = find_widget("../evil", search_paths=[widgets_dir])
+        assert result is None
+
+    def test_path_traversal_py_blocked(self, tmp_path: Path):
+        """Python factory path traversal is also blocked."""
+        widgets_dir = tmp_path / "widgets"
+        widgets_dir.mkdir()
+        evil = tmp_path / "evil.py"
+        evil.write_text('METADATA = {"widget": "evil", "version": "0", "config": {}, "licence": "Rosh-BSL", "provides": [], "requires": [], "exposes": []}')
+
+        with pytest.warns(UserWarning):
+            result = find_widget("../evil", search_paths=[widgets_dir])
+        assert result is None
+
 
 # ── prefix_programme ─────────────────────────────────────────────
 

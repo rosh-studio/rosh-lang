@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from rosh_lang.core.parser import parse_string
-from rosh_lang.targets._js_codegen import compile_programme
+from rosh_lang.targets._js_codegen import compile_programme, _escape_js
 
 
 # ── Statement emitters ────────────────────────────────────────────
@@ -630,3 +630,61 @@ class TestEmitBackground:
         prog = parse_string('background "https://example.com/bg.jpg"')
         result = compile_programme(prog)
         assert 'rosh.setBackground("https://example.com/bg.jpg")' in result.init_code
+
+
+# ── Security: _escape_js ──────────────────────────────────────────
+
+
+class TestEscapeJs:
+    def test_escapes_script_close_tag(self):
+        """</script> in a string value must not close the enclosing <script> block."""
+        assert "<\\/script>" in _escape_js("</script>")
+
+    def test_escapes_all_slash_less_than(self):
+        assert "<\\/" in _escape_js("</")
+
+    def test_escapes_backslash(self):
+        assert "\\\\" in _escape_js("\\")
+
+    def test_escapes_double_quote(self):
+        assert '\\"' in _escape_js('"')
+
+    def test_escapes_single_quote(self):
+        assert "\\'" in _escape_js("'")
+
+    def test_escapes_newline(self):
+        assert "\\n" in _escape_js("\n")
+
+    def test_script_injection_in_print(self):
+        """print with </script> payload must not break out of the script tag."""
+        prog = parse_string('print "</script><script>alert(1)</script>"')
+        result = compile_programme(prog)
+        assert "</script>" not in result.init_code
+        assert "<\\/script>" in result.init_code
+
+    def test_script_injection_in_say(self):
+        prog = parse_string('say "</script>evil"')
+        result = compile_programme(prog)
+        assert "</script>" not in result.init_code
+
+    def test_script_injection_in_set(self):
+        prog = parse_string('set label to "</script>evil"')
+        result = compile_programme(prog)
+        assert "</script>" not in result.init_code
+
+
+# ── Repeat variable cleanup ───────────────────────────────────────
+
+
+class TestRepeatVarCleanup:
+    def test_repeat_with_var_uses_unset(self):
+        """After a repeat-as loop, JS should unset the variable (not set to undefined)."""
+        prog = parse_string('repeat 3 as i\n  print "{i}"\nend')
+        result = compile_programme(prog)
+        assert 'rosh.unset("i")' in result.init_code
+        assert 'rosh.set("i", undefined)' not in result.init_code
+
+    def test_repeat_without_var_no_unset(self):
+        prog = parse_string('repeat 3\n  print "hi"\nend')
+        result = compile_programme(prog)
+        assert "rosh.unset" not in result.init_code
