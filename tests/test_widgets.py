@@ -14,11 +14,13 @@ from rosh_lang.core.model import (
     DestroyStatement,
     DefineStatement,
     DoStatement,
+    EventStatement,
     ForEachStatement,
     IfStatement,
     OnStatement,
     PlayStatement,
     PrintStatement,
+    Programme,
     RemoveStatement,
     RepeatStatement,
     SayStatement,
@@ -1383,3 +1385,62 @@ class TestHUDAnchorTheme:
         sets = [s for s in stmts if isinstance(s, SetStatement)]
         label_set = [s for s in sets if s.target == "score.display.label"]
         assert "Points:" in label_set[0].value
+
+
+# ── provides / requires contract enforcement ─────────────────────
+
+
+class TestProvidesContract:
+    """Python factories auto-declare their provided events; .rosh components validate theirs."""
+
+    def test_lives_auto_declares_game_over(self):
+        """use lives must auto-declare event game-over so send game-over doesn't raise."""
+        stmts = load_widget("lives", search_paths=[BUNDLED_DIR])
+        events = [s for s in stmts if isinstance(s, EventStatement)]
+        assert any(e.name == "game-over" for e in events)
+
+    def test_timer_auto_declares_timer_done(self):
+        stmts = load_widget("timer", search_paths=[BUNDLED_DIR])
+        events = [s for s in stmts if isinstance(s, EventStatement)]
+        assert any(e.name == "timer_done" for e in events)
+
+    def test_controller_auto_declares_fire_and_fire2(self):
+        stmts = load_widget("controller", config={"target": "ship"}, search_paths=[BUNDLED_DIR])
+        events = [s for s in stmts if isinstance(s, EventStatement)]
+        event_names = {e.name for e in events}
+        assert "fire" in event_names
+        assert "fire2" in event_names
+
+    def test_declared_event_runs_without_error(self):
+        """After loading lives, send game-over must not raise (event is now declared)."""
+        from rosh_lang.core.runtime import Runtime
+        import io
+        stmts = load_widget("lives", search_paths=[BUNDLED_DIR])
+        rt = Runtime(output=io.StringIO())
+        rt.run(Programme(statements=stmts))
+        # Should not raise — game-over is now declared by the provides auto-declaration
+        rt.send("game-over")
+
+    def test_rosh_component_provides_validates_body(self):
+        """game-lifecycle.rosh provides game_start/game_restart — both declared in body."""
+        stmts = load_widget("game-lifecycle", search_paths=[BUNDLED_DIR])
+        events = [s for s in stmts if isinstance(s, EventStatement)]
+        event_names = {e.name for e in events}
+        assert "game_start" in event_names
+        assert "game_restart" in event_names
+
+    def test_requires_warning_fires_for_external_dependency(self, tmp_path):
+        """A component that requires an undeclared external event warns at load time."""
+        w = tmp_path / "needs_start.rosh"
+        w.write_text("# widget: needs_start\n# requires: start_game\ncreate number x\n")
+        with pytest.warns(UserWarning, match="requires event"):
+            load_widget("needs_start", search_paths=[tmp_path])
+
+    def test_requires_no_warning_when_self_declared(self):
+        """game-lifecycle requires game_over but declares it itself — no warning."""
+        import warnings as _warnings
+        with _warnings.catch_warnings(record=True) as caught:
+            _warnings.simplefilter("always")
+            load_widget("game-lifecycle", search_paths=[BUNDLED_DIR])
+        requires_warns = [w for w in caught if "requires event" in str(w.message)]
+        assert len(requires_warns) == 0

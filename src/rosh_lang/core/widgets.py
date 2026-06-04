@@ -27,6 +27,7 @@ from rosh_lang.core.model import (
     DefineStatement,
     DestroyStatement,
     DoStatement,
+    EventStatement,
     ForEachStatement,
     IfStatement,
     OnStatement,
@@ -346,6 +347,32 @@ def load_widget(
             for key, value in (config or {}).items()
         ]
 
+        # Collect all event names declared in the component body (used for both
+        # provides validation and requires filtering below).
+        body_events = {s.name for s in expanded if isinstance(s, EventStatement)}
+
+        # For .rosh components: provides events should already be declared in
+        # the component body (e.g. `event game_start`). Warn if any are missing.
+        provided = [e for e in meta.get("provides", []) if e]
+        missing_provides = [e for e in provided if e not in body_events]
+        if missing_provides:
+            warnings.warn(
+                f"Component '{name}' declares provides={missing_provides} but has no "
+                f"'event {missing_provides[0]}' in its body — add event declarations.",
+                stacklevel=2,
+            )
+
+        # Warn on requires only for events the component does NOT self-declare.
+        # (game-lifecycle requires game_over but also declares it in its own body.)
+        required = [e for e in meta.get("requires", []) if e]
+        externally_required = [e for e in required if e not in body_events]
+        if externally_required:
+            warnings.warn(
+                f"Component '{name}' requires event(s): {', '.join(externally_required)}. "
+                f"Ensure they are declared in your programme or loaded before this component.",
+                stacklevel=2,
+            )
+
         return config_stmts + prefixed + direct_overrides
     finally:
         _loading.discard(name)
@@ -405,7 +432,26 @@ def _load_python_factory(
             config_stmts.append(SetStatement(target=f"{name}.{key}", value=value))
     prefixed.extend(config_stmts)
 
-    return prefixed
+    # Auto-declare provided events so programmes don't need to declare them
+    # separately. Event names are global (never namespaced), so these are
+    # prepended as-is before the component body.
+    provided = [e for e in meta.get("provides", []) if e]
+    event_decls: list[Statement] = [
+        EventStatement(name=e, payload_fields=[]) for e in provided
+    ]
+
+    # Warn about required events that the factory cannot self-declare.
+    # 'requires' means this component listens for or depends on an event that
+    # must be provided by another component or the programme itself.
+    required = [e for e in meta.get("requires", []) if e]
+    if required:
+        warnings.warn(
+            f"Component '{name}' requires event(s): {', '.join(required)}. "
+            f"Ensure they are declared in your programme or loaded before this component.",
+            stacklevel=2,
+        )
+
+    return event_decls + prefixed
 
 
 def prefix_programme(programme: Programme, namespace: str) -> list[Statement]:

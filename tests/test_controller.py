@@ -21,10 +21,11 @@ BUNDLED_DIR = Path(__file__).parent.parent / "src" / "rosh_lang" / "library"
 
 
 class TestControllerBasic:
-    def test_no_target_returns_empty(self):
+    def test_no_target_returns_only_event_declarations(self):
         stmts = load_widget("controller", config={}, search_paths=[BUNDLED_DIR])
-        # With no target, should be empty (no object to control)
-        assert stmts == []
+        # With no target, body is empty — only provides event declarations remain.
+        non_event = [s for s in stmts if not isinstance(s, EventStatement)]
+        assert non_event == []
 
     def test_basic_arrows(self):
         stmts = load_widget(
@@ -121,9 +122,12 @@ class TestControllerFire:
             config={"target": "ship"},
             search_paths=[BUNDLED_DIR],
         )
-        events = [s for s in stmts if isinstance(s, EventStatement)]
-        fire_events = [e for e in events if e.name == "fire"]
-        assert len(fire_events) == 0
+        # fire event IS declared (from provides contract) but no fire handler exists.
+        fire_decls = [s for s in stmts if isinstance(s, EventStatement) and s.name == "fire"]
+        assert len(fire_decls) >= 1
+        # No keydown handler that sends fire
+        on_fire = [s for s in stmts if isinstance(s, OnStatement) and "fire" in s.args]
+        assert len(on_fire) == 0
 
     def test_fire_on(self):
         stmts = load_widget(
@@ -131,9 +135,12 @@ class TestControllerFire:
             config={"target": "ship", "fire": "on"},
             search_paths=[BUNDLED_DIR],
         )
-        events = [s for s in stmts if isinstance(s, EventStatement)]
-        fire_events = [e for e in events if e.name == "fire"]
-        assert len(fire_events) == 1
+        # fire event declared (from provides and from factory body — idempotent)
+        fire_decls = [s for s in stmts if isinstance(s, EventStatement) and s.name == "fire"]
+        assert len(fire_decls) >= 1
+        # And a keydown handler that sends fire exists
+        on_fire = [s for s in stmts if isinstance(s, OnStatement) and "fire" in s.args]
+        assert len(on_fire) >= 1
 
     def test_custom_fire_event(self):
         stmts = load_widget(
