@@ -134,32 +134,50 @@ var rosh = (function() {
       }
     }
 
-    // Arithmetic: left op right (variables or literals)
-    var ops = ["+", "-", "*", "/"];
+    // Expression: atom op atom — mirrors runtime.py _try_arithmetic
+    // Multi-char ops tried before single-char to avoid ambiguous splits.
+    function resolveAtom(s) {
+      if ((s[0] === '"' && s[s.length-1] === '"') ||
+          (s[0] === "'" && s[s.length-1] === "'")) return s.slice(1, -1);
+      if (s.toLowerCase() === "true") return true;
+      if (s.toLowerCase() === "false") return false;
+      if (/^-?\\d+$/.test(s)) return parseInt(s, 10);
+      if (/^-?\\d+\\.\\d+$/.test(s)) return parseFloat(s);
+      return get(s);
+    }
+    var ops = [">=", "<=", "==", "!=", ">", "<", "+", "-", "*", "/"];
     for (var oi = 0; oi < ops.length; oi++) {
       var op = ops[oi];
       var sep = " " + op + " ";
       var idx = raw.indexOf(sep);
-      if (idx !== -1) {
-        var left = raw.substring(0, idx);
-        var right = raw.substring(idx + sep.length);
-        var rval = parseFloat(right);
-        if (isNaN(rval)) {
-          var resolved = get(right);
-          if (typeof resolved === "number") rval = resolved;
-          else { var cur = get(target); return cur != null ? cur : 0; }
+      if (idx === -1) continue;
+      var lraw = raw.substring(0, idx);
+      var rraw = raw.substring(idx + sep.length);
+      var lval = resolveAtom(lraw);
+      var rval = resolveAtom(rraw);
+      if (op === "+") {
+        if (typeof lval === "string" || typeof rval === "string") {
+          if (lval == null || rval == null) continue;
+          return String(lval) + String(rval);
         }
-        var cur = get(left);
-        if (typeof cur === "number") {
-          if (op === "+") return cur + rval;
-          if (op === "-") return cur - rval;
-          if (op === "*") return cur * rval;
-          if (op === "/" && rval !== 0) return cur / rval;
-        }
-        // Left operand not numeric — return current value unchanged
-        var existing = get(target);
-        return existing != null ? existing : 0;
+        if (typeof lval === "number" && typeof rval === "number") return lval + rval;
+        continue;
       }
+      if (op === "-" || op === "*" || op === "/") {
+        if (typeof lval !== "number" || typeof rval !== "number") continue;
+        if (op === "-") return lval - rval;
+        if (op === "*") return lval * rval;
+        if (op === "/" && rval !== 0) return lval / rval;
+        continue;
+      }
+      // Comparison operators
+      if (lval == null || rval == null) continue;
+      if (op === "==") return lval == rval;
+      if (op === "!=") return lval != rval;
+      if (op === "<") return lval < rval;
+      if (op === ">") return lval > rval;
+      if (op === "<=") return lval <= rval;
+      if (op === ">=") return lval >= rval;
     }
 
     // Integer

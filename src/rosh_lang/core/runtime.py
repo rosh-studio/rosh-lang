@@ -673,7 +673,7 @@ class Runtime:
                     except ValueError:
                         pass
 
-        # Arithmetic: <left> <op> <right>
+        # Expression: <atom> <op> <atom>
         arith = self._try_arithmetic(raw)
         if arith is not None:
             return arith
@@ -698,49 +698,94 @@ class Runtime:
 
         return raw
 
-    def _try_arithmetic(self, raw: str) -> Any | None:
-        """Try to parse 'left op right' arithmetic expression.
+    def _resolve_atom(self, raw: str) -> Any | None:
+        """Resolve a single expression atom to a Python value.
 
-        Supports variable references on both sides:
-        - set x to x + 1       (self-ref left, literal right)
-        - set x to x + drift   (self-ref left, variable right)
-        - set x to y + 1       (cross-ref left, literal right)
-        - set x to y + z       (both variable)
+        Handles: quoted strings, booleans, integers, floats, state references.
+        Returns None if the atom cannot be resolved (e.g. unknown state key).
         """
-        for op in ("+", "-", "*", "/"):
-            if f" {op} " in raw:
-                parts = raw.split(f" {op} ", 1)
-                left = parts[0].strip()
-                right = parts[1].strip()
+        if (raw.startswith('"') and raw.endswith('"')) or \
+           (raw.startswith("'") and raw.endswith("'")):
+            return raw[1:-1]
+        if raw.lower() == "true":
+            return True
+        if raw.lower() == "false":
+            return False
+        try:
+            return int(raw)
+        except ValueError:
+            pass
+        try:
+            return float(raw)
+        except ValueError:
+            pass
+        return self._resolve(raw)
 
-                # Right operand: literal number or variable reference
+    def _try_arithmetic(self, raw: str) -> Any | None:
+        """Evaluate a single binary expression: atom op atom.
+
+        Operators tried in order — multi-char before single-char to avoid
+        ambiguous splits (>= before >, <= before <):
+
+          Comparisons: >= <= == !=  then  > <
+          Arithmetic:  + - * /
+
+        Arithmetic on non-numeric operands is a no-op (returns None).
+        String concatenation: if either operand is a string, + joins them.
+        Comparisons return Python bool (True/False).
+        """
+        for op in (">=", "<=", "==", "!=", ">", "<", "+", "-", "*", "/"):
+            sep = f" {op} "
+            if sep not in raw:
+                continue
+            parts = raw.split(sep, 1)
+            left_raw = parts[0].strip()
+            right_raw = parts[1].strip()
+
+            left_val = self._resolve_atom(left_raw)
+            right_val = self._resolve_atom(right_raw)
+
+            if op == "+":
+                # String concatenation if either side is a string
+                if isinstance(left_val, str) or isinstance(right_val, str):
+                    if left_val is None or right_val is None:
+                        continue
+                    return str(left_val) + str(right_val)
+                # Numeric addition
+                if isinstance(left_val, (int, float)) and isinstance(right_val, (int, float)):
+                    return left_val + right_val
+                continue
+
+            if op in ("-", "*", "/"):
+                if not isinstance(left_val, (int, float)) or \
+                   not isinstance(right_val, (int, float)):
+                    continue
+                if op == "-":
+                    return left_val - right_val
+                if op == "*":
+                    return left_val * right_val
+                if op == "/":
+                    return None if right_val == 0 else left_val / right_val
+
+            if op in ("==", "!=", "<", ">", "<=", ">="):
+                if left_val is None or right_val is None:
+                    continue
                 try:
-                    right_val: int | float = int(right)
-                except ValueError:
-                    try:
-                        right_val = float(right)
-                    except ValueError:
-                        resolved = self._resolve(right)
-                        if isinstance(resolved, (int, float)):
-                            right_val = resolved
-                        else:
-                            continue
-
-                # Left operand: resolve from state
-                current = self._resolve(left)
-                if current is None or not isinstance(current, (int, float)):
+                    if op == "==":
+                        return left_val == right_val
+                    if op == "!=":
+                        return left_val != right_val
+                    if op == "<":
+                        return left_val < right_val
+                    if op == ">":
+                        return left_val > right_val
+                    if op == "<=":
+                        return left_val <= right_val
+                    if op == ">=":
+                        return left_val >= right_val
+                except TypeError:
                     continue
 
-                if op == "+":
-                    return current + right_val
-                if op == "-":
-                    return current - right_val
-                if op == "*":
-                    return current * right_val
-                if op == "/":
-                    if right_val == 0:
-                        return None
-                    return current / right_val
         return None
 
     # ── helpers ────────────────────────────────────────────────

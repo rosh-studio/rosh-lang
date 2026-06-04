@@ -241,14 +241,21 @@ class TestSetExecution:
         ])
         assert rt.state["player"]["health"] == 90
 
-    def test_set_arithmetic_non_numeric_noop(self) -> None:
-        """Arithmetic on non-numeric value is a no-op."""
+    def test_set_string_concat_with_number(self) -> None:
+        """String + number concatenates via str() coercion."""
         rt = _run([
             SetStatement(target="name", value='"Alice"'),
             SetStatement(target="name", value="name + 1"),
         ])
-        # Should fall back to raw string since Alice isn't numeric
-        assert rt.state["name"] == "name + 1"
+        assert rt.state["name"] == "Alice1"
+
+    def test_set_multiply_on_string_is_noop(self) -> None:
+        """* on a string value is a no-op (arithmetic only)."""
+        rt = _run([
+            SetStatement(target="name", value='"Alice"'),
+            SetStatement(target="name", value="name * 2"),
+        ])
+        assert rt.state["name"] == "name * 2"
 
     def test_set_arithmetic_undefined_left_falls_through(self) -> None:
         """Left operand that doesn't resolve falls through to raw string."""
@@ -341,6 +348,149 @@ class TestSetExecution:
             SetStatement(target="x", value="clamp x 0.0 1.0"),
         ])
         assert rt.state["x"] == 0.5
+
+
+class TestPhase2aExpressions:
+    """Phase 2a: string concatenation and comparison operators."""
+
+    # String concatenation
+    def test_string_concat_literal_and_variable(self) -> None:
+        """set greeting to "Hello, " + name — literal + variable."""
+        rt = _run([
+            SetStatement(target="name", value='"Alice"'),
+            SetStatement(target="greeting", value='"Hello, " + name'),
+        ])
+        assert rt.state["greeting"] == "Hello, Alice"
+
+    def test_string_concat_two_variables(self) -> None:
+        """set full to first + last — two string variables."""
+        rt = _run([
+            SetStatement(target="first", value='"John"'),
+            SetStatement(target="last", value='"Doe"'),
+            SetStatement(target="full", value="first + last"),
+        ])
+        assert rt.state["full"] == "JohnDoe"
+
+    def test_string_concat_variable_and_literal(self) -> None:
+        """set msg to prefix + " world" — variable + string literal."""
+        rt = _run([
+            SetStatement(target="prefix", value='"Hello"'),
+            SetStatement(target="msg", value='prefix + " world"'),
+        ])
+        assert rt.state["msg"] == "Hello world"
+
+    def test_string_concat_with_number_coercion(self) -> None:
+        """set label to "Score: " + score — string + number coerces via str()."""
+        rt = _run([
+            SetStatement(target="score", value="42"),
+            SetStatement(target="label", value='"Score: " + score'),
+        ])
+        assert rt.state["label"] == "Score: 42"
+
+    def test_string_concat_unknown_var_noop(self) -> None:
+        """Concatenation with unresolved variable is a no-op."""
+        rt = _run([
+            SetStatement(target="result", value='"Hello, " + unknown'),
+        ])
+        assert rt.state["result"] == '"Hello, " + unknown'
+
+    # Comparison operators
+    def test_comparison_gte_true(self) -> None:
+        """set eligible to age >= 18 returns True when age >= 18."""
+        rt = _run([
+            SetStatement(target="age", value="20"),
+            SetStatement(target="eligible", value="age >= 18"),
+        ])
+        assert rt.state["eligible"] is True
+
+    def test_comparison_gte_false(self) -> None:
+        """set eligible to age >= 18 returns False when age < 18."""
+        rt = _run([
+            SetStatement(target="age", value="16"),
+            SetStatement(target="eligible", value="age >= 18"),
+        ])
+        assert rt.state["eligible"] is False
+
+    def test_comparison_lte(self) -> None:
+        """<= comparison."""
+        rt = _run([
+            SetStatement(target="x", value="5"),
+            SetStatement(target="ok", value="x <= 10"),
+        ])
+        assert rt.state["ok"] is True
+
+    def test_comparison_eq(self) -> None:
+        """== comparison."""
+        rt = _run([
+            SetStatement(target="score", value="100"),
+            SetStatement(target="maxed", value="score == 100"),
+        ])
+        assert rt.state["maxed"] is True
+
+    def test_comparison_neq(self) -> None:
+        """!= comparison."""
+        rt = _run([
+            SetStatement(target="phase", value='"playing"'),
+            SetStatement(target="not_over", value='phase != "done"'),
+        ])
+        assert rt.state["not_over"] is True
+
+    def test_comparison_lt(self) -> None:
+        """< comparison."""
+        rt = _run([
+            SetStatement(target="lives", value="3"),
+            SetStatement(target="low", value="lives < 2"),
+        ])
+        assert rt.state["low"] is False
+
+    def test_comparison_gt(self) -> None:
+        """> comparison."""
+        rt = _run([
+            SetStatement(target="score", value="50"),
+            SetStatement(target="winning", value="score > 40"),
+        ])
+        assert rt.state["winning"] is True
+
+    def test_comparison_two_variables(self) -> None:
+        """Comparison between two state variables."""
+        rt = _run([
+            SetStatement(target="a", value="10"),
+            SetStatement(target="b", value="20"),
+            SetStatement(target="result", value="a < b"),
+        ])
+        assert rt.state["result"] is True
+
+    def test_comparison_string_equality(self) -> None:
+        """String equality comparison."""
+        rt = _run([
+            SetStatement(target="phase", value='"playing"'),
+            SetStatement(target="active", value='phase == "playing"'),
+        ])
+        assert rt.state["active"] is True
+
+    def test_comparison_unresolved_noop(self) -> None:
+        """Comparison with unresolved variable leaves value unchanged."""
+        rt = _run([
+            SetStatement(target="result", value="unknown >= 18"),
+        ])
+        assert rt.state["result"] == "unknown >= 18"
+
+    # Type safety
+    def test_multiply_on_string_noop(self) -> None:
+        """* on a string value is a no-op (numeric operators only)."""
+        rt = _run([
+            SetStatement(target="name", value='"Alice"'),
+            SetStatement(target="name", value="name * 2"),
+        ])
+        assert rt.state["name"] == "name * 2"
+
+    def test_divide_on_string_noop(self) -> None:
+        """/ on a string value is a no-op."""
+        rt = _run([
+            SetStatement(target="name", value='"Alice"'),
+            SetStatement(target="name", value="name / 2"),
+        ])
+        assert rt.state["name"] == "name / 2"
 
 
 class TestWhenExecution:
