@@ -387,10 +387,10 @@ _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
 def _sanitize_background(value: str) -> str:
     """Return value if it is a safe CSS background value, else return the default.
 
-    Prevents CSS injection via } ; { when the value lands in a <style> block,
-    and prevents single-quote injection in url('...').
+    Prevents CSS injection via } ; { when the value lands in a <style> block.
     Accepted forms: hex colour, named colour, rgb/rgba/hsl/hsla, http/https URL,
-    data: URI, local image file path.
+    data: URI, local image file path. Values with quotes or other unsafe characters
+    are rejected by _URL_UNSAFE before reaching the CSS template.
     """
     v = value.strip()
     if not v:
@@ -426,7 +426,7 @@ def _html_page(
     )
     if is_image:
         bg_css = (
-            f"background-image: url('{safe_bg}');\n"
+            f'background-image: url("{escape(safe_bg)}");\n'
             f"      background-size: cover;\n"
             f"      background-position: center;\n"
             f"      background-repeat: no-repeat"
