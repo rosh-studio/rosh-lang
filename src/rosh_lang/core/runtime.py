@@ -84,6 +84,8 @@ class Runtime:
         self._call_stack: set[str] = set()
         self._programme: Programme | None = None
         self._run_depth = 0
+        # Tracks loaded components: namespace → {name, description, provides, exposes, alias}
+        self.components: dict[str, dict[str, Any]] = {}
 
     # ── public API ────────────────────────────────────────────
 
@@ -412,6 +414,9 @@ class Runtime:
         if target == "programme":
             return self._look_programme()
 
+        if target == "components":
+            return self._look_components()
+
         if target:
             # Look at specific object/field
             val = self._resolve(target)
@@ -467,6 +472,27 @@ class Runtime:
             summary = _stmt_summary(rd)
             self.output.write(f"  {i:>3}  {rd['type']:<12}{summary}\n")
         return semantic
+
+    def _look_components(self) -> list[dict[str, Any]]:
+        """Return loaded component manifest — namespace, name, provides, exposes."""
+        if not self.components:
+            self.output.write("components: none loaded\n")
+            return []
+        self.output.write(f"components ({len(self.components)} loaded)\n")
+        result: list[dict[str, Any]] = []
+        for ns, info in sorted(self.components.items()):
+            name = info["name"]
+            alias_str = f" as {ns}" if info.get("alias") else ""
+            desc = f" — {info['description']}" if info.get("description") else ""
+            parts: list[str] = []
+            if info.get("provides"):
+                parts.append(f"provides: {' '.join(info['provides'])}")
+            if info.get("exposes"):
+                parts.append(f"exposes: {' '.join(info['exposes'])}")
+            contract = f" [{', '.join(parts)}]" if parts else ""
+            self.output.write(f"  {name}{alias_str}{desc}{contract}\n")
+            result.append({"namespace": ns, **info})
+        return result
 
     def _exec_connect(self, stmt: ConnectStatement) -> None:
         if not stmt.name:
@@ -648,7 +674,7 @@ class Runtime:
 
     def _exec_use(self, stmt: UseStatement) -> None:
         """Load a widget: find, namespace-prefix, apply config, execute."""
-        from rosh_lang.core.widgets import load_widget
+        from rosh_lang.core.widgets import find_widget, load_widget, parse_metadata
 
         stmts = load_widget(
             stmt.name,
@@ -658,6 +684,20 @@ class Runtime:
         )
         if not stmts:
             return
+
+        # Register component in the loaded-components manifest.
+        ns = stmt.alias or stmt.name
+        path = find_widget(stmt.name, self.search_paths)
+        if path is not None:
+            meta = parse_metadata(path)
+            self.components[ns] = {
+                "name": stmt.name,
+                "alias": stmt.alias,
+                "description": meta.get("description", ""),
+                "provides": meta.get("provides", []),
+                "exposes": meta.get("exposes", []),
+            }
+
         # Run the loaded statements as a mini-programme
         # (handles when/end block collection correctly)
         self.run(Programme(statements=stmts))

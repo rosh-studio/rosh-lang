@@ -35,6 +35,7 @@ from rosh_lang.core.model import (
     SpriteStatement,
     WhenStatement,
 )
+from rosh_lang.core.parser import parse_string
 from rosh_lang.core.runtime import Runtime, run
 
 
@@ -1090,6 +1091,62 @@ class TestLookExecution:
         result = rt.execute(LookStatement(target="programme"))
         send = next(d for d in result if d["type"] == "send")
         assert send["event"] == "scored"
+
+    def test_look_components_empty(self) -> None:
+        rt = _run([])
+        buf = io.StringIO()
+        rt.output = buf
+        result = rt.execute(LookStatement(target="components"))
+        assert result == []
+        assert "none loaded" in buf.getvalue()
+
+    def test_look_components_after_use(self) -> None:
+        from pathlib import Path
+        from rosh_lang.core.widgets import get_bundled_library_path
+        rt = Runtime(
+            output=io.StringIO(),
+            search_paths=[get_bundled_library_path()],
+        )
+        rt.run(parse_string("use score"))
+        result = rt.execute(LookStatement(target="components"))
+        assert len(result) == 1
+        assert result[0]["name"] == "score"
+        assert result[0]["namespace"] == "score"
+        assert "value" in result[0]["exposes"]
+
+    def test_look_components_alias(self) -> None:
+        from rosh_lang.core.widgets import get_bundled_library_path
+        rt = Runtime(
+            output=io.StringIO(),
+            search_paths=[get_bundled_library_path()],
+        )
+        rt.run(parse_string("use score as home_score"))
+        result = rt.execute(LookStatement(target="components"))
+        assert result[0]["namespace"] == "home_score"
+        assert result[0]["name"] == "score"
+        assert result[0]["alias"] == "home_score"
+
+    def test_look_components_shows_provides(self) -> None:
+        from rosh_lang.core.widgets import get_bundled_library_path
+        buf = io.StringIO()
+        rt = Runtime(output=buf, search_paths=[get_bundled_library_path()])
+        rt.run(parse_string("use lives"))
+        rt.execute(LookStatement(target="components"))
+        output = buf.getvalue()
+        assert "game-over" in output   # in provides
+        assert "count" in output        # in exposes
+
+    def test_look_components_multiple(self) -> None:
+        from rosh_lang.core.widgets import get_bundled_library_path
+        rt = Runtime(
+            output=io.StringIO(),
+            search_paths=[get_bundled_library_path()],
+        )
+        rt.run(parse_string("use score\nuse timer"))
+        result = rt.execute(LookStatement(target="components"))
+        names = {r["name"] for r in result}
+        assert "score" in names
+        assert "timer" in names
 
 
 # ══════════════════════════════════════════════════════════════

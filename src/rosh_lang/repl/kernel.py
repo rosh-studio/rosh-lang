@@ -114,9 +114,9 @@ _HELP_TOPICS: Final[dict[str, HelpTopic]] = {
     ),
     "look": HelpTopic(
         command="look",
-        summary="Inspect scene or object",
-        usage="look [target]",
-        examples=("look", "look player", "look player.color"),
+        summary="Inspect scene, object, or loaded components",
+        usage="look [target|components|programme]",
+        examples=("look", "look player", "look player.color", "look components", "look programme"),
         aliases=("examine", "inspect", "x"),
         accepts_no_args=True,
     ),
