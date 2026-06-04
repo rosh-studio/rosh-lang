@@ -1010,6 +1010,51 @@ class TestUseExecution:
         assert rt.state["counter"]["value"] == 0
         assert "click" in rt.handlers
 
+    def test_use_alias_creates_namespaced_state(self) -> None:
+        from rosh_lang.core.parser import parse_string
+        prog = parse_string("use counter as clicks")
+        buf = io.StringIO()
+        rt = Runtime(output=buf, search_paths=[WIDGETS_DIR])
+        rt.run(prog)
+        assert "clicks" in rt.state
+        assert rt.state["clicks"]["value"] == 0
+        assert "counter" not in rt.state
+
+    def test_use_alias_with_config(self) -> None:
+        from rosh_lang.core.parser import parse_string
+        prog = parse_string("use score as hud1\nset hud1.value to 99")
+        buf = io.StringIO()
+        rt = Runtime(output=buf, search_paths=[WIDGETS_DIR])
+        rt.run(prog)
+        assert rt.state["hud1"]["value"] == 99
+        assert "score" not in rt.state
+
+    def test_two_aliases_have_independent_state(self) -> None:
+        from rosh_lang.core.parser import parse_string
+        prog = parse_string(
+            "use score as p1_score\n"
+            "use score as p2_score\n"
+            "set p1_score.value to 10\n"
+            "set p2_score.value to 20\n"
+        )
+        buf = io.StringIO()
+        rt = Runtime(output=buf, search_paths=[WIDGETS_DIR])
+        rt.run(prog)
+        assert rt.state["p1_score"]["value"] == 10
+        assert rt.state["p2_score"]["value"] == 20
+
+    def test_use_alias_then_print_interpolation(self) -> None:
+        from rosh_lang.core.parser import parse_string
+        prog = parse_string(
+            "use score as hud1\n"
+            "set hud1.value to 7\n"
+            'print "Points: {hud1.value}"'
+        )
+        buf = io.StringIO()
+        rt = Runtime(output=buf, search_paths=[WIDGETS_DIR])
+        rt.run(prog)
+        assert "Points: 7" in buf.getvalue()
+
     def test_use_widget_handler_fires(self) -> None:
         from rosh_lang.core.parser import parse_string
         prog = parse_string("use counter")

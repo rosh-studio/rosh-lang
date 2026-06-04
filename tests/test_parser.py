@@ -539,6 +539,36 @@ class TestUse:
         with pytest.raises(ParseError, match="use requires"):
             parse_string("use")
 
+    def test_use_with_alias(self) -> None:
+        prog = parse_string("use score as hud1")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, UseStatement)
+        assert stmt.name == "score"
+        assert stmt.alias == "hud1"
+        assert stmt.config == {}
+
+    def test_use_with_alias_and_config(self) -> None:
+        prog = parse_string("use score as player_score label Player")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, UseStatement)
+        assert stmt.name == "score"
+        assert stmt.alias == "player_score"
+        assert stmt.config == {"label": "Player"}
+
+    def test_use_without_alias_has_none(self) -> None:
+        prog = parse_string("use score")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, UseStatement)
+        assert stmt.alias is None
+
+    def test_use_with_alias_multiple_config_pairs(self) -> None:
+        prog = parse_string("use score as enemy_score anchor top-right theme dark")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, UseStatement)
+        assert stmt.name == "score"
+        assert stmt.alias == "enemy_score"
+        assert stmt.config == {"anchor": "top-right", "theme": "dark"}
+
 
 # ── background ──────────────────────────────────────────────────
 

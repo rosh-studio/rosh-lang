@@ -537,6 +537,7 @@ class Runtime:
         stmts = load_widget(
             stmt.name,
             config=stmt.config if stmt.config else None,
+            namespace=stmt.alias,
             search_paths=self.search_paths,
         )
         if not stmts:

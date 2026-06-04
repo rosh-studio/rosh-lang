@@ -213,6 +213,45 @@ class TestLoadWidget:
         assert last_speed[-1].value == "0.05"
 
 
+# ── Named alias (use X as Y) ─────────────────────────────────────
+
+
+class TestLoadWidgetAlias:
+    """use score as hud1 — namespace prefix uses the alias, not the component name."""
+
+    def test_alias_replaces_namespace(self):
+        stmts = load_widget("counter", namespace="clicks", search_paths=[BUNDLED_DIR])
+        names = [s.name for s in stmts if isinstance(s, CreateStatement)]
+        assert all(n.startswith("clicks.") for n in names)
+        assert not any(n.startswith("counter.") for n in names)
+
+    def test_alias_set_targets_use_alias(self):
+        stmts = load_widget("counter", namespace="clicks", search_paths=[BUNDLED_DIR])
+        targets = [s.target for s in stmts if isinstance(s, SetStatement)]
+        assert all(t.startswith("clicks.") for t in targets)
+
+    def test_no_alias_uses_component_name(self):
+        stmts = load_widget("counter", search_paths=[BUNDLED_DIR])
+        names = [s.name for s in stmts if isinstance(s, CreateStatement)]
+        assert all(n.startswith("counter.") for n in names)
+
+    def test_alias_with_config_uses_alias_in_set(self):
+        stmts = load_widget("counter", config={"start": "5"}, namespace="clicks",
+                            search_paths=[BUNDLED_DIR])
+        config_sets = [s for s in stmts if isinstance(s, SetStatement) and s.target == "clicks.start"]
+        assert len(config_sets) == 1
+        assert config_sets[0].value == "5"
+
+    def test_two_aliases_are_independent(self):
+        a = load_widget("counter", namespace="a_counter", search_paths=[BUNDLED_DIR])
+        b = load_widget("counter", namespace="b_counter", search_paths=[BUNDLED_DIR])
+        a_names = {s.name for s in a if isinstance(s, CreateStatement)}
+        b_names = {s.name for s in b if isinstance(s, CreateStatement)}
+        assert all(n.startswith("a_counter.") for n in a_names)
+        assert all(n.startswith("b_counter.") for n in b_names)
+        assert a_names.isdisjoint(b_names)
+
+
 # ── Bundled library discovery ──────────────────────────────────────
 
 

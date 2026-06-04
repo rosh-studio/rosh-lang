@@ -204,9 +204,10 @@ class AfterStatement:
 
 @dataclass
 class UseStatement:
-    """use score / use player speed 0.02 / use enemy-grid rows 2 cols 5"""
+    """use score / use score as hud1 / use player speed 0.02 / use enemy-grid rows 2 cols 5"""
 
     name: str
+    alias: str | None = None
     config: dict[str, str] = field(default_factory=dict)
     line: int = 0
 

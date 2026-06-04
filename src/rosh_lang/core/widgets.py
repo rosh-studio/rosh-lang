@@ -249,6 +249,7 @@ def _list_available(search_paths: list[Path]) -> dict[str, Path]:
 def load_widget(
     name: str,
     config: dict[str, str] | None = None,
+    namespace: str | None = None,
     search_paths: list[Path] | None = None,
     _loading: set[str] | None = None,
 ) -> list[Statement]:
@@ -257,10 +258,13 @@ def load_widget(
     Returns a list of namespace-prefixed statements ready to execute.
     Returns empty list if widget not found (graceful fallback).
 
-    The _loading set tracks widgets currently being loaded to detect
-    circular dependencies. On circular dep: warn and skip (Roshonic).
+    namespace: when set (e.g. from `use score as hud1`), all name prefixes
+    use this value instead of the component name. The component file is still
+    found by name. Circular-dependency tracking always uses the component name.
     """
-    # Circular dependency guard
+    ns = namespace or name
+
+    # Circular dependency guard (always keyed on component name, not alias)
     if _loading is None:
         _loading = set()
 
@@ -276,7 +280,7 @@ def load_widget(
     try:
         # Python factory — call generate(), get raw statements
         if path.suffix == ".py":
-            return _load_python_factory(path, name, config or {})
+            return _load_python_factory(path, ns, config or {})
 
         programme = parse_file(path)
 
@@ -289,6 +293,7 @@ def load_widget(
                 nested = load_widget(
                     stmt.name,
                     config=stmt.config if stmt.config else None,
+                    namespace=stmt.alias,
                     search_paths=search_paths,
                     _loading=_loading,
                 )
@@ -296,14 +301,14 @@ def load_widget(
             else:
                 expanded.append(stmt)
 
-        # Prefix everything with this widget's namespace
-        prefixed = [_prefix_statement(s, name) for s in expanded]
+        # Prefix everything with the resolved namespace
+        prefixed = [_prefix_statement(s, ns) for s in expanded]
 
         # Apply config overrides as set statements
         if config:
             config_stmts: list[Statement] = []
             for key, value in config.items():
-                config_stmts.append(SetStatement(target=f"{name}.{key}", value=value))
+                config_stmts.append(SetStatement(target=f"{ns}.{key}", value=value))
             prefixed.extend(config_stmts)
 
         return prefixed

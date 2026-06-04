@@ -410,9 +410,14 @@ def _parse_use(line_text: str, line: int, source: str) -> UseStatement:
         raise ParseError("use requires a widget name", line=line, source=source)
     tokens = rest.split()
     name = tokens[0]
-    # Parse config: key value pairs after the name
-    config: dict[str, str] = {}
+    # Detect optional alias: use <name> as <alias> [config...]
+    alias: str | None = None
     i = 1
+    if i + 1 < len(tokens) and tokens[i].lower() == "as":
+        alias = tokens[i + 1]
+        i += 2
+    # Parse config: key value pairs after name (and optional alias)
+    config: dict[str, str] = {}
     while i < len(tokens):
         key = tokens[i]
         if i + 1 < len(tokens):
@@ -422,7 +427,7 @@ def _parse_use(line_text: str, line: int, source: str) -> UseStatement:
             # Odd trailing token — treat as flag with empty value
             config[key] = ""
             i += 1
-    return UseStatement(name=name, config=config, line=line)
+    return UseStatement(name=name, alias=alias, config=config, line=line)
 
 
 def _parse_after(line_text: str, line: int, source: str) -> AfterStatement:
