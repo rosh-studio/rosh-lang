@@ -259,6 +259,7 @@ def test_summarise_target_terminal() -> None:
     assert "terminal" in summary
     assert "after" in summary        # listed as no-op
     assert "get" in summary          # supported
+    assert "background" in summary   # supported as observable state
 
 
 def test_summarise_target_web() -> None:
@@ -273,6 +274,15 @@ def test_summarise_target_world() -> None:
     summary = _summarise_target("world")
     assert "world" in summary
     assert "when" in summary         # listed as absent in world
+
+
+def test_summarise_target_scratch_matches_capability_table() -> None:
+    from rosh_lang.intent.planner import _summarise_target
+    summary = _summarise_target("scratch")
+    supported, absent = summary.split("Absent (do not use):", 1)
+    assert "after" in supported
+    assert "go" not in supported
+    assert "go" in absent
 
 
 def test_summarise_target_unknown() -> None:

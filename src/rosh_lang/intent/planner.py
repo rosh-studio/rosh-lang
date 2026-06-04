@@ -111,12 +111,13 @@ _TARGET_CAPS: dict[str, dict[str, str]] = {
     "terminal": {
         "supported": (
             "print say create set destroy send event on when if repeat "
-            "for-each add remove define do look get connect go"
+            "for-each add remove define do look get connect go background"
         ),
-        "no-op": "after sprite sound play animate background",
+        "no-op": "after sprite sound play animate",
         "absent": "",
         "notes": (
             "after/sprite/sound/play/animate parse without error but produce no effect. "
+            "background stores state but has no visual effect. "
             "get and look return state data. connect stores a named URL."
         ),
     },
@@ -153,13 +154,14 @@ _TARGET_CAPS: dict[str, dict[str, str]] = {
     "scratch": {
         "supported": (
             "print say create set destroy send on when if repeat "
-            "define do go sound play background"
+            "define do after sound play background"
         ),
         "no-op": "",
-        "absent": "event for-each add remove get connect look after animate sprite",
+        "absent": "event for-each add remove get connect look go animate sprite",
         "notes": (
-            "Scratch export. event/for-each/add/remove/animate/sprite absent. "
-            "Custom events cannot be declared. No scene or collection operations."
+            "Scratch export. event/for-each/add/remove/go/animate/sprite absent. "
+            "Custom events cannot be declared. after compiles to wait then broadcast. "
+            "No scene or collection operations."
         ),
     },
     "world": {

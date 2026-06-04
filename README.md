@@ -268,8 +268,7 @@ Coordinates: `0.0`-`1.0` maps to percentage of the canvas. Values `>1.0` are tre
 | `destroy` | `name` | Object destroyed |
 | `timer_done` | `name` | Timer widget finished |
 | `game_start` | — | Game started (via game-lifecycle widget) |
-| `game-over` | — | Lives reached zero (sent by `lives` widget) |
-| `game_over` | — | Game-over phase entered (sent by `game-lifecycle` widget) |
+| `game_over` | — | Lives reached zero; `game-lifecycle` enters its game-over phase |
 | `game_restart` | — | Game restarted (via game-lifecycle widget) |
 
 ### Control Flow

@@ -527,6 +527,17 @@ class TestIfCodegen:
         result = compile_programme(prog)
         assert 'rosh.get("status") === "ready"' in result.init_code
 
+    def test_if_quoted_string_comparison_strips_source_quotes(self):
+        """Quoted RHS values must not become strings containing literal quote characters."""
+        prog = parse_string(
+            'if phase == "playing"\n'
+            '  print "go"\n'
+            'end\n'
+        )
+        result = compile_programme(prog)
+        assert 'rosh.get("phase") === "playing"' in result.init_code
+        assert '\\"playing\\"' not in result.init_code
+
     def test_else_if_chain(self):
         prog = parse_string(
             'if x > 5\n'
