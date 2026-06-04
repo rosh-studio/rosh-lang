@@ -529,6 +529,15 @@ class TestUse:
         assert stmt.name == "enemy-grid"
         assert stmt.config == {"rows": "2", "cols": "5"}
 
+    def test_use_with_quoted_config_value(self) -> None:
+        prog = parse_string('use label text "Welcome home"')
+        stmt = prog.statements[0]
+        assert stmt.config == {"text": "Welcome home"}
+
+    def test_use_with_unclosed_quoted_config_is_parse_error(self) -> None:
+        with pytest.raises(ParseError, match="invalid use config"):
+            parse_string('use label text "Welcome home')
+
     def test_use_hyphenated_name(self) -> None:
         prog = parse_string("use game-lifecycle")
         stmt = prog.statements[0]
@@ -912,3 +921,17 @@ class TestAfter:
     def test_non_numeric_delay(self) -> None:
         with pytest.raises(ParseError, match="number"):
             parse_string("after soon send wave")
+
+
+class TestStructuralMarkers:
+    def test_rejects_unmatched_end(self) -> None:
+        with pytest.raises(ParseError, match="end has no matching block"):
+            parse_string("end", strict_blocks=True)
+
+    def test_rejects_unmatched_else(self) -> None:
+        with pytest.raises(ParseError, match="else has no matching if"):
+            parse_string("else", strict_blocks=True)
+
+    def test_rejects_unclosed_when(self) -> None:
+        with pytest.raises(ParseError, match="when block has no matching end"):
+            parse_string("when click\nprint hello", strict_blocks=True)

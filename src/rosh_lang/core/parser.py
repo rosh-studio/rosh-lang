@@ -64,10 +64,21 @@ def parse_file(path: Path | str, *, allow_extensions: bool = False) -> Programme
     """Parse a .rosh file into a Programme."""
     path = Path(path)
     text = path.read_text(encoding="utf-8")
-    return parse_string(text, source=str(path), allow_extensions=allow_extensions)
+    return parse_string(
+        text,
+        source=str(path),
+        allow_extensions=allow_extensions,
+        strict_blocks=True,
+    )
 
 
-def parse_string(text: str, source: str = "<string>", *, allow_extensions: bool = False) -> Programme:
+def parse_string(
+    text: str,
+    source: str = "<string>",
+    *,
+    allow_extensions: bool = False,
+    strict_blocks: bool = False,
+) -> Programme:
     """Parse a string of Rosh code into a Programme."""
     from rosh_lang.core.normalise import normalise
     # Normalise each line; a single line may expand to multiple canonical lines
@@ -92,15 +103,135 @@ def parse_string(text: str, source: str = "<string>", *, allow_extensions: bool 
         else:
             stmt = _parse_line(raw_line, line=i, source=source, allow_extensions=allow_extensions)
             statements.append(stmt)
-    # Post-pass: collect if/else/end blocks into IfStatement trees
-    statements = _collect_if_blocks(statements, source=source)
-    # Post-pass: collect define...end blocks into DefineStatement.body
-    statements = _collect_define_blocks(statements, source=source)
-    # Post-pass: collect repeat...end blocks into RepeatStatement.body
-    statements = _collect_repeat_blocks(statements, source=source)
-    # Post-pass: collect for each...end blocks into ForEachStatement.body
-    statements = _collect_foreach_blocks(statements, source=source)
+    # Collect structured blocks in one recursive pass so different block types
+    # can nest without an order-dependent post-pass losing their bodies.
+    statements = _collect_structured_blocks(statements, source=source)
+    if strict_blocks:
+        _validate_when_blocks(statements, source=source)
     return Programme(statements=statements, source=source)
+
+
+_STRUCTURED_BLOCK_TYPES = (IfStatement, DefineStatement, RepeatStatement, ForEachStatement)
+
+
+def _collect_structured_blocks(
+    stmts: list[Statement], source: str = ""
+) -> list[Statement]:
+    """Collect if/define/repeat/for-each blocks, preserving top-level when/end."""
+    result: list[Statement] = []
+    i = 0
+    while i < len(stmts):
+        stmt = stmts[i]
+        if isinstance(stmt, _STRUCTURED_BLOCK_TYPES):
+            collected, i = _collect_structured_statement(stmts, i, source)
+            result.append(collected)
+        else:
+            result.append(stmt)
+            i += 1
+    return result
+
+
+def _validate_when_blocks(stmts: list[Statement], source: str) -> None:
+    """Validate the flat when/end markers retained for event registration."""
+    open_when: WhenStatement | None = None
+    for stmt in stmts:
+        if isinstance(stmt, WhenStatement):
+            if open_when is not None:
+                raise ParseError(
+                    "when blocks cannot be nested",
+                    line=stmt.line,
+                    source=source,
+                )
+            open_when = stmt
+        elif isinstance(stmt, EndStatement):
+            if open_when is None:
+                raise ParseError("end has no matching block", line=stmt.line, source=source)
+            open_when = None
+        elif isinstance(stmt, ElseStatement):
+            raise ParseError("else has no matching if", line=stmt.line, source=source)
+
+    if open_when is not None:
+        raise ParseError(
+            "when block has no matching end",
+            line=open_when.line,
+            source=source,
+        )
+
+
+def _collect_structured_statement(
+    stmts: list[Statement], start: int, source: str
+) -> tuple[Statement, int]:
+    stmt = stmts[start]
+    if isinstance(stmt, IfStatement):
+        return _collect_structured_if(stmts, start, source)
+
+    body, i, terminator = _collect_structured_body(stmts, start + 1, source)
+    if terminator != "end":
+        kind = type(stmt).__name__.removesuffix("Statement").lower()
+        raise ParseError(f"{kind} block has no matching end", line=stmt.line, source=source)
+
+    if isinstance(stmt, DefineStatement):
+        return DefineStatement(
+            name=stmt.name, params=stmt.params, body=body, line=stmt.line
+        ), i
+    if isinstance(stmt, RepeatStatement):
+        return RepeatStatement(
+            count=stmt.count, var=stmt.var, body=body, line=stmt.line
+        ), i
+    assert isinstance(stmt, ForEachStatement)
+    return ForEachStatement(
+        var=stmt.var, target=stmt.target, body=body, line=stmt.line
+    ), i
+
+
+def _collect_structured_if(
+    stmts: list[Statement], start: int, source: str
+) -> tuple[IfStatement, int]:
+    stmt = stmts[start]
+    assert isinstance(stmt, IfStatement)
+    then_body, i, terminator = _collect_structured_body(stmts, start + 1, source)
+    else_body: list[Statement] = []
+
+    if terminator == "else":
+        if i < len(stmts) and isinstance(stmts[i], IfStatement) and stmts[i].line == stmts[i - 1].line:
+            nested, i = _collect_structured_if(stmts, i, source)
+            else_body = [nested]
+            return IfStatement(
+                condition=stmt.condition,
+                then_body=then_body,
+                else_body=else_body,
+                line=stmt.line,
+            ), i
+        else_body, i, terminator = _collect_structured_body(stmts, i, source)
+
+    if terminator != "end":
+        raise ParseError("if block has no matching end", line=stmt.line, source=source)
+    return IfStatement(
+        condition=stmt.condition,
+        then_body=then_body,
+        else_body=else_body,
+        line=stmt.line,
+    ), i
+
+
+def _collect_structured_body(
+    stmts: list[Statement], start: int, source: str
+) -> tuple[list[Statement], int, str]:
+    body: list[Statement] = []
+    i = start
+    while i < len(stmts):
+        stmt = stmts[i]
+        if isinstance(stmt, EndStatement):
+            return body, i + 1, "end"
+        if isinstance(stmt, ElseStatement):
+            return body, i + 1, "else"
+        if isinstance(stmt, _STRUCTURED_BLOCK_TYPES):
+            collected, i = _collect_structured_statement(stmts, i, source)
+            body.append(collected)
+        else:
+            body.append(stmt)
+            i += 1
+    return body, i, ""
 
 
 def _parse_line(raw: str, line: int, source: str, *, allow_extensions: bool = False) -> Statement:
@@ -416,7 +547,10 @@ def _parse_use(line_text: str, line: int, source: str) -> UseStatement:
     rest = line_text[len("use"):].strip()
     if not rest:
         raise ParseError("use requires a widget name", line=line, source=source)
-    tokens = rest.split()
+    try:
+        tokens = shlex.split(rest)
+    except ValueError as exc:
+        raise ParseError(f"invalid use config: {exc}", line=line, source=source) from exc
     name = tokens[0]
     # Detect optional alias: use <name> as <alias> [config...]
     alias: str | None = None

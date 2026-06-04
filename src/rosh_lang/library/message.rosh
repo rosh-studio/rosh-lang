@@ -1,0 +1,16 @@
+# widget: message
+# version: 0.3
+# description: Text overlay with configurable position, color, and content
+# config: text=Hello x=0.3 y=0.4 bg=#333 text_color=#fff font_size=14px
+# exposes: box
+# licence: Rosh-BSL
+
+create object box
+set box.x to config.x
+set box.y to config.y
+set box.width to 0.4
+set box.height to 0.08
+set box.color to config.bg
+set box.label to config.text
+set box.text_color to config.text_color
+set box.font_size to config.font_size

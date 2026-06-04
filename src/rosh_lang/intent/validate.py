@@ -23,7 +23,7 @@ def validate_generated_rosh(source: str) -> ValidationResult:
     if not text:
         return ValidationResult(programme=None, error="Planner returned no Rosh code.")
     try:
-        programme = parse_string(text, source="<intent>")
+        programme = parse_string(text, source="<intent>", strict_blocks=True)
     except Exception as exc:
         return ValidationResult(programme=None, error=str(exc))
 

@@ -1,0 +1,16 @@
+# widget: label
+# version: 0.3
+# description: Positioned text label
+# config: text=Hello x=0.5 y=0.5 bg=#555 text_color=#fff font_size=14px
+# exposes: display
+# licence: Rosh-BSL
+
+create object display
+set display.label to config.text
+set display.x to config.x
+set display.y to config.y
+set display.width to 0.20
+set display.height to 0.06
+set display.color to config.bg
+set display.text_color to config.text_color
+set display.font_size to config.font_size

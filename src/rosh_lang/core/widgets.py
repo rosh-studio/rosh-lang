@@ -14,22 +14,27 @@ from __future__ import annotations
 import difflib
 import importlib.util
 import re
+import shlex
 import warnings
 from pathlib import Path
 from typing import Any
 
 from rosh_lang.core.model import (
+    AddStatement,
     AfterStatement,
     AnimateStatement,
     CreateStatement,
     DefineStatement,
     DestroyStatement,
     DoStatement,
+    ForEachStatement,
     IfStatement,
     OnStatement,
     PlayStatement,
     PrintStatement,
     Programme,
+    RemoveStatement,
+    RepeatStatement,
     SayStatement,
     SendStatement,
     SetStatement,
@@ -42,7 +47,9 @@ from rosh_lang.core.model import (
 from rosh_lang.core.parser import parse_file
 
 _INTERP_RE = re.compile(r"\{([^}]+)\}")
-_META_RE = re.compile(r"^#\s*(widget|version|description|config|licence):\s*(.+)$")
+_META_RE = re.compile(
+    r"^#\s*(widget|version|description|config|licence|provides|requires|exposes):\s*(.+)$"
+)
 
 # ── HUD anchor/theme system ──────────────────────────────────
 
@@ -168,10 +175,12 @@ def parse_metadata(path: Path) -> dict[str, Any]:
         key, value = m.group(1), m.group(2).strip()
         if key == "config":
             # Parse "max=999 min=0" → {"max": "999", "min": "0"}
-            for pair in value.split():
+            for pair in shlex.split(value):
                 if "=" in pair:
                     k, v = pair.split("=", 1)
                     meta["config"][k] = v
+        elif key in ("provides", "requires", "exposes"):
+            meta[key] = [item for item in re.split(r"[\s,]+", value) if item]
         else:
             meta[key] = value
     return meta
@@ -289,6 +298,10 @@ def load_widget(
             return _load_python_factory(path, ns, config or {})
 
         programme = parse_file(path)
+        meta = parse_metadata(path)
+        declared_config = dict(meta.get("config", {}))
+        merged_config = dict(declared_config)
+        merged_config.update(config or {})
 
         # Resolve nested use statements, then prefix everything
         expanded: list[Statement] = []
@@ -310,14 +323,20 @@ def load_widget(
         # Prefix everything with the resolved namespace
         prefixed = [_prefix_statement(s, ns) for s in expanded]
 
-        # Apply config overrides as set statements
-        if config:
-            config_stmts: list[Statement] = []
-            for key, value in config.items():
-                config_stmts.append(SetStatement(target=f"{ns}.{key}", value=value))
-            prefixed.extend(config_stmts)
+        # Declared config is available before the component body at ns.config.*.
+        config_stmts = [
+            SetStatement(target=f"{ns}.config.{key}", value=value)
+            for key, value in merged_config.items()
+        ]
 
-        return prefixed
+        # Caller keys also remain direct post-load overrides for compatibility,
+        # especially existing components and dotted paths such as display.x.
+        direct_overrides = [
+            SetStatement(target=f"{ns}.{key}", value=value)
+            for key, value in (config or {}).items()
+        ]
+
+        return config_stmts + prefixed + direct_overrides
     finally:
         _loading.discard(name)
 
@@ -500,6 +519,7 @@ def _prefix_statement(stmt: Statement, ns: str) -> Statement:
     if isinstance(stmt, DefineStatement):
         return DefineStatement(
             name=_prefix_name(stmt.name, ns),
+            params=[_prefix_name(p, ns) for p in stmt.params],
             body=[_prefix_statement(s, ns) for s in stmt.body],
             line=stmt.line,
         )
@@ -507,6 +527,40 @@ def _prefix_statement(stmt: Statement, ns: str) -> Statement:
     if isinstance(stmt, DoStatement):
         return DoStatement(
             name=_prefix_name(stmt.name, ns),
+            args={
+                _prefix_name(k, ns): _prefix_value_reference(v, ns)
+                for k, v in stmt.args.items()
+            },
+            line=stmt.line,
+        )
+
+    if isinstance(stmt, RepeatStatement):
+        return RepeatStatement(
+            count=_prefix_value_reference(stmt.count, ns),
+            var=_prefix_name(stmt.var, ns) if stmt.var else "",
+            body=[_prefix_statement(s, ns) for s in stmt.body],
+            line=stmt.line,
+        )
+
+    if isinstance(stmt, AddStatement):
+        return AddStatement(
+            item=_prefix_value_reference(stmt.item, ns),
+            target=_prefix_name(stmt.target, ns),
+            line=stmt.line,
+        )
+
+    if isinstance(stmt, RemoveStatement):
+        return RemoveStatement(
+            item=_prefix_value_reference(stmt.item, ns),
+            target=_prefix_name(stmt.target, ns),
+            line=stmt.line,
+        )
+
+    if isinstance(stmt, ForEachStatement):
+        return ForEachStatement(
+            var=_prefix_name(stmt.var, ns),
+            target=_prefix_name(stmt.target, ns),
+            body=[_prefix_statement(s, ns) for s in stmt.body],
             line=stmt.line,
         )
 
@@ -559,6 +613,10 @@ def _prefix_set_value(target: str, value: str, ns: str) -> str:
     if value == "random" or (value.startswith("random ") and len(value.split()) == 3):
         return value
 
+    if value.startswith("count of "):
+        list_name = value[len("count of "):].strip()
+        return f"count of {_prefix_name(list_name, ns)}"
+
     # Clamp: "clamp field min max" — prefix the field reference
     if value.startswith("clamp "):
         parts = value.split()
@@ -566,26 +624,41 @@ def _prefix_set_value(target: str, value: str, ns: str) -> str:
             return f"clamp {_prefix_name(parts[1], ns)} {parts[2]} {parts[3]}"
 
     # Arithmetic: "target + 1" → "ns.target + 1", "target + drift" → "ns.target + ns.drift"
-    for op in ("+", "-", "*", "/"):
+    for op in (">=", "<=", "==", "!=", ">", "<", "+", "-", "*", "/"):
         sep = f" {op} "
         if sep in value:
             parts = value.split(sep, 1)
-            left = parts[0].strip()
-            right = parts[1].strip()
-            # Prefix the left operand (always a name reference)
-            prefixed_left = _prefix_name(left, ns)
-            # Prefix the right operand if it's a name (not a numeric literal)
-            try:
-                float(right)
-            except ValueError:
-                right = _prefix_name(right, ns)
-            return f"{prefixed_left}{sep}{right}"
+            left = _prefix_value_reference(parts[0].strip(), ns)
+            right = _prefix_value_reference(parts[1].strip(), ns)
+            return f"{left}{sep}{right}"
 
     # Interpolation in unquoted strings
     if "{" in value:
         return _prefix_interpolation(value, ns)
 
+    if "." in value:
+        return _prefix_value_reference(value, ns)
     return value
+
+
+def _prefix_value_reference(value: str, ns: str) -> str:
+    """Prefix a bare value only when it is a state reference."""
+    if (value.startswith('"') and value.endswith('"')) or \
+       (value.startswith("'") and value.endswith("'")):
+        inner = _prefix_interpolation(value[1:-1], ns)
+        return value[0] + inner + value[-1]
+    if value.lower() in ("true", "false", "nothing", "none"):
+        return value
+    try:
+        float(value)
+        return value
+    except ValueError:
+        pass
+    if any(char.isspace() for char in value):
+        return value
+    if value.startswith("#"):
+        return value
+    return _prefix_name(value, ns)
 
 
 def _prefix_on_args(action: str, args: str, ns: str) -> str:

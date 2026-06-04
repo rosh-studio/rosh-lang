@@ -144,7 +144,17 @@ set _ai.provider to anthropic
 set _ai.model to claude-sonnet-4-20250514
 ```
 
-Keep API keys in environment variables rather than `.rosh` files. The planner currently runs in the terminal REPL only; browser demos and the shared homepage world continue to use their deterministic command pipelines.
+Keep API keys in environment variables rather than `.rosh` files. The planner
+currently runs in the terminal REPL only. The portal's authenticated browser
+`prompt` command is a separate AI generation surface; the shared homepage
+world continues to use its deterministic command pipeline.
+
+### Trusted Native Components
+
+Bundled and locally installed `.py` component factories are native extensions:
+loading one executes trusted Python with the permissions of the `rosh` process.
+Do not install or generate Python factories from untrusted input. Native `.rosh`
+components are the safe, inspectable default for AI planning and composition.
 
 ## Interactive REPL
 
@@ -322,6 +332,21 @@ use ball walls top-sides
 use hazard count 5 vy 0.3 spawn_rate 0.8
 ```
 
+Native `.rosh` widgets declare defaults in their header and read them through
+instance-owned `config.*` state:
+
+```rosh
+# widget: label
+# config: text=Hello x=0.5
+
+create object display
+set display.label to config.text
+set display.x to config.x
+```
+
+`use label as title text "Welcome home"` binds `title.config.text` before the
+component runs. Named instances therefore receive independent config.
+
 ### Available Widgets (22)
 
 | Widget | Type | Config | Description |
@@ -334,10 +359,10 @@ use hazard count 5 vy 0.3 spawn_rate 0.8
 | `health-bar` | .py | `max current x y bg text_color font_size` | Health display |
 | `lives` | .py | `count auto_gameover x y bg text_color font_size` | Lives counter |
 | `button` | .rosh | — | Clickable button |
-| `label` | .py | `text x y bg text_color font_size` | Text label with interpolation |
+| `label` | .rosh | `text x y bg text_color font_size` | Text label with interpolation |
 | `fps` | .py | `x y bg text_color font_size` | FPS counter |
-| `message` | .py | `text x y bg text_color font_size` | Overlay message box |
-| `title-screen` | .py | `title subtitle bg text_color font_size` | Title screen |
+| `message` | .rosh | `text x y bg text_color font_size` | Overlay message box |
+| `title-screen` | .rosh | `title subtitle bg text_color font_size` | Title screen |
 | `coin` | .rosh | — | Collectible with sprite + sound |
 | `grid` | .py | `rows cols size gap color` | Configurable cell grid |
 | `enemy-grid` | .py | `rows cols size gap color` | Enemy formation with drift |
@@ -345,7 +370,7 @@ use hazard count 5 vy 0.3 spawn_rate 0.8
 | `bullet` | .py | `count vx vy color` | Pooled projectiles |
 | `explosion` | .py | `count color` | Pooled explosion effects |
 | `animation` | .py | `target sheet frames speed mode` | Spritesheet animation |
-| `game-lifecycle` | .py | `title subtitle bg text_color font_size` | Title -> playing -> over flow |
+| `game-lifecycle` | .rosh | `title subtitle bg text_color font_size` | Title -> playing -> over flow |
 | `ball` | .py | `x y size color vx vy walls` | Bouncing ball with wall bounce |
 | `hazard` | .py | `count vx vy color width height sprite spawn_rate` | Auto-spawning obstacle pool |
 

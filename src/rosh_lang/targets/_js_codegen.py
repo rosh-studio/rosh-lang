@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from rosh_lang.core.model import (
+    AddStatement,
     AfterStatement,
     AnimateStatement,
     BackgroundStatement,
@@ -20,6 +21,7 @@ from rosh_lang.core.model import (
     DoStatement,
     EndStatement,
     EventStatement,
+    ForEachStatement,
     GoStatement,
     IfStatement,
     LookStatement,
@@ -27,6 +29,7 @@ from rosh_lang.core.model import (
     PlayStatement,
     PrintStatement,
     Programme,
+    RemoveStatement,
     RepeatStatement,
     SayStatement,
     SendStatement,
@@ -77,6 +80,7 @@ def compile_programme(
             widget_stmts = load_widget(
                 stmt.name,
                 config=widget_config or None,
+                namespace=stmt.alias,
                 search_paths=search_paths,
             )
             if widget_stmts:
@@ -208,6 +212,12 @@ def _emit_statement(stmt: Statement) -> str:
         return _emit_define(stmt)
     if isinstance(stmt, RepeatStatement):
         return _emit_repeat(stmt)
+    if isinstance(stmt, AddStatement):
+        return _emit_add(stmt)
+    if isinstance(stmt, RemoveStatement):
+        return _emit_remove(stmt)
+    if isinstance(stmt, ForEachStatement):
+        return _emit_foreach(stmt)
     return ""
 
 
@@ -297,7 +307,7 @@ def _emit_define(stmt: DefineStatement) -> str:
     # Parameterised function: save/bind/restore state around body
     param_keys = [_escape_js(p) for p in stmt.params]
     save_lines = "\n".join(
-        f'  _sv["{k}"] = rosh.get("{k}"); '
+        f'  _sv["{k}"] = {{had: rosh.has("{k}"), value: rosh.get("{k}")}}; '
         f'rosh.set("{k}", (_a["{k}"] !== undefined ? _a["{k}"] : null));'
         for k in param_keys
     )
@@ -308,7 +318,7 @@ def _emit_define(stmt: DefineStatement) -> str:
         f"{save_lines}\n"
         f"{body_js}"
         f"  [{restore_expr}].forEach(function(k) {{\n"
-        f"    var p = _sv[k]; if (p == null) {{ delete rosh.state[k]; }} else {{ rosh.set(k, p); }}\n"
+        f"    var p = _sv[k]; if (p.had) {{ rosh.set(k, p.value); }} else {{ rosh.unset(k); }}\n"
         f"  }});\n"
         f"}}"
     )
@@ -352,6 +362,31 @@ def _emit_repeat(stmt: RepeatStatement) -> str:
             f"{body_js}"
             f"}}"
         )
+
+
+def _emit_add(stmt: AddStatement) -> str:
+    return (
+        f'rosh.addToList("{_escape_js(stmt.target)}", '
+        f'rosh.evalSetValue("{_escape_js(stmt.item)}", "{_escape_js(stmt.item)}"));'
+    )
+
+
+def _emit_remove(stmt: RemoveStatement) -> str:
+    return (
+        f'rosh.removeFromList("{_escape_js(stmt.target)}", '
+        f'rosh.evalSetValue("{_escape_js(stmt.item)}", "{_escape_js(stmt.item)}"));'
+    )
+
+
+def _emit_foreach(stmt: ForEachStatement) -> str:
+    body_js = _emit_body(stmt.body)
+    var = _escape_js(stmt.var)
+    target = _escape_js(stmt.target)
+    return (
+        f'rosh.forEach("{target}", "{var}", function() {{\n'
+        f"{body_js}"
+        f"}});"
+    )
 
 
 def _safe_fn_name(name: str) -> str:
@@ -401,10 +436,14 @@ def _emit_on(stmt: OnStatement) -> str:
     if stmt.condition:
         field, op, val = _parse_condition(stmt.condition)
         if field:
-            js_op = {"=": "===", "==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<="}.get(op, op)
+            if val.lower() in ("nothing", "none") and op in ("=", "==", "!="):
+                condition_js = f"_v {'!=' if op == '!=' else '=='} null"
+            else:
+                js_op = {"=": "===", "==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<="}.get(op, op)
+                condition_js = f"_v {js_op} {val}"
             body = (
                 f'var _v = rosh.get("{_escape_js(field)}"); '
-                f'if (_v {js_op} {val}) {{ {body} }}'
+                f"if ({condition_js}) {{ {body} }}"
             )
 
     return (
@@ -438,15 +477,25 @@ def _emit_if(stmt: IfStatement, indent: str = "") -> str:
     field, op, val = _parse_condition(stmt.condition)
     if not field:
         return ""
-    js_op = {"=": "===", "==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<="}.get(op, op)
+    if val.lower() in ("nothing", "none") and op in ("=", "==", "!="):
+        js_op = "!=" if op == "!=" else "=="
+    else:
+        js_op = {"=": "===", "==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<="}.get(op, op)
 
     # Coerce value: try number first, then string comparison
     try:
         float(val)
         js_val = val
     except ValueError:
+        if val.lower() in ("nothing", "none"):
+            js_val = "null"
+        elif val.lower() == "true":
+            js_val = "true"
+        elif val.lower() == "false":
+            js_val = "false"
+        else:
         # String comparison — quote the value
-        js_val = f'"{_escape_js(val)}"'
+            js_val = f'"{_escape_js(val)}"'
 
     lines = [f'{indent}if (rosh.get("{_escape_js(field)}") {js_op} {js_val}) {{']
     for s in stmt.then_body:

@@ -1,0 +1,36 @@
+# widget: title-screen
+# version: 0.3
+# description: Title + subtitle + prompt - three stacked objects
+# config: title=Rosh subtitle="Press any key" bg=#222 text_color=#fff font_size=14px
+# exposes: heading sub prompt
+# licence: Rosh-BSL
+
+create object heading
+set heading.x to 0.2
+set heading.y to 0.25
+set heading.width to 0.6
+set heading.height to 0.1
+set heading.color to config.bg
+set heading.label to config.title
+set heading.text_color to config.text_color
+set heading.font_size to config.font_size
+
+create object sub
+set sub.x to 0.25
+set sub.y to 0.38
+set sub.width to 0.5
+set sub.height to 0.06
+set sub.color to "#333"
+set sub.label to config.subtitle
+set sub.text_color to config.text_color
+set sub.font_size to config.font_size
+
+create object prompt
+set prompt.x to 0.3
+set prompt.y to 0.55
+set prompt.width to 0.4
+set prompt.height to 0.05
+set prompt.color to "#444"
+set prompt.label to "Click to start"
+set prompt.text_color to config.text_color
+set prompt.font_size to config.font_size

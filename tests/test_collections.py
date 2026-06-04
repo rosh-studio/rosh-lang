@@ -103,6 +103,34 @@ class TestParserForEach:
         with pytest.raises(ParseError, match="for requires"):
             parse_string("for visitor in visitors\nend")
 
+    def test_foreach_nested_inside_if_keeps_body(self):
+        prog = parse_string(
+            "if ready == true\n"
+            "  for each item in items\n"
+            "    print {item}\n"
+            "  end\n"
+            "end"
+        )
+        outer = prog.statements[0]
+        assert len(prog.statements) == 1
+        loop = outer.then_body[0]
+        assert isinstance(loop, ForEachStatement)
+        assert len(loop.body) == 1
+
+    def test_foreach_nested_inside_define_keeps_body(self):
+        prog = parse_string(
+            "define show\n"
+            "  for each item in items\n"
+            "    print {item}\n"
+            "  end\n"
+            "end"
+        )
+        define = prog.statements[0]
+        assert len(prog.statements) == 1
+        loop = define.body[0]
+        assert isinstance(loop, ForEachStatement)
+        assert len(loop.body) == 1
+
 
 # ── Runtime: add ─────────────────────────────────────────────
 

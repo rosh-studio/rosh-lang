@@ -1,0 +1,73 @@
+# widget: game-lifecycle
+# version: 0.2
+# description: Title to playing to game-over lifecycle with events
+# config: title="My Game" subtitle="Press Space to start" bg=#222 text_color=#fff font_size=14px
+# provides: game_start game_restart
+# requires: game_over
+# exposes: phase
+# licence: Rosh-BSL
+
+event game_start
+event game_restart
+event game_over
+
+create string phase
+set phase to "title"
+
+create object title_heading
+set title_heading.x to 0.15
+set title_heading.y to 0.25
+set title_heading.width to 0.7
+set title_heading.height to 0.12
+set title_heading.color to config.bg
+set title_heading.label to config.title
+set title_heading.text_color to config.text_color
+set title_heading.font_size to "24px"
+
+create object title_sub
+set title_sub.x to 0.2
+set title_sub.y to 0.40
+set title_sub.width to 0.6
+set title_sub.height to 0.06
+set title_sub.color to "#333"
+set title_sub.label to config.subtitle
+set title_sub.text_color to config.text_color
+set title_sub.font_size to config.font_size
+
+create object over_heading
+set over_heading.x to 0.15
+set over_heading.y to 0.30
+set over_heading.width to 0.7
+set over_heading.height to 0.12
+set over_heading.color to "#660000"
+set over_heading.label to "GAME OVER"
+set over_heading.text_color to config.text_color
+set over_heading.font_size to "24px"
+set over_heading.visible to 0
+
+create object over_restart
+set over_restart.x to 0.25
+set over_restart.y to 0.48
+set over_restart.width to 0.5
+set over_restart.height to 0.06
+set over_restart.color to "#444"
+set over_restart.label to "Press Space to restart"
+set over_restart.text_color to config.text_color
+set over_restart.font_size to config.font_size
+set over_restart.visible to 0
+
+on keydown when phase == "title" set phase to "playing"
+on keydown when phase == "playing" set title_heading.visible to 0
+on keydown when phase == "playing" set title_sub.visible to 0
+on keydown when phase == "playing" send game_start
+
+on game_over set phase to "over"
+on game_over set over_heading.visible to 1
+on game_over set over_restart.visible to 1
+
+on keydown when phase == "over" set phase to "title"
+on keydown when phase == "title" set over_heading.visible to 0
+on keydown when phase == "title" set over_restart.visible to 0
+on keydown when phase == "title" set title_heading.visible to 1
+on keydown when phase == "title" set title_sub.visible to 1
+on keydown when phase == "title" send game_restart

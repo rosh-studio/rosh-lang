@@ -66,6 +66,27 @@ var rosh = (function() {
     obj[parts[parts.length - 1]] = val;
   }
 
+  function has(key) {
+    var parts = key.split(".");
+    var obj = state;
+    for (var i = 0; i < parts.length; i++) {
+      if (obj == null || typeof obj !== "object" ||
+          !Object.prototype.hasOwnProperty.call(obj, parts[i])) return false;
+      obj = obj[parts[i]];
+    }
+    return true;
+  }
+
+  function unset(key) {
+    var parts = key.split(".");
+    var obj = state;
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (obj == null || typeof obj !== "object") return;
+      obj = obj[parts[i]];
+    }
+    if (obj != null && typeof obj === "object") delete obj[parts[parts.length - 1]];
+  }
+
   function create(kind, name) {
     // Use set() to navigate dots — "player.ship" → state.player.ship
     if (kind === "object") {
@@ -101,6 +122,31 @@ var rosh = (function() {
     if (existed) send("destroy", {name: name});
   }
 
+  function addToList(name, value) {
+    var list = get(name);
+    if (Array.isArray(list)) list.push(value);
+  }
+
+  function removeFromList(name, value) {
+    var list = get(name);
+    if (!Array.isArray(list)) return;
+    var index = list.indexOf(value);
+    if (index !== -1) list.splice(index, 1);
+  }
+
+  function forEach(name, variable, action) {
+    var list = get(name);
+    if (!Array.isArray(list)) return;
+    var had = has(variable);
+    var previous = get(variable);
+    list.slice(0, 10000).forEach(function(value) {
+      set(variable, value);
+      action();
+    });
+    if (had) set(variable, previous);
+    else unset(variable);
+  }
+
   // ── Expression evaluator ──────────────────────────────
   // Mirrors runtime.py _eval_set_value: nothing → quoted → random → clamp → arithmetic → int → float → raw
   function evalSetValue(target, raw) {
@@ -108,6 +154,12 @@ var rosh = (function() {
 
     // nothing: explicit absence
     if (raw.toLowerCase() === "nothing" || raw.toLowerCase() === "none") return null;
+
+    // count of <list>
+    if (raw.indexOf("count of ") === 0) {
+      var counted = get(raw.slice(9).trim());
+      return Array.isArray(counted) ? counted.length : 0;
+    }
 
     // Quoted string
     if ((raw[0] === '"' && raw[raw.length-1] === '"') ||
@@ -204,7 +256,8 @@ var rosh = (function() {
   function interpolate(template) {
     return template.replace(/\\{([^}]+)\\}/g, function(match, key) {
       var val = get(key);
-      return (val != null) ? String(val) : match;
+      if (val != null) return String(val);
+      return has(key) ? "" : match;
     });
   }
 
@@ -533,8 +586,13 @@ var rosh = (function() {
     _animData: _animData,
     get: get,
     set: set,
+    has: has,
+    unset: unset,
     create: create,
     destroy: destroy,
+    addToList: addToList,
+    removeFromList: removeFromList,
+    forEach: forEach,
     evalSetValue: evalSetValue,
     interpolate: interpolate,
     on: on,

@@ -118,6 +118,13 @@ def test_validate_generated_rosh_rejects_invalid_code() -> None:
     assert "Unknown keyword" in result.error
 
 
+def test_validate_generated_rosh_rejects_unclosed_when() -> None:
+    result = validate_generated_rosh("when click\nprint hello")
+
+    assert not result.ok
+    assert "when block has no matching end" in result.error
+
+
 def test_planner_returns_valid_plan_from_json_response() -> None:
     provider = FakeProvider(
         response=json.dumps({

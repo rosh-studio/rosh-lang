@@ -2,18 +2,25 @@
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 import pytest
 
 from rosh_lang.core.model import (
+    AddStatement,
     AfterStatement,
     CreateStatement,
     DestroyStatement,
+    DefineStatement,
+    DoStatement,
+    ForEachStatement,
     IfStatement,
     OnStatement,
     PlayStatement,
     PrintStatement,
+    RemoveStatement,
+    RepeatStatement,
     SayStatement,
     SendStatement,
     SetStatement,
@@ -22,6 +29,7 @@ from rosh_lang.core.model import (
     WhenStatement,
 )
 from rosh_lang.core.parser import parse_string
+from rosh_lang.core.runtime import Runtime
 from rosh_lang.core.widgets import (
     find_widget,
     get_bundled_library_path,
@@ -172,6 +180,87 @@ class TestPrefixProgramme:
         stmt = result[0]
         assert isinstance(stmt, SayStatement)
         assert "{ns.name}" in stmt.text
+
+    def test_callable_interface_data_preserved_and_prefixed(self):
+        prog = parse_string(
+            "define greet with name\n  print {name}\nend\n"
+            "do greet name=visitor"
+        )
+        define, call = prefix_programme(prog, "ns")
+        assert isinstance(define, DefineStatement)
+        assert define.params == ["ns.name"]
+        assert isinstance(call, DoStatement)
+        assert call.args == {"ns.name": "ns.visitor"}
+
+    def test_callable_literal_argument_is_not_prefixed(self):
+        prog = parse_string(
+            'define greet with name\n  print {name}\nend\n'
+            'do greet name="Roger"'
+        )
+        call = prefix_programme(prog, "ns")[1]
+        assert isinstance(call, DoStatement)
+        assert call.args == {"ns.name": '"Roger"'}
+
+    def test_prefixed_callable_binds_and_restores_nested_params(self):
+        prog = parse_string(
+            "define greet with name\n  print {name}\nend\n"
+            "do greet name=visitor"
+        )
+        rt = Runtime(output=io.StringIO())
+        rt.state["ns"] = {"visitor": "Roger", "name": "original"}
+
+        rt.run(type(prog)(statements=prefix_programme(prog, "ns")))
+
+        assert rt.output.getvalue() == "Roger\n"
+        assert rt.state["ns"]["name"] == "original"
+        assert "ns.name" not in rt.state
+
+    def test_collection_statements_prefixed(self):
+        prog = parse_string(
+            "create list items\n"
+            "add item to items\n"
+            "remove item from items\n"
+            "for each item in items\n  print {item}\nend"
+        )
+        result = prefix_programme(prog, "ns")
+        assert isinstance(result[1], AddStatement)
+        assert result[1].item == "ns.item"
+        assert result[1].target == "ns.items"
+        assert isinstance(result[2], RemoveStatement)
+        assert result[2].target == "ns.items"
+        loop = result[3]
+        assert isinstance(loop, ForEachStatement)
+        assert loop.var == "ns.item"
+        assert loop.target == "ns.items"
+        assert isinstance(loop.body[0], PrintStatement)
+        assert loop.body[0].text == "{ns.item}"
+
+    def test_collection_literal_item_is_not_prefixed(self):
+        result = prefix_programme(parse_string(
+            'add "guest" to visitors\n'
+            'add welcome home to messages'
+        ), "ns")
+        assert isinstance(result[0], AddStatement)
+        assert result[0].item == '"guest"'
+        assert result[0].target == "ns.visitors"
+        assert result[1].item == "welcome home"
+        assert result[1].target == "ns.messages"
+
+    def test_repeat_body_and_names_prefixed(self):
+        prog = parse_string("repeat count as i\n  print {i}\nend")
+        loop = prefix_programme(prog, "ns")[0]
+        assert isinstance(loop, RepeatStatement)
+        assert loop.count == "ns.count"
+        assert loop.var == "ns.i"
+        assert loop.body[0].text == "{ns.i}"
+
+    def test_set_count_expression_and_quoted_comparison_prefixed(self):
+        result = prefix_programme(parse_string(
+            'set total to count of items\n'
+            'set ready to status == "ready"'
+        ), "ns")
+        assert result[0].value == "count of ns.items"
+        assert result[1].value == 'ns.status == "ready"'
 
 
 # ── load_widget ──────────────────────────────────────────────────
@@ -396,15 +485,15 @@ class TestComponentInterfaceMetadata:
         assert "count" in meta["exposes"]
 
     def test_game_lifecycle_provides_game_start(self):
-        meta = parse_metadata(BUNDLED_DIR / "game-lifecycle.py")
+        meta = parse_metadata(BUNDLED_DIR / "game-lifecycle.rosh")
         assert "game_start" in meta["provides"]
 
     def test_game_lifecycle_requires_game_over(self):
-        meta = parse_metadata(BUNDLED_DIR / "game-lifecycle.py")
+        meta = parse_metadata(BUNDLED_DIR / "game-lifecycle.rosh")
         assert "game_over" in meta["requires"]
 
     def test_game_lifecycle_exposes_phase(self):
-        meta = parse_metadata(BUNDLED_DIR / "game-lifecycle.py")
+        meta = parse_metadata(BUNDLED_DIR / "game-lifecycle.rosh")
         assert "phase" in meta["exposes"]
 
     def test_controller_provides_fire_events(self):
@@ -781,9 +870,53 @@ class TestMessageWidget:
         assert label_sets[-1].value == "Game Over"
 
     def test_metadata(self):
-        meta = parse_metadata(BUNDLED_DIR / "message.py")
+        meta = parse_metadata(BUNDLED_DIR / "message.rosh")
         assert meta["widget"] == "message"
         assert meta["licence"] == "Rosh-BSL"
+
+
+class TestNativeConfigBinding:
+    def test_label_and_message_are_native_rosh_components(self):
+        for name in ("label", "message", "title-screen", "game-lifecycle"):
+            assert (BUNDLED_DIR / f"{name}.rosh").is_file()
+            assert not (BUNDLED_DIR / f"{name}.py").exists()
+
+    def test_declared_defaults_bound_before_body(self):
+        stmts = load_widget("label", search_paths=[BUNDLED_DIR])
+        config_index = next(
+            i for i, s in enumerate(stmts)
+            if isinstance(s, SetStatement) and s.target == "label.config.text"
+        )
+        display_index = next(
+            i for i, s in enumerate(stmts)
+            if isinstance(s, SetStatement) and s.target == "label.display.label"
+        )
+        assert config_index < display_index
+
+    def test_caller_config_changes_component_output(self):
+        out = io.StringIO()
+        runtime = Runtime(output=out, search_paths=[BUNDLED_DIR])
+        runtime.run(parse_string('use label as title text "Welcome home" x 0.2'))
+        assert runtime.state["title"]["display"]["label"] == "Welcome home"
+        assert runtime.state["title"]["display"]["x"] == 0.2
+        assert runtime.state["title"]["config"]["text"] == "Welcome home"
+
+    def test_native_interface_metadata(self):
+        meta = parse_metadata(BUNDLED_DIR / "label.rosh")
+        assert meta["exposes"] == ["display"]
+
+    def test_all_native_components_have_required_metadata(self):
+        for path in BUNDLED_DIR.glob("*.rosh"):
+            meta = parse_metadata(path)
+            assert meta["widget"], f"{path.name}: missing widget"
+            assert meta["version"], f"{path.name}: missing version"
+            assert meta["description"], f"{path.name}: missing description"
+            assert meta["licence"] == "Rosh-BSL", f"{path.name}: missing Rosh-BSL licence"
+
+    def test_all_native_components_load_standalone(self):
+        for path in BUNDLED_DIR.glob("*.rosh"):
+            stmts = load_widget(path.stem, search_paths=[BUNDLED_DIR])
+            assert stmts, f"{path.name}: did not load"
 
 
 class TestTitleScreenWidget:
@@ -802,8 +935,13 @@ class TestTitleScreenWidget:
         assert title_sets[-1].value == "Space Invaders"
 
     def test_metadata(self):
-        meta = parse_metadata(BUNDLED_DIR / "title-screen.py")
+        meta = parse_metadata(BUNDLED_DIR / "title-screen.rosh")
         assert meta["widget"] == "title-screen"
+
+    def test_declared_config_changes_title(self):
+        runtime = Runtime(output=io.StringIO(), search_paths=[BUNDLED_DIR])
+        runtime.run(parse_string('use title-screen title "Space Invaders"'))
+        assert runtime.state["title-screen"]["heading"]["label"] == "Space Invaders"
 
 
 class TestExplosionWidget:
@@ -966,10 +1104,28 @@ class TestGameLifecycleWidget:
         assert phase_sets[0].value == '"title"'
 
     def test_config_title(self):
-        stmts = load_widget("game-lifecycle", config={"title": "Space Pong"}, search_paths=[BUNDLED_DIR])
-        sets = [s for s in stmts if isinstance(s, SetStatement)]
-        heading = [s for s in sets if s.target == "game-lifecycle.title_heading.label"]
-        assert heading[0].value == '"Space Pong"'
+        runtime = Runtime(output=io.StringIO(), search_paths=[BUNDLED_DIR])
+        runtime.run(parse_string('use game-lifecycle title "Space Pong"'))
+        assert runtime.state["game-lifecycle"]["title_heading"]["label"] == "Space Pong"
+
+    def test_native_interface_metadata(self):
+        meta = parse_metadata(BUNDLED_DIR / "game-lifecycle.rosh")
+        assert meta["provides"] == ["game_start", "game_restart"]
+        assert meta["requires"] == ["game_over"]
+        assert meta["exposes"] == ["phase"]
+
+    def test_native_lifecycle_transitions(self):
+        runtime = Runtime(output=io.StringIO(), search_paths=[BUNDLED_DIR])
+        runtime.run(parse_string(
+            "use game-lifecycle\n"
+            "send keydown\n"
+            "send game_over\n"
+            "send keydown"
+        ))
+        lifecycle = runtime.state["game-lifecycle"]
+        assert lifecycle["phase"] == "title"
+        assert lifecycle["title_heading"]["visible"] == 1
+        assert lifecycle["over_heading"]["visible"] == 0
 
 
 class TestBallWidget:

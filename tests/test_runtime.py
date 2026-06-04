@@ -1747,3 +1747,16 @@ class TestBackground:
             BackgroundStatement(value="#00ff00"),
         ])
         assert rt.state["_background"] == "#00ff00"
+
+
+class TestRuntimeRecovery:
+    def test_failed_run_does_not_poison_next_programme_inspection(self) -> None:
+        rt = Runtime(output=io.StringIO())
+        with pytest.raises(KeyError):
+            rt.run(Programme(statements=[LookStatement(target="missing")]))
+
+        next_programme = Programme(statements=[PrintStatement(text="recovered")])
+        rt.run(next_programme)
+
+        assert rt._run_depth == 0
+        assert rt._programme is next_programme

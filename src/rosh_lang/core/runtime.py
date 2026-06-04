@@ -92,22 +92,24 @@ class Runtime:
         if self._run_depth == 0:
             self._programme = programme
         self._run_depth += 1
-        stmts = programme.statements
-        i = 0
-        while i < len(stmts):
-            stmt = stmts[i]
-            if isinstance(stmt, WhenStatement):
-                body: list[Statement] = []
-                i += 1
-                while i < len(stmts) and not isinstance(stmts[i], EndStatement):
-                    body.append(stmts[i])
+        try:
+            stmts = programme.statements
+            i = 0
+            while i < len(stmts):
+                stmt = stmts[i]
+                if isinstance(stmt, WhenStatement):
+                    body: list[Statement] = []
                     i += 1
-                i += 1  # skip end
-                self.handlers.setdefault(stmt.event, []).append(body)
-                continue
-            self.execute(stmt)
-            i += 1
-        self._run_depth -= 1
+                    while i < len(stmts) and not isinstance(stmts[i], EndStatement):
+                        body.append(stmts[i])
+                        i += 1
+                    i += 1  # skip end
+                    self.handlers.setdefault(stmt.event, []).append(body)
+                    continue
+                self.execute(stmt)
+                i += 1
+        finally:
+            self._run_depth -= 1
 
     def execute(self, stmt: Statement) -> Any:
         """Execute a single statement. Returns result for get."""
@@ -286,6 +288,17 @@ class Runtime:
                     obj[part] = {}
                 obj = obj[part]
             obj[parts[-1]] = value
+
+    def _delete_path(self, key: str) -> None:
+        """Delete a dotted key path if it exists."""
+        parts = key.split(".")
+        obj: Any = self.state
+        for part in parts[:-1]:
+            if not isinstance(obj, dict) or part not in obj:
+                return
+            obj = obj[part]
+        if isinstance(obj, dict):
+            obj.pop(parts[-1], None)
 
     def _exec_get(self, stmt: GetStatement) -> list[dict[str, Any]]:
         target = stmt.target.strip()
@@ -538,11 +551,11 @@ class Runtime:
         _MISSING = object()
         saved: dict[str, Any] = {}
         for param in params:
-            saved[param] = self.state.get(param, _MISSING)
+            saved[param] = self._resolve(param) if self._key_exists(param) else _MISSING
             if param in stmt.args:
-                self.state[param] = self._eval_set_value(param, stmt.args[param])
+                self._set_path(param, self._eval_set_value(param, stmt.args[param]))
             else:
-                self.state[param] = None
+                self._set_path(param, None)
 
         self._call_stack.add(name)
         try:
@@ -553,9 +566,9 @@ class Runtime:
             # Restore saved state
             for param, prev in saved.items():
                 if prev is _MISSING:
-                    self.state.pop(param, None)
+                    self._delete_path(param)
                 else:
-                    self.state[param] = prev
+                    self._set_path(param, prev)
 
     _MAX_REPEAT = 10_000
 

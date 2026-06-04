@@ -64,6 +64,10 @@ class TestEmitSet:
         result = compile_programme(prog)
         assert '"clamp x 0.0 1.0"' in result.init_code
 
+    def test_set_count_expression(self):
+        result = compile_programme(parse_string("set n to count of items"))
+        assert '"count of items"' in result.init_code
+
 
 class TestEmitDestroy:
     def test_destroy(self):
@@ -202,6 +206,37 @@ class TestCompileProgramme:
         assert 'rosh.set("box.x"' in result.init_code
         assert result.has_handlers
         assert 'rosh.on("click_box"' in result.handler_code
+
+    def test_named_component_alias_used_in_js(self):
+        result = compile_programme(parse_string("use counter as clicks"))
+        assert '"clicks.value"' in result.init_code
+        assert '"counter.value"' not in result.init_code
+
+
+class TestCollectionCodegen:
+    def test_add_remove_and_foreach_emit(self):
+        result = compile_programme(parse_string(
+            "create list items\n"
+            "add 1 to items\n"
+            "remove 1 from items\n"
+            "for each item in items\n  print {item}\nend"
+        ))
+        assert 'rosh.addToList("items"' in result.init_code
+        assert 'rosh.removeFromList("items"' in result.init_code
+        assert 'rosh.forEach("items", "item"' in result.init_code
+        assert "rosh.appendOutput" in result.init_code
+
+    def test_nothing_condition_emits_null(self):
+        result = compile_programme(parse_string(
+            "if value == nothing\n  print absent\nend"
+        ))
+        assert 'rosh.get("value") == null' in result.init_code
+
+    def test_nothing_inequality_emits_null(self):
+        result = compile_programme(parse_string(
+            "if value != nothing\n  print present\nend"
+        ))
+        assert 'rosh.get("value") != null' in result.init_code
 
 
 # ── Per-key event filtering ──────────────────────────────────────
