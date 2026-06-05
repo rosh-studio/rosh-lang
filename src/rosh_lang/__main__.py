@@ -64,7 +64,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--target", "-t",
-        choices=["terminal", "web", "phaser", "threejs", "scratch", "world", "hytopia"],
+        choices=["terminal", "web", "phaser", "threejs", "scratch", "world"],
         default="terminal",
         help="Output target (default: terminal)",
     )

@@ -121,6 +121,27 @@ def normalise(line: str) -> str:
     tokens = stripped.split()
     head = tokens[0].lower()
 
+    # -- if condition operator aliases: is / is not / equals → == / != -------
+    # Uses token-based extraction so quoted string values like "is not real"
+    # are never corrupted — only the operator token itself is replaced.
+    if head == "if":
+        rest = stripped[len("if"):].strip()
+        parts = rest.split(None, 2)  # [field, op, value_rest]
+        if len(parts) >= 2:
+            field, op_word = parts[0], parts[1].lower()
+            value_rest = parts[2] if len(parts) > 2 else ""
+            if op_word == "is" and value_rest.lower().startswith("not "):
+                return f"if {field} != {value_rest[4:].strip()}"
+            elif op_word in ("is", "equals"):
+                return f"if {field} == {value_rest}"
+
+    # -- collision wildcard: "name all" → "name.*" in when collision lines ---
+    if head == "when" and stripped.lower().startswith("when collision "):
+        rest = stripped[len("when collision "):]
+        candidate = re.sub(r'(\w[\w.-]*)\s+all\b', r'\1.*', rest)
+        if candidate != rest:
+            return "when collision " + candidate
+
     # -- destroy aliases: delete/remove -> destroy -------------------------
     # BUT: "remove X from Y" is a collection operation — leave it alone.
     if head in _DESTROY_VERBS and head != "destroy":

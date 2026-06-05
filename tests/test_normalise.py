@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from rosh_lang.core.normalise import fuzzy_color, normalise, normalise_programme
 from rosh_lang.core.parser import parse_string
-from rosh_lang.core.model import DestroyStatement, SetStatement
+from rosh_lang.core.model import DestroyStatement, IfStatement, SetStatement, WhenStatement
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +182,63 @@ class TestCreateAliases:
 
 
 # ---------------------------------------------------------------------------
+# normalise — if condition operator aliases
+# ---------------------------------------------------------------------------
+
+class TestIfConditionAliases:
+    def test_is_becomes_eq(self):
+        assert normalise("if score is 10") == "if score == 10"
+
+    def test_is_not_becomes_ne(self):
+        assert normalise("if score is not 0") == "if score != 0"
+
+    def test_equals_becomes_eq(self):
+        assert normalise("if score equals 10") == "if score == 10"
+
+    def test_is_with_quoted_value(self):
+        assert normalise('if phase is "playing"') == 'if phase == "playing"'
+
+    def test_is_not_with_quoted_value(self):
+        assert normalise('if phase is not "over"') == 'if phase != "over"'
+
+    def test_is_with_quoted_value_containing_is_not(self):
+        # Quoted string value "is not real" must not be corrupted
+        assert normalise('if phase is "is not real"') == 'if phase == "is not real"'
+
+    def test_is_with_dotted_field(self):
+        assert normalise('if game-lifecycle.phase is "playing"') == 'if game-lifecycle.phase == "playing"'
+
+    def test_canonical_ops_unchanged(self):
+        assert normalise("if score > 10") == "if score > 10"
+        assert normalise("if score == 10") == "if score == 10"
+        assert normalise("if score != 0") == "if score != 0"
+
+
+# ---------------------------------------------------------------------------
+# normalise — collision wildcard aliases
+# ---------------------------------------------------------------------------
+
+class TestCollisionWildcard:
+    def test_first_arg_wildcard(self):
+        assert normalise("when collision hazard all player") == "when collision hazard.* player"
+
+    def test_second_arg_wildcard(self):
+        assert normalise("when collision player hazard all") == "when collision player hazard.*"
+
+    def test_both_args_wildcard(self):
+        assert normalise("when collision bullet all hazard all") == "when collision bullet.* hazard.*"
+
+    def test_already_canonical_unchanged(self):
+        assert normalise("when collision bullet.* enemy") == "when collision bullet.* enemy"
+
+    def test_no_wildcard_unchanged(self):
+        assert normalise("when collision player enemy") == "when collision player enemy"
+
+    def test_hyphenated_widget_name(self):
+        assert normalise("when collision enemy-grid all player") == "when collision enemy-grid.* player"
+
+
+# ---------------------------------------------------------------------------
 # normalise — passthrough cases
 # ---------------------------------------------------------------------------
 
@@ -220,3 +277,15 @@ class TestParserIntegration:
         targets = [s.target for s in set_stmts]
         assert any("color" in t and "desc" not in t for t in targets)
         assert any("color_desc" in t for t in targets)
+
+    def test_if_is_parses_as_eq_condition(self):
+        prog = parse_string('if score is 10\n  print "yes"\nend')
+        if_stmts = [s for s in prog.statements if isinstance(s, IfStatement)]
+        assert len(if_stmts) == 1
+        assert if_stmts[0].condition == "score == 10"
+
+    def test_collision_all_parses_as_wildcard(self):
+        prog = parse_string("when collision hazard all player\n  print hit\nend")
+        when_stmts = [s for s in prog.statements if isinstance(s, WhenStatement)]
+        assert len(when_stmts) == 1
+        assert "hazard.*" in when_stmts[0].args

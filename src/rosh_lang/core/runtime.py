@@ -52,7 +52,7 @@ _INTERP_RE = re.compile(r"\{([^}]+)\}")
 # Universal events — never need declaration
 UNIVERSAL_EVENTS = frozenset({
     "start", "update", "collision", "click", "keydown",
-    "keyup", "destroy", "timer", "message",
+    "keyup", "destroy", "message",
     "scene_exit", "scene_enter", "say",
 })
 

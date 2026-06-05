@@ -108,7 +108,7 @@ end
 
 # ── Game over (auto-fired when lives hit 0) ──
 when game_over
-  print "GAME OVER — Score: {{score.value}}"
+  print "GAME OVER — Score: {score.value}"
 end
 
 # ── Restart: reset state ──
