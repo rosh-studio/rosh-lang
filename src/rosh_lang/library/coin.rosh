@@ -2,7 +2,7 @@
 # version: 0.1
 # description: Collectible item with position and collect sound
 # config: x=0.5 y=0.1 color=#ffd700
-# licence: Rosh-BSL
+# licence: MIT
 
 create object gem
 set gem.x to 0.5

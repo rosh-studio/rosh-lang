@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """animation — Python widget factory for spritesheet animation.
 
 Usage:
@@ -23,7 +23,7 @@ METADATA = {
     "provides": [],
     "requires": [],
     "exposes": [],
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 

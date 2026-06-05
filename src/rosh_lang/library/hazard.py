@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """hazard — Python widget factory for a pool of falling/approaching obstacles.
 
 Same pool pattern as bullet.py but for hazards (enemies, rocks, etc.).
@@ -32,7 +32,7 @@ METADATA = {
     "provides": [],
     "requires": [],
     "exposes": ["_fire"],
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 

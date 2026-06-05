@@ -4,7 +4,7 @@ Thanks for your interest in contributing to Rosh.
 
 ## Licence
 
-Rosh is released under the [Rosh Business Source License (Rosh-BSL)](LICENSE). By contributing, you agree that your contributions will be licensed under the same terms.
+Rosh is released under the [MIT License](LICENSE). By contributing, you agree that your contributions will be licensed under MIT.
 
 ## Getting Started
 
@@ -66,7 +66,7 @@ Please open an issue to discuss before submitting a PR for these.
 
 ## Commit Messages
 
-```
+```text
 type: Short description
 
 Co-Authored-By: Your Name <your@email.com>
@@ -76,5 +76,5 @@ Types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`.
 
 ## Questions?
 
-- Discord: https://discord.gg/gevBPucznD
-- Email: info@rosh.cloud
+- Discord: [discord.gg/gevBPucznD](https://discord.gg/gevBPucznD)
+- Email: [info@rosh.cloud](mailto:info@rosh.cloud)

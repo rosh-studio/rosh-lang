@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """controller — Universal input controller widget.
 
 Provides keyboard and touch input for any target object.
@@ -58,7 +58,7 @@ METADATA = {
     "provides": ["fire", "fire2"],
     "requires": [],
     "exposes": [],
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 

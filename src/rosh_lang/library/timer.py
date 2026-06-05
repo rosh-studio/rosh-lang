@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """timer — Python widget factory for an auto-decrementing countdown timer.
 
 Creates a seconds number, _timer_total marker, _timer_running flag,
@@ -31,7 +31,7 @@ METADATA = {
     "provides": ["timer_done"],
     "requires": [],
     "exposes": ["seconds", "_timer_running"],
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 

@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """Spritesheet slicer — horizontal-strip PNG → list of per-frame data URIs.
 
 Pure Python, no external dependencies (struct + zlib, mirrors sprites.py).

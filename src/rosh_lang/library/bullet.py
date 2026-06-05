@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """bullet — Python widget factory for a pool of reusable bullet objects.
 
 Creates N bullet objects (b0..bN-1) parked off-screen at (-1, -1).
@@ -28,7 +28,7 @@ METADATA = {
     "provides": [],
     "requires": [],
     "exposes": ["_fire", "_x", "_y"],
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 

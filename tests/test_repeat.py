@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """Tests for the repeat keyword — counted loops."""
 
 from __future__ import annotations

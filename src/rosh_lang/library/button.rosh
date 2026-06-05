@@ -2,7 +2,7 @@
 # version: 0.1
 # description: Clickable button with label
 # config: label=Click x=0.4 y=0.5
-# licence: Rosh-BSL
+# licence: MIT
 
 create object box
 set box.label to "Click"

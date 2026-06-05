@@ -5,7 +5,7 @@
 # provides: game_start game_restart
 # requires: game_over
 # exposes: phase
-# licence: Rosh-BSL
+# licence: MIT
 
 event game_start
 event game_restart

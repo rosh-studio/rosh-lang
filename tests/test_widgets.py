@@ -98,7 +98,7 @@ class TestFindWidget:
         widgets_dir = tmp_path / "widgets"
         widgets_dir.mkdir()
         evil = tmp_path / "evil.py"
-        evil.write_text('METADATA = {"widget": "evil", "version": "0", "config": {}, "licence": "Rosh-BSL", "provides": [], "requires": [], "exposes": []}')
+        evil.write_text('METADATA = {"widget": "evil", "version": "0", "config": {}, "licence": "MIT", "provides": [], "requires": [], "exposes": []}')
 
         with pytest.warns(UserWarning):
             result = find_widget("../evil", search_paths=[widgets_dir])
@@ -415,9 +415,9 @@ class TestParseMetadata:
         assert meta["config"]["speed"] == "0.02"
 
     def test_parse_licence_field(self):
-        """Bundled widgets should declare Rosh-BSL licence."""
+        """Bundled widgets should declare MIT licence."""
         meta = parse_metadata(BUNDLED_DIR / "score.py")
-        assert meta["licence"] == "Rosh-BSL"
+        assert meta["licence"] == "MIT"
 
     def test_parse_no_metadata(self, tmp_path: Path):
         widget = tmp_path / "bare.rosh"
@@ -738,7 +738,7 @@ METADATA = {
     "version": "0.1",
     "description": "Test factory",
     "config": {"count": "2"},
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 def generate(config):
@@ -776,7 +776,7 @@ METADATA = {
     "version": "0.2",
     "description": "Test metadata",
     "config": {"rows": "3"},
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 def generate(config):
@@ -787,7 +787,7 @@ def generate(config):
         assert meta["version"] == "0.2"
         assert meta["description"] == "Test metadata"
         assert meta["config"] == {"rows": "3"}
-        assert meta["licence"] == "Rosh-BSL"
+        assert meta["licence"] == "MIT"
 
     def test_factory_prefixing_applied(self, tmp_path: Path):
         """Factory output gets namespace-prefixed like .rosh widgets."""
@@ -897,7 +897,7 @@ class TestMessageWidget:
     def test_metadata(self):
         meta = parse_metadata(BUNDLED_DIR / "message.rosh")
         assert meta["widget"] == "message"
-        assert meta["licence"] == "Rosh-BSL"
+        assert meta["licence"] == "MIT"
 
 
 class TestNativeConfigBinding:
@@ -936,7 +936,7 @@ class TestNativeConfigBinding:
             assert meta["widget"], f"{path.name}: missing widget"
             assert meta["version"], f"{path.name}: missing version"
             assert meta["description"], f"{path.name}: missing description"
-            assert meta["licence"] == "Rosh-BSL", f"{path.name}: missing Rosh-BSL licence"
+            assert meta["licence"] == "MIT", f"{path.name}: missing MIT licence"
 
     def test_all_native_components_load_standalone(self):
         for path in BUNDLED_DIR.glob("*.rosh"):
@@ -1008,7 +1008,7 @@ class TestExplosionWidget:
         meta = parse_metadata(BUNDLED_DIR / "explosion.py")
         assert meta["widget"] == "explosion"
         assert meta["config"]["count"] == "3"
-        assert meta["licence"] == "Rosh-BSL"
+        assert meta["licence"] == "MIT"
 
 
 class TestBulletWidget:
@@ -1054,7 +1054,7 @@ class TestBulletWidget:
         meta = parse_metadata(BUNDLED_DIR / "bullet.py")
         assert meta["widget"] == "bullet"
         assert meta["config"]["count"] == "3"
-        assert meta["licence"] == "Rosh-BSL"
+        assert meta["licence"] == "MIT"
 
 
 class TestCoinWidget:

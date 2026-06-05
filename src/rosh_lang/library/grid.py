@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """grid — Python widget factory for a grid of positioned cells."""
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ METADATA = {
     "provides": [],
     "requires": [],
     "exposes": [],
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 

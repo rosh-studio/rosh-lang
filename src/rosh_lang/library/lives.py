@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """lives — Python widget factory for a lives display.
 
 Creates a count number and a display object with configurable position,
@@ -34,7 +34,7 @@ METADATA = {
     "provides": ["game_over"],
     "requires": [],
     "exposes": ["count"],
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 

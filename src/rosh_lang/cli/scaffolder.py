@@ -32,7 +32,7 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "A minimal hello-world programme",
         '''\
 # {name} — a Rosh programme
-# licence: Rosh-BSL
+# licence: MIT
 
 print "hello from {name}!"
 print "edit this file and run: rosh {name}.rosh"
@@ -45,7 +45,7 @@ print "edit this file and run: rosh {name}.rosh"
 # Run: rosh {name}.rosh --target web --run
 #      rosh {name}.rosh --target phaser --run
 #      rosh {name}.rosh --target threejs --run
-# licence: Rosh-BSL
+# licence: MIT
 
 # ── Game lifecycle (title → playing → game over → restart) ──
 use game-lifecycle title "{name}" subtitle "Press Space to start"
@@ -125,7 +125,7 @@ end
         '''\
 # {name} — a Rosh app
 # Run with: rosh {name}.rosh --target web --run
-# licence: Rosh-BSL
+# licence: MIT
 
 # ── Header ──
 create object header

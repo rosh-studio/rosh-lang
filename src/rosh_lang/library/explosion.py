@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """explosion — Python widget factory for a pool of reusable explosion effects.
 
 Creates N flash objects parked off-screen. When _fire flag is set, positions
@@ -28,7 +28,7 @@ METADATA = {
     "provides": [],
     "requires": [],
     "exposes": ["_fire", "_x", "_y"],
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 

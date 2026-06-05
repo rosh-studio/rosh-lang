@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """rosh cloud — create with AI and publish to rosh.cloud.
 
 Commands:

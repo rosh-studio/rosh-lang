@@ -1,14 +1,15 @@
 [project]
 name = "rosh-lang"
-version = "0.8.0"
+version = "0.9.0"
 description = "One script, many worlds — a plain-English language for terminal, browser, and game engine"
 requires-python = ">=3.10"
 readme = "README.md"
-license = {text = "Rosh-BSL"}
+license = {text = "MIT"}
 authors = [{name = "Roger Dubar"}]
 keywords = ["language", "game", "plain-english", "transpiler", "phaser", "creative-coding"]
 classifiers = [
     "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Topic :: Games/Entertainment",
     "Topic :: Software Development :: Compilers",

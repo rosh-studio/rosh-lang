@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """player — Python widget factory for a keyboard-controlled player ship.
 
 Creates a ship object with arrow-key (or WASD) movement handlers and
@@ -38,7 +38,7 @@ METADATA = {
     "provides": [],
     "requires": [],
     "exposes": ["ship"],
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 

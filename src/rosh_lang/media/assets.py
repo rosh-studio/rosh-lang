@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """Asset file resolution — find spritesheets and other assets.
 
 Search order mirrors widget resolution:

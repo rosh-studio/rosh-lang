@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """enemy-grid — Python widget factory for a grid of enemy objects.
 
 Supports optional side-to-side drift movement via `drift` config.
@@ -30,7 +30,7 @@ METADATA = {
     "provides": [],
     "requires": [],
     "exposes": [],
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 

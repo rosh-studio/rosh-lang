@@ -3,7 +3,7 @@
 # description: Positioned text label
 # config: text=Hello x=0.5 y=0.5 bg=#555 text_color=#fff font_size=14px
 # exposes: display
-# licence: Rosh-BSL
+# licence: MIT
 
 create object display
 set display.label to config.text

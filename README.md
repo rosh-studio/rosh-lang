@@ -582,11 +582,7 @@ rosh-lang/
 
 ## Licence
 
-**[Rosh Business Source License v0.2 (Rosh-BSL)](LICENSE)**  
-Copyright 2026 Roger Dubar / Rosh Studio
+**[MIT](LICENSE)** — Copyright 2026 Roger Dubar / Rosh Studio
 
-Free for personal use, education, open-source projects, and non-commercial research.
-Commercial use (SaaS, products, paid services) requires a separate licence — contact
-[rosh.cloud](https://rosh.cloud) or read the [LICENSE](LICENSE) file for full terms.
-
-Converts automatically to **Apache 2.0 on 2029-05-02**.
+Free to use, modify, and distribute for any purpose. "Rosh" is a trademark of
+Rosh Studio — forks are welcome, but the name isn't.

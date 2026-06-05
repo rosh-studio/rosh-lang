@@ -3,7 +3,7 @@
 # description: Title + subtitle + prompt - three stacked objects
 # config: title=Rosh subtitle="Press any key" bg=#222 text_color=#fff font_size=14px
 # exposes: heading sub prompt
-# licence: Rosh-BSL
+# licence: MIT
 
 create object heading
 set heading.x to 0.2

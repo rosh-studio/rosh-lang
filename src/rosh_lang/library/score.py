@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """score — Python widget factory for a score display.
 
 Creates a value number and a display object with configurable position,
@@ -27,7 +27,7 @@ METADATA = {
     "provides": [],
     "requires": [],
     "exposes": ["value"],
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 

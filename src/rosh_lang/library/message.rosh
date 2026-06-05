@@ -3,7 +3,7 @@
 # description: Text overlay with configurable position, color, and content
 # config: text=Hello x=0.3 y=0.4 bg=#333 text_color=#fff font_size=14px
 # exposes: box
-# licence: Rosh-BSL
+# licence: MIT
 
 create object box
 set box.x to config.x

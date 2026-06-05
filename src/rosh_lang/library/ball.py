@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """ball — Python widget factory for a bouncing ball with wall collisions.
 
 Creates a ball object with velocity and on-statements for wall bouncing.
@@ -31,7 +31,7 @@ METADATA = {
     "provides": [],
     "requires": [],
     "exposes": ["ball"],
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 

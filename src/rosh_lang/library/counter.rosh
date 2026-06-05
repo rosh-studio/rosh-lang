@@ -2,7 +2,7 @@
 # version: 0.1
 # description: Click counter — increments on each click
 # config: start=0
-# licence: Rosh-BSL
+# licence: MIT
 
 create number value
 set value to 0

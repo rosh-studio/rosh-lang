@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """fps — Python widget factory for an FPS counter.
 
 Creates a frames number and a display object with configurable position,
@@ -26,7 +26,7 @@ METADATA = {
     "provides": [],
     "requires": [],
     "exposes": ["frames"],
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 

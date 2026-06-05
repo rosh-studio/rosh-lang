@@ -202,7 +202,7 @@ targets/
 1. **Don't add keywords** unless they are documented in the public syntax reference or agreed in an issue first
 2. **Test after every change**: `cd rosh-lang && uv run pytest -q`
 3. **Rebuild showcase** after completing build steps: `cd rosh-lang && uv run python tools/build_showcase.py`
-4. **Licence**: Rosh-BSL. All widgets must declare `# licence: Rosh-BSL`
+4. **Licence**: MIT. All widgets must declare `# licence: MIT`
 5. **Spec before code**: check the README and https://rosh.cloud/docs/syntax before implementing language behavior
 6. **Commits**: use `type: Short description`, with types like `feat`, `fix`, `docs`, `test`, `refactor`, or `chore`
 7. **Reinstall after changes**: `uv tool install --from .../rosh-lang rosh-lang --force`

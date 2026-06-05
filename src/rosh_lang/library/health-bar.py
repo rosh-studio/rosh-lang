@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """health-bar — Python widget factory for a health display.
 
 Creates max, current numbers and a display object with configurable position,
@@ -28,7 +28,7 @@ METADATA = {
     "provides": [],
     "requires": [],
     "exposes": ["current", "max"],
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 

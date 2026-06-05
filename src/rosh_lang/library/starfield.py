@@ -1,4 +1,4 @@
-# licence: Rosh-BSL
+# licence: MIT
 """starfield — Python widget factory for random background dots."""
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ METADATA = {
     "provides": [],
     "requires": [],
     "exposes": [],
-    "licence": "Rosh-BSL",
+    "licence": "MIT",
 }
 
 _DIM_COLORS = ["#444", "#555", "#666", "#777", "#888", "#555"]
