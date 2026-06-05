@@ -250,9 +250,35 @@ class TestGet:
         stmt = prog.statements[0]
         assert stmt.target == "all bool"
 
+    def test_get_into(self) -> None:
+        prog = parse_string("get score into saved")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, GetStatement)
+        assert stmt.target == "score"
+        assert stmt.into == "saved"
+
+    def test_get_all_typed_into(self) -> None:
+        prog = parse_string("get all int into ints")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, GetStatement)
+        assert stmt.target == "all int"
+        assert stmt.into == "ints"
+
     def test_get_empty_raises(self) -> None:
         with pytest.raises(ParseError, match="get requires"):
             parse_string("get")
+
+    def test_get_into_missing_target_raises(self) -> None:
+        with pytest.raises(ParseError, match="get requires"):
+            parse_string("get into result")
+
+    def test_get_into_missing_destination_raises(self) -> None:
+        with pytest.raises(ParseError, match="into requires"):
+            parse_string("get score into")
+
+    def test_get_into_dotted_destination_raises(self) -> None:
+        with pytest.raises(ParseError, match="plain name"):
+            parse_string("get score into result.value")
 
 
 class TestSay:
@@ -401,6 +427,24 @@ class TestLook:
         prog = parse_string("look player")
         stmt = prog.statements[0]
         assert stmt.target == "player"
+
+    def test_look_into(self) -> None:
+        prog = parse_string("look programme into statements")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, LookStatement)
+        assert stmt.target == "programme"
+        assert stmt.into == "statements"
+
+    def test_look_bare_into(self) -> None:
+        prog = parse_string("look into here")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, LookStatement)
+        assert stmt.target == ""
+        assert stmt.into == "here"
+
+    def test_look_into_dotted_destination_raises(self) -> None:
+        with pytest.raises(ParseError, match="plain name"):
+            parse_string("look player into player.info")
 
 
 # ── Group 4: connect, destroy ──────────────────────────────────

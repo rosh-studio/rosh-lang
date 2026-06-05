@@ -2,8 +2,52 @@
 
 from __future__ import annotations
 
+import json
+import shutil
+import subprocess
+import textwrap
+
+import pytest
+
 from rosh_lang.core.parser import parse_string
 from rosh_lang.targets._js_codegen import compile_programme, _escape_js
+from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE
+
+
+def _execute_js(source: str, interaction: str = "") -> dict:
+    """Run generated JS against JS_RUNTIME_CORE and return observable state."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is required for generated JS execution tests")
+
+    compiled = compile_programme(parse_string(source))
+    script = "\n".join([
+        JS_RUNTIME_CORE,
+        "// -- generated init --",
+        compiled.init_code,
+        "// -- generated handlers --",
+        compiled.handler_code,
+        "// -- test interaction --",
+        interaction,
+        textwrap.dedent(
+            """
+            console.log(JSON.stringify({
+              state: rosh.state,
+              output: rosh._outputBuffer,
+              handlers: Object.keys(rosh.handlers).sort()
+            }));
+            """
+        ),
+    ])
+    result = subprocess.run(
+        [node],
+        input=script,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout.strip().splitlines()[-1])
 
 
 # ── Statement emitters ────────────────────────────────────────────
@@ -216,6 +260,70 @@ class TestCompileProgramme:
         result = compile_programme(parse_string("use counter as clicks"))
         assert '"clicks.value"' in result.init_code
         assert '"counter.value"' not in result.init_code
+
+
+class TestGeneratedJsExecution:
+    def test_executes_init_state_and_output(self):
+        result = _execute_js(
+            'create object box\n'
+            'set box.color to "red"\n'
+            'create number score\n'
+            'set score to 41\n'
+            'set score to score + 1\n'
+            'print "Score: {score}"'
+        )
+
+        assert result["state"]["box"]["color"] == "red"
+        assert result["state"]["score"] == 42
+        assert result["output"] == ["Score: 42"]
+
+    def test_executes_when_handler_and_restores_payload(self):
+        result = _execute_js(
+            'create number score\n'
+            'set score to 0\n'
+            'when scored\n'
+            '  set score to score + amount\n'
+            '  print "Score: {score}"\n'
+            'end',
+            'rosh.send("scored", {amount: 5});',
+        )
+
+        assert result["handlers"] == ["scored"]
+        assert result["state"]["score"] == 5
+        assert "amount" not in result["state"]
+        assert result["output"] == ["Score: 5"]
+
+    def test_executes_if_else_and_repeat_cleanup(self):
+        result = _execute_js(
+            'create number total\n'
+            'repeat 3 as i\n'
+            '  set total to total + i\n'
+            'end\n'
+            'if total == 6\n'
+            '  print "ok"\n'
+            'else\n'
+            '  print "bad"\n'
+            'end'
+        )
+
+        assert result["state"]["total"] == 6
+        assert "i" not in result["state"]
+        assert result["output"] == ["ok"]
+
+    def test_executes_list_mutation_and_foreach_cleanup(self):
+        result = _execute_js(
+            'create list items\n'
+            'add "Ada" to items\n'
+            'add "Grace" to items\n'
+            'remove "Ada" from items\n'
+            'for each name in items\n'
+            '  print "Hello {name}"\n'
+            'end'
+        )
+
+        assert result["state"]["items"] == ["Grace"]
+        assert "name" not in result["state"]
+        assert result["output"] == ["Hello Grace"]
 
 
 class TestCollectionCodegen:

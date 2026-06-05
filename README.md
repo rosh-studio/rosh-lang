@@ -54,7 +54,7 @@ Full docs at [rosh.cloud/docs](https://rosh.cloud/docs) · [Syntax reference](ht
 | `print` | `print "text"` or bare `print` | `print "hello {name}"` / `print` (blank line) |
 | `create` | `create <kind> <name>` | `create object player` |
 | `set` | `set <target> to <value>` | `set score to score + 1` / `set x to random` / `set x to clamp x 0 1` |
-| `get` | `get <target>` | `get player` |
+| `get` | `get <target> [into <name>]` | `get player` / `get score into saved` |
 | `say` | `say <text>` | `say hello everyone` |
 | `when` | `when <event> [then]` ... `end` | `when click` ... `end` |
 | `on` | `on <event> <action>` | `on click set count to count + 1` |
@@ -65,7 +65,7 @@ Full docs at [rosh.cloud/docs](https://rosh.cloud/docs) · [Syntax reference](ht
 | `end` | `end` | `end` |
 | `use` | `use <widget> [config]` | `use score label "Points"` |
 | `go` | `go <scene>` | `go level2` |
-| `look` | `look [target]` | `look` |
+| `look` | `look [target] [into <name>]` | `look` / `look programme into stmts` |
 | `connect` | `connect <name> <url>` | `connect server wss://...` |
 | `destroy` | `destroy <name>` | `destroy enemy` |
 | `sprite` | `sprite <name> "desc"` | `sprite ship "blue spaceship"` |
@@ -81,6 +81,10 @@ Full docs at [rosh.cloud/docs](https://rosh.cloud/docs) · [Syntax reference](ht
 | `remove` | `remove <item> from <list>` | `remove visitor from visitors` |
 | `for each` | `for each <var> in <list>` ... `end` | `for each v in visitors` ... `end` |
 | `create scene` | `create scene <name>` | `create scene level1` |
+
+`into` capture for `get` and `look` is currently a terminal/REPL feature.
+Browser, Phaser, Three.js, Scratch, and world target capture semantics are
+deferred until those targets have explicit `get`/`look` command-state paths.
 
 ### Object Properties
 

@@ -60,6 +60,32 @@ class ParseError(Exception):
         self.source = source
 
 
+_INTO_DEST_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
+
+
+def _split_into(rest: str, *, line: int, source: str) -> tuple[str, str]:
+    """Split a trailing `into name` clause from a result-producing statement."""
+    tokens = rest.split()
+    if not tokens:
+        return rest.strip(), ""
+
+    into_positions = [i for i, tok in enumerate(tokens) if tok.lower() == "into"]
+    if not into_positions:
+        return rest.strip(), ""
+
+    idx = into_positions[-1]
+    target = " ".join(tokens[:idx]).strip()
+    dest_tokens = tokens[idx + 1:]
+    if not dest_tokens:
+        raise ParseError("into requires a destination name", line=line, source=source)
+    if len(dest_tokens) != 1:
+        raise ParseError("into destination must be a single name", line=line, source=source)
+    dest = dest_tokens[0]
+    if not _INTO_DEST_RE.match(dest):
+        raise ParseError("into destination must be a plain name", line=line, source=source)
+    return target, dest
+
+
 def parse_file(path: Path | str, *, allow_extensions: bool = False) -> Programme:
     """Parse a .rosh file into a Programme."""
     path = Path(path)
@@ -381,7 +407,10 @@ def _parse_get(line_text: str, line: int, source: str) -> GetStatement:
     rest = line_text[len("get"):].strip()
     if not rest:
         raise ParseError("get requires a target", line=line, source=source)
-    return GetStatement(target=rest, line=line)
+    target, into = _split_into(rest, line=line, source=source)
+    if not target:
+        raise ParseError("get requires a target", line=line, source=source)
+    return GetStatement(target=target, into=into, line=line)
 
 
 def _parse_say(line_text: str, line: int, source: str) -> SayStatement:
@@ -481,7 +510,8 @@ def _parse_go(line_text: str, line: int, source: str) -> GoStatement:
 
 def _parse_look(line_text: str, line: int, source: str) -> LookStatement:
     rest = line_text[len("look"):].strip()
-    return LookStatement(target=rest, line=line)
+    target, into = _split_into(rest, line=line, source=source)
+    return LookStatement(target=target, into=into, line=line)
 
 
 def _parse_connect(line_text: str, line: int, source: str) -> ConnectStatement:

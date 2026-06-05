@@ -37,6 +37,12 @@ set player.x to 0.5                   # assign value (arithmetic: score + 1)
 set x to random                       # random 0.0–1.0 (or: random 0.1 0.9)
 set x to clamp x 0.02 0.8             # constrain to [min, max]
 get player                            # query state
+get score into saved                  # capture result into state variable
+get all into items                    # capture all visible state as structured list
+get count of visitors into n          # capture list length as integer
+look                                  # inspect scene
+look player into info                 # capture inspection result into state
+look programme into stmts             # capture statement list (iterate with for each)
 say hello                             # broadcast text
 when click                            # event handler block
   set count to count + 1
@@ -54,7 +60,6 @@ else
 end
 use score label "Points"              # compose widget with config
 go level2                             # scene navigation
-look                                  # inspect scene
 connect server wss://...              # register connection
 destroy enemy                         # remove object
 sprite ship "blue spaceship"          # procedural pixel art
@@ -77,6 +82,10 @@ repeat 3 as i                         # loop with variable (1, 2, 3)
   print "Round {i}"
 end
 ```
+
+`into` capture for `get` and `look` is terminal/REPL-first. Browser, Phaser,
+Three.js, Scratch, and world target capture semantics are deferred until those
+targets have explicit `get`/`look` command-state paths.
 
 ## Object Properties
 

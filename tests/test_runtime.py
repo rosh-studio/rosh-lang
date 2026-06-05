@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from rosh_lang.core.model import (
+    AddStatement,
     AfterStatement,
     AnimateStatement,
     BackgroundStatement,
@@ -632,6 +633,53 @@ class TestGetExecution:
         assert "_last_said" not in keys
         assert "_say_count" not in keys
 
+    def test_get_into_scalar_value(self) -> None:
+        rt = _run([
+            CreateStatement(kind="number", name="score"),
+            SetStatement(target="score", value="42"),
+            GetStatement(target="score", into="saved"),
+        ])
+        assert rt.state["saved"] == 42
+
+    def test_get_into_object_value(self) -> None:
+        rt = _run([
+            CreateStatement(kind="object", name="player"),
+            SetStatement(target="player.health", value="100"),
+            GetStatement(target="player", into="saved_player"),
+        ])
+        assert rt.state["saved_player"] == {"health": 100}
+
+    def test_get_all_into_structured_list(self) -> None:
+        rt = _run([
+            CreateStatement(kind="number", name="x"),
+            SetStatement(target="x", value="1"),
+            CreateStatement(kind="string", name="y"),
+            SetStatement(target="y", value='"hello"'),
+            GetStatement(target="all", into="items"),
+        ])
+        assert isinstance(rt.state["items"], list)
+        keys = {row["key"] for row in rt.state["items"]}
+        assert keys == {"x", "y"}
+
+    def test_get_all_into_single_item_is_still_list(self) -> None:
+        rt = _run([
+            CreateStatement(kind="number", name="score"),
+            SetStatement(target="score", value="42"),
+            GetStatement(target="all", into="items"),
+        ])
+        assert isinstance(rt.state["items"], list)
+        assert rt.state["items"][0]["key"] == "score"
+
+    def test_get_count_into_scalar_value(self) -> None:
+        rt = _run([
+            CreateStatement(kind="list", name="visitors"),
+            AddStatement(item='"Ada"', target="visitors"),
+            AddStatement(item='"Grace"', target="visitors"),
+            GetStatement(target="count of visitors", into="visitor_count"),
+        ])
+        assert rt.state["visitor_count"] == 2
+        assert rt.state["_count"] == 2
+
 
 class TestSayExecution:
     # Compliance S1
@@ -998,6 +1046,16 @@ class TestLookExecution:
         result = rt.execute(LookStatement(target="player"))
         assert result[0]["value"] == {"health": 100}
 
+    def test_look_target_into_structured_list(self) -> None:
+        rt = _run([
+            CreateStatement(kind="object", name="player"),
+            SetStatement(target="player.health", value="100"),
+            LookStatement(target="player", into="info"),
+        ])
+        assert rt.state["info"] == [
+            {"key": "player", "value": {"health": 100}, "type": "object"}
+        ]
+
     def test_look_unknown_raises(self) -> None:
         rt = _run([])
         with pytest.raises(KeyError, match="Unknown"):
@@ -1091,6 +1149,38 @@ class TestLookExecution:
         result = rt.execute(LookStatement(target="programme"))
         send = next(d for d in result if d["type"] == "send")
         assert send["event"] == "scored"
+
+    def test_look_programme_into_structured_list(self) -> None:
+        rt = _run([
+            CreateStatement(kind="number", name="score"),
+            GetStatement(target="score", into="saved"),
+            LookStatement(target="programme", into="stmts"),
+        ])
+        assert rt.state["stmts"][1] == {
+            "type": "get",
+            "target": "score",
+            "into": "saved",
+        }
+        assert rt.state["stmts"][2] == {
+            "type": "look",
+            "target": "programme",
+            "into": "stmts",
+        }
+
+    def test_look_programme_into_can_be_iterated(self) -> None:
+        buf = io.StringIO()
+        rt = Runtime(output=buf)
+        rt.run(parse_string(
+            "create number score\n"
+            "look programme into stmts\n"
+            "for each stmt in stmts\n"
+            "  print {stmt}\n"
+            "end\n"
+        ))
+        assert isinstance(rt.state["stmts"], list)
+        assert "create" in buf.getvalue()
+        assert "look" in buf.getvalue()
+        assert "foreach" in buf.getvalue()
 
     def test_look_components_empty(self) -> None:
         rt = _run([])

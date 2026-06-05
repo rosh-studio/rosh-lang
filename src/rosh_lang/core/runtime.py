@@ -291,6 +291,21 @@ class Runtime:
                 obj = obj[part]
             obj[parts[-1]] = value
 
+    def _capture_result(
+        self,
+        into: str,
+        result: list[dict[str, Any]],
+        *,
+        unwrap_single: bool = False,
+    ) -> None:
+        """Store a structured command result under `into` when requested."""
+        if not into:
+            return
+        value: Any = result
+        if unwrap_single and len(result) == 1 and "value" in result[0]:
+            value = result[0]["value"]
+        self.state[into] = value
+
     def _delete_path(self, key: str) -> None:
         """Delete a dotted key path if it exists."""
         parts = key.split(".")
@@ -311,7 +326,9 @@ class Runtime:
             lst = self._resolve(list_name)
             count = len(lst) if isinstance(lst, list) else 0
             self.state["_count"] = count
-            return [{"key": "_count", "value": count}]
+            result = [{"key": "_count", "value": count}]
+            self._capture_result(stmt.into, result, unwrap_single=True)
+            return result
 
         # get all / get all <type>
         if target.startswith("all"):
@@ -325,6 +342,7 @@ class Runtime:
                 if type_filter and t != type_filter:
                     continue
                 results.append({"key": k, "value": v, "type": t})
+            self._capture_result(stmt.into, results)
             return results
 
         # get specific key
@@ -344,7 +362,9 @@ class Runtime:
                 raise KeyError(f"Unknown key: {target!r}")
             val = obj
 
-        return [{"key": target, "value": val, "type": _type_name(val)}]
+        result = [{"key": target, "value": val, "type": _type_name(val)}]
+        self._capture_result(stmt.into, result, unwrap_single=True)
+        return result
 
     def _exec_say(self, stmt: SayStatement) -> None:
         text = self._interpolate(stmt.text)
@@ -412,17 +432,23 @@ class Runtime:
         target = stmt.target.strip() if stmt.target else ""
 
         if target == "programme":
-            return self._look_programme()
+            result = self._look_programme()
+            self._capture_result(stmt.into, result)
+            return result
 
         if target == "components":
-            return self._look_components()
+            result = self._look_components()
+            self._capture_result(stmt.into, result)
+            return result
 
         if target:
             # Look at specific object/field
             val = self._resolve(target)
             if val is None:
                 raise KeyError(f"Unknown: {target!r}")
-            return [{"key": target, "value": val, "type": _type_name(val)}]
+            result = [{"key": target, "value": val, "type": _type_name(val)}]
+            self._capture_result(stmt.into, result)
+            return result
 
         # Full scene inspection
         result: list[dict[str, Any]] = []
@@ -455,6 +481,7 @@ class Runtime:
                 if exits:
                     self.output.write(f"Exits: {', '.join(exits)}\n")
 
+        self._capture_result(stmt.into, result)
         return result
 
     def _look_programme(self) -> list[dict[str, Any]]:
@@ -1071,9 +1098,14 @@ def _stmt_to_dict(stmt: Statement) -> dict[str, Any]:
         d = {"type": "look"}
         if stmt.target:
             d["target"] = stmt.target
+        if stmt.into:
+            d["into"] = stmt.into
         return d
     if isinstance(stmt, GetStatement):
-        return {"type": "get", "target": stmt.target}
+        d = {"type": "get", "target": stmt.target}
+        if stmt.into:
+            d["into"] = stmt.into
+        return d
     if isinstance(stmt, DestroyStatement):
         return {"type": "destroy", "name": stmt.name}
     if isinstance(stmt, SpriteStatement):
@@ -1163,7 +1195,7 @@ def _stmt_summary(d: dict[str, Any]) -> str:
         if d.get("alias"):
             s += f" as {d['alias']}"
         return s
-    if t in ("go", "get"):
+    if t == "go":
         return d.get("target", "")
     if t in ("destroy", "define", "do"):
         return d.get("name", "")
@@ -1175,7 +1207,15 @@ def _stmt_summary(d: dict[str, Any]) -> str:
             s += f" {d['mode']}"
         return s
     if t == "look":
-        return d.get("target", "")
+        s = d.get("target", "")
+        if d.get("into"):
+            s = f"{s} into {d['into']}".strip()
+        return s
+    if t == "get":
+        s = d.get("target", "")
+        if d.get("into"):
+            s = f"{s} into {d['into']}".strip()
+        return s
     if t == "background":
         return d.get("value", "")
     if t == "after":

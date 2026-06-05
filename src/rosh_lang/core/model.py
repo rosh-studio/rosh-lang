@@ -64,6 +64,7 @@ class GetStatement:
     """get score / get all / get all bool"""
 
     target: str
+    into: str = ""
     line: int = 0
 
 
@@ -117,6 +118,7 @@ class LookStatement:
     """look / look player"""
 
     target: str = ""
+    into: str = ""
     line: int = 0
 
 
