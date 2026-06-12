@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any, Mapping
+
+_log = logging.getLogger(__name__)
 
 from rosh_lang.intent.prompts import SYSTEM_PROMPT, build_user_prompt
 from rosh_lang.intent.providers import IntentProvider, IntentProviderError, provider_from_settings
@@ -59,15 +62,18 @@ class IntentPlanner:
         )
         try:
             raw = self.provider.complete(system=SYSTEM_PROMPT, prompt=prompt)
-        except IntentProviderError:
+        except IntentProviderError as exc:
+            _log.warning("IntentPlanner: provider error: %s", exc)
             return None
 
         plan = _parse_plan(intent, raw)
         if plan is None:
+            _log.warning("IntentPlanner: could not parse plan from response: %r", raw[:200])
             return None
 
         validation = validate_generated_rosh(plan.rosh)
         if not validation.ok:
+            _log.warning("IntentPlanner: generated Rosh failed validation: %s", validation.error)
             return None
         return plan
 

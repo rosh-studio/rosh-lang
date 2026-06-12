@@ -350,4 +350,5 @@ class Programme:
     """A parsed Rosh programme — a list of statements."""
 
     statements: list[Statement] = field(default_factory=list)
-    source: str = ""
+    source: str = ""       # source label — filename or "<string>" (for error messages)
+    source_text: str = ""  # actual source text (populated by parse_string/parse_file)

@@ -134,7 +134,7 @@ def parse_string(
     statements = _collect_structured_blocks(statements, source=source)
     if strict_blocks:
         _validate_when_blocks(statements, source=source)
-    return Programme(statements=statements, source=source)
+    return Programme(statements=statements, source=source, source_text=text)
 
 
 _STRUCTURED_BLOCK_TYPES = (IfStatement, DefineStatement, RepeatStatement, ForEachStatement)
