@@ -113,6 +113,71 @@ def test_cli_scratch_target_writes_sb3(tmp_path: Path) -> None:
     assert (tmp_path / "ball.sb3").exists()
 
 
+def test_cli_assets_search_outputs_candidates(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    requests = tmp_path / "requests.json"
+    requests.write_text(
+        json.dumps([{"query": "pictish stone", "target": "threejs"}]),
+        encoding="utf-8",
+    )
+
+    result = cli.main(["assets", "search", str(requests), "--provider", "mock", "--limit", "1"])
+
+    assert result == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data[0]["provider"] == "mock"
+    assert data[0]["candidates"][0]["id"] == "mock_pictish_stone"
+
+
+def test_cli_assets_search_reports_missing_file(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        cli.main(["assets", "search", "/tmp/does-not-exist-rosh-assets.json"])
+
+    assert "AssetError:" in capsys.readouterr().err
+
+
+def test_cli_assets_search_reports_invalid_json(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    requests = tmp_path / "bad.json"
+    requests.write_text("{not json", encoding="utf-8")
+
+    with pytest.raises(SystemExit):
+        cli.main(["assets", "search", str(requests)])
+
+    assert "invalid JSON" in capsys.readouterr().err
+
+
+def test_cli_assets_search_reports_unknown_provider(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    requests = tmp_path / "requests.json"
+    requests.write_text(json.dumps([{"query": "stone"}]), encoding="utf-8")
+
+    with pytest.raises(SystemExit):
+        cli.main(["assets", "search", str(requests), "--provider", "nope"])
+
+    assert "unknown provider" in capsys.readouterr().err
+
+
+def test_cli_assets_search_limit_zero_clamps_to_one(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    requests = tmp_path / "requests.json"
+    requests.write_text(json.dumps([{"query": "pictish stone"}]), encoding="utf-8")
+
+    result = cli.main(["assets", "search", str(requests), "--limit", "0"])
+
+    assert result == 0
+    data = json.loads(capsys.readouterr().out)
+    assert len(data[0]["candidates"]) == 1
+
+
 def test_runtime_adapter_lists_top_level_dicts_as_objects() -> None:
     adapter = RuntimeAdapter()
     adapter.runtime.state["player"] = {"x": 1, "y": 2}

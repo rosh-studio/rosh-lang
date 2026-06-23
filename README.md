@@ -554,13 +554,17 @@ rosh-lang/
     cli/
       cloud.py        # rosh.cloud commands
       scaffolder.py   # rosh new templates
-      library_cli.py  # rosh library CLI
+      library_cli.py  # rosh library list/info (widget inspector)
+      assets_cli.py   # rosh assets search (asset pipeline CLI)
     media/
-      assets.py       # Asset file resolver
+      assets.py       # Asset file resolver (legacy path resolver)
       sprites.py      # Procedural pixel-art generator
       sounds.py       # Procedural sound generator
       sheets.py       # Spritesheet slicer
-      assets/         # Bundled media assets
+      asset_registry.py   # Semantic asset registry (find by name/alias/tag)
+      asset_providers.py  # External provider connectors (mock, Sketchfab)
+      asset_requests.py   # Unknown-object request queue loader
+      asset_manifests/    # Bundled seed asset manifests (JSON)
     library/          # 22 bundled widgets
     targets/
       terminal.py     # Terminal target
@@ -578,7 +582,7 @@ rosh-lang/
     parser.py         # Compatibility shim for rosh_lang.core.parser
     __main__.py       # CLI entry point + REPL
   examples/           # Example programmes
-  tests/              # Test suite (1,215 tests)
+  tests/              # Test suite (1,289 tests)
   editor/vscode/      # Official VS Code language extension
   tools/              # Build tools (showcase generator)
   dist/               # Generated output (showcase.html)

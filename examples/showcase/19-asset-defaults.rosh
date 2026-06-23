@@ -1,0 +1,14 @@
+# demo: Asset Defaults
+# description: Known object names resolve through the bundled asset registry into useful Three.js defaults.
+# badges: 3D, assets
+# target: threejs
+
+create object stone
+set stone.x to -2
+
+create object wooden_door
+set wooden_door.x to 0
+
+create object gold_coin
+set gold_coin.x to 2
+set gold_coin.y to 0.5

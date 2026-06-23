@@ -104,6 +104,12 @@ def main(argv: list[str] | None = None) -> int:
         library_main(argv[1:])
         return 0
 
+    # "rosh assets ..." — asset request/provider helpers
+    if argv[0] == "assets":
+        from rosh_lang.cli.assets_cli import assets_main
+        assets_main(argv[1:])
+        return 0
+
     # "rosh new ..." — handle before argparse
     if argv[0] == "new":
         from rosh_lang.cli.scaffolder import scaffold

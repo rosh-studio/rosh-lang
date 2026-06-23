@@ -1,0 +1,38 @@
+{
+  "id": "torch",
+  "name": "Torch",
+  "version": "0.1",
+  "description": "A wall-mounted torch or sconce — a flame light source for heritage, castle, and dungeon spaces.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["torch", "sconce", "flame", "fire", "light", "wall torch", "heritage", "medieval", "castle", "dungeon"],
+  "aliases": ["wall torch", "sconce", "flame torch", "fire torch", "brazier"],
+  "semantic": {
+    "kind": "light_source",
+    "material": "wood",
+    "scale_hint": "hand_held",
+    "inspectable": true,
+    "emits_light": true
+  },
+  "defaults": {
+    "color": "orange",
+    "shape": "cylinder",
+    "collision": "static"
+  },
+  "representations": {
+    "text": {
+      "description": "A torch flickers on the wall, casting warm light."
+    },
+    "threejs": {
+      "fallback_shape": "cylinder",
+      "scale": [0.08, 0.7, 0.08]
+    },
+    "phaser": {
+      "fallback_shape": "rectangle"
+    }
+  }
+}

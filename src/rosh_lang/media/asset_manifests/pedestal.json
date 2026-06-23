@@ -1,0 +1,37 @@
+{
+  "id": "pedestal",
+  "name": "Pedestal",
+  "version": "0.1",
+  "description": "A square plinth for displaying sculpture, objects, or standing stone.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["pedestal", "plinth", "stand", "base", "museum", "gallery", "sculpture"],
+  "aliases": ["plinth", "plinth block", "display stand", "sculpture base"],
+  "semantic": {
+    "kind": "pedestal",
+    "material": "stone",
+    "scale_hint": "waist_height",
+    "inspectable": true
+  },
+  "defaults": {
+    "color": "white",
+    "shape": "box",
+    "collision": "static"
+  },
+  "representations": {
+    "text": {
+      "description": "A square white pedestal stands ready to display something."
+    },
+    "threejs": {
+      "fallback_shape": "box",
+      "scale": [0.5, 1.0, 0.5]
+    },
+    "phaser": {
+      "fallback_shape": "rectangle"
+    }
+  }
+}

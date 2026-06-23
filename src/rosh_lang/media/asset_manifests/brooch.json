@@ -1,0 +1,38 @@
+{
+  "id": "brooch",
+  "name": "Brooch",
+  "version": "0.1",
+  "description": "A penannular brooch or decorative pin — a signature Pictish and early medieval artefact.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["brooch", "penannular brooch", "clasp", "pin", "pictish", "celtic", "silver", "jewellery", "heritage", "museum"],
+  "aliases": ["penannular brooch", "clasp", "fibula", "pin", "pictish brooch"],
+  "semantic": {
+    "kind": "brooch",
+    "material": "silver",
+    "scale_hint": "tiny",
+    "inspectable": true,
+    "period": "early_medieval"
+  },
+  "defaults": {
+    "color": "silver",
+    "shape": "torus",
+    "collision": "collectable"
+  },
+  "representations": {
+    "text": {
+      "description": "A silver penannular brooch, its terminals finely decorated."
+    },
+    "threejs": {
+      "fallback_shape": "torus",
+      "scale": [0.25, 0.04, 0.25]
+    },
+    "phaser": {
+      "fallback_shape": "circle"
+    }
+  }
+}

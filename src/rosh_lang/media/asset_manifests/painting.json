@@ -1,0 +1,36 @@
+{
+  "id": "painting",
+  "name": "Painting",
+  "version": "0.1",
+  "description": "A framed flat artwork for rooms, galleries, and museum spaces.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["painting", "art", "picture", "frame", "museum", "gallery"],
+  "aliases": ["framed painting", "picture"],
+  "semantic": {
+    "kind": "artwork",
+    "scale_hint": "wall_object",
+    "inspectable": true
+  },
+  "defaults": {
+    "color": "white",
+    "shape": "rectangle",
+    "collision": "static"
+  },
+  "representations": {
+    "text": {
+      "description": "A framed painting hangs here."
+    },
+    "threejs": {
+      "fallback_shape": "plane",
+      "scale": [1.4, 1.0, 0.05]
+    },
+    "phaser": {
+      "fallback_shape": "rectangle"
+    }
+  }
+}

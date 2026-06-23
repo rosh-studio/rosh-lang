@@ -230,6 +230,43 @@ class TestThreejs3DFeatures:
         from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_THREEJS
         assert "0x16213e" in JS_RUNTIME_THREEJS
 
+    def test_registry_defaults_for_known_asset(self):
+        prog = parse_string("create object stone")
+        html = render_threejs(prog)
+
+        assert 'rosh.set("stone._asset.id", "stone");' in html
+        assert 'rosh.set("stone.shape", "box");' in html
+        assert 'rosh.set("stone.color", "grey");' in html
+        assert 'rosh.set("stone.label", "Standing Stone");' in html
+
+    def test_registry_defaults_use_alias_match(self):
+        prog = parse_string("create object pictish_stone")
+        html = render_threejs(prog)
+
+        assert 'rosh.set("pictish_stone._asset.id", "stone");' in html
+        assert 'rosh.set("pictish_stone._asset.reason", "alias");' in html
+
+    def test_user_set_overrides_registry_default(self):
+        prog = parse_string(
+            "create object stone\n"
+            "set stone.color to blue\n"
+        )
+        html = render_threejs(prog)
+
+        default_index = html.index('rosh.set("stone.color", "grey");')
+        override_index = html.index('rosh.set("stone.color", rosh.evalSetValue')
+        assert default_index < override_index
+
+    def test_unknown_object_gets_placeholder_asset_request(self):
+        prog = parse_string("create object blargle")
+        html = render_threejs(prog)
+
+        assert 'rosh.set("blargle._asset.status", "missing");' in html
+        assert 'rosh.set("blargle._asset.query", "blargle");' in html
+        assert 'rosh.set("blargle.shape", "box");' in html
+        assert 'rosh.set("blargle.label", "blargle");' in html
+        assert 'rosh.addToList("_assetRequests"' in html
+
 
 # ── Key hold state ───────────────────────────────────────────
 

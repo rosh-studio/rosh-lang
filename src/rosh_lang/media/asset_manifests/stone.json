@@ -1,0 +1,37 @@
+{
+  "id": "stone",
+  "name": "Standing Stone",
+  "version": "0.1",
+  "description": "A generic upright stone suitable for heritage and landscape worlds.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["stone", "standing stone", "pictish", "carved", "museum", "heritage"],
+  "aliases": ["pictish stone", "symbol stone", "carved stone"],
+  "semantic": {
+    "kind": "standing_stone",
+    "material": "stone",
+    "scale_hint": "human_height",
+    "inspectable": true
+  },
+  "defaults": {
+    "color": "grey",
+    "shape": "slab",
+    "collision": "static"
+  },
+  "representations": {
+    "text": {
+      "description": "A tall standing stone rises from the ground."
+    },
+    "threejs": {
+      "fallback_shape": "box",
+      "scale": [0.8, 2.2, 0.3]
+    },
+    "phaser": {
+      "fallback_shape": "rectangle"
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "id": "ball",
+  "name": "Ball",
+  "version": "0.1",
+  "description": "A simple round object for games, toys, and physical examples.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["ball", "sphere", "round", "toy", "game"],
+  "aliases": ["orb", "round ball"],
+  "semantic": {
+    "kind": "ball",
+    "material": "generic",
+    "scale_hint": "handheld"
+  },
+  "defaults": {
+    "color": "red",
+    "shape": "sphere",
+    "collision": "dynamic"
+  },
+  "representations": {
+    "text": {
+      "description": "A round ball is here."
+    },
+    "threejs": {
+      "fallback_shape": "sphere",
+      "scale": [1.0, 1.0, 1.0]
+    },
+    "phaser": {
+      "fallback_shape": "circle"
+    }
+  }
+}

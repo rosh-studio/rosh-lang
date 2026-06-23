@@ -1,0 +1,36 @@
+{
+  "id": "box",
+  "name": "Box",
+  "version": "0.1",
+  "description": "A simple rectangular container or block.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["box", "cube", "crate", "container", "block"],
+  "aliases": ["crate", "wooden crate"],
+  "semantic": {
+    "kind": "container",
+    "material": "generic",
+    "scale_hint": "waist_height"
+  },
+  "defaults": {
+    "color": "brown",
+    "shape": "box",
+    "collision": "static"
+  },
+  "representations": {
+    "text": {
+      "description": "A box sits here."
+    },
+    "threejs": {
+      "fallback_shape": "box",
+      "scale": [1.0, 1.0, 1.0]
+    },
+    "phaser": {
+      "fallback_shape": "rectangle"
+    }
+  }
+}

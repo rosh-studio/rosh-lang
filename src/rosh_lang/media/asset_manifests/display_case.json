@@ -1,0 +1,38 @@
+{
+  "id": "display_case",
+  "name": "Display Case",
+  "version": "0.1",
+  "description": "A glass-fronted display case for museum exhibits and gallery objects.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["display case", "vitrine", "glass case", "cabinet", "museum", "gallery", "exhibit"],
+  "aliases": ["vitrine", "glass case", "exhibit case", "museum case"],
+  "semantic": {
+    "kind": "display_case",
+    "material": "glass",
+    "scale_hint": "furniture_scale",
+    "inspectable": true,
+    "contains_objects": true
+  },
+  "defaults": {
+    "color": "lightblue",
+    "shape": "box",
+    "collision": "static"
+  },
+  "representations": {
+    "text": {
+      "description": "A glass display case stands here, its contents visible through the panels."
+    },
+    "threejs": {
+      "fallback_shape": "box",
+      "scale": [0.8, 1.2, 0.8]
+    },
+    "phaser": {
+      "fallback_shape": "rectangle"
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "id": "key",
+  "name": "Key",
+  "version": "0.1",
+  "description": "A small key for locks, puzzles, and collectable items.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["key", "lock", "unlock", "puzzle", "collectable"],
+  "aliases": ["gold key", "small key"],
+  "semantic": {
+    "kind": "key",
+    "material": "metal",
+    "scale_hint": "small"
+  },
+  "defaults": {
+    "color": "gold",
+    "shape": "key",
+    "collision": "collectable"
+  },
+  "representations": {
+    "text": {
+      "description": "A small key lies here."
+    },
+    "threejs": {
+      "fallback_shape": "box",
+      "scale": [0.2, 0.08, 0.6]
+    },
+    "phaser": {
+      "fallback_shape": "rectangle"
+    }
+  }
+}

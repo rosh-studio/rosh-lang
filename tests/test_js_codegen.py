@@ -71,6 +71,64 @@ class TestEmitCreate:
         result = compile_programme(prog)
         assert 'rosh.create("object", "box")' in result.init_code
 
+    def test_create_object_no_asset_defaults_for_web(self):
+        prog = parse_string("create object stone")
+        result = compile_programme(prog)
+        assert 'rosh.set("stone._asset.id"' not in result.init_code
+
+    def test_create_object_asset_defaults_for_threejs(self):
+        prog = parse_string("create object stone")
+        result = compile_programme(prog, target="threejs")
+        assert 'rosh.create("object", "stone")' in result.init_code
+        assert 'rosh.set("stone._asset.id", "stone");' in result.init_code
+        assert 'rosh.set("stone.shape", "box");' in result.init_code
+
+    def test_create_unknown_object_emits_asset_request_for_threejs(self):
+        prog = parse_string("create object blargle")
+        result = compile_programme(prog, target="threejs")
+        assert 'rosh.set("blargle._asset.status", "missing");' in result.init_code
+        assert 'rosh.set("blargle._asset.query", "blargle");' in result.init_code
+        assert 'rosh.set("blargle._asset.reason", "no_match");' in result.init_code
+        assert 'rosh.set("blargle.shape", "box");' in result.init_code
+        assert 'rosh.set("blargle.color", "grey");' in result.init_code
+        assert 'rosh.addToList("_assetRequests"' in result.init_code
+
+    def test_unknown_threejs_asset_request_executes(self):
+        node = shutil.which("node")
+        if node is None:
+            pytest.skip("node is required for generated JS execution tests")
+
+        compiled = compile_programme(
+            parse_string("create object blargle"),
+            target="threejs",
+        )
+        script = "\n".join([
+            JS_RUNTIME_CORE,
+            compiled.init_code,
+            "console.log(JSON.stringify(rosh.state._assetRequests));",
+        ])
+        result = subprocess.run(
+            [node],
+            input=script,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        requests = json.loads(result.stdout.strip().splitlines()[-1])
+        assert requests == [{
+            "object": "blargle",
+            "query": "blargle",
+            "target": "threejs",
+            "status": "open",
+            "reason": "no_match",
+            "needed": ["model", "thumbnail", "renderer_defaults"],
+        }]
+
+    def test_known_threejs_asset_does_not_request_asset(self):
+        result = compile_programme(parse_string("create object stone"), target="threejs")
+        assert 'rosh.addToList("_assetRequests"' not in result.init_code
+
     def test_create_number(self):
         prog = parse_string("create number score")
         result = compile_programme(prog)

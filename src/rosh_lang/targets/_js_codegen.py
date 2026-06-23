@@ -7,6 +7,7 @@ One emitter per statement type. Pure functions, no side effects.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 
 from rosh_lang.core.model import (
     AddStatement,
@@ -40,6 +41,7 @@ from rosh_lang.core.model import (
     UseStatement,
     WhenStatement,
 )
+from rosh_lang.media.asset_registry import load_bundled_registry
 from rosh_lang.media.sounds import generate_sound_params
 
 
@@ -116,7 +118,7 @@ def compile_programme(
             i += 1  # skip end
 
             # Emit body lines
-            body_js = _emit_body(body)
+            body_js = _emit_body(body, target=target)
 
             # Choose event name — "click <name>" → "click_<name>"
             if event == "click" and args:
@@ -160,7 +162,7 @@ def compile_programme(
             # AnimateStatement requires a game loop for tickAnimations
             if isinstance(stmt, AnimateStatement):
                 needs_loop = True
-            line = _emit_statement(stmt)
+            line = _emit_statement(stmt, target=target)
             if line:
                 init_lines.append(line)
             i += 1
@@ -176,12 +178,12 @@ def compile_programme(
 # ── Statement emitters ────────────────────────────────────────────
 
 
-def _emit_statement(stmt: Statement) -> str:
+def _emit_statement(stmt: Statement, target: str = "web") -> str:
     """Emit JS for a single top-level statement."""
     if isinstance(stmt, PrintStatement):
         return _emit_print(stmt)
     if isinstance(stmt, CreateStatement):
-        return _emit_create(stmt)
+        return _emit_create(stmt, target=target)
     if isinstance(stmt, SetStatement):
         return _emit_set(stmt)
     if isinstance(stmt, DestroyStatement):
@@ -197,7 +199,7 @@ def _emit_statement(stmt: Statement) -> str:
     if isinstance(stmt, PlayStatement):
         return _emit_play(stmt)
     if isinstance(stmt, IfStatement):
-        return _emit_if(stmt)
+        return _emit_if(stmt, target=target)
     if isinstance(stmt, GoStatement):
         return _emit_go(stmt)
     if isinstance(stmt, AnimateStatement):
@@ -209,15 +211,15 @@ def _emit_statement(stmt: Statement) -> str:
     if isinstance(stmt, DoStatement):
         return _emit_do(stmt)
     if isinstance(stmt, DefineStatement):
-        return _emit_define(stmt)
+        return _emit_define(stmt, target=target)
     if isinstance(stmt, RepeatStatement):
-        return _emit_repeat(stmt)
+        return _emit_repeat(stmt, target=target)
     if isinstance(stmt, AddStatement):
         return _emit_add(stmt)
     if isinstance(stmt, RemoveStatement):
         return _emit_remove(stmt)
     if isinstance(stmt, ForEachStatement):
-        return _emit_foreach(stmt)
+        return _emit_foreach(stmt, target=target)
     if isinstance(stmt, LookStatement):
         return "/* look: terminal-only, no-op in JS */"
     return ""
@@ -227,10 +229,80 @@ def _emit_print(stmt: PrintStatement) -> str:
     return f'rosh.appendOutput(rosh.interpolate("{_escape_js(stmt.text)}"));'
 
 
-def _emit_create(stmt: CreateStatement) -> str:
+def _emit_create(stmt: CreateStatement, target: str = "web") -> str:
     if stmt.kind.lower() == "scene":
         return f'rosh.createScene("{_escape_js(stmt.name)}");'
-    return f'rosh.create("{_escape_js(stmt.kind)}", "{_escape_js(stmt.name)}");'
+    line = f'rosh.create("{_escape_js(stmt.kind)}", "{_escape_js(stmt.name)}");'
+    if target == "threejs" and stmt.kind.lower() == "object":
+        defaults = _threejs_asset_defaults(stmt.name)
+        if defaults:
+            return line + "\n" + defaults
+    return line
+
+
+def _threejs_asset_defaults(name: str) -> str:
+    """Emit registry-backed Three.js defaults for an object name."""
+    match = load_bundled_registry().find(name)
+    if match is None:
+        object_name = _escape_js(name)
+        label = _escape_js(_asset_label_from_name(name))
+        request = {
+            "object": name,
+            "query": _asset_label_from_name(name),
+            "target": "threejs",
+            "status": "open",
+            "reason": "no_match",
+            "needed": ["model", "thumbnail", "renderer_defaults"],
+        }
+        request_json = json.dumps(request, separators=(",", ":"))
+        return "\n".join([
+            f'rosh.set("{object_name}._asset.status", "missing");',
+            f'rosh.set("{object_name}._asset.query", "{object_name}");',
+            f'rosh.set("{object_name}._asset.reason", "no_match");',
+            f'rosh.set("{object_name}.shape", "box");',
+            f'rosh.set("{object_name}.color", "grey");',
+            f'rosh.set("{object_name}.label", "{label}");',
+            'if (!Array.isArray(rosh.get("_assetRequests"))) { rosh.set("_assetRequests", []); }',
+            f'rosh.addToList("_assetRequests", {request_json});',
+        ])
+
+    asset = match.asset
+    defaults = dict(asset.defaults)
+    threejs = asset.representation("threejs") or {}
+    scale = threejs.get("scale")
+    if isinstance(scale, list) and len(scale) >= 3:
+        defaults.setdefault("width", scale[0])
+        defaults.setdefault("height", scale[1])
+        defaults.setdefault("depth", scale[2])
+    fallback_shape = threejs.get("fallback_shape")
+    if isinstance(fallback_shape, str) and fallback_shape:
+        defaults["shape"] = fallback_shape
+    model = threejs.get("model")
+    if isinstance(model, str) and model:
+        defaults.setdefault("model", model)
+    defaults.setdefault("label", asset.name)
+
+    object_name = _escape_js(name)
+    lines = [
+        f'rosh.set("{object_name}._asset.id", "{_escape_js(asset.id)}");',
+        f'rosh.set("{object_name}._asset.version", "{_escape_js(asset.version)}");',
+        f'rosh.set("{object_name}._asset.status", "resolved");',
+        f'rosh.set("{object_name}._asset.reason", "{_escape_js(match.reason)}");',
+    ]
+    for key in sorted(defaults):
+        value = defaults[key]
+        if key == "collision":
+            continue
+        lines.append(
+            f'rosh.set("{object_name}.{_escape_js(str(key))}", '
+            f"{json.dumps(value, separators=(',', ':'))});"
+        )
+    return "\n".join(lines)
+
+
+def _asset_label_from_name(name: str) -> str:
+    """Create a readable fallback label from a Rosh object identifier."""
+    return " ".join(part for part in name.replace("-", "_").split("_") if part) or name
 
 
 def _emit_set(stmt: SetStatement) -> str:
@@ -300,9 +372,9 @@ def _emit_background(stmt: BackgroundStatement) -> str:
     return f'rosh.setBackground("{_escape_js(stmt.value)}");'
 
 
-def _emit_define(stmt: DefineStatement) -> str:
+def _emit_define(stmt: DefineStatement, target: str = "web") -> str:
     """Emit a JS function declaration from a define block."""
-    body_js = _emit_body(stmt.body)
+    body_js = _emit_body(stmt.body, target=target)
     name = _safe_fn_name(stmt.name)
     if not stmt.params:
         return f"function {name}() {{\n{body_js}}}"
@@ -338,9 +410,9 @@ def _emit_do(stmt: DoStatement) -> str:
     return f"{name}({{{arg_pairs}}});"
 
 
-def _emit_repeat(stmt: RepeatStatement) -> str:
+def _emit_repeat(stmt: RepeatStatement, target: str = "web") -> str:
     """Emit a JS for loop from a repeat block."""
-    body_js = _emit_body(stmt.body)
+    body_js = _emit_body(stmt.body, target=target)
     count_expr = _escape_js(stmt.count)
     # If count is a literal int, use directly; otherwise resolve from state
     try:
@@ -383,8 +455,8 @@ def _emit_remove(stmt: RemoveStatement) -> str:
     )
 
 
-def _emit_foreach(stmt: ForEachStatement) -> str:
-    body_js = _emit_body(stmt.body)
+def _emit_foreach(stmt: ForEachStatement, target: str = "web") -> str:
+    body_js = _emit_body(stmt.body, target=target)
     var = _escape_js(stmt.var)
     target = _escape_js(stmt.target)
     return (
@@ -483,7 +555,7 @@ def _parse_condition(condition: str) -> tuple[str, str, str]:
     return (field, op, val)
 
 
-def _emit_if(stmt: IfStatement, indent: str = "") -> str:
+def _emit_if(stmt: IfStatement, indent: str = "", target: str = "web") -> str:
     """Emit JS for an if/else block."""
     field, op, val = _parse_condition(stmt.condition)
     if not field:
@@ -515,7 +587,7 @@ def _emit_if(stmt: IfStatement, indent: str = "") -> str:
 
     lines = [f'{indent}if (rosh.get("{_escape_js(field)}") {js_op} {js_val}) {{']
     for s in stmt.then_body:
-        line = _emit_statement(s)
+        line = _emit_statement(s, target=target)
         if line:
             # If it's a multi-line block (nested if), re-indent each line
             for sub in line.split("\n"):
@@ -523,7 +595,7 @@ def _emit_if(stmt: IfStatement, indent: str = "") -> str:
     if stmt.else_body:
         lines.append(f"{indent}}} else {{")
         for s in stmt.else_body:
-            line = _emit_statement(s)
+            line = _emit_statement(s, target=target)
             if line:
                 for sub in line.split("\n"):
                     lines.append(f"{indent}  {sub}")
@@ -531,11 +603,11 @@ def _emit_if(stmt: IfStatement, indent: str = "") -> str:
     return "\n".join(lines)
 
 
-def _emit_body(stmts: list[Statement]) -> str:
+def _emit_body(stmts: list[Statement], target: str = "web") -> str:
     """Emit JS for a list of body statements (inside a handler)."""
     lines: list[str] = []
     for stmt in stmts:
-        line = _emit_statement(stmt)
+        line = _emit_statement(stmt, target=target)
         if line:
             # Multi-line (if blocks) — indent each line
             for sub in line.split("\n"):

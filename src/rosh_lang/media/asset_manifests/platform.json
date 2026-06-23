@@ -1,0 +1,35 @@
+{
+  "id": "platform",
+  "name": "Platform",
+  "version": "0.1",
+  "description": "A flat platform for game levels and physical layouts.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["platform", "floor", "ground", "ledge", "level"],
+  "aliases": ["ledge", "floor platform"],
+  "semantic": {
+    "kind": "platform",
+    "scale_hint": "large"
+  },
+  "defaults": {
+    "color": "grey",
+    "shape": "rectangle",
+    "collision": "static"
+  },
+  "representations": {
+    "text": {
+      "description": "A flat platform stretches across the space."
+    },
+    "threejs": {
+      "fallback_shape": "box",
+      "scale": [4.0, 0.2, 1.0]
+    },
+    "phaser": {
+      "fallback_shape": "rectangle"
+    }
+  }
+}

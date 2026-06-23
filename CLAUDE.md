@@ -187,12 +187,19 @@ core/model.py     → statement dataclasses + Programme
 core/parser.py    → text → Programme
 core/runtime.py   → execute Programme, state dict, events, if/else, scenes
 core/widgets.py   → widget loader: find, namespace-prefix, configure
-media/sprites.py  → name + description → data:image/png;base64 (7×9 grid)
-media/sounds.py   → name + description → Web Audio synthesis params
-media/sheets.py   → PNG spritesheet → list of frame data URIs
-media/assets.py   → resolve asset file paths
-cli/scaffolder.py → rosh new templates
-cli/cloud.py      → rosh.cloud login/create/publish commands
+media/sprites.py          → name + description → data:image/png;base64 (7×9 grid)
+media/sounds.py           → name + description → Web Audio synthesis params
+media/sheets.py           → PNG spritesheet → list of frame data URIs
+media/assets.py           → resolve asset file paths (legacy)
+media/asset_registry.py   → semantic registry; find() by name/alias/tag, visibility-gated
+media/asset_providers.py  → provider connectors: MockAssetProvider + SketchfabAssetProvider (metadata-only)
+media/asset_requests.py   → load unknown-object request queue from generated _assetRequests state
+media/asset_reviews.py    → CandidateReview dataclass; validate_review(); review_to_draft_manifest(); candidates_to_review_template()
+media/asset_manifests/    → bundled seed manifests (18 JSON files, MIT-licensed, review_status=featured)
+cli/scaffolder.py         → rosh new templates
+cli/cloud.py              → rosh.cloud login/create/publish commands
+cli/library_cli.py        → rosh library list/info (widget inspector)
+cli/assets_cli.py         → rosh assets search [--save review.json] | rosh assets register <review.json> [--output-dir DIR]
 library/          → bundled widgets
 targets/
   terminal.py     → print to stdout
