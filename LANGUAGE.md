@@ -530,11 +530,19 @@ Exports a `.sb3` file for import into [Scratch 3](https://scratch.mit.edu). Cove
 
 The world target is a live networked 3D/2D world backed by a persistent server. Objects are authored via the REPL and live in a named world. Multiple viewers can connect simultaneously.
 
+The world uses a separate launcher (`rosh-world/bin/rosh`) that wraps the server and REPL. When `rosh-world/bin` is on your `PATH`, `rosh` picks it up automatically.
+
 ```bash
-rosh                        # REPL connected to default world (rosh/museum)
-rosh gsa/demo-2026          # REPL connected to a specific world
-rosh --start                # start the rosh-world server in background
-rosh --web                  # open 3D viewer in browser
+# rosh-lang CLI (always available)
+rosh hello.rosh --target world   # run a .rosh file against a world server
+rosh --version                    # print rosh-lang version
+
+# rosh-world launcher (requires rosh-world/bin on PATH)
+rosh                              # REPL connected to default world (rosh/museum)
+rosh gsa/demo-2026                # REPL connected to a specific world
+rosh --start                      # start the rosh-world server in background
+rosh --open rosh/museum           # open 3D viewer in browser
+rosh --stop                       # stop the background server
 ```
 
 ---

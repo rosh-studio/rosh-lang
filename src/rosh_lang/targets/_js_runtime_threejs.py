@@ -45,7 +45,9 @@ JS_RUNTIME_THREEJS = """\
     if (typeof c === "string" && c[0] === "#") {
       return parseInt(c.slice(1), 16);
     }
-    if (colorMap[c]) return colorMap[c];
+    if (colorMap[c] !== undefined) return colorMap[c];
+    // Delegate unknown names to Three.js CSS colour parser (full CSS4 set)
+    try { return (new THREE.Color(c)).getHex(); } catch (_) {}
     return 0x444444;
   }
 

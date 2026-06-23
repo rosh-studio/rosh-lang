@@ -272,18 +272,17 @@ def _acquire_single(candidate_id: str, asset_id: str, provider: AssetProvider) -
 
 
 def _acquire_from_review(review_path: Path, provider: AssetProvider) -> None:
-    from rosh_lang.media.asset_cache import cache_asset, get_cache_dir
+    from rosh_lang.media.asset_cache import get_cache_dir
 
     try:
-        raw = json.loads(review_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"Error reading {review_path}: {exc}", file=sys.stderr)
+        reviews = load_candidate_reviews(review_path)
+    except AssetReviewError as exc:
+        print(f"ReviewError: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    entries = raw if isinstance(raw, list) else [raw]
-    accepted = [e for e in entries if isinstance(e, dict) and e.get("decision") == "accept"]
+    accepted = [r for r in reviews if r.decision == "accept"]
     if not accepted:
-        decisions = {e.get("decision", "?") for e in entries if isinstance(e, dict)}
+        decisions = {r.decision for r in reviews}
         print(
             f"No 'accept' entries in {review_path} — found: {', '.join(sorted(decisions))}",
             file=sys.stderr,
@@ -294,20 +293,35 @@ def _acquire_from_review(review_path: Path, provider: AssetProvider) -> None:
     print(f"Acquiring {len(accepted)} asset(s) from {review_path}...", file=sys.stderr)
     cache_dir = get_cache_dir()
     ok = 0
-    for entry in accepted:
-        candidate_id = str(entry.get("candidate_id") or "").strip()
-        asset_id = str(entry.get("proposed_manifest_id") or candidate_id).strip()
+    blocked = 0
+    for review in accepted:
+        candidate_id = review.candidate_id
+        asset_id = review.proposed_manifest_id or candidate_id
         if not candidate_id:
-            print("  [SKIP] entry has no candidate_id")
+            print("  [SKIP] entry has no candidate_id", file=sys.stderr)
             continue
+
+        # Run the same licence/downloadability guardrails as register
+        problems = validate_review(review)
+        blockers = [p for p in problems if p.startswith("BLOCK:")]
+        warnings = [p for p in problems if p.startswith("WARN:")]
+        if blockers:
+            print(f"  [SKIP] {review.request!r} — blocked:", file=sys.stderr)
+            for b in blockers:
+                print(f"    {b}", file=sys.stderr)
+            blocked += 1
+            continue
+        for w in warnings:
+            print(f"  [WARN] {review.request!r}: {w}", file=sys.stderr)
+
         print(f"  Downloading {candidate_id} → {asset_id}...", file=sys.stderr)
         try:
             acquisition = provider.acquire(candidate_id)
         except AssetProviderError as exc:
-            print(f"  [FAIL] {candidate_id}: {exc}")
+            print(f"  [FAIL] {candidate_id}: {exc}", file=sys.stderr)
             continue
 
-        for key, path_str in acquisition.local_files.items():
+        for _key, path_str in acquisition.local_files.items():
             src = Path(path_str)
             ext = src.suffix.lstrip(".") or "glb"
             dest = cache_dir / f"{asset_id}.{ext}"
@@ -317,7 +331,7 @@ def _acquire_from_review(review_path: Path, provider: AssetProvider) -> None:
             print(f"  [OK] {dest.name}  ({size / 1024:.0f} KB)")
         ok += 1
 
-    print(f"\n{ok}/{len(accepted)} acquired.", file=sys.stderr)
+    print(f"\n{ok}/{len(accepted)} acquired, {blocked} blocked.", file=sys.stderr)
     _print_next_steps("*", cache_dir)
 
 

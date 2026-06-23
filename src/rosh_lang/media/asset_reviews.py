@@ -32,15 +32,22 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 # Licences safe for bundled distribution with no usage restriction.
+# Includes Sketchfab display labels ("CC Attribution") and slugs ("cc-by")
+# as aliases so review files written by the provider pipeline pass validation.
 PERMISSIVE_LICENCES: frozenset[str] = frozenset({
     "cc0",
     "public domain",
+    # CC BY — canonical + Sketchfab label + Sketchfab slug
     "cc by",
     "cc by 4.0",
     "cc by 3.0",
+    "cc attribution",
+    "cc-by",
+    # CC BY-SA — canonical + slug
     "cc by-sa",
     "cc by-sa 4.0",
     "cc by-sa 3.0",
+    "cc-by-sa",
 })
 
 # Licences permitted with a warning — non-commercial only.

@@ -432,9 +432,27 @@ def _http_get_json(url: str, headers: dict[str, str]) -> dict[str, Any]:
     return data
 
 
+_SKETCHFAB_SLUG_TO_LICENCE = {
+    "cc0": "CC0",
+    "cc-by": "CC BY",
+    "cc-by-sa": "CC BY-SA",
+    "cc-by-nc": "CC BY-NC",
+    "cc-by-nd": "CC BY-ND",
+    "cc-by-nc-sa": "CC BY-NC-SA",
+    "cc-by-nc-nd": "CC BY-NC-ND",
+    "public-domain": "Public Domain",
+}
+
+
 def _licence_label(value: Any) -> str:
     if isinstance(value, dict):
-        for key in ("label", "slug", "fullName", "name"):
+        # Prefer slug for canonical normalisation; fall back to human label
+        slug = value.get("slug")
+        if isinstance(slug, str) and slug.strip():
+            canonical = _SKETCHFAB_SLUG_TO_LICENCE.get(slug.strip().lower())
+            if canonical:
+                return canonical
+        for key in ("label", "fullName", "name"):
             item = value.get(key)
             if isinstance(item, str) and item.strip():
                 return item.strip()

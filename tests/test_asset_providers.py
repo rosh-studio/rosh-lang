@@ -165,7 +165,7 @@ def test_sketchfab_search_maps_results_and_headers():
     assert candidate.provider == "sketchfab"
     assert candidate.id == "abc123"
     assert candidate.name == "Pictish Stone"
-    assert candidate.licence == "CC Attribution"
+    assert candidate.licence == "CC BY"  # slug "cc-by" normalised to canonical
     assert candidate.source_url.endswith("abc123")
     assert candidate.formats == ("thumbnail", "glb")
     assert candidate.tags == ("Pictish", "stone")
