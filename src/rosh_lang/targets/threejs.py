@@ -174,8 +174,27 @@ def serve_threejs(
     html = render_threejs(programme, search_paths=search_paths)
     html_bytes = html.encode("utf-8")
 
+    _ASSET_CACHE = Path.home() / ".rosh" / "cache" / "3d"
+    _MIME = {".glb": "model/gltf-binary", ".gltf": "model/gltf+json"}
+
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self) -> None:
+            # Serve GLB/GLTF assets from local cache
+            if self.path.startswith("/assets/3d/"):
+                fname = self.path[len("/assets/3d/"):]
+                fpath = _ASSET_CACHE / fname
+                if fpath.exists() and fpath.is_file():
+                    data = fpath.read_bytes()
+                    mime = _MIME.get(fpath.suffix, "application/octet-stream")
+                    self.send_response(200)
+                    self.send_header("Content-Type", mime)
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+                self.send_response(404)
+                self.end_headers()
+                return
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(html_bytes)))
