@@ -145,11 +145,11 @@ def test_validate_clean_cc_by():
     assert validate_review(review) == []
 
 
-def test_validate_warns_nc_licence():
+def test_validate_blocks_nc_licence():
     review = _make_review(licence="CC BY-NC 4.0")
     problems = validate_review(review)
-    assert any("WARN:" in p and "non-commercial" in p for p in problems)
-    assert not any("BLOCK:" in p for p in problems)
+    # NC licences are blocked: library assets must be freely usable
+    assert any("BLOCK:" in p and "non-commercial" in p for p in problems)
 
 
 def test_validate_blocks_unknown_licence():

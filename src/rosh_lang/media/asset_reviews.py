@@ -50,13 +50,16 @@ PERMISSIVE_LICENCES: frozenset[str] = frozenset({
     "cc-by-sa",
 })
 
-# Licences permitted with a warning — non-commercial only.
+# Non-commercial licences are blocked: assets in the Rosh library are
+# distributed under MIT and must be freely usable without use-case restrictions.
 NC_LICENCES: frozenset[str] = frozenset({
     "cc by-nc",
     "cc by-nc 4.0",
     "cc by-nc 3.0",
     "cc by-nc-sa",
     "cc by-nc-sa 4.0",
+    "cc-by-nc",
+    "cc-by-nc-sa",
 })
 
 
@@ -164,7 +167,8 @@ def validate_review(review: CandidateReview) -> list[str]:
         problems.append("BLOCK: licence field is empty — cannot register without licence")
     elif licence_key in NC_LICENCES:
         problems.append(
-            f"WARN: '{review.licence}' is non-commercial — confirm the use case permits this"
+            f"BLOCK: '{review.licence}' is non-commercial — Rosh library assets must be"
+            " freely usable; use a CC BY or CC0 alternative, or reject this candidate"
         )
     elif licence_key not in PERMISSIVE_LICENCES:
         problems.append(
