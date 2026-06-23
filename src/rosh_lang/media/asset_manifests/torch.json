@@ -3,12 +3,13 @@
   "name": "Torch",
   "version": "0.1",
   "description": "A wall-mounted torch or sconce — a flame light source for heritage, castle, and dungeon spaces.",
-  "licence": "MIT",
-  "source": "bundled",
+  "licence": "CC BY 4.0",
+  "source": "sketchfab",
+  "source_url": "https://sketchfab.com/3d-models/77db436da2844cbfb4dde0bb9b396835",
   "visibility": "featured",
   "review_status": "featured",
-  "author": "Rosh Studio",
-  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "author": "Sketchfab community",
+  "copyright": "Medieval Wall Torch via Sketchfab (CC BY 4.0) — attribution required",
   "tags": ["torch", "sconce", "flame", "fire", "light", "wall torch", "heritage", "medieval", "castle", "dungeon"],
   "aliases": ["wall torch", "sconce", "flame torch", "fire torch", "brazier"],
   "semantic": {
@@ -29,7 +30,8 @@
     },
     "threejs": {
       "fallback_shape": "cylinder",
-      "scale": [0.08, 0.7, 0.08]
+      "model": "/assets/3d/torch_wall.glb",
+      "scale": [1.0, 1.0, 1.0]
     },
     "phaser": {
       "fallback_shape": "rectangle"

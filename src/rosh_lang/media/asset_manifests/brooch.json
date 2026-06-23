@@ -3,12 +3,13 @@
   "name": "Brooch",
   "version": "0.1",
   "description": "A penannular brooch or decorative pin — a signature Pictish and early medieval artefact.",
-  "licence": "MIT",
-  "source": "bundled",
+  "licence": "CC BY 4.0",
+  "source": "sketchfab",
+  "source_url": "https://sketchfab.com/3d-models/e87aa7fc0e274d3da500d0355281c0e7",
   "visibility": "featured",
   "review_status": "featured",
-  "author": "Rosh Studio",
-  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "author": "Sketchfab community",
+  "copyright": "Rhynie Brooch via Sketchfab (CC BY 4.0) — attribution required",
   "tags": ["brooch", "penannular brooch", "clasp", "pin", "pictish", "celtic", "silver", "jewellery", "heritage", "museum"],
   "aliases": ["penannular brooch", "clasp", "fibula", "pin", "pictish brooch"],
   "semantic": {
@@ -29,7 +30,8 @@
     },
     "threejs": {
       "fallback_shape": "torus",
-      "scale": [0.25, 0.04, 0.25]
+      "model": "/assets/3d/brooch_pictish.glb",
+      "scale": [1.0, 1.0, 1.0]
     },
     "phaser": {
       "fallback_shape": "circle"

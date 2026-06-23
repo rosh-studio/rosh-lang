@@ -1,0 +1,40 @@
+{
+  "id": "amphora",
+  "name": "Amphora",
+  "version": "0.1",
+  "description": "An ancient Greek amphora — a two-handled ceramic storage vessel used for wine, olive oil, and grain.",
+  "licence": "CC BY 4.0",
+  "source": "sketchfab",
+  "source_url": "https://sketchfab.com/3d-models/77603e342d1b4bafba7679c5483af280",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Sketchfab community",
+  "copyright": "Ancient Greek Amphora via Sketchfab (CC BY 4.0) — attribution required",
+  "tags": ["amphora", "pottery", "ceramic", "greek", "ancient", "vessel", "heritage", "museum", "roman", "wine jar"],
+  "aliases": ["greek amphora", "roman amphora", "pottery vessel", "storage jar", "clay pot"],
+  "semantic": {
+    "kind": "vessel",
+    "material": "ceramic",
+    "scale_hint": "small",
+    "inspectable": true,
+    "period": "classical_antiquity"
+  },
+  "defaults": {
+    "color": "saddlebrown",
+    "shape": "cylinder",
+    "collision": "static"
+  },
+  "representations": {
+    "text": {
+      "description": "An ancient amphora stands here, its two handles worn smooth."
+    },
+    "threejs": {
+      "fallback_shape": "cylinder",
+      "model": "/assets/3d/amphora.glb",
+      "scale": [1.0, 1.0, 1.0]
+    },
+    "phaser": {
+      "fallback_shape": "rectangle"
+    }
+  }
+}

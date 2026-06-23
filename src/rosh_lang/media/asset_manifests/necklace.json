@@ -3,12 +3,13 @@
   "name": "Necklace",
   "version": "0.1",
   "description": "An ancient necklace — amber bead, jet, or metalwork. Common in Bronze Age and Pictish finds.",
-  "licence": "MIT",
-  "source": "bundled",
+  "licence": "CC BY 4.0",
+  "source": "sketchfab",
+  "source_url": "https://sketchfab.com/3d-models/082e38963740463d9877f796058a0963",
   "visibility": "featured",
   "review_status": "featured",
-  "author": "Rosh Studio",
-  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "author": "Sketchfab community",
+  "copyright": "Torque de Burela via Sketchfab (CC BY 4.0) — attribution required",
   "tags": ["necklace", "jewellery", "jewelry", "amber", "jet", "bead", "bronze age", "pictish", "heritage", "museum"],
   "aliases": ["amber bead", "jet necklace", "amber necklace", "bead necklace", "jewellery", "jewelry"],
   "semantic": {
@@ -29,7 +30,8 @@
     },
     "threejs": {
       "fallback_shape": "torus",
-      "scale": [0.5, 0.05, 0.5]
+      "model": "/assets/3d/necklace_torque.glb",
+      "scale": [1.0, 1.0, 1.0]
     },
     "phaser": {
       "fallback_shape": "circle"
