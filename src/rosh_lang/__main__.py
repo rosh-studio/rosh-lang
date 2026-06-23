@@ -224,7 +224,23 @@ def main(argv: list[str] | None = None) -> int:
         from rosh_lang.targets.phaser import serve_phaser
         serve_phaser(programme, auto_open=args.run)
     elif args.target == "threejs":
-        from rosh_lang.targets.threejs import serve_threejs
+        from rosh_lang.targets.threejs import serve_threejs, render_threejs
+        from rosh_lang.targets._js_codegen import compile_programme
+        import json as _json
+        # Compile first so we can surface unknown-object requests before serving
+        compiled = compile_programme(programme, target="threejs")
+        if compiled.asset_requests:
+            names = ", ".join(r["object"] for r in compiled.asset_requests)
+            requests_path = path.with_suffix(".asset-requests.json")
+            requests_path.write_text(
+                _json.dumps(compiled.asset_requests, indent=2), encoding="utf-8"
+            )
+            console.print(
+                f"[rosh.warn]Unknown objects ({len(compiled.asset_requests)}):[/] {names}\n"
+                f"  Requests saved to [rosh.key]{requests_path}[/]\n"
+                f"  Run: [rosh.value]rosh assets search {requests_path} "
+                f"--provider sketchfab --save review.json[/]"
+            )
         serve_threejs(programme, auto_open=args.run)
     elif args.target == "scratch":
         from rosh_lang.targets.scratch import render_scratch_sb3

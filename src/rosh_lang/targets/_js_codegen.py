@@ -53,6 +53,7 @@ class CompiledProgramme:
     handler_code: str  # rosh.on() registrations
     needs_loop: bool  # True if when update / when collision
     has_handlers: bool  # True if any when blocks
+    asset_requests: list[dict] = None  # Unknown objects queued for asset search
 
 
 def compile_programme(
@@ -65,6 +66,7 @@ def compile_programme(
     handler_lines: list[str] = []
     needs_loop = False
     has_handlers = False
+    asset_requests: list[dict] = []
 
     stmts = programme.statements
     i = 0
@@ -162,6 +164,11 @@ def compile_programme(
             # AnimateStatement requires a game loop for tickAnimations
             if isinstance(stmt, AnimateStatement):
                 needs_loop = True
+            # Collect unknown-object requests for the magic loop (Three.js only)
+            if target == "threejs" and isinstance(stmt, CreateStatement) and stmt.kind.lower() == "object":
+                req = _threejs_asset_request(stmt.name)
+                if req:
+                    asset_requests.append(req)
             line = _emit_statement(stmt, target=target)
             if line:
                 init_lines.append(line)
@@ -172,6 +179,7 @@ def compile_programme(
         handler_code="\n".join(handler_lines),
         needs_loop=needs_loop,
         has_handlers=has_handlers,
+        asset_requests=asset_requests,
     )
 
 
@@ -240,13 +248,10 @@ def _emit_create(stmt: CreateStatement, target: str = "web") -> str:
     return line
 
 
-def _threejs_asset_defaults(name: str) -> str:
-    """Emit registry-backed Three.js defaults for an object name."""
-    match = load_bundled_registry().find(name)
-    if match is None:
-        object_name = _escape_js(name)
-        label = _escape_js(_asset_label_from_name(name))
-        request = {
+def _threejs_asset_request(name: str) -> dict | None:
+    """Return an asset-request dict for *name* if it is not in the registry, else None."""
+    if load_bundled_registry().find(name) is None:
+        return {
             "object": name,
             "query": _asset_label_from_name(name),
             "target": "threejs",
@@ -254,6 +259,16 @@ def _threejs_asset_defaults(name: str) -> str:
             "reason": "no_match",
             "needed": ["model", "thumbnail", "renderer_defaults"],
         }
+    return None
+
+
+def _threejs_asset_defaults(name: str) -> str:
+    """Emit registry-backed Three.js defaults for an object name."""
+    match = load_bundled_registry().find(name)
+    if match is None:
+        object_name = _escape_js(name)
+        label = _escape_js(_asset_label_from_name(name))
+        request = _threejs_asset_request(name)
         request_json = json.dumps(request, separators=(",", ":"))
         return "\n".join([
             f'rosh.set("{object_name}._asset.status", "missing");',
