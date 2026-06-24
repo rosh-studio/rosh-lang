@@ -2,16 +2,34 @@
   "id": "sword",
   "name": "Sword",
   "version": "0.1",
-  "description": "A medieval sword — iron or steel blade with a crossguard, suitable for heritage and fantasy worlds.",
+  "description": "A medieval sword \u2014 iron or steel blade with a crossguard, suitable for heritage and fantasy worlds.",
   "licence": "CC BY 4.0",
   "source": "sketchfab",
   "source_url": "https://sketchfab.com/3d-models/24a359770f7e47618c6e37ccd5a77612",
   "visibility": "featured",
   "review_status": "featured",
   "author": "Sketchfab community",
-  "copyright": "Medieval Fantasy Sword via Sketchfab (CC BY 4.0) — attribution required",
-  "tags": ["sword", "blade", "medieval", "iron", "steel", "weapon", "heritage", "museum", "knight", "fantasy"],
-  "aliases": ["longsword", "broadsword", "blade", "iron sword", "knight sword", "medieval sword"],
+  "copyright": "Medieval Fantasy Sword via Sketchfab (CC BY 4.0) \u2014 attribution required",
+  "tags": [
+    "sword",
+    "blade",
+    "medieval",
+    "iron",
+    "steel",
+    "weapon",
+    "heritage",
+    "museum",
+    "knight",
+    "fantasy"
+  ],
+  "aliases": [
+    "longsword",
+    "broadsword",
+    "blade",
+    "iron sword",
+    "knight sword",
+    "medieval sword"
+  ],
   "semantic": {
     "kind": "weapon",
     "material": "iron",
@@ -30,8 +48,12 @@
     },
     "threejs": {
       "fallback_shape": "box",
-      "model": "/assets/3d/sword.glb",
-      "scale": [1.0, 1.0, 1.0]
+      "model": "https://pub-fbfd86631b0e4d80abb9fe54aa3a378d.r2.dev/3d/sword.glb",
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
     },
     "phaser": {
       "fallback_shape": "rectangle"

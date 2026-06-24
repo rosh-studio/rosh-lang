@@ -2,16 +2,33 @@
   "id": "torch",
   "name": "Torch",
   "version": "0.1",
-  "description": "A wall-mounted torch or sconce — a flame light source for heritage, castle, and dungeon spaces.",
+  "description": "A wall-mounted torch or sconce \u2014 a flame light source for heritage, castle, and dungeon spaces.",
   "licence": "CC BY 4.0",
   "source": "sketchfab",
   "source_url": "https://sketchfab.com/3d-models/77db436da2844cbfb4dde0bb9b396835",
   "visibility": "featured",
   "review_status": "featured",
   "author": "Sketchfab community",
-  "copyright": "Medieval Wall Torch via Sketchfab (CC BY 4.0) — attribution required",
-  "tags": ["torch", "sconce", "flame", "fire", "light", "wall torch", "heritage", "medieval", "castle", "dungeon"],
-  "aliases": ["wall torch", "sconce", "flame torch", "fire torch", "brazier"],
+  "copyright": "Medieval Wall Torch via Sketchfab (CC BY 4.0) \u2014 attribution required",
+  "tags": [
+    "torch",
+    "sconce",
+    "flame",
+    "fire",
+    "light",
+    "wall torch",
+    "heritage",
+    "medieval",
+    "castle",
+    "dungeon"
+  ],
+  "aliases": [
+    "wall torch",
+    "sconce",
+    "flame torch",
+    "fire torch",
+    "brazier"
+  ],
   "semantic": {
     "kind": "light_source",
     "material": "wood",
@@ -30,8 +47,12 @@
     },
     "threejs": {
       "fallback_shape": "cylinder",
-      "model": "/assets/3d/torch_wall.glb",
-      "scale": [1.0, 1.0, 1.0]
+      "model": "https://pub-fbfd86631b0e4d80abb9fe54aa3a378d.r2.dev/3d/torch_wall.glb",
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
     },
     "phaser": {
       "fallback_shape": "rectangle"

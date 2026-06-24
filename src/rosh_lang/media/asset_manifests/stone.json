@@ -9,9 +9,20 @@
   "visibility": "featured",
   "review_status": "featured",
   "author": "Sketchfab community",
-  "copyright": "Logierait Pictish Stone via Sketchfab (CC BY 4.0) — attribution required",
-  "tags": ["stone", "standing stone", "pictish", "carved", "museum", "heritage"],
-  "aliases": ["pictish stone", "symbol stone", "carved stone"],
+  "copyright": "Logierait Pictish Stone via Sketchfab (CC BY 4.0) \u2014 attribution required",
+  "tags": [
+    "stone",
+    "standing stone",
+    "pictish",
+    "carved",
+    "museum",
+    "heritage"
+  ],
+  "aliases": [
+    "pictish stone",
+    "symbol stone",
+    "carved stone"
+  ],
   "semantic": {
     "kind": "standing_stone",
     "material": "stone",
@@ -29,8 +40,12 @@
     },
     "threejs": {
       "fallback_shape": "box",
-      "model": "/assets/3d/pictish_stone.glb",
-      "scale": [1.0, 1.0, 1.0]
+      "model": "https://pub-fbfd86631b0e4d80abb9fe54aa3a378d.r2.dev/3d/pictish_stone.glb",
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
     },
     "phaser": {
       "fallback_shape": "rectangle"
