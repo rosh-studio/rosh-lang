@@ -35,8 +35,32 @@ COPYRIGHT = "(c) Rosh Studio 2026 — rosh.cloud"
 
 # rosh-natural.js — shared NLP layer; inlined at build time so standalone demos
 # (uploaded to R2) carry it without needing the portal as a dependency.
-_ROSH_NATURAL_PATH = Path(__file__).parents[4] / "rosh-portal/static/js/rosh-natural.js"
-ROSH_NATURAL_JS = _ROSH_NATURAL_PATH.read_text() if _ROSH_NATURAL_PATH.exists() else ""
+#
+# This file gets vendored to more than one directory depth: canonical
+# rosh-lang/src/rosh_lang/targets/threejs.py, vendored
+# rosh-portal/rosh_lang/targets/threejs.py, and flattened into a Docker
+# image at /app/rosh_lang/targets/threejs.py. A single fixed
+# `.parents[N]` breaks for at least one of these — either raising
+# IndexError (fewer directory levels than N) or silently resolving to the
+# wrong, nonexistent path (more levels, `.exists()` just quietly fails).
+# Try both known layouts instead of assuming one.
+def _find_rosh_natural_js() -> str:
+    here = Path(__file__).resolve()
+    parents = here.parents
+    candidates = [
+        # Vendored/deployed: rosh_lang/ lives directly inside the portal
+        # (rosh-portal/rosh_lang/... or, flattened, /app/rosh_lang/...)
+        parents[2] / "static/js/rosh-natural.js" if len(parents) > 2 else None,
+        # Canonical monorepo: rosh-lang/src/rosh_lang/... sibling to rosh-portal/
+        parents[4] / "rosh-portal/static/js/rosh-natural.js" if len(parents) > 4 else None,
+    ]
+    for candidate in candidates:
+        if candidate is not None and candidate.exists():
+            return candidate.read_text()
+    return ""
+
+
+ROSH_NATURAL_JS = _find_rosh_natural_js()
 
 
 # ── HTML generation ───────────────────────────────────────────
