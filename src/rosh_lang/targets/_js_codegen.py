@@ -491,7 +491,7 @@ def _emit_on(stmt: OnStatement) -> str:
     """Emit JS for an on-statement — one-line event reactor.
 
     on <event> <action> <args>
-    Actions: set, send, say, print, destroy
+    Actions: set, send, say, print, destroy, do, play
     """
     action = stmt.action.lower()
     args = stmt.args
@@ -527,6 +527,17 @@ def _emit_on(stmt: OnStatement) -> str:
         if not func_name:
             return ""
         body = f"{_safe_fn_name(func_name)}();"
+    elif action == "play":
+        # on <event> play <sound> [mode] — same as a top-level "play" line,
+        # e.g. "on click ball play boom". Previously silently produced no
+        # JS at all: "play" wasn't in this dispatch, so a very natural
+        # reactive-sound pattern was a complete no-op with no error anywhere.
+        tokens = args.strip().split()
+        if not tokens:
+            return ""
+        sound = tokens[0]
+        mode = tokens[1] if len(tokens) > 1 else "once"
+        body = f'rosh.playAudio("{_escape_js(sound)}", "{_escape_js(mode)}");'
     else:
         return ""
 

@@ -476,7 +476,7 @@ def _parse_event(line_text: str, line: int, source: str) -> EventStatement:
     return EventStatement(name=name, payload_fields=payload_fields, line=line)
 
 
-_ON_ACTION_WORDS = {"when", "set", "send", "say", "print", "destroy", "do"}
+_ON_ACTION_WORDS = {"when", "set", "send", "say", "print", "destroy", "do", "play"}
 
 
 def _parse_on(line_text: str, line: int, source: str) -> OnStatement:

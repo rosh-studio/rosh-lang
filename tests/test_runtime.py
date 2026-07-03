@@ -928,6 +928,20 @@ class TestOnExecution:
         rt.execute_send("hit")
         assert "enemy" not in rt.state
 
+    def test_on_play_action(self) -> None:
+        """2026-07-03: _fire_listener had no "play" branch at all — an
+        on-listener with action="play" silently did nothing, matching the
+        equally-missing "play" case in the JS codegen used for rendered
+        games. Doesn't need an assertion on audio output (the Python runtime
+        _exec_play is a no-op stub without an adapter — see its docstring);
+        this just confirms the action is recognized and doesn't error."""
+        rt = _run([
+            SoundStatement(name="boom", description="a loud explosion"),
+            EventStatement(name="hit", payload_fields=[]),
+            OnStatement(event="hit", action="play", args="boom"),
+        ])
+        rt.execute_send("hit")  # must not raise
+
 
 # ══════════════════════════════════════════════════════════════
 # Checkpoint 2: Events

@@ -208,6 +208,17 @@ class TestInteractiveRouting:
         html = render_html(prog)
         assert "<script>" in html
 
+    def test_on_only_programme_is_interactive(self):
+        """2026-07-03: _is_interactive checked for WhenStatement/UseStatement
+        but not OnStatement — a programme using only the one-line `on`
+        reactive form (no `when`, no `use`) was routed to the static
+        renderer, which emits no JS at all. Every on-listener was silently
+        dropped with no error: the object rendered, nothing it did worked."""
+        prog = parse_string('create object ball\non click ball print "clicked"')
+        html = render_html(prog)
+        assert "<script>" in html
+        assert "click_ball" in html
+
     def test_interactive_preserves_page_structure(self):
         prog = parse_string('when click\n  print "clicked"\nend')
         html = render_html(prog)

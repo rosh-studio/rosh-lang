@@ -771,6 +771,10 @@ class Runtime:
             func_name = args.strip().split()[0] if args.strip() else ""
             if func_name:
                 self._exec_do(DoStatement(name=func_name))
+        elif action == "play":
+            sound = args.strip().split()[0] if args.strip() else ""
+            if sound:
+                self._exec_play(PlayStatement(sound=sound, mode=""))
 
     def _eval_condition(self, condition: str) -> bool:
         """Evaluate a simple condition: field op value."""

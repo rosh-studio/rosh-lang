@@ -503,6 +503,22 @@ class TestOnStatement:
         result = compile_programme(prog)
         assert 'rosh.destroy("enemy")' in result.handler_code
 
+    def test_on_play(self):
+        """on click play boom → JS handler with playAudio.
+
+        2026-07-03: "play" wasn't in _emit_on's action dispatch at all, so
+        "on <event> play <sound>" — an extremely natural pattern for
+        reactive sound feedback — silently produced no JS whatsoever.
+        """
+        prog = parse_string("event click\non click play boom")
+        result = compile_programme(prog)
+        assert 'rosh.playAudio("boom", "once")' in result.handler_code
+
+    def test_on_play_with_mode(self):
+        prog = parse_string("event alarm\non alarm play siren loop")
+        result = compile_programme(prog)
+        assert 'rosh.playAudio("siren", "loop")' in result.handler_code
+
     def test_on_with_condition(self):
         """on check when level > 3 set message to 'high' → conditional handler."""
         prog = parse_string(

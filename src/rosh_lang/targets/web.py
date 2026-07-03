@@ -25,6 +25,7 @@ from pathlib import Path
 from rosh_lang.core.model import (
     AnimateStatement,
     BackgroundStatement,
+    OnStatement,
     PrintStatement,
     Programme,
     SayStatement,
@@ -232,9 +233,18 @@ def _collect_objects(state: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
 
 
 def _is_interactive(programme: Programme) -> bool:
-    """Check if a programme has any when/end event handlers or use statements."""
+    """Check if a programme needs the JS runtime — any event handler
+    (`on` or `when`) or a widget (`use`).
+
+    2026-07-03: this only checked for WhenStatement/UseStatement, not
+    OnStatement — the far more common one-line reactive form
+    (`on click ball play boom`). A programme using only `on` (no `when`,
+    no `use`) was routed to the static renderer, which emits no JS at all:
+    the object rendered, but every on-listener — click handlers, sound
+    triggers, everything — was silently dropped with no error.
+    """
     return any(
-        isinstance(s, (WhenStatement, UseStatement))
+        isinstance(s, (WhenStatement, UseStatement, OnStatement))
         for s in programme.statements
     )
 
