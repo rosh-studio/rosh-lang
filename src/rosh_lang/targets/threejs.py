@@ -11,6 +11,7 @@ No 2D sprites or spritesheet animations — objects use color materials or GLB m
 from __future__ import annotations
 
 import http.server
+import importlib.resources
 import io
 import json
 import socketserver
@@ -36,28 +37,26 @@ COPYRIGHT = "(c) Rosh Studio 2026 — rosh.cloud"
 # rosh-natural.js — shared NLP layer; inlined at build time so standalone demos
 # (uploaded to R2) carry it without needing the portal as a dependency.
 #
-# This file gets vendored to more than one directory depth: canonical
-# rosh-lang/src/rosh_lang/targets/threejs.py, vendored
-# rosh-portal/rosh_lang/targets/threejs.py, and flattened into a Docker
-# image at /app/rosh_lang/targets/threejs.py. A single fixed
-# `.parents[N]` breaks for at least one of these — either raising
-# IndexError (fewer directory levels than N) or silently resolving to the
-# wrong, nonexistent path (more levels, `.exists()` just quietly fails).
-# Try both known layouts instead of assuming one.
+# This used to be located by counting a fixed number of parent directories
+# from this file and reaching sideways into a sibling "rosh-portal/" — which
+# breaks differently depending on how deep this file ends up being deployed:
+# it raised IndexError when flattened into a Docker image at
+# /app/rosh_lang/..., and silently resolved to a wrong, nonexistent path
+# (empty string, no error at all) when installed from a wheel into a venv's
+# site-packages, as rosh-world does — three real deployment shapes, three
+# different failure modes, all for one file. Bundling the file directly
+# inside the package and loading it via importlib.resources removes the
+# guesswork: it works identically for an editable source checkout, a file
+# vendored/copied into another app, or a wheel installed into site-packages.
 def _find_rosh_natural_js() -> str:
-    here = Path(__file__).resolve()
-    parents = here.parents
-    candidates = [
-        # Vendored/deployed: rosh_lang/ lives directly inside the portal
-        # (rosh-portal/rosh_lang/... or, flattened, /app/rosh_lang/...)
-        parents[2] / "static/js/rosh-natural.js" if len(parents) > 2 else None,
-        # Canonical monorepo: rosh-lang/src/rosh_lang/... sibling to rosh-portal/
-        parents[4] / "rosh-portal/static/js/rosh-natural.js" if len(parents) > 4 else None,
-    ]
-    for candidate in candidates:
-        if candidate is not None and candidate.exists():
-            return candidate.read_text()
-    return ""
+    try:
+        return (
+            importlib.resources.files("rosh_lang.targets")
+            .joinpath("rosh-natural.js")
+            .read_text()
+        )
+    except (FileNotFoundError, ModuleNotFoundError):
+        return ""
 
 
 ROSH_NATURAL_JS = _find_rosh_natural_js()
