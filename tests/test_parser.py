@@ -132,6 +132,46 @@ class TestCreate:
             parse_string("create")
 
 
+class TestCreateMultiwordName:
+    """create <kind> <name...> joins a natural multi-word phrase into a
+    single underscore identifier, so authors don't need quotes or a single
+    word (2026-07-03: the previous behaviour silently took only the first
+    word and discarded the rest with no error at all)."""
+
+    def test_multiword_name_joins_with_underscores(self) -> None:
+        prog = parse_string("create object ancient oak door")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, CreateStatement)
+        assert stmt.name == "ancient_oak_door"
+
+    def test_multiword_name_stops_at_from(self) -> None:
+        prog = parse_string("create object baby dragon from ancient dragon")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, CreateStatement)
+        assert stmt.name == "baby_dragon"
+        assert stmt.parent == "ancient_dragon"
+
+    def test_multiword_name_after_as(self) -> None:
+        prog = parse_string("create 3 objects as rocking horses")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, CreateStatement)
+        assert stmt.count == 3
+        assert stmt.name == "rocking_horses"
+
+    def test_single_word_name_unaffected(self) -> None:
+        prog = parse_string("create object player")
+        stmt = prog.statements[0]
+        assert stmt.name == "player"
+
+    def test_create_number_as_initial_value_still_parses(self) -> None:
+        """'as' after the name means something else here (an initial value,
+        not yet applied — a pre-existing, separate gap) and must still stop
+        the name there, not get swallowed into it."""
+        prog = parse_string("create number score as 0")
+        stmt = prog.statements[0]
+        assert stmt.name == "score"
+
+
 class TestSet:
     def test_set_with_to(self) -> None:
         prog = parse_string("set x to 100")
@@ -152,6 +192,22 @@ class TestSet:
         stmt = prog.statements[0]
         assert stmt.target == "player.health"
         assert stmt.value == "75"
+
+    def test_set_multiword_object_name_before_dot(self) -> None:
+        """set <multi-word name>.<property> to <value> must match the same
+        underscore-joined identifier _parse_create produces for
+        "create object <multi-word name>" (2026-07-03 incident: this used
+        to keep the literal spaces in the key, e.g. "ancient oak
+        door.material", which never matched the object actually created)."""
+        prog = parse_string("set ancient oak door.material to wood")
+        stmt = prog.statements[0]
+        assert stmt.target == "ancient_oak_door.material"
+        assert stmt.value == "wood"
+
+    def test_set_single_word_dotted_target_unaffected(self) -> None:
+        prog = parse_string("set score.value to 5")
+        stmt = prog.statements[0]
+        assert stmt.target == "score.value"
 
     def test_set_without_to(self) -> None:
         prog = parse_string("set x 100")
@@ -372,6 +428,23 @@ class TestOn:
         assert stmt.condition == "level > 3"
         assert stmt.action == "set"
         assert stmt.args == 'message to "high"'
+
+    def test_on_multiword_event_name(self) -> None:
+        """on <event words...> <action> joins the event into one underscore
+        identifier the same way create does, stopping at the action keyword
+        rather than requiring a single word or quotes."""
+        prog = parse_string("on open door do task")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, OnStatement)
+        assert stmt.event == "open_door"
+        assert stmt.action == "do"
+        assert stmt.args == "task"
+
+    def test_on_multiword_event_name_with_condition(self) -> None:
+        prog = parse_string("on open door when level > 3 set message to high")
+        stmt = prog.statements[0]
+        assert stmt.event == "open_door"
+        assert stmt.condition == "level > 3"
 
     def test_on_empty_raises(self) -> None:
         with pytest.raises(ParseError, match="on requires"):

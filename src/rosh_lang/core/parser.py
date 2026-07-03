@@ -329,6 +329,23 @@ def _parse_print(line_text: str, line: int, source: str) -> PrintStatement:
     return PrintStatement(text=text, line=line)
 
 
+def _consume_multiword_name(tokens: list[str], start: int, stop_words: set[str]) -> tuple[str, int]:
+    """Greedily consume tokens starting at `start` as a single identifier,
+    stopping at a case-insensitive match in `stop_words` or the end of the
+    line. Joins multiple words with underscores, so a natural phrase like
+    "open door" reads as the identifier "open_door" without requiring quotes
+    or a single word from the author.
+
+    Returns (name, next_index). name is "" if nothing was consumed.
+    """
+    words: list[str] = []
+    i = start
+    while i < len(tokens) and tokens[i].lower() not in stop_words:
+        words.append(tokens[i])
+        i += 1
+    return "_".join(words), i
+
+
 def _parse_create(line_text: str, line: int, source: str) -> CreateStatement:
     tokens = line_text.split()
     if len(tokens) < 3:
@@ -349,19 +366,21 @@ def _parse_create(line_text: str, line: int, source: str) -> CreateStatement:
         idx += 1
         if idx >= len(tokens):
             raise ParseError("Expected name after 'as'", line=line, source=source)
-        name = tokens[idx]
-        idx += 1
+        name, idx = _consume_multiword_name(tokens, idx, {"from", "as"})
+        if not name:
+            raise ParseError("Expected name after 'as'", line=line, source=source)
     else:
         if idx >= len(tokens):
             raise ParseError("create requires a name", line=line, source=source)
-        name = tokens[idx]
-        idx += 1
+        name, idx = _consume_multiword_name(tokens, idx, {"from", "as"})
+        if not name:
+            raise ParseError("create requires a name", line=line, source=source)
     parent = ""
     if idx < len(tokens) and tokens[idx].lower() == "from":
         idx += 1
         if idx >= len(tokens):
             raise ParseError("Expected parent name after 'from'", line=line, source=source)
-        parent = tokens[idx]
+        parent, idx = _consume_multiword_name(tokens, idx, set())
     return CreateStatement(kind=kind, name=name, parent=parent, count=count, line=line)
 
 
@@ -381,6 +400,13 @@ def _parse_set(line_text: str, line: int, source: str) -> SetStatement:
         target_str = " ".join(tokens[:-1])
     if "." not in target_str and " " in target_str:
         target = ".".join(target_str.split())
+    elif "." in target_str and " " in target_str:
+        # "ancient oak door.material" -> "ancient_oak_door.material" — the
+        # object name may be a multi-word phrase (see _consume_multiword_name
+        # in _parse_create); only the property after the last dot is a
+        # single word by convention.
+        name_part, _, prop_part = target_str.rpartition(".")
+        target = f"{'_'.join(name_part.split())}.{prop_part}"
     else:
         target = target_str
     return SetStatement(target=target, value=value_str, line=line)
@@ -450,13 +476,18 @@ def _parse_event(line_text: str, line: int, source: str) -> EventStatement:
     return EventStatement(name=name, payload_fields=payload_fields, line=line)
 
 
+_ON_ACTION_WORDS = {"when", "set", "send", "say", "print", "destroy", "do"}
+
+
 def _parse_on(line_text: str, line: int, source: str) -> OnStatement:
     rest = line_text[len("on"):].strip()
     if not rest:
         raise ParseError("on requires an event and action", line=line, source=source)
     tokens = rest.split()
-    event = tokens[0]
-    remaining = tokens[1:]
+    event, idx = _consume_multiword_name(tokens, 0, _ON_ACTION_WORDS)
+    if not event:
+        raise ParseError("on requires an event and action", line=line, source=source)
+    remaining = tokens[idx:]
 
     # Check for conditional form: on <event> when <field> <op> <value> <action...>
     condition = ""
