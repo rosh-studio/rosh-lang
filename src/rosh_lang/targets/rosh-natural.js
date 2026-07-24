@@ -168,6 +168,21 @@ const RoshNatural = (function () {
     return { geometric: false, shape: name };
   }
 
+  // "create a tiny cube"/"create a huge ball" — the leading adjective in a
+  // "create ADJ NOUN" phrase may be a size word, not a colour. Without this,
+  // PHRASE_PATTERNS below always emitted "set noun.color to <adj>", so a size
+  // word like "tiny" was written into the colour property.
+  const SIZE_WORDS = {
+    tiny: "0.25", small: "0.5", smaller: "0.5", medium: "1",
+    big: "2", large: "2", bigger: "2", huge: "4", giant: "6", massive: "8",
+  };
+
+  function adjModifierLine(noun, adj) {
+    const lower = adj.toLowerCase();
+    if (lower in SIZE_WORDS) return `set ${noun}.scale to ${SIZE_WORDS[lower]}`;
+    return `set ${noun}.color to ${adj}`;
+  }
+
   // =========================================================================
   // NATURAL PHRASE PATTERNS — maps speech to valid Rosh syntax
   // =========================================================================
@@ -178,20 +193,22 @@ const RoshNatural = (function () {
     [/\b(?:create|make|add|draw|spawn)\s+(\w+)\s+(\w+)\s+at\s+(\d+)\s*[,\s]\s*(\d+)\b/gi,
       (_, adj, noun, x, y) => {
         const r = resolveShape(noun);
+        const modLine = adjModifierLine(noun, adj);
         if (r.geometric) {
-          return `create object ${noun}\nset ${noun}.color to ${adj}\nset ${noun}.shape to ${r.shape}\nset ${noun}.x to 0.${x}\nset ${noun}.y to 0.${y}`;
+          return `create object ${noun}\n${modLine}\nset ${noun}.shape to ${r.shape}\nset ${noun}.x to 0.${x}\nset ${noun}.y to 0.${y}`;
         }
-        return `sprite ${noun} "${adj} ${r.shape}"\nset ${noun}.color to ${adj}\nset ${noun}.x to 0.${x}\nset ${noun}.y to 0.${y}`;
+        return `sprite ${noun} "${adj} ${r.shape}"\n${modLine}\nset ${noun}.x to 0.${x}\nset ${noun}.y to 0.${y}`;
       }],
 
     // "create/make/add/draw a [adj] [noun]" — centered (0.5 works on all targets)
     [/\b(?:create|make|add|draw|spawn)\s+(\w+)\s+(\w+)\b/gi,
       (_, adj, noun) => {
         const r = resolveShape(noun);
+        const modLine = adjModifierLine(noun, adj);
         if (r.geometric) {
-          return `create object ${noun}\nset ${noun}.color to ${adj}\nset ${noun}.shape to ${r.shape}\nset ${noun}.x to 0.5\nset ${noun}.y to 0.5`;
+          return `create object ${noun}\n${modLine}\nset ${noun}.shape to ${r.shape}\nset ${noun}.x to 0.5\nset ${noun}.y to 0.5`;
         }
-        return `sprite ${noun} "${adj} ${r.shape}"\nset ${noun}.color to ${adj}\nset ${noun}.x to 0.5\nset ${noun}.y to 0.5`;
+        return `sprite ${noun} "${adj} ${r.shape}"\n${modLine}\nset ${noun}.x to 0.5\nset ${noun}.y to 0.5`;
       }],
 
     // "set background to [color]" / "background [color]"
@@ -418,6 +435,7 @@ const RoshNatural = (function () {
     "gray", "grey", "gold", "silver", "brown",
     "navy", "teal", "coral", "salmon", "lime",
     "indigo", "violet", "crimson", "maroon",
+    "sapphire", "lavender", "turquoise", "mustard", "emerald",
   ]);
 
   function inferProperty(text) {
