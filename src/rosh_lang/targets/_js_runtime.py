@@ -656,6 +656,34 @@ JS_RUNTIME_DOM = """\
     return "0%";
   }
 
+  // ── Contrast-aware label colour ────────────────────────
+  // Generated objects pick their own background colour freely (including
+  // white/light ones), so a hardcoded white label text silently disappears
+  // on top of them. Resolve any CSS colour string via the browser's own
+  // parser (handles named colours and hex alike, no colour-name table to
+  // keep in sync) and pick readable text against its luminance.
+  var _contrastCache = {};
+  var _contrastProbe = null;
+  function contrastTextColor(bgColor) {
+    if (!bgColor) return "#fff";
+    if (_contrastCache.hasOwnProperty(bgColor)) return _contrastCache[bgColor];
+    if (!_contrastProbe) {
+      _contrastProbe = document.createElement("div");
+      _contrastProbe.style.display = "none";
+      document.body.appendChild(_contrastProbe);
+    }
+    _contrastProbe.style.color = bgColor;
+    var rgb = getComputedStyle(_contrastProbe).color;
+    var m = rgb.match(/\\d+/g);
+    var result = "#fff";
+    if (m && m.length >= 3) {
+      var lum = (0.299 * m[0] + 0.587 * m[1] + 0.114 * m[2]) / 255;
+      result = lum > 0.5 ? "#111" : "#fff";
+    }
+    _contrastCache[bgColor] = result;
+    return result;
+  }
+
   // ── DOM sync ──────────────────────────────────────────
   function syncAll() {
     // 3D mode: web (CSS/div) target can't render world-unit coordinates.
@@ -784,7 +812,7 @@ JS_RUNTIME_DOM = """\
       div.style.justifyContent = "center";
       div.style.boxSizing = "border-box";
       div.style.borderRadius = (obj.shape === "circle" || obj.shape === "sphere" || obj.shape === "ball") ? "50%" : "4px";
-      div.style.color = obj.text_color || "#fff";
+      div.style.color = obj.text_color || contrastTextColor(color);
       div.style.fontSize = obj.font_size || "14px";
       div.style.fontFamily = "system-ui, sans-serif";
     }
