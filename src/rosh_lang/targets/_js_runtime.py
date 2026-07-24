@@ -898,6 +898,9 @@ JS_RUNTIME_DOM = """\
     if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
     rosh.state._keys[e.key] = 1;
     rosh.send("keydown", {key: e.key});
+    // "on key ArrowLeft ..." (the one-line form) compiles to a handler
+    // registered on "key_<Name>" — mirrors "click_<name>" for click.
+    rosh.send("key_" + e.key, {key: e.key});
     if (!loopRunning) syncAll();
   });
 
@@ -905,6 +908,7 @@ JS_RUNTIME_DOM = """\
     if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
     rosh.state._keys[e.key] = 0;
     rosh.send("keyup", {key: e.key});
+    rosh.send("keyup_" + e.key, {key: e.key});
     if (!loopRunning) syncAll();
   });
 
