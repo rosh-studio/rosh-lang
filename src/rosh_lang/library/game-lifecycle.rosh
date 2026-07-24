@@ -13,6 +13,7 @@ event game_over
 
 create string phase
 set phase to "title"
+set _paused to 1
 
 create object title_heading
 set title_heading.x to 0.15
@@ -59,11 +60,13 @@ set over_restart.visible to 0
 on keydown when phase == "title" set phase to "playing"
 on keydown when phase == "playing" set title_heading.visible to 0
 on keydown when phase == "playing" set title_sub.visible to 0
+on keydown when phase == "playing" set _paused to 0
 on keydown when phase == "playing" send game_start
 
 on game_over set phase to "over"
 on game_over set over_heading.visible to 1
 on game_over set over_restart.visible to 1
+on game_over set _paused to 1
 
 on keydown when phase == "over" set phase to "title"
 on keydown when phase == "title" set over_heading.visible to 0
