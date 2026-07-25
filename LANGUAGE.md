@@ -53,8 +53,9 @@ rosh            # interactive line-by-line
 ### Scaffold a starter
 
 ```bash
-rosh new game my-shooter     # game template
-rosh new world my-world      # world template
+rosh new hello my-first      # minimal hello-world template
+rosh new game my-shooter     # game template (title screen, score, lives)
+rosh new app my-app          # interactive web app template
 ```
 
 ---

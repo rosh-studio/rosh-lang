@@ -252,22 +252,28 @@ class TestSetExecution:
         assert rt.state["name"] == "Alice1"
 
     def test_set_multiply_on_string_is_noop(self) -> None:
-        """* on a string value is a no-op (arithmetic only)."""
+        """* on a string value is a no-op (arithmetic only) — target unchanged."""
         rt = _run([
             SetStatement(target="name", value='"Alice"'),
             SetStatement(target="name", value="name * 2"),
         ])
-        assert rt.state["name"] == "name * 2"
+        assert rt.state["name"] == "Alice"
 
-    def test_set_arithmetic_undefined_left_falls_through(self) -> None:
-        """Left operand that doesn't resolve falls through to raw string."""
+    def test_set_arithmetic_undefined_left_is_noop(self) -> None:
+        """Left operand that doesn't resolve is a no-op — target unchanged.
+
+        Previously this silently stored the raw, un-evaluated expression
+        text ("b + 1") as the value — a real bug (silent state corruption)
+        found by a blind playtest of "make it bigger/smaller" corrupting
+        width/height/depth to literal unevaluated strings when those
+        properties had never been explicitly set.
+        """
         rt = _run([
             CreateStatement(kind="number", name="a"),
             SetStatement(target="a", value="5"),
             SetStatement(target="a", value="b + 1"),
         ])
-        # "b" doesn't exist so not arithmetic — stored as raw string
-        assert rt.state["a"] == "b + 1"
+        assert rt.state["a"] == 5
 
     def test_set_arithmetic_variable_right_operand(self) -> None:
         """set x to x + drift — variable right operand."""
@@ -390,11 +396,11 @@ class TestPhase2aExpressions:
         assert rt.state["label"] == "Score: 42"
 
     def test_string_concat_unknown_var_noop(self) -> None:
-        """Concatenation with unresolved variable is a no-op."""
+        """Concatenation with unresolved variable is a no-op — target unchanged (never set)."""
         rt = _run([
             SetStatement(target="result", value='"Hello, " + unknown'),
         ])
-        assert rt.state["result"] == '"Hello, " + unknown'
+        assert rt.state["result"] is None
 
     # Comparison operators
     def test_comparison_gte_true(self) -> None:
@@ -471,28 +477,28 @@ class TestPhase2aExpressions:
         assert rt.state["active"] is True
 
     def test_comparison_unresolved_noop(self) -> None:
-        """Comparison with unresolved variable leaves value unchanged."""
+        """Comparison with unresolved variable leaves value unchanged (never set)."""
         rt = _run([
             SetStatement(target="result", value="unknown >= 18"),
         ])
-        assert rt.state["result"] == "unknown >= 18"
+        assert rt.state["result"] is None
 
     # Type safety
     def test_multiply_on_string_noop(self) -> None:
-        """* on a string value is a no-op (numeric operators only)."""
+        """* on a string value is a no-op (numeric operators only) — target unchanged."""
         rt = _run([
             SetStatement(target="name", value='"Alice"'),
             SetStatement(target="name", value="name * 2"),
         ])
-        assert rt.state["name"] == "name * 2"
+        assert rt.state["name"] == "Alice"
 
     def test_divide_on_string_noop(self) -> None:
-        """/ on a string value is a no-op."""
+        """/ on a string value is a no-op — target unchanged."""
         rt = _run([
             SetStatement(target="name", value='"Alice"'),
             SetStatement(target="name", value="name / 2"),
         ])
-        assert rt.state["name"] == "name / 2"
+        assert rt.state["name"] == "Alice"
 
 
 class TestWhenExecution:

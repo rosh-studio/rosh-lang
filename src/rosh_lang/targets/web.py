@@ -538,7 +538,12 @@ def serve_web(
     with socketserver.TCPServer(("", 0), Handler) as httpd:
         port = httpd.server_address[1]
         url = f"http://localhost:{port}"
-        print(f"Serving at {url} — Ctrl-C to stop")
+        # flush=True: stdout is fully buffered (not line-buffered) whenever
+        # it isn't a TTY — a subprocess, redirected to a file, etc. Since
+        # serve_forever() below never returns, an unflushed print here sat
+        # in the buffer forever and was never seen: the process looked like
+        # it had silently hung with no URL printed at all.
+        print(f"Serving at {url} — Ctrl-C to stop", flush=True)
 
         if auto_open:
             webbrowser.open(url)

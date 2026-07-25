@@ -320,9 +320,18 @@ def _parse_print(line_text: str, line: int, source: str) -> PrintStatement:
     rest = line_text[len("print"):].strip()
     if not rest:
         return PrintStatement(text="", line=line)
-    if rest.startswith('"') and rest.endswith('"'):
-        text = rest[1:-1]
-    elif rest.startswith("'") and rest.endswith("'"):
+    if rest[0] in ('"', "'"):
+        # A missing closing quote used to fall through to the bare-text
+        # branch below, silently printing the stray leading quote
+        # character instead of flagging the mistake — found by a blind
+        # playtest: `print "hello world` (no closing quote) printed
+        # `"hello world` with exit 0, no error.
+        quote = rest[0]
+        if len(rest) < 2 or rest[-1] != quote:
+            raise ParseError(
+                f"unterminated string literal in print — missing closing {quote}",
+                line=line, source=source,
+            )
         text = rest[1:-1]
     else:
         text = rest

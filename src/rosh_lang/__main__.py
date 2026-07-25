@@ -35,11 +35,26 @@ console = Console(theme=_THEME)
 # ── CLI entry ──────────────────────────────────────────────────
 
 
+_SUBCOMMANDS_HELP = """\
+Subcommands (dispatched before the options above; run "rosh new --help"
+for help, where supported):
+  new <template> <name>    Scaffold a starter .rosh file (hello, game, app)
+  library ...              Inspect the bundled widget library
+  assets ...               Search/register semantic asset providers
+  create ...               Generate a programme from a prompt (needs [ai] extra)
+  register / login/logout  Manage a rosh.cloud account
+  publish <file>           Upload a compiled programme to rosh.cloud
+  config ...               Manage stored API keys
+"""
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Build the argparse parser for the rosh CLI."""
     parser = argparse.ArgumentParser(
         prog="rosh",
         description="rosh — one script, many worlds",
+        epilog=_SUBCOMMANDS_HELP,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         add_help=True,
     )
     parser.add_argument(
@@ -244,8 +259,19 @@ def main(argv: list[str] | None = None) -> int:
         serve_threejs(programme, auto_open=args.run)
     elif args.target == "scratch":
         from rosh_lang.targets.scratch import render_scratch_sb3
+        import warnings as _warnings
         out_path = path.with_suffix(".sb3")
-        out_path.write_bytes(render_scratch_sb3(programme))
+        # Both scratch.py's own warnings (e.g. "collision handler references
+        # unknown sprite") and zipfile's internal "Duplicate name" warning
+        # otherwise print as raw "file.py:188: UserWarning: ..." tracebacks
+        # with internal paths and line numbers — looks like a crash even
+        # though the export completes fine. Capture and reprint them
+        # through the same console the rest of the CLI uses.
+        with _warnings.catch_warnings(record=True) as caught:
+            _warnings.simplefilter("always")
+            out_path.write_bytes(render_scratch_sb3(programme))
+        for w in caught:
+            console.print(f"[rosh.warn]Warning:[/] {w.message}")
         console.print(f"[rosh.brand]Wrote Scratch project:[/] {out_path}")
     elif args.target == "hytopia":
         from rosh_lang.targets.hytopia import serve_hytopia

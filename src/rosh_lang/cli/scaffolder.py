@@ -151,6 +151,18 @@ def scaffold(args: list[str]) -> None:
     template_name: str | None = None
     project_name: str | None = None
 
+    # "rosh new --help" was parsed as a template name (there's no argparse
+    # here — this dispatches straight from __main__.py) and reported
+    # "Unknown template: --help", which reads as a bug rather than help.
+    if args and args[0] in ("-h", "--help"):
+        console.print("[rosh.brand]rosh new[/] <template> <name> — create a starter programme\n")
+        console.print("Templates:")
+        for key, (desc, _) in _TEMPLATES.items():
+            console.print(f"  [rosh.key]{key:8s}[/]  {desc}")
+        console.print()
+        console.print("[rosh.muted]Examples: rosh new · rosh new game · rosh new game pong[/]")
+        return
+
     if len(args) >= 1:
         template_name = args[0]
     if len(args) >= 2:

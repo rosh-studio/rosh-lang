@@ -213,7 +213,10 @@ def serve_phaser(
     with socketserver.TCPServer(("", 0), Handler) as httpd:
         port = httpd.server_address[1]
         url = f"http://localhost:{port}"
-        print(f"Serving Phaser game at {url} — Ctrl-C to stop")
+        # flush=True: see web.py's serve_web for why this matters — stdout
+        # is fully buffered when not a TTY, and serve_forever() never
+        # returns to flush it otherwise.
+        print(f"Serving Phaser game at {url} — Ctrl-C to stop", flush=True)
 
         if auto_open:
             webbrowser.open(url)

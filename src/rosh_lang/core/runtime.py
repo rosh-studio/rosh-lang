@@ -63,6 +63,10 @@ _MAX_SEND_DEPTH = 10
 class Runtime:
     """Execute a Rosh programme."""
 
+    # Shared with _try_arithmetic and _looks_like_expression — multi-char
+    # before single-char to avoid ambiguous splits (>= before >, <= before <).
+    _ARITHMETIC_OPS = (">=", "<=", "==", "!=", ">", "<", "+", "-", "*", "/")
+
     def __init__(
         self,
         output: TextIO = sys.stdout,
@@ -865,6 +869,17 @@ class Runtime:
         if arith is not None:
             return arith
 
+        # "ball.width * 1.25" (relative resize, etc.) looks like an
+        # arithmetic expression but _try_arithmetic returned None because
+        # an operand — typically a property that hasn't been explicitly
+        # set yet — couldn't be resolved to a number. Falling through to
+        # the raw-text fallback below would silently store the literal,
+        # un-evaluated source ("ball.width * 1.25") as the property's
+        # value instead of a number, with nothing signalling the failure.
+        # Leave the target unchanged instead of corrupting it.
+        if self._looks_like_expression(raw):
+            return self._resolve(target)
+
         # Integer
         try:
             return int(raw)
@@ -926,7 +941,7 @@ class Runtime:
         String concatenation: if either operand is a string, + joins them.
         Comparisons return Python bool (True/False).
         """
-        for op in (">=", "<=", "==", "!=", ">", "<", "+", "-", "*", "/"):
+        for op in self._ARITHMETIC_OPS:
             sep = f" {op} "
             if sep not in raw:
                 continue
@@ -979,6 +994,16 @@ class Runtime:
                     continue
 
         return None
+
+    def _looks_like_expression(self, raw: str) -> bool:
+        """True if raw contains one of the recognised binary operators.
+
+        Used to tell apart the two reasons _try_arithmetic can return
+        None: "not an expression at all" vs. "was an expression attempt
+        that failed to resolve" — only the latter should avoid the
+        raw-text fallback in _eval_set_value.
+        """
+        return any(f" {op} " in raw for op in self._ARITHMETIC_OPS)
 
     # ── helpers ────────────────────────────────────────────────
 
