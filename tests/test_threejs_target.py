@@ -126,6 +126,14 @@ class TestThreejsRuntimeContent:
         from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_THREEJS
         assert "obj.vz" in JS_RUNTIME_THREEJS
 
+    def test_rebuilds_geometry_when_shape_changes_after_creation(self):
+        # "create object x" then "set x.shape to torus" arrive as separate
+        # updates — the mesh must not be stuck with the geometry it was
+        # first built with (regression: torus/etc rendered as a cube).
+        from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_THREEJS
+        assert "_roshShape" in JS_RUNTIME_THREEJS
+        assert "m.geometry.dispose()" in JS_RUNTIME_THREEJS
+
     def test_has_box3_collision(self):
         from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_THREEJS
         assert "Box3" in JS_RUNTIME_THREEJS

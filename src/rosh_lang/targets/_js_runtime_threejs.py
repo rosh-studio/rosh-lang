@@ -372,9 +372,18 @@ JS_RUNTIME_THREEJS = """\
           var geo = createGeometry(obj.shape);
           var mat = new THREE.MeshStandardMaterial({color: parseColor(obj.color || "#444")});
           m = new THREE.Mesh(geo, mat);
+          m._roshShape = obj.shape || "cube";
           scene.add(m);
           meshes[name] = m;
         }
+      }
+
+      // Shape changed after creation (e.g. "create object x" then "set x.shape
+      // to torus" arrive as separate updates) — rebuild geometry in place.
+      if (!m._isModel && !obj.model && m._roshShape !== (obj.shape || "cube")) {
+        m.geometry.dispose();
+        m.geometry = createGeometry(obj.shape);
+        m._roshShape = obj.shape || "cube";
       }
 
       // Update transform (coords already remapped if 2D mode)
