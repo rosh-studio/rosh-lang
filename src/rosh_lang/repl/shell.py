@@ -157,6 +157,10 @@ def _render_response(console: Console, response: KernelResponse) -> None:
                 console.print(f"    [rosh.keyword]{line}[/]")
         return
 
+    if response.message:
+        console.print(response.message)
+        return
+
     if response.view == "help":
         console.print()
         _render_help_topic(console, response.help_topic)

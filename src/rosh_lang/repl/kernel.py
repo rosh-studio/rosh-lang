@@ -177,6 +177,12 @@ _HELP_TOPICS: Final[dict[str, HelpTopic]] = {
         aliases=("exit",),
         accepts_no_args=True,
     ),
+    "push": HelpTopic(
+        command="push",
+        summary="Save this session's world to rosh.cloud",
+        usage="push <slug>",
+        examples=("push my-world",),
+    ),
 }
 
 _HELP_ROWS: Final[list[tuple[str, str]]] = [
@@ -205,6 +211,7 @@ class ReplKernel:
     def __init__(self, adapter: RuntimeAdapter) -> None:
         self.adapter = adapter
         self.current_subject: str | None = None
+        self.session_lines: list[str] = []
 
     def process_line(self, line: str) -> KernelResponse:
         stripped = line.strip()
@@ -254,6 +261,9 @@ class ReplKernel:
                 help_topic=canonical,
             )
 
+        if lower.startswith("push "):
+            return self._handle_push(stripped)
+
         # REPL-only convenience: bare identifier behaves like get <identifier>.
         tokens = stripped.split()
         if len(tokens) == 1:
@@ -285,6 +295,7 @@ class ReplKernel:
             return KernelResponse(status="error", error=error)
 
         self._remember_subject(stripped, lowered.subject)
+        self.session_lines.append(stripped)
 
         if items:
             return KernelResponse(status="ok", view=view, state_items=items)
@@ -317,6 +328,7 @@ class ReplKernel:
             return None
 
         self._remember_subject(plan.rosh, None)
+        self.session_lines.append(plan.rosh)
         return KernelResponse(
             status="ok",
             view=view,
@@ -332,6 +344,43 @@ class ReplKernel:
         inferred = _infer_subject(stripped)
         if inferred is not None:
             self.current_subject = inferred
+
+    def _handle_push(self, stripped: str) -> KernelResponse:
+        """push <slug> — save this session's accumulated source to
+        rosh.cloud as a world, creating it on first push and updating it on
+        any later push in the same session."""
+        slug = stripped.split(None, 1)[1].strip().split()[0]
+        source = "\n".join(self.session_lines)
+        if not source.strip():
+            return KernelResponse(status="error", error=ErrorInfo(
+                kind="shell",
+                message="Nothing to push yet — build something first, e.g. create object cube.",
+            ))
+
+        from rosh_lang.cli.cloud import get_api_key_or_none, push_world
+
+        api_key = get_api_key_or_none()
+        if not api_key:
+            return KernelResponse(status="error", error=ErrorInfo(
+                kind="shell",
+                message="No API key configured.",
+                guidance=[
+                    "rosh config --key rosh_k1_...",
+                    "Get one: log in at https://rosh.cloud/login, then Settings > API Keys.",
+                ],
+            ))
+
+        result = push_world(slug, source, api_key=api_key)
+        if result.get("success"):
+            owner = result.get("owner", "?")
+            return KernelResponse(
+                status="ok",
+                message=f"[rosh.brand]Pushed![/] https://rosh.cloud/world/{owner}/{slug}",
+            )
+        return KernelResponse(status="error", error=ErrorInfo(
+            kind="shell",
+            message=f"Push failed: {result.get('error', 'unknown error')}",
+        ))
 
 
 def help_rows_for_topic(topic: str | None) -> list[tuple[str, str]]:

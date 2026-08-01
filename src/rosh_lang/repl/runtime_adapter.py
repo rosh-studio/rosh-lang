@@ -48,6 +48,7 @@ _COMMAND_CANDIDATES = (
     "ls",
     "objects",
     "?",
+    "push",
 )
 
 

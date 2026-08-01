@@ -86,6 +86,74 @@ def test_cloud_post_does_not_retry_transient_http_error(
     assert "Error 522: rosh.cloud temporarily unavailable after 1 attempt" in capsys.readouterr().out
 
 
+def test_api_request_non_fatal_returns_error_dict_instead_of_exiting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail(*_args: object, **_kwargs: object) -> None:
+        raise HTTPError("https://rosh.cloud/api/v1/worlds", 500, None, {}, io.BytesIO(b'{"error": "boom"}'))
+
+    monkeypatch.setattr(cloud, "urlopen", fail)
+
+    result = cloud._api_request("POST", "/api/v1/worlds", {"slug": "x"}, fatal=False)
+
+    assert result["success"] is False
+    assert result["status"] == 500
+    assert "boom" in result["error"]
+
+
+def test_push_world_falls_back_to_put_on_slug_exists(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, str]] = []
+
+    def fake_urlopen(req: object, timeout: int = 30) -> object:
+        method = req.get_method()  # type: ignore[attr-defined]
+        url = req.full_url  # type: ignore[attr-defined]
+        calls.append((method, url))
+        if method == "POST":
+            raise HTTPError(url, 409, None, {}, io.BytesIO(json.dumps({"code": "slug_exists", "error": "dup"}).encode()))
+        return _FakeResponse({"success": True, "slug": "my-world", "owner": "alice"})
+
+    monkeypatch.setattr(cloud, "urlopen", fake_urlopen)
+
+    result = cloud.push_world("my-world", "create object cube", api_key="rosh_k1_test")
+
+    assert result["success"] is True
+    assert [m for m, _ in calls] == ["POST", "PUT"]
+    assert calls[1][1].endswith("/api/v1/worlds/my-world")
+
+
+def test_kernel_push_appends_only_executed_source_not_builtins() -> None:
+    kernel = ReplKernel(RuntimeAdapter())
+
+    kernel.process_line("create object cube")
+    kernel.process_line("state")
+    kernel.process_line("help")
+    kernel.process_line("this is not valid rosh at all !!!")
+    kernel.process_line("set cube.color to red")
+
+    assert kernel.session_lines == ["create object cube", "set cube.color to red"]
+
+
+def test_kernel_push_reports_no_api_key_without_exiting(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cloud, "get_api_key_or_none", lambda: None)
+
+    kernel = ReplKernel(RuntimeAdapter())
+    kernel.process_line("create object cube")
+    response = kernel.process_line("push my-world")
+
+    assert response.status == "error"
+    assert response.error is not None
+    assert "No API key configured" in response.error.message
+
+
+def test_kernel_bare_push_gives_usage_error() -> None:
+    kernel = ReplKernel(RuntimeAdapter())
+    response = kernel.process_line("push")
+
+    assert response.status == "error"
+    assert response.error is not None
+    assert "push <slug>" in response.error.guidance
+
+
 def test_runtime_adapter_get_state_filters_internal_keys() -> None:
     adapter = RuntimeAdapter()
     adapter.runtime.state["player"] = {"x": 1}

@@ -51,3 +51,4 @@ class KernelResponse:
     error: ErrorInfo | None = None
     planned_rosh: str = ""
     planner_notes: str = ""
+    message: str = ""  # free-text reply for simple builtins (e.g. push)

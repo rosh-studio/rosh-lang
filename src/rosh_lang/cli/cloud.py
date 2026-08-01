@@ -38,9 +38,16 @@ def _save_config(config: dict) -> None:
     CONFIG_FILE.write_text(json.dumps(config, indent=2))
 
 
+def get_api_key_or_none() -> str | None:
+    """Get API key from config or environment, without exiting the process.
+    Safe to call from a long-lived session (e.g. the REPL's `push` command)
+    where a missing key should be a recoverable error, not a crash."""
+    return os.environ.get("ROSH_API_KEY", "") or _load_config().get("api_key", "") or None
+
+
 def _get_api_key() -> str:
-    """Get API key from config or environment."""
-    key = os.environ.get("ROSH_API_KEY", "") or _load_config().get("api_key", "")
+    """Get API key from config or environment (one-shot CLI use — exits if absent)."""
+    key = get_api_key_or_none()
     if not key:
         print("No API key configured. Run: rosh config --key rosh_k1_...")
         print("Or set ROSH_API_KEY environment variable.")
@@ -48,8 +55,14 @@ def _get_api_key() -> str:
     return key
 
 
-def _api_request(method: str, path: str, data: dict | None = None, api_key: str = "") -> dict:
-    """Make an API request to rosh.cloud."""
+def _api_request(method: str, path: str, data: dict | None = None, api_key: str = "", fatal: bool = True) -> dict:
+    """Make an API request to rosh.cloud.
+
+    By default (`fatal=True`, the existing behaviour every one-shot CLI
+    subcommand relies on), a failed request prints an error and exits the
+    process. Pass `fatal=False` for callers that must survive a failure —
+    e.g. the REPL's `push` command, where a missing key or a transient
+    network blip must not kill the whole interactive session."""
     url = f"{CLOUD_BASE}{path}"
     headers = {
         "Content-Type": "application/json",
@@ -71,10 +84,25 @@ def _api_request(method: str, path: str, data: dict | None = None, api_key: str 
                 print(f"Temporary error {e.code}; retrying ({attempt}/{attempts - 1})...")
                 time.sleep(attempt)
                 continue
-            detail = _http_error_detail(e)
+            # Read the error body exactly once — HTTPError's stream can't be
+            # re-read, so both the human-readable detail and any structured
+            # `code` field (e.g. "slug_exists") must come from this one parse.
+            body = None
+            try:
+                body = json.loads(e.read().decode())
+            except Exception:
+                pass
+            if isinstance(body, dict):
+                detail = str(body.get("detail") or body.get("message") or body.get("error") or e.reason or body)
+                error_code = body.get("code")
+            else:
+                detail = str(body if body is not None else (e.reason or "unknown error"))
+                error_code = None
             if e.code in _TRANSIENT_HTTP_ERRORS:
                 noun = "attempt" if attempts == 1 else "attempts"
                 detail = f"rosh.cloud temporarily unavailable after {attempts} {noun}"
+            if not fatal:
+                return {"success": False, "error": detail, "status": e.code, "code": error_code}
             print(f"Error {e.code}: {detail}")
             sys.exit(1)
         except URLError as e:
@@ -82,21 +110,12 @@ def _api_request(method: str, path: str, data: dict | None = None, api_key: str 
                 print(f"Connection error; retrying ({attempt}/{attempts - 1})...")
                 time.sleep(attempt)
                 continue
+            if not fatal:
+                return {"success": False, "error": f"Connection error: {e.reason}"}
             print(f"Connection error after {attempts} attempts: {e.reason}")
             sys.exit(1)
 
     raise AssertionError("unreachable")
-
-
-def _http_error_detail(error: HTTPError) -> str:
-    """Return a useful message for JSON and non-JSON HTTP errors."""
-    try:
-        detail = json.loads(error.read().decode())
-    except Exception:
-        return str(error.reason or "unknown error")
-    if isinstance(detail, dict):
-        return str(detail.get("detail") or detail.get("message") or error.reason or detail)
-    return str(detail)
 
 
 def _fetch_docs(api_key: str) -> dict:
@@ -457,3 +476,21 @@ def cmd_publish(args: list[str]) -> None:
     else:
         print(f"Publish failed: {result}")
         sys.exit(1)
+
+
+def push_world(slug: str, code: str, name: str | None = None, api_key: str = "") -> dict:
+    """Create or update a world (a live rosh.cloud `spaces` row, distinct
+    from the `programs` published by cmd_create/cmd_publish above) with the
+    given source. Tries create first; if the slug already exists for this
+    account, falls back to updating it instead. Never raises or calls
+    sys.exit — safe to call repeatedly from a long-lived interactive
+    session (the REPL's `push` command)."""
+    body: dict = {"slug": slug, "code": code}
+    if name:
+        body["name"] = name
+    result = _api_request("POST", "/api/v1/worlds", body, api_key=api_key, fatal=False)
+    if result.get("success"):
+        return result
+    if result.get("status") == 409 or result.get("code") == "slug_exists":
+        return _api_request("PUT", f"/api/v1/worlds/{slug}", {"code": code}, api_key=api_key, fatal=False)
+    return result
