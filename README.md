@@ -453,6 +453,7 @@ rosh> make it smaller
 rosh> move it left
 rosh> put the ball at 40 60
 rosh> examine ball
+rosh> push my-world
 ```
 
 Current REPL-only conveniences include:
@@ -464,6 +465,12 @@ Current REPL-only conveniences include:
 - typo suggestions for misspelled commands
 - tab completion, history, and multiline blocks for `when`, `define`, and `repeat`
 - optional AI intent planning for broad unknown commands when `ROSH_AI`, provider, model, and API key are configured
+- `push <slug>` — publish everything built so far in the current session to
+  rosh.cloud as a live, shareable world (creates it if the slug is new,
+  updates it otherwise). Requires an API key: `rosh config --key rosh_k1_...`,
+  or set `ROSH_API_KEY`. Get a key from rosh.cloud's Settings page after
+  logging in. This is genuinely local-first: everything you build runs
+  entirely in the terminal REPL until you explicitly `push` it.
 
 ## VS Code
 
