@@ -807,6 +807,11 @@ class TestEmitAfter:
         result = compile_programme(prog)
         assert not result.needs_loop
 
+    def test_payload_emitted(self):
+        prog = parse_string("after 0.5 send scored value=5")
+        result = compile_programme(prog)
+        assert 'rosh.send("scored", {"value": "5"});' in result.init_code
+
 
 class TestEmitBackground:
     def test_background_colour(self):

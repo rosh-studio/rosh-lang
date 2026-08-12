@@ -1149,7 +1149,10 @@ def _stmt_to_dict(stmt: Statement) -> dict[str, Any]:
     if isinstance(stmt, BackgroundStatement):
         return {"type": "background", "value": stmt.value}
     if isinstance(stmt, AfterStatement):
-        return {"type": "after", "seconds": stmt.delay, "event": stmt.event}
+        d = {"type": "after", "seconds": stmt.delay, "event": stmt.event}
+        if stmt.payload:
+            d["payload"] = stmt.payload
+        return d
     if isinstance(stmt, AnimateStatement):
         return {"type": "animate", "name": stmt.name, "sheet": stmt.sheet,
                 "frames": stmt.frames, "speed": stmt.speed, "mode": stmt.mode}

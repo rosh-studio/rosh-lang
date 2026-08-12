@@ -108,6 +108,29 @@ def fuzzy_color(text: str) -> Optional[str]:
 # Public API
 # ---------------------------------------------------------------------------
 
+def _strip_inline_comment(text: str) -> str:
+    """Strip a trailing '# ...' comment that starts outside any quoted string.
+
+    A '#' inside a quoted string (e.g. a hex colour `"#1a1a2e"`) is left
+    alone; only an unquoted '#' begins a comment. A bare apostrophe used as
+    a contraction or possessive (Rosh's, don't) is not treated as opening a
+    quote — only a `'` preceded by whitespace or the start of the line can
+    open one, since a real quote is never glued onto the previous word.
+    """
+    in_quote: str = ""
+    for i, ch in enumerate(text):
+        if in_quote:
+            if ch == in_quote:
+                in_quote = ""
+        elif ch == '"':
+            in_quote = ch
+        elif ch == "'" and (i == 0 or text[i - 1].isspace()):
+            in_quote = ch
+        elif ch == "#":
+            return text[:i].rstrip()
+    return text
+
+
 def normalise(line: str) -> str:
     """Normalise one line of natural-language Rosh into canonical form.
 
@@ -117,6 +140,10 @@ def normalise(line: str) -> str:
     stripped = line.strip()
     if not stripped or stripped.startswith("#"):
         return line
+
+    stripped = _strip_inline_comment(stripped)
+    if not stripped:
+        return ""
 
     tokens = stripped.split()
     head = tokens[0].lower()
@@ -186,7 +213,12 @@ def normalise(line: str) -> str:
             last = rest[-1].lower()
             # "turn X into <material>" — last word is the material noun
             if len(rest) >= 3 and rest[1].lower() == "into":
-                material_words = rest[2:]
+                material_words = list(rest[2:])
+                # A quoted phrase ("dark wood") splits on whitespace with the
+                # quote characters still attached to the first/last word.
+                if material_words:
+                    material_words[0] = material_words[0].lstrip("\"'")
+                    material_words[-1] = material_words[-1].rstrip("\"'")
                 material = material_words[-1].lower()
                 lines = [f"set {obj}.material to {material}"]
                 if len(material_words) > 1:
@@ -225,6 +257,16 @@ def normalise(line: str) -> str:
         )
         if m2:
             obj, _, desc = m2.group(1), m2.group(2), m2.group(3).strip()
+            # Strip enclosing quote characters before splitting into words —
+            # otherwise a quoted value like "walrus ivory" leaves a stray
+            # quote baked into the material noun (words[-1] == 'ivory"').
+            # Stripped independently (not as a matched pair) so a missing
+            # closing quote from a typo doesn't leave the other side dirty.
+            if len(desc) >= 1 and desc[0] in ('"', "'"):
+                desc = desc[1:]
+            if len(desc) >= 1 and desc[-1] in ('"', "'"):
+                desc = desc[:-1]
+            desc = desc.strip()
             words = desc.split()
             if len(words) > 1:
                 # Last word is the material noun; earlier words are adjectives

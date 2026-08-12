@@ -118,7 +118,7 @@ get count of visitors into n   # list length as an integer
 ```rosh
 look                           # inspect the current scene
 look player into info          # capture inspection result into state
-look programme into stmts      # capture statement list (use with repeat/for each)
+look programme into stmts      # capture statement list (iterate with for each)
 ```
 
 `into` capture is terminal/REPL-first. Browser and game targets have deferred capture paths.
@@ -191,18 +191,26 @@ Events are handled with `when <event>` (block) or `on <event>` (one-liner).
 
 ```rosh
 event scored value        # declare an event with a payload variable
-send scored 10            # emit it; handlers receive value=10
 
 when scored
   set score.value to score.value + value
 end
+
+send scored value=10      # emit it; handlers receive value=10
 ```
+
+`when` handlers must be registered (i.e. appear earlier in the programme)
+before the matching `send` runs — a `send` fired before its `when` block has
+been reached has no handler to call yet. Payload values must be passed as
+`key=value` — `send scored 10` (a bare value with no key) is parsed but the
+value is silently dropped, since only `key=value` tokens are read into the
+payload.
 
 ### Delayed events
 
 ```rosh
-after 3 send timeout      # fire 'timeout' after 3 seconds
-after 0.5 send scored 5   # fire with payload
+after 3 send timeout             # fire 'timeout' after 3 seconds
+after 0.5 send scored value=5    # fire with payload
 ```
 
 ### Key-hold detection
@@ -268,10 +276,13 @@ end
 
 ### For each (over a captured list)
 
+`repeat` only takes a count (a number, or `as <var>` to expose the counter) —
+it does not iterate a list. To loop over a captured list, use `for each`:
+
 ```rosh
 get all into items
-repeat items as item
-  print "{item.name}"
+for each item in items
+  print "{item.key}"      # each captured item is {key, value, type}
 end
 ```
 
@@ -296,23 +307,34 @@ Functions share the global state space — they read and write the same variable
 
 ## Scenes
 
+`create scene NAME` registers a scene. **The lines between `create scene` and
+its `end` are not scoped to that scene** — they run immediately, once, like
+any other top-level statement. Use `create scene` purely to register the
+scene and set its properties; put anything that should only happen while a
+particular scene is active inside a global `when scene_enter` / `when
+scene_exit` handler, gated on the `scene` value the event carries:
+
 ```rosh
 create scene title
-  print "Press space to start"
-  when keydown
-    go game
+set title.room_description to "Press space to start"
+
+create scene corridor
+set corridor.exits to "title"
+
+when scene_enter
+  if scene == "title"
+    print "Press space to start"
   end
 end
 
-create scene game
-  use player speed 0.03
-  use score
-end
+on keydown when key == " " go corridor
 
 go title                  # navigate to a scene
 ```
 
-`go` triggers `scene_exit` on the current scene and `scene_enter` on the target.
+`go` triggers `scene_exit` on the current scene and `scene_enter` on the
+target scene, passing the scene name as `scene` — available inside the
+handler like any other event payload value.
 
 ```rosh
 background "#1a1a2e"       # set scene/canvas background (colour or image URL)
@@ -386,7 +408,7 @@ create object display_case   # registry finds display_case.json → fallback_sha
 create object torch          # registry finds torch.json → fallback_shape=cylinder, color=orange
 ```
 
-Object names and aliases are fuzzy-matched. `"ancient carved stone"`, `"carving"`, and `"stone"` all resolve to the `stone` manifest.
+Object names and aliases are fuzzy-matched. `"ancient carved stone"`, `"pictish stone"`, and `"stone"` all resolve to the `stone` manifest. (Careful with near-neighbours: `"carving"` on its own resolves to the separate `carved_relief` manifest, not `stone`.)
 
 ### Asset manifests
 
@@ -490,7 +512,13 @@ rosh hello.rosh
 rosh hello.rosh --target web --run
 ```
 
-Generates a self-contained HTML file. Objects are CSS `div` elements positioned by percentage. All events active. The output file has no dependencies — share it as a single `.html`.
+Renders the programme to a self-contained page (CSS `div` elements
+positioned by percentage, no external dependencies) and serves it from a
+local HTTP server, printing the URL and opening it in your browser with
+`--run`. All events active. The CLI doesn't currently write the page to disk
+as a shareable `.html` file — if you need that, call
+`rosh_lang.targets.web.render_html(programme)` directly from Python and
+save the returned string yourself.
 
 ### Phaser (2D game)
 
@@ -746,16 +774,21 @@ print "Welcome to the museum."
 
 ### Scenes with navigation
 
+Widget loads (`use`) and listeners (`on`) run immediately regardless of
+indentation — they are not deferred until their scene becomes active (see
+[Scenes](#scenes)). That's fine here: `title-screen`, `score`, and `player`
+are all meant to exist for the whole session; `go` just switches which scene
+is current and fires `scene_enter`/`scene_exit`.
+
 ```rosh
 create scene title
-  use title-screen title "My Game" subtitle "Press space"
-  on keydown when key == " " go game
-end
-
 create scene game
-  use score
-  use player speed 0.04
-end
+
+use title-screen title "My Game" subtitle "Press space"
+use score
+use player speed 0.04
+
+on keydown when key == " " go game
 
 go title
 ```

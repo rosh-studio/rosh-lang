@@ -138,6 +138,13 @@ class TestTurnVerb:
         result = normalise("turn the campfire red")
         assert "set campfire.color to red" in result
 
+    def test_turn_into_quoted_multi_word_material(self):
+        # A quoted multi-word material must not leave a stray quote baked
+        # into the material noun (regression: was "wood'").
+        result = normalise("turn ball into 'dark wood'")
+        assert "set ball.material to wood" in result
+        assert "set ball.material_desc to dark wood" in result
+
 
 # ---------------------------------------------------------------------------
 # normalise — set X.color to <prose>
@@ -159,6 +166,50 @@ class TestSetColorProse:
         # Last word is the material noun; adjectives are stored in _desc
         assert "set tree.material to wood" in result
         assert "set tree.material_desc to cracked ancient bark wood" in result
+
+    def test_quoted_multi_word_material_no_stray_quote(self):
+        # Regression: quoted material values used to leave a stray trailing
+        # quote baked into state, e.g. material == 'ivory"'.
+        result = normalise('set brooch.material to "walrus ivory"')
+        assert "set brooch.material to ivory" in result
+        assert "set brooch.material_desc to walrus ivory" in result
+        assert '"' not in result
+
+    def test_unterminated_quote_material_still_clean(self):
+        # A missing closing (or opening) quote from a typo must not leave a
+        # stray quote on either side — each edge is stripped independently.
+        assert '"' not in normalise('set brooch.material to "walrus ivory')
+        assert '"' not in normalise('set brooch.material to walrus ivory"')
+
+
+# ---------------------------------------------------------------------------
+# normalise — inline comments
+# ---------------------------------------------------------------------------
+
+class TestInlineComments:
+    def test_trailing_comment_stripped(self):
+        assert normalise("play laser # once") == "play laser"
+
+    def test_hex_colour_in_quotes_not_treated_as_comment(self):
+        assert normalise('background "#1a1a2e"') == 'background "#1a1a2e"'
+
+    def test_hash_inside_quoted_string_preserved(self):
+        assert normalise('print "score #1"') == 'print "score #1"'
+
+    def test_trailing_whitespace_before_comment_trimmed(self):
+        assert normalise("set x to 5   # inline note") == "set x to 5"
+
+    def test_possessive_apostrophe_not_mistaken_for_quote(self):
+        # Regression: a bare apostrophe glued to a word (possessive/
+        # contraction) was treated as opening a string, so the scanner
+        # stayed "inside a quote" for the rest of the line and never found
+        # the comment.
+        assert normalise("say Rosh's world # note") == "say Rosh's world"
+        assert normalise("say don't stop # note") == "say don't stop"
+
+    def test_quoted_string_after_contraction_still_recognised(self):
+        result = normalise("say can't 'do it' # note")
+        assert result == "say can't 'do it'"
 
 
 # ---------------------------------------------------------------------------

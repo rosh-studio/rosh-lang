@@ -659,7 +659,12 @@ def _parse_after(line_text: str, line: int, source: str) -> AfterStatement:
     if tokens[1].lower() != "send":
         raise ParseError("after requires 'send' keyword: after <seconds> send <event>", line=line, source=source)
     event = tokens[2]
-    return AfterStatement(delay=delay, event=event, line=line)
+    payload: dict[str, str] = {}
+    for tok in tokens[3:]:
+        if "=" in tok:
+            k, v = tok.split("=", 1)
+            payload[k] = v
+    return AfterStatement(delay=delay, event=event, payload=payload, line=line)
 
 
 def _parse_animate(line_text: str, line: int, source: str) -> AnimateStatement:

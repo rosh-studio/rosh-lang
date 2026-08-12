@@ -197,10 +197,11 @@ class AnimateStatement:
 
 @dataclass
 class AfterStatement:
-    """after 2 send wave_2 — schedule a delayed event."""
+    """after 2 send wave_2 / after 0.5 send scored value=5 — schedule a delayed event."""
 
     delay: float
     event: str
+    payload: dict[str, str] = field(default_factory=dict)
     line: int = 0
 
 

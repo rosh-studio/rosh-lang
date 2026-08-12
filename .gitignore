@@ -28,7 +28,6 @@ Thumbs.db
 .env
 
 # UV
-uv.lock
 .uv-cache/
 
 # Generated

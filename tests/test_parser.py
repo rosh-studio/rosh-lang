@@ -1039,6 +1039,19 @@ class TestAfter:
         with pytest.raises(ParseError, match="number"):
             parse_string("after soon send wave")
 
+    def test_payload(self) -> None:
+        prog = parse_string("after 0.5 send scored value=5")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, AfterStatement)
+        assert stmt.event == "scored"
+        assert stmt.payload == {"value": "5"}
+
+    def test_no_payload_defaults_empty(self) -> None:
+        prog = parse_string("after 2 send wave_2")
+        stmt = prog.statements[0]
+        assert isinstance(stmt, AfterStatement)
+        assert stmt.payload == {}
+
 
 class TestStructuralMarkers:
     def test_rejects_unmatched_end(self) -> None:

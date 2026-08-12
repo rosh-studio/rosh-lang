@@ -380,7 +380,18 @@ def _emit_animate(stmt: AnimateStatement) -> str:
 
 def _emit_after(stmt: AfterStatement) -> str:
     delay_ms = int(stmt.delay * 1000)
-    return f'setTimeout(function() {{ rosh.send("{_escape_js(stmt.event)}", {{}}); }}, {delay_ms});'
+    if stmt.payload:
+        pairs = ", ".join(
+            f'"{_escape_js(k)}": "{_escape_js(v)}"'
+            for k, v in stmt.payload.items()
+        )
+        payload_js = f"{{{pairs}}}"
+    else:
+        payload_js = "{}"
+    return (
+        f'setTimeout(function() {{ rosh.send("{_escape_js(stmt.event)}", '
+        f'{payload_js}); }}, {delay_ms});'
+    )
 
 
 def _emit_background(stmt: BackgroundStatement) -> str:
