@@ -1378,7 +1378,7 @@ class TestSkippedStatements:
 # use (widget composition)
 # ══════════════════════════════════════════════════════════════
 
-WIDGETS_DIR = Path(__file__).parent.parent / "examples" / "widgets"
+WIDGETS_DIR = Path(__file__).parent.parent / "examples" / "widget-demos"
 
 
 class TestUseExecution:

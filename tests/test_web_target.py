@@ -7,7 +7,7 @@ from pathlib import Path
 from rosh_lang.core.parser import parse_string
 from rosh_lang.targets.web import render_html
 
-WIDGETS_DIR = Path(__file__).parent.parent / "examples" / "widgets"
+WIDGETS_DIR = Path(__file__).parent.parent / "examples" / "widget-demos"
 
 
 # ── Print output ──────────────────────────────────────────────

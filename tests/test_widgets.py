@@ -41,7 +41,7 @@ from rosh_lang.core.widgets import (
 )
 
 # Path to example widgets shipped with the project
-WIDGETS_DIR = Path(__file__).parent.parent / "examples" / "widgets"
+WIDGETS_DIR = Path(__file__).parent.parent / "examples" / "widget-demos"
 BUNDLED_DIR = get_bundled_library_path()
 
 
