@@ -34,3 +34,5 @@ Thumbs.db
 *.rosh.html
 *.sb3
 test-verify.rosh
+
+.token
