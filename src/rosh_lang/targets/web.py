@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import http.server
 import io
+import json
 import re
 import socketserver
 import webbrowser
@@ -336,17 +337,27 @@ def _render_interactive(
     # Build script block
     script_parts = [JS_RUNTIME, "", "// ── Init ──", compiled.init_code]
 
-    # Inject sprite data URIs for JS runtime syncAll()
+    # Inject sprite data URIs for JS runtime syncAll(). Both key and value
+    # go through json.dumps — sprite() lets a description that starts with
+    # http(s):// pass straight through verbatim as this value (see
+    # media/sprites.py), so it can be fully attacker-influenced. This used
+    # to be raw f'"{escape(k)}": "{v}"' string interpolation with *no*
+    # escaping on the value at all — a value containing a literal `"`
+    # broke out of the JS string entirely and ran as live code, not just
+    # markup. _is_safe_style_url() (added earlier the same day) only
+    # protects the *other* sprite sink, _render_object's CSS
+    # background-image: url(...) — this is a second, separate sink over
+    # the same untrusted data. json.dumps is the correct fix (matching
+    # audio_data's existing, already-safe pattern just below) because it
+    # produces a valid JS string literal by construction, not a blocklist.
     if sprite_data:
         pairs = ", ".join(
-            f'"{escape(k)}": "{v}"' for k, v in sprite_data.items()
+            f"{json.dumps(k)}: {json.dumps(v)}" for k, v in sprite_data.items()
         )
         script_parts.append(f"rosh._spriteData = {{{pairs}}};")
 
     # Inject audio data for JS runtime playAudio()
     if audio_data:
-        import json
-
         audio_pairs = ", ".join(
             f'"{escape(k)}": {json.dumps(v, separators=(",", ":"))}'
             for k, v in audio_data.items()
@@ -358,8 +369,6 @@ def _render_interactive(
         programme, rt, search_paths=search_paths,
     )
     if anim_data:
-        import json
-
         anim_init_lines: list[str] = []
         for anim_name, anim_info in anim_data.items():
             frames_json = json.dumps(anim_info["frames"], separators=(",", ":"))

@@ -75,10 +75,12 @@ def render_phaser(
     # Build script block
     script_parts = [JS_RUNTIME_CORE, "", "// ── Init ──", compiled.init_code]
 
-    # Inject sprite data URIs
+    # Inject sprite data URIs. See web.py's identical fix for why this must
+    # be json.dumps, not raw string interpolation — sprite() lets an
+    # attacker-influenced http(s):// URL through verbatim as this value.
     if sprite_data:
         pairs = ", ".join(
-            f'"{escape(k)}": "{v}"' for k, v in sprite_data.items()
+            f"{json.dumps(k)}: {json.dumps(v)}" for k, v in sprite_data.items()
         )
         script_parts.append(f"rosh._spriteData = {{{pairs}}};")
 

@@ -57,3 +57,69 @@ class TestSpriteURLNotXSSable:
         data_uri = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
         html = _render_object("thing", {}, {"thing": data_uri})
         assert f"background-image: url({data_uri})" in html
+
+
+class TestSpriteDataJSInjection:
+    """Round two of this bug, found by an independent external review the
+    same day, after the fix above shipped: _is_safe_style_url() only
+    protects _render_object's CSS `background-image: url(...)` sink. It
+    does nothing for interactive programmes (any `when`/`on` handler),
+    which additionally serialise the *entire, unvalidated* sprite_data
+    dict into a JS object literal — `rosh._spriteData = {"name": "<raw
+    value>"};` — for the JS runtime's syncAll(). That interpolation had
+    *zero* escaping on the value (the adjacent, otherwise-identical
+    audio_data injection a few lines below it already used json.dumps
+    correctly — this one just didn't). A sprite value containing a
+    literal `"` closed the JS string outright, and anything after it ran
+    as live JavaScript, not markup — confirmed with a payload that
+    produces literal `alert(1)` as executable code in the compiled
+    output. Same underlying issue in targets/phaser.py's identical
+    pattern. Fixed by switching both to json.dumps for key and value,
+    matching the already-correct audio_data code right next to each.
+    """
+
+    MALICIOUS_JS_BREAKOUT = 'https://evil.example/x.png","pwn":alert(1),"x":"x'
+
+    def test_web_target_sprite_data_is_json_safe(self):
+        from rosh_lang.core.parser import parse_string
+        from rosh_lang.targets.web import render_html
+
+        code = (
+            'create object thing\n'
+            f'sprite thing "{self.MALICIOUS_JS_BREAKOUT}"\n'
+            "when click\n"
+            "  print \"hi\"\n"
+            "end"
+        )
+        html = render_html(parse_string(code))
+        # The unambiguous check: rosh._spriteData's value must be a single
+        # well-formed JSON string literal — if the payload broke out, this
+        # parse either fails outright or the dict has extra top-level keys
+        # ("pwn", "x") instead of one clean "thing" entry.
+        import json
+        import re
+
+        m = re.search(r"rosh\._spriteData = (\{.*?\});", html)
+        assert m, "sprite data block not found in compiled output"
+        parsed = json.loads(m.group(1))
+        assert parsed["thing"] == self.MALICIOUS_JS_BREAKOUT
+
+    def test_phaser_target_sprite_data_is_json_safe(self):
+        from rosh_lang.core.parser import parse_string
+        from rosh_lang.targets.phaser import render_phaser
+
+        code = (
+            'create object thing\n'
+            f'sprite thing "{self.MALICIOUS_JS_BREAKOUT}"\n'
+            "when click\n"
+            "  print \"hi\"\n"
+            "end"
+        )
+        html = render_phaser(parse_string(code))
+        import json
+        import re
+
+        m = re.search(r"rosh\._spriteData = (\{.*?\});", html)
+        assert m, "sprite data block not found in compiled phaser output"
+        parsed = json.loads(m.group(1))
+        assert parsed["thing"] == self.MALICIOUS_JS_BREAKOUT
