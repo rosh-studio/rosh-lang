@@ -8,6 +8,19 @@ that new keywords require discussion first. Undocumented internals (e.g.
 widget-specific properties like `.material`) may change without a version
 bump until they're promoted into the public spec.
 
+## 0.9.8 - 2026-08-16
+
+### Fixed
+
+- **An invalid comparison operator in a condition (e.g. mixing the
+  one-line `on <event> when <condition> <action>` form with `collision`
+  used as a condition rather than the correct block form `when collision
+  A B ... end`) used to silently compile to invalid JavaScript**, which
+  aborted the entire generated script at parse time with no error
+  surfaced anywhere. Both places this could happen (`on ... when`
+  conditions, and block-form `if`) now raise a clear error at compile
+  time instead.
+
 ## 0.9.7 - 2026-08-16
 
 ### Fixed
