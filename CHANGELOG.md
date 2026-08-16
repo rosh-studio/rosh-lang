@@ -8,6 +8,22 @@ that new keywords require discussion first. Undocumented internals (e.g.
 widget-specific properties like `.material`) may change without a version
 bump until they're promoted into the public spec.
 
+## 0.9.7 - 2026-08-16
+
+### Fixed
+
+- **The one-line `on update`/`on collision` reactor form never started
+  the game loop.** `compile_programme()` only set the internal flag that
+  triggers `rosh.startLoop()` (the only thing that fires the `"update"`
+  event, or runs `tickTimers`/`tickVelocity`/`checkCollisions`) for the
+  block-form `when update/collision ... end` and `animate` statements —
+  never for the one-line `on <event> <action>` form, even though it's a
+  first-class, documented syntax. This silently broke the bundled `ball`
+  widget (its wall-bounce physics is built entirely from one-line
+  `on update ...` statements), the `timer` widget's auto-decrement, and
+  any hand-written `on update`/`on collision` code, whenever a program
+  didn't *also* contain an unrelated block-form trigger elsewhere.
+
 ## 0.9.6 - 2026-08-16
 
 ### Security
