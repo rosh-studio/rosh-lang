@@ -1035,3 +1035,46 @@ class TestSafeFnNameCodeInjection:
         assert result.returncode == 0, result.stderr
         parsed = json.loads(result.stdout.strip().splitlines()[-1])
         assert parsed["pwned"] is False, "injected payload executed as live JS"
+
+
+# ── repeat-as save-slot code injection (round 6, 16-Aug-2026) ─────────
+#
+# Found by a spawned adversarial review explicitly asked to hunt for OTHER
+# instances of round 5's bug shape (a name spliced into JS *code*, not a
+# string/JSON value) — `_emit_repeat`'s save-slot variable had the exact
+# same incomplete mitigation `_safe_fn_name` had before its round-5 fix
+# (only "-"/"." replaced), spliced unquoted into `var _had_{safe} = ...,
+# _prev_{safe} = ...`. `repeat N as <var>` accepts any non-whitespace
+# token for <var> (core/parser.py's _parse_repeat), so a name using the
+# comma operator inside the `var` declarator's initializer runs arbitrary
+# code with the loop still executing normally afterwards — no visible
+# sign anything happened. Fixed with the same [A-Za-z0-9_] whitelist.
+class TestRepeatAsCodeInjection:
+    MALICIOUS_VAR = "z=(PWNEDMARKER=1,1),q"
+
+    def _program(self) -> str:
+        return f'repeat 3 as {self.MALICIOUS_VAR}\n  print "hi"\nend'
+
+    def test_malicious_repeat_var_does_not_execute_as_js(self):
+        node = shutil.which("node")
+        if node is None:
+            pytest.skip("node is required for generated JS execution tests")
+
+        compiled = compile_programme(parse_string(self._program()))
+        script = "\n".join([
+            JS_RUNTIME_CORE,
+            compiled.init_code,
+            'console.log(JSON.stringify({'
+            'pwned: typeof PWNEDMARKER !== "undefined" && PWNEDMARKER === 1, '
+            'output: rosh._outputBuffer'
+            '}));',
+        ])
+        result = subprocess.run(
+            [node], input=script, capture_output=True, text=True, check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        parsed = json.loads(result.stdout.strip().splitlines()[-1])
+        assert parsed["pwned"] is False, "injected repeat-as var executed as live JS"
+        # The loop itself must still behave normally — proves the fix
+        # sanitised the name rather than breaking the feature outright.
+        assert parsed["output"] == ["hi", "hi", "hi"]

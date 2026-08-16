@@ -462,7 +462,17 @@ def _emit_repeat(stmt: RepeatStatement, target: str = "web") -> str:
     if stmt.var:
         var = _escape_js(stmt.var)
         # Use a name-scoped save slot so nested repeat-as loops don't clobber each other.
-        safe = var.replace(".", "_").replace("-", "_")
+        # `safe` is spliced unquoted into bare JS identifier positions below
+        # (_had_{safe}, _prev_{safe}) — the same round-5 mistake
+        # (_safe_fn_name replacing only "-"/"." before a code-generation
+        # splice, not a string context) applied here too, and was equally
+        # exploitable: `repeat 3 as z=(PWNEDMARKER=1,1),q` runs the
+        # attacker's code as the `var` declarator's initializer via the
+        # comma operator, with the loop still executing normally
+        # afterwards — confirmed with a real Node.js execution check, the
+        # same way round 5 was. Whitelisting to [A-Za-z0-9_] closes this
+        # the same way _safe_fn_name was fixed.
+        safe = re.sub(r"[^A-Za-z0-9_]", "_", stmt.var)
         return (
             f'var _had_{safe} = rosh.has("{var}"), _prev_{safe} = rosh.get("{var}");\n'
             f"for (var _ri = 1; _ri <= Math.min({count_js}, 10000); _ri++) {{\n"
