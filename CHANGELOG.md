@@ -8,6 +8,20 @@ that new keywords require discussion first. Undocumented internals (e.g.
 widget-specific properties like `.material`) may change without a version
 bump until they're promoted into the public spec.
 
+## 0.9.6 - 2026-08-16
+
+### Security
+
+- **Fixed a stored XSS via sprite image URLs.** `sprite <name> "https://..."`
+  descriptions were passed through unescaped into the compiled web target's
+  `style="..."` attribute — a URL containing a `"` could close the
+  attribute and inject arbitrary HTML/JS into the compiled page. Any
+  application compiling and serving untrusted `.rosh` source (e.g. a
+  hosted playground) was affected. Fixed at the render sink: sprite URLs
+  are now validated (real `data:image/` URI, or a clean `http(s)://` URL
+  with no quotes/angle-brackets/control characters) before being trusted
+  into unescaped CSS; anything else falls back to a plain colour box.
+
 ## 0.9.5 - 2026-08-16
 
 ### Fixed
