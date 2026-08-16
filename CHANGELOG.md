@@ -8,6 +8,15 @@ that new keywords require discussion first. Undocumented internals (e.g.
 widget-specific properties like `.material`) may change without a version
 bump until they're promoted into the public spec.
 
+## 0.9.4 - 2026-08-16
+
+### Changed
+
+- README/LANGUAGE.md/pyproject reworked around the canonical `uv tool install
+  rosh-lang` first-run path (terminal → browser), dropping the GitHub install
+  command now that this repo is public. Portal docs/site synced to match
+  (version strings, target/widget/test counts, MCP install instructions).
+
 ## 0.9.3 - 2026-08-12
 
 ### Fixed
