@@ -171,9 +171,15 @@ def _render_object(
         styles.append(f"top: {_css_value(y if y is not None else 0)}")
     styles.append(f"width: {_css_value(w)}")
     styles.append(f"height: {_css_value(h)}")
-    # Sprite overlay (if available)
+    # Sprite overlay (if available). data_uri can be an attacker-controlled
+    # URL verbatim — sprite() passes any "http(s)://..." description
+    # straight through unmodified (see media/sprites.py's docstring) — so
+    # unlike every other property here it was never escaped before landing
+    # in this style="..." attribute, making it a stored-XSS vector via a
+    # crafted sprite URL. _is_safe_style_url reuses _sanitize_background's
+    # own character blocklist for exactly this reason.
     data_uri = (sprite_data or {}).get(name)
-    if data_uri:
+    if data_uri and _is_safe_style_url(data_uri):
         styles.append("background-color: transparent")
         styles.append(f"background-image: url({data_uri})")
         styles.append("background-size: 100% 100%")
@@ -181,6 +187,7 @@ def _render_object(
         styles.append("background-position: center")
         styles.append("image-rendering: pixelated")
     else:
+        data_uri = None  # unsafe or absent — fall back to a plain colour box
         styles.append(f"background-color: {escape(str(color))}")
     styles.append("display: flex")
     styles.append("align-items: center")
@@ -392,6 +399,21 @@ _RGB_RE = re.compile(r"^rgba?\([\d\s,.%/]+\)$")
 _HSL_RE = re.compile(r"^hsla?\([\d\s,.%/]+\)$")
 _URL_UNSAFE = re.compile(r"""['"<>{|}\\^`\[\]\x00-\x1f]""")
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
+
+
+def _is_safe_style_url(value: str) -> bool:
+    """True if value is safe to interpolate unescaped into a CSS url()
+    inside a style="..." attribute — a data: URI (what procedurally
+    generated sprites always are), or an http(s) URL with none of
+    _URL_UNSAFE's characters (what a user-supplied image-URL sprite must
+    be to not break out of the attribute). Used by _render_object; see its
+    comment for why this exists."""
+    v = value.strip()
+    if v.startswith("data:image/"):
+        return True
+    if v.startswith(("http://", "https://")) and not _URL_UNSAFE.search(v):
+        return True
+    return False
 
 
 def _sanitize_background(value: str) -> str:
