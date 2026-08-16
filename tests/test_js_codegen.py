@@ -259,6 +259,45 @@ class TestCompileProgramme:
         assert "hero" in result.handler_code
         assert "enemy" in result.handler_code
 
+    def test_one_line_on_update_sets_needs_loop(self):
+        """16-Aug-2026 regression: the one-line "on <event> <action>" form
+        (OnStatement) never set needs_loop, only the block "when ... end"
+        form did — so a programme using only one-line `on update ...`
+        reactors (no block-form when/animate) compiled with needs_loop
+        False, web.py never emitted rosh.startLoop(), and the handler was
+        registered but never once invoked. The bundled `ball` widget's
+        entire wall-bounce implementation is exactly this shape — this bug
+        made `use ball` (and any "on update ..."-only programme) silently
+        never animate at all. Confirmed live via rosh.cloud's describe-to-
+        run flow generating a "bouncing ball" that never moved."""
+        prog = parse_string("on update set x to x + 0.01")
+        result = compile_programme(prog)
+        assert result.has_handlers
+        assert result.needs_loop
+        assert 'rosh.on("update"' in result.handler_code
+
+    def test_one_line_on_collision_sets_needs_loop(self):
+        """Bare "on collision <action>" (no name filter) parses to the
+        literal event "collision" and is a real, functional pattern —
+        unlike "on collision <name> <action>", which parses to a combined
+        event name like "collision_ball" that the runtime never actually
+        fires (only bare "collision" is ever rosh.send()'d) and is a
+        separate, pre-existing bug not addressed by this fix; see
+        rosh-dev/BUGS.md 16-Aug-2026."""
+        prog = parse_string("on collision set score to score + 1")
+        result = compile_programme(prog)
+        assert result.needs_loop
+
+    def test_ball_widget_alone_sets_needs_loop(self):
+        """End-to-end proof for the exact real-world shape that broke:
+        `use ball` alone must produce a compiled programme whose script
+        actually calls rosh.startLoop(), not just registers dead handlers."""
+        from rosh_lang.targets.web import render_html
+
+        prog = parse_string('use ball color "red"')
+        html = render_html(prog)
+        assert "startLoop()" in html
+
     def test_collision_wildcard(self):
         """when collision bullet.* enemy → startsWith filter."""
         prog = parse_string(

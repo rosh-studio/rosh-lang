@@ -146,6 +146,17 @@ def compile_programme(
         elif isinstance(stmt, OnStatement):
             # One-line event reactor: on <event> <action> <args>
             has_handlers = True
+            if stmt.event in ("update", "collision"):
+                # Same rule as the WhenStatement branch above: an "update"/
+                # "collision" listener is only ever driven by the game loop
+                # (rosh.startLoop() firing "update" each frame) — without
+                # this, needs_loop stays False, startLoop() is never
+                # emitted, and the handler is registered but never once
+                # invoked. Missing this was a real, confirmed bug: any
+                # program using only one-line "on update ..." reactors
+                # (e.g. the bundled `ball` widget's entire wall-bounce
+                # implementation) silently never animated at all.
+                needs_loop = True
             on_js = _emit_on(stmt)
             if on_js:
                 handler_lines.append(on_js)
