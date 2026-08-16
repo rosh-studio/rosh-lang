@@ -8,6 +8,18 @@ that new keywords require discussion first. Undocumented internals (e.g.
 widget-specific properties like `.material`) may change without a version
 bump until they're promoted into the public spec.
 
+## 0.9.9 - 2026-08-16
+
+### Security
+
+- **Fixed a second, separate stored-XSS sink over sprite image URLs**,
+  found by external review of the 0.9.6 fix. That fix only protected the
+  CSS `background-image: url(...)` attribute; any interactive programme
+  (a `when`/`on` handler) also serialised sprite data into a JS object
+  literal with no escaping on the value at all — worse than the first
+  sink, since it ran as live JavaScript rather than HTML. Both the `web`
+  and `phaser` targets are affected; both are now fixed with `json.dumps`.
+
 ## 0.9.8 - 2026-08-16
 
 ### Fixed

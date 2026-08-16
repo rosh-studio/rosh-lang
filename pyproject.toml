@@ -1,6 +1,6 @@
 [project]
 name = "rosh-lang"
-version = "0.9.8"
+version = "0.9.9"
 description = "A universal control language for live systems. One script, many worlds."
 requires-python = ">=3.10"
 readme = "README.md"
