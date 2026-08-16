@@ -567,6 +567,26 @@ class TestOnStatement:
         assert 'rosh.get("level")' in result.handler_code
         assert "> 3" in result.handler_code
 
+    def test_on_condition_with_invalid_operator_raises(self):
+        """16-Aug-2026 regression: 'on update when collision ball player1
+        set ...' (mixing the one-line reactor form with "collision" used
+        as if it were a condition operator, instead of the correct block
+        form "when collision A B ... end") used to silently compile field=
+        "collision", op="ball", val="player1" into literally invalid
+        JavaScript (`if (_v ball player1)`), which aborted the entire
+        <script> block at parse time — a completely blank page with no
+        error surfaced anywhere, even though the API reported success.
+        Confirmed live via a describe-to-run "pong" prompt. It must now
+        raise instead, so a bad condition fails loudly at compile time
+        rather than shipping broken JS — see rosh-dev/BUGS.md 16-Aug-2026."""
+        import pytest
+
+        prog = parse_string(
+            "event tick\non tick when collision ball player1 set score to score + 1"
+        )
+        with pytest.raises(ValueError, match="not a valid comparison operator"):
+            compile_programme(prog)
+
     def test_event_declaration_is_noop(self):
         """event declarations produce no JS output."""
         prog = parse_string("event alarm")
@@ -699,6 +719,17 @@ class TestJSVariableArithmetic:
         prog = parse_string("create number score\nset score to score + 1")
         result = compile_programme(prog)
         assert '"score + 1"' in result.init_code
+
+    def test_if_with_invalid_operator_raises(self):
+        """Same class of bug as OnStatement's condition handling (see
+        test_on_condition_with_invalid_operator_raises) reached via the
+        block "if" form instead — the parser doesn't validate the operator
+        token either, so this must be caught at codegen time."""
+        import pytest
+
+        prog = parse_string('if score bogus 10\n  print "x"\nend')
+        with pytest.raises(ValueError, match="not a valid comparison operator"):
+            compile_programme(prog)
 
 
 class TestIfCodegen:

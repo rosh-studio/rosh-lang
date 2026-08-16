@@ -570,8 +570,7 @@ def _emit_on(stmt: OnStatement) -> str:
             if val.lower() in ("nothing", "none") and op in ("=", "==", "!="):
                 condition_js = f"_v {'!=' if op == '!=' else '=='} null"
             else:
-                js_op = {"=": "===", "==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<="}.get(op, op)
-                condition_js = f"_v {js_op} {val}"
+                condition_js = f"_v {_js_comparison_op(op)} {val}"
             body = (
                 f'var _v = rosh.get("{_escape_js(field)}"); '
                 f"if ({condition_js}) {{ {body} }}"
@@ -585,6 +584,37 @@ def _emit_on(stmt: OnStatement) -> str:
 
 
 # ── Helpers ───────────────────────────────────────────────────────
+
+
+_COMPARISON_OPS = {"=": "===", "==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
+
+
+def _js_comparison_op(op: str) -> str:
+    """Map a condition's comparison operator to its JS equivalent.
+
+    Raises ValueError for anything unrecognised, rather than the previous
+    behaviour of silently passing the raw token through as if it were a
+    valid operator. That let a malformed condition like "collision ball
+    player1" (field="collision", op="ball", val="player1" — "ball" is not
+    a comparison operator at all) compile to literally invalid JavaScript
+    (`if (_v ball player1)`), which aborted the entire generated <script>
+    block at parse time with zero visible content and no error surfaced
+    to the user, even though the publish API reported success. Confirmed
+    live via a describe-to-run "pong" prompt. Raising here instead means
+    _compile_and_cache's caller sees a clear failure — for the AI
+    generation path specifically, _check_rosh_generation's try/except
+    already turns any compile exception into a rejection that feeds back
+    into the existing repair-and-retry pass, rather than ever publishing
+    the broken result.
+    """
+    if op not in _COMPARISON_OPS:
+        raise ValueError(
+            f"'{op}' is not a valid comparison operator in a condition "
+            f"(expected one of {', '.join(sorted(_COMPARISON_OPS))}) — "
+            "two-object collision filtering needs the block form "
+            "'when collision A B ... end', not a one-line 'when' condition"
+        )
+    return _COMPARISON_OPS[op]
 
 
 def _parse_condition(condition: str) -> tuple[str, str, str]:
@@ -611,7 +641,7 @@ def _emit_if(stmt: IfStatement, indent: str = "", target: str = "web") -> str:
     if val.lower() in ("nothing", "none") and op in ("=", "==", "!="):
         js_op = "!=" if op == "!=" else "=="
     else:
-        js_op = {"=": "===", "==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<="}.get(op, op)
+        js_op = _js_comparison_op(op)
 
     # Coerce value: try number first, then string comparison
     try:
