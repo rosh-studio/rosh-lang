@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import re
 
 from rosh_lang.core.model import (
     AddStatement,
@@ -504,8 +505,29 @@ def _emit_foreach(stmt: ForEachStatement, target: str = "web") -> str:
 
 
 def _safe_fn_name(name: str) -> str:
-    """Convert a Rosh function name to a safe JS identifier."""
-    safe = name.replace("-", "_").replace(".", "_")
+    """Convert a Rosh function name to a safe JS identifier.
+
+    `define <name>`/`do <name>` accept any non-whitespace token as *name*
+    (core/parser.py's _parse_define/_parse_do only split on whitespace) —
+    unlike every other sink in this module, this one splices the result
+    directly into generated JS *source code*
+    (`f"function {name}() {{...}}"` in _emit_define), not into a string or
+    JSON value. None of this file's escaping helpers (_escape_js,
+    _json_for_inline_script) apply here: escaping makes a value safe to
+    embed as *data*, but this position is *code* — a name containing
+    `(){};alert(1);function x` closes the function early, runs as a
+    top-level statement, and re-opens a new function so the rest still
+    parses, with zero string-escaping involved at any point. Confirmed
+    exploitable (real code execution, not just malformed output) by an
+    external review, 16-Aug-2026. Only "-" and "." used to be neutralised,
+    which was never enough. Fixed by whitelisting: replace every character
+    that isn't [A-Za-z0-9_] with "_", so whatever comes out cannot contain
+    JS syntax of any kind. Two different malicious names can now collide
+    to the same sanitised identifier — that already happened pre-fix for
+    e.g. "a-b" vs "a.b", so it's an accepted, pre-existing tradeoff, not a
+    new one.
+    """
+    safe = re.sub(r"[^A-Za-z0-9_]", "_", name)
     return f"rosh_fn_{safe}"
 
 

@@ -978,3 +978,60 @@ class TestRepeatVarCleanup:
         prog = parse_string('repeat 3\n  print "hi"\nend')
         result = compile_programme(prog)
         assert "rosh.unset" not in result.init_code
+
+
+# ── define/do function-name code injection (round 5, 16-Aug-2026) ─────
+#
+# _parse_define/_parse_do (core/parser.py) accept any non-whitespace token
+# as a function name — unlike every other user-controlled string in this
+# module, _safe_fn_name() spliced that name directly into generated JS
+# *source code* (`f"function {name}() {{...}}"`), not into a string or
+# JSON value. None of the JSON/string escaping fixed earlier the same day
+# (_json_for_inline_script, _escape_js) applies to a code-generation sink:
+# a name like `x(){};(function(){...})();function y` closes the function
+# declaration early, runs an IIFE as a top-level statement, and re-opens a
+# new function so the rest still parses — no string-breakout involved at
+# any point. Found by an external review; confirmed here by actually
+# executing the generated JS in Node (matching how the review proved it),
+# not just by string-matching the output, since a naive substring check
+# for the payload is blind to "present but inert vs. actually executed".
+class TestSafeFnNameCodeInjection:
+    MALICIOUS_NAME = 'x(){};(function(){globalThis["__ROSH_PWNED__"]=true})();function/**/y'
+
+    def _program(self) -> str:
+        return (
+            f'define {self.MALICIOUS_NAME}\n'
+            '  print "hi"\n'
+            'end\n'
+            'when click\n'
+            '  print "hi"\n'
+            'end'
+        )
+
+    def test_safe_fn_name_only_contains_identifier_characters(self):
+        from rosh_lang.targets._js_codegen import _safe_fn_name
+        import re
+
+        safe = _safe_fn_name(self.MALICIOUS_NAME)
+        assert re.fullmatch(r"[A-Za-z0-9_]+", safe), safe
+
+    def test_malicious_define_name_does_not_execute_as_js(self):
+        node = shutil.which("node")
+        if node is None:
+            pytest.skip("node is required for generated JS execution tests")
+
+        compiled = compile_programme(parse_string(self._program()))
+        script = "\n".join([
+            JS_RUNTIME_CORE,
+            compiled.init_code,
+            compiled.handler_code,
+            'console.log(JSON.stringify({pwned: globalThis.__ROSH_PWNED__ === true}));',
+        ])
+        result = subprocess.run(
+            [node], input=script, capture_output=True, text=True, check=False,
+        )
+        # A syntax error here would mean the sanitised name produced
+        # invalid JS, not just unsafe JS — also a bug, so don't swallow it.
+        assert result.returncode == 0, result.stderr
+        parsed = json.loads(result.stdout.strip().splitlines()[-1])
+        assert parsed["pwned"] is False, "injected payload executed as live JS"
