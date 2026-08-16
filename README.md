@@ -1,35 +1,37 @@
 # Rosh
 
-**One script, many worlds.** A plain-English language that runs on terminal, browser, and game engine.
+**A universal control language for live systems. One script, many worlds.**
+
+Rosh lets people and agents describe behaviour in plain, speakable English,
+then run the same deterministic source on different targets.
 
 ```rosh
 print "hello world"
 ```
 
-That's a complete programme. The same source targets a terminal, a browser, or a Phaser game — no rewriting.
+That's a complete programme. Run it in a terminal, open it in a browser, or
+send it to a game-engine target — no rewrite required.
 
-## Install
+## 60-Second First Run
 
 Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 uv tool install rosh-lang
 
-# With AI support (rosh create, REPL intent planner)
-uv tool install "rosh-lang[ai]"
-
-# Or install from GitHub for the latest pre-release
-uv tool install git+https://github.com/rosh-studio/rosh-lang
+printf 'print "hello world"\n' > hello.rosh
+rosh hello.rosh                      # prints: hello world
+rosh hello.rosh --target web --run   # opens the same programme in a browser
 ```
 
-## Quick Start
+No account or AI service is needed. That is the core idea: one `hello.rosh`,
+multiple targets.
 
-No account needed.
+To include optional AI-assisted commands (`rosh create` and the REPL intent
+planner), install the extra instead of the base package:
 
 ```bash
-echo 'print "hello world"' > hello.rosh
-rosh hello.rosh                      # prints to terminal
-rosh hello.rosh --target web --run   # opens in browser
+uv tool install "rosh-lang[ai]"
 ```
 
 **Scaffold and run a game in three commands:**
@@ -527,8 +529,11 @@ Rosh has a separate MCP server package for AI tools that can compile, publish, b
 Install and run it with `uvx`:
 
 ```bash
-ROSH_API_KEY=rosh_k1_your_key_here uvx rosh-mcp
+uvx rosh-mcp
 ```
+
+`uvx` starts the server without installing it globally. Set `ROSH_API_KEY` in
+the MCP client configuration so its tools can call the current rosh.cloud API.
 
 Example MCP config:
 
@@ -546,7 +551,8 @@ Example MCP config:
 }
 ```
 
-Canonical MCP package: [github.com/rosh-studio/rosh-mcp](https://github.com/rosh-studio/rosh-mcp)
+Canonical MCP package: [PyPI](https://pypi.org/project/rosh-mcp/) ·
+[source](https://github.com/rosh-studio/rosh-mcp)
 
 ## Project Structure
 
@@ -589,7 +595,7 @@ rosh-lang/
     parser.py         # Compatibility shim for rosh_lang.core.parser
     __main__.py       # CLI entry point + REPL
   examples/           # Example programmes
-  tests/              # Test suite (1,289 tests)
+  tests/              # Test suite (1,300+ tests)
   editor/vscode/      # Official VS Code language extension
   tools/              # Build tools (showcase generator)
   dist/               # Generated output (showcase.html)

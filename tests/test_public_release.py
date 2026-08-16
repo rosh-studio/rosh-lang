@@ -40,3 +40,24 @@ def test_standalone_public_ci_exists() -> None:
     text = workflow.read_text()
     assert 'python-version: ["3.10", "3.12"]' in text
     assert "uv build --no-sources" in text
+
+
+def test_public_first_run_uses_the_published_package() -> None:
+    readme = (ROOT / "README.md").read_text()
+    pyproject = (ROOT / "pyproject.toml").read_text()
+
+    assert "A universal control language for live systems" in readme
+    assert "uv tool install rosh-lang" in readme
+    assert 'print "hello world"' in readme
+    assert "rosh hello.rosh" in readme
+    assert "rosh hello.rosh --target web --run" in readme
+    assert "uv tool install git+https://github.com/rosh-studio/rosh-lang" not in readme
+    assert 'description = "A universal control language for live systems.' in pyproject
+
+
+def test_mcp_install_uses_published_uvx_package() -> None:
+    readme = (ROOT / "README.md").read_text()
+
+    assert "uvx rosh-mcp" in readme
+    assert "ROSH_API_KEY" in readme
+    assert "https://pypi.org/project/rosh-mcp/" in readme

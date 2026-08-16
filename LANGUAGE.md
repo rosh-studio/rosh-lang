@@ -2,7 +2,10 @@
 
 > "One script, many worlds."
 
-Rosh is a plain-English programming language. The same `.rosh` file runs in a terminal, a browser, a 2D game, a 3D scene, or a live networked world. You describe what you want; the target decides how to render it.
+Rosh is a universal control language for live systems. The same plain-English
+`.rosh` file runs in a terminal, a browser, a 2D game, a 3D scene, or a live
+networked world. You describe what you want; the target decides how to render
+it.
 
 ---
 
@@ -31,8 +34,11 @@ Rosh is a plain-English programming language. The same `.rosh` file runs in a te
 ### Install
 
 ```bash
-pip install rosh-lang          # or: uv tool install rosh-lang
+uv tool install rosh-lang
 ```
+
+`pip install rosh-lang` is also supported when Rosh is being installed into an
+existing Python environment rather than as a standalone command-line tool.
 
 ### Run a file
 
