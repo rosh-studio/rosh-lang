@@ -8,6 +8,19 @@ that new keywords require discussion first. Undocumented internals (e.g.
 widget-specific properties like `.material`) may change without a version
 bump until they're promoted into the public spec.
 
+## 0.9.5 - 2026-08-16
+
+### Fixed
+
+- `examples/widgets/` renamed to `examples/widget-demos/` — it was shadowing
+  the bundled widget library for anyone running a bundled example from
+  inside `rosh-lang/examples/`, since the default search path checks
+  `./widgets` before the bundled library. Widget demo scripts sharing a
+  name with a real widget (e.g. `explosion.rosh`) self-referenced their
+  own name, tripping the circular-dependency guard and silently returning
+  no widget — `breakout.rosh` rendered zero bricks and zero explosions
+  when run this way, with no error.
+
 ## 0.9.4 - 2026-08-16
 
 ### Changed
