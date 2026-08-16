@@ -280,7 +280,7 @@ def _threejs_asset_defaults(name: str) -> str:
         object_name = _escape_js(name)
         label = _escape_js(_asset_label_from_name(name))
         request = _threejs_asset_request(name)
-        request_json = json.dumps(request, separators=(",", ":"))
+        request_json = _json_for_inline_script(request)
         return "\n".join([
             f'rosh.set("{object_name}._asset.status", "missing");',
             f'rosh.set("{object_name}._asset.query", "{object_name}");',
@@ -772,3 +772,32 @@ def _escape_js(s: str) -> str:
         .replace("\r", "\\r")
         .replace("</", "<\\/")
     )
+
+
+def _json_for_inline_script(obj) -> str:
+    """json.dumps(), but safe to embed literally inside an HTML
+    <script>...</script> block. See targets/web.py's identical helper
+    (same name, duplicated here rather than imported, matching this
+    file's existing per-file-local-helper convention — e.g. _escape_js
+    above) for the full explanation of why plain json.dumps() alone is
+    not enough.
+
+    16-Aug-2026, found by a THIRD round of external review, after
+    web.py/phaser.py's sprite-data sink was fixed with the same
+    technique: this file's _threejs_asset_defaults() builds
+    `request_json = json.dumps(request, ...)` with a raw, unescaped
+    json.dumps() call — no _escape_js, nothing — where `request["object"]`
+    is an object's user-chosen name verbatim (`create object <name>`
+    accepts any non-whitespace characters, including "<", "/", etc.).
+    Confirmed reproducible via the threejs target specifically (the only
+    target that calls _threejs_asset_defaults): an object named
+    `x</script><img src=x onerror=alert(1)>` survived intact into
+    `rosh.addToList("_assetRequests", {request_json});`, and a real HTML
+    parser confirmed a live <img onerror=...> element parses out of the
+    compiled document. _escape_js's existing "</" -> "<\\/" protection
+    would also have closed this specific vector if it had been applied
+    here at all — it wasn't applied anywhere in this code path. Using
+    the broader _json_for_inline_script (escapes every "<", not just
+    "</") for consistency with the sprite-data fix.
+    """
+    return json.dumps(obj, separators=(",", ":")).replace("<", "\\u003c")

@@ -338,28 +338,45 @@ def _render_interactive(
     script_parts = [JS_RUNTIME, "", "// ── Init ──", compiled.init_code]
 
     # Inject sprite data URIs for JS runtime syncAll(). Both key and value
-    # go through json.dumps — sprite() lets a description that starts with
-    # http(s):// pass straight through verbatim as this value (see
-    # media/sprites.py), so it can be fully attacker-influenced. This used
-    # to be raw f'"{escape(k)}": "{v}"' string interpolation with *no*
+    # go through _json_for_inline_script — sprite() lets a description that
+    # starts with http(s):// pass straight through verbatim as this value
+    # (see media/sprites.py), so it can be fully attacker-influenced. This
+    # used to be raw f'"{escape(k)}": "{v}"' string interpolation with *no*
     # escaping on the value at all — a value containing a literal `"`
     # broke out of the JS string entirely and ran as live code, not just
     # markup. _is_safe_style_url() (added earlier the same day) only
     # protects the *other* sprite sink, _render_object's CSS
     # background-image: url(...) — this is a second, separate sink over
-    # the same untrusted data. json.dumps is the correct fix (matching
-    # audio_data's existing, already-safe pattern just below) because it
-    # produces a valid JS string literal by construction, not a blocklist.
+    # the same untrusted data.
+    #
+    # Plain json.dumps() alone is NOT sufficient here, even though it
+    # looks like it should be — found by a second round of external
+    # review: json.dumps escapes what's needed for valid JS-string syntax
+    # (quotes, backslashes, control chars) but not what's needed for safe
+    # HTML embedding. This whole block is embedded verbatim inside a real
+    # inline <script>...</script> tag, and the HTML PARSER runs before
+    # the JS parser and has no concept of JS string literals — a literal
+    # "</script>" anywhere in the JSON output, even one that's perfectly
+    # safe as far as the JS engine is concerned, closes the tag right
+    # there, and everything after it becomes real, parsed HTML. A sprite
+    # URL of `https://x/y</script><input autofocus onfocus=alert(1)>`
+    # reproduced this exactly. _json_for_inline_script() additionally
+    # escapes every literal less-than character as its 6-char JSON unicode
+    # escape sequence (matching Django's json_script filter and OWASP's
+    # guidance) — applied to every json.dumps() call building this
+    # <script> block's content, not just sprite data, since audio/
+    # animation data share the identical sink.
     if sprite_data:
         pairs = ", ".join(
-            f"{json.dumps(k)}: {json.dumps(v)}" for k, v in sprite_data.items()
+            f"{_json_for_inline_script(k)}: {_json_for_inline_script(v)}"
+            for k, v in sprite_data.items()
         )
         script_parts.append(f"rosh._spriteData = {{{pairs}}};")
 
     # Inject audio data for JS runtime playAudio()
     if audio_data:
         audio_pairs = ", ".join(
-            f'"{escape(k)}": {json.dumps(v, separators=(",", ":"))}'
+            f"{_json_for_inline_script(k)}: {_json_for_inline_script(v)}"
             for k, v in audio_data.items()
         )
         script_parts.append(f"rosh._audioData = {{{audio_pairs}}};")
@@ -371,17 +388,18 @@ def _render_interactive(
     if anim_data:
         anim_init_lines: list[str] = []
         for anim_name, anim_info in anim_data.items():
-            frames_json = json.dumps(anim_info["frames"], separators=(",", ":"))
+            frames_json = _json_for_inline_script(anim_info["frames"])
             anim_init_lines.append(
-                f'rosh._animData["{escape(anim_name)}"] = '
+                f"rosh._animData[{_json_for_inline_script(anim_name)}] = "
                 f'{{"frames": {frames_json}, '
                 f'"speed": {anim_info["speed"]}, '
-                f'"mode": "{escape(anim_info["mode"])}", '
+                f"\"mode\": {_json_for_inline_script(anim_info['mode'])}, "
                 f'"_frame": 0, "_elapsed": 0, "_dir": 1}};'
             )
             # Set initial sprite to frame 0
             anim_init_lines.append(
-                f'rosh._spriteData["{escape(anim_name)}"] = {json.dumps(anim_info["frames"][0])};'
+                f"rosh._spriteData[{_json_for_inline_script(anim_name)}] = "
+                f"{_json_for_inline_script(anim_info['frames'][0])};"
             )
         script_parts.extend(anim_init_lines)
 
@@ -423,6 +441,34 @@ def _is_safe_style_url(value: str) -> bool:
     if v.startswith(("http://", "https://")) and not _URL_UNSAFE.search(v):
         return True
     return False
+
+
+def _json_for_inline_script(obj) -> str:
+    """json.dumps(), but safe to embed literally inside an HTML
+    <script>...</script> block — which is how every place in this file
+    that calls it uses the result.
+
+    Plain json.dumps() escapes what's needed for valid JS-string syntax
+    (quotes, backslashes, control characters) but nothing more. That's
+    NOT the same as "safe to embed in an HTML document": the HTML parser
+    runs before the JS parser and has no concept of JS string literals,
+    so a literal "</script>" anywhere in the JSON text — even one that's
+    a perfectly well-formed, harmless JS string as far as the JS engine
+    is concerned — closes the enclosing <script> tag right there, and
+    everything after it becomes real, parsed HTML. Confirmed exploitable
+    directly: a sprite URL containing "</script><input autofocus
+    onfocus=alert(1)>" survived a plain json.dumps() call intact and
+    produced a live, firing <input> element in the compiled page.
+
+    The fix — escaping every literal "<" as its JSON/JS unicode escape
+    equivalent — is the standard one for this exact problem (Django's
+    `json_script` template filter does the same thing). It can never
+    change the JSON's meaning (a bare "<" is never syntactically
+    significant in JSON), and it closes the door on any tag-opening
+    sequence ("<script", "<style", "<img", ...), not just the one
+    "</script>" payload that happened to be demonstrated.
+    """
+    return json.dumps(obj, separators=(",", ":")).replace("<", "\\u003c")
 
 
 def _sanitize_background(value: str) -> str:

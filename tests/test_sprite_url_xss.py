@@ -123,3 +123,128 @@ class TestSpriteDataJSInjection:
         assert m, "sprite data block not found in compiled phaser output"
         parsed = json.loads(m.group(1))
         assert parsed["thing"] == self.MALICIOUS_JS_BREAKOUT
+
+
+def _parsed_input_elements(html: str) -> list[dict]:
+    """Feed html through a real HTML parser (stdlib html.parser, the same
+    class of tool a browser's HTML tokenizer is) and return every <input>
+    element it finds. Used to prove no attacker-controlled element
+    survives — not just that the embedded JS object round-trips as valid
+    JSON, which proves nothing about how the *browser* parses the
+    surrounding HTML document."""
+    from html.parser import HTMLParser
+
+    class _InputFinder(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.inputs: list[dict] = []
+
+        def handle_starttag(self, tag, attrs):
+            if tag == "input":
+                self.inputs.append(dict(attrs))
+
+    parser = _InputFinder()
+    parser.feed(html)
+    return parser.inputs
+
+
+class TestSpriteDataScriptTagBreakout:
+    """Round three of this bug, found by a second independent external
+    review, after round two's json.dumps() fix shipped: json.dumps()
+    correctly escapes what's needed for valid JS-*string* syntax, but
+    that is not the same thing as "safe to embed inside an HTML
+    <script>...</script> block". The HTML parser runs before the JS
+    parser and has no concept of JS string literals — a literal
+    "</script>" anywhere in the JSON text, even one that's a perfectly
+    well-formed, harmless JS string as far as the JS engine is concerned,
+    closes the enclosing <script> tag right there, and everything after
+    it becomes real, parsed HTML. round two's own tests (above) only
+    proved the embedded object round-trips through json.loads() — that
+    catches JS-string breakout, but is blind to this class of bug by
+    construction, since it never considers the HTML document the JSON is
+    sitting inside.
+
+    Fixed with _json_for_inline_script() (web.py), which additionally
+    escapes every literal "<" — closing the door on "</script>",
+    "<script", "<style", or any other tag-opening/closing sequence, not
+    just the one payload shape demonstrated. These tests parse the FULL
+    compiled document with a real HTML parser (matching how the review
+    verified the bug) and assert no attacker-controlled element appears —
+    not just that the JS payload happens to parse as valid JSON.
+    """
+
+    SCRIPT_BREAKOUT_URL = 'https://evil.example/x.png</script><input autofocus onfocus=alert(1)>'
+
+    def _program(self) -> str:
+        return (
+            'create object thing\n'
+            f'sprite thing "{self.SCRIPT_BREAKOUT_URL}"\n'
+            "when click\n"
+            "  print \"hi\"\n"
+            "end"
+        )
+
+    def test_web_target_no_attacker_element_parses_out(self):
+        from rosh_lang.core.parser import parse_string
+        from rosh_lang.targets.web import render_html
+
+        html = render_html(parse_string(self._program()))
+        inputs = _parsed_input_elements(html)
+        assert not inputs, f"attacker-controlled <input> element parsed as real HTML: {inputs}"
+
+    def test_phaser_target_no_attacker_element_parses_out(self):
+        from rosh_lang.core.parser import parse_string
+        from rosh_lang.targets.phaser import render_phaser
+
+        html = render_phaser(parse_string(self._program()))
+        inputs = _parsed_input_elements(html)
+        assert not inputs, f"attacker-controlled <input> element parsed as real HTML: {inputs}"
+
+
+class TestThreejsAssetDefaultsScriptTagBreakout:
+    """A FOURTH round, found by a spawned adversarial self-review of round
+    three's fix (before anything was deployed) — same underlying bug
+    class, different attacker-controlled field and a different file the
+    round-three sweep never touched: `_js_codegen.py`'s
+    `_threejs_asset_defaults()` builds `request_json =
+    json.dumps(request, ...)` (this file's own request dict, containing
+    `request["object"] = name` verbatim) with a raw, UNESCAPED
+    json.dumps() call — not even this file's own, narrower `_escape_js`
+    "</" -> "<\\/" protection, which is applied to every OTHER string in
+    the same function. `create object <name>` accepts any non-whitespace
+    characters for the name, including "<", "/", etc. — an object named
+    `x</script><img src=x onerror=alert(1)>` (no registry match, so it
+    hits this exact code path) survives into
+    `rosh.addToList("_assetRequests", {request_json});` and a real HTML
+    parser confirms a live <img onerror=...> element parses out — same
+    fix as round three: _json_for_inline_script(), duplicated locally in
+    _js_codegen.py matching this file's existing per-file-helper
+    convention (_escape_js is likewise file-local, not imported)."""
+
+    def test_threejs_no_attacker_element_parses_out_via_object_name(self):
+        from rosh_lang.core.parser import parse_string
+        from rosh_lang.targets.threejs import render_threejs
+
+        # No registry match for this name (deliberately nonsensical), so
+        # this reaches _threejs_asset_defaults's no-match / vulnerable branch.
+        code = 'create object x</script><img src=x onerror=alert(1)>'
+        html = render_threejs(parse_string(code))
+        imgs = _parsed_img_elements(html)
+        assert not imgs, f"attacker-controlled <img> element parsed as real HTML: {imgs}"
+
+
+def _parsed_img_elements(html: str) -> list[dict]:
+    from html.parser import HTMLParser
+
+    class _ImgFinder(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.imgs: list[dict] = []
+
+        def handle_starttag(self, tag, attrs):
+            if tag == "img":
+                self.imgs.append(dict(attrs))
+
+    parser = _ImgFinder()
+    parser.feed(html)
+    return parser.imgs

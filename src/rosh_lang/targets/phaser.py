@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import http.server
 import io
-import json
 import socketserver
 import webbrowser
 from html import escape
@@ -32,6 +31,7 @@ from rosh_lang.targets.web import (
     _generate_animation_data,
     _generate_audio_data,
     _generate_sprite_data,
+    _json_for_inline_script,
 )
 
 PHASER_CDN = "https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"
@@ -75,19 +75,29 @@ def render_phaser(
     # Build script block
     script_parts = [JS_RUNTIME_CORE, "", "// ── Init ──", compiled.init_code]
 
-    # Inject sprite data URIs. See web.py's identical fix for why this must
-    # be json.dumps, not raw string interpolation — sprite() lets an
-    # attacker-influenced http(s):// URL through verbatim as this value.
+    # Inject sprite data URIs. See web.py's _json_for_inline_script for why
+    # plain json.dumps() alone is not enough — it escapes what's needed
+    # for valid JS-string syntax, but not what's needed for safe HTML
+    # embedding. This whole block sits inside a real inline
+    # <script>...</script> tag; the HTML parser runs before the JS parser
+    # and has no concept of JS string literals, so a literal "</script>"
+    # anywhere in the JSON text — perfectly safe as far as the JS engine
+    # is concerned — closes the tag right there and turns everything
+    # after it into real, parsed HTML. sprite() lets an attacker-
+    # influenced http(s):// URL through verbatim as this value; applied
+    # uniformly to audio/animation data below too, since object and
+    # animation names come from user-authored .rosh source as well.
     if sprite_data:
         pairs = ", ".join(
-            f"{json.dumps(k)}: {json.dumps(v)}" for k, v in sprite_data.items()
+            f"{_json_for_inline_script(k)}: {_json_for_inline_script(v)}"
+            for k, v in sprite_data.items()
         )
         script_parts.append(f"rosh._spriteData = {{{pairs}}};")
 
     # Inject audio data
     if audio_data:
         audio_pairs = ", ".join(
-            f'"{escape(k)}": {json.dumps(v, separators=(",", ":"))}'
+            f"{_json_for_inline_script(k)}: {_json_for_inline_script(v)}"
             for k, v in audio_data.items()
         )
         script_parts.append(f"rosh._audioData = {{{audio_pairs}}};")
@@ -99,17 +109,18 @@ def render_phaser(
     if anim_data:
         anim_init_lines: list[str] = []
         for anim_name, anim_info in anim_data.items():
-            frames_json = json.dumps(anim_info["frames"], separators=(",", ":"))
+            frames_json = _json_for_inline_script(anim_info["frames"])
             anim_init_lines.append(
-                f'rosh._animData["{anim_name}"] = '
+                f"rosh._animData[{_json_for_inline_script(anim_name)}] = "
                 f'{{"frames": {frames_json}, '
                 f'"speed": {anim_info["speed"]}, '
-                f'"mode": "{anim_info["mode"]}", '
+                f"\"mode\": {_json_for_inline_script(anim_info['mode'])}, "
                 f'"_frame": 0, "_elapsed": 0, "_dir": 1}};'
             )
             # Set initial sprite to frame 0
             anim_init_lines.append(
-                f'rosh._spriteData["{anim_name}"] = {json.dumps(anim_info["frames"][0])};'
+                f"rosh._spriteData[{_json_for_inline_script(anim_name)}] = "
+                f"{_json_for_inline_script(anim_info['frames'][0])};"
             )
         script_parts.extend(anim_init_lines)
 

@@ -13,7 +13,6 @@ from __future__ import annotations
 import http.server
 import importlib.resources
 import io
-import json
 import socketserver
 import webbrowser
 from html import escape
@@ -27,7 +26,7 @@ from rosh_lang.media.sounds import generate_sound_params
 from rosh_lang.targets._js_codegen import compile_programme
 from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE, JS_TOUCH_CONTROLS
 from rosh_lang.targets._js_runtime_threejs import JS_RUNTIME_THREEJS, JS_RUNTIME_CONSOLE
-from rosh_lang.targets.web import _generate_audio_data
+from rosh_lang.targets.web import _generate_audio_data, _json_for_inline_script
 
 THREEJS_CDN = "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"
 ORBIT_CDN = "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"
@@ -95,10 +94,21 @@ def render_threejs(
     # Build script block
     script_parts = [JS_RUNTIME_CORE, "", "// ── Init ──", compiled.init_code]
 
-    # Inject audio data
+    # Inject audio data. Uses _json_for_inline_script for both key and
+    # value, matching web.py/phaser.py's identical fix — not because this
+    # specific site was found exploitable (it wasn't: html.escape() on
+    # the key happens to also defeat </script> breakout, since the HTML
+    # parser's raw-text scan for that literal byte sequence never finds
+    # it once "<" has been entity-encoded to "&lt;"), but because
+    # html.escape() is still the wrong tool here — entity-encoding a
+    # sound name would corrupt it from the JS runtime's own perspective
+    # (the JS engine sees the literal text "&lt;/script&gt;", not a
+    # decoded "<"), and consistency with the other two now-fixed sites
+    # over the identical sink shape is worth more than "technically
+    # wasn't provably exploitable this one time."
     if audio_data:
         audio_pairs = ", ".join(
-            f'"{escape(k)}": {json.dumps(v, separators=(",", ":"))}'
+            f"{_json_for_inline_script(k)}: {_json_for_inline_script(v)}"
             for k, v in audio_data.items()
         )
         script_parts.append(f"rosh._audioData = {{{audio_pairs}}};")
