@@ -23,6 +23,34 @@ var rosh = (function() {
   var handlers = {};
   var sendDepth = 0;
   var MAX_DEPTH = 10;
+  // Total-loop-iteration budget for one outermost send() dispatch (a
+  // single event/tick — click, keydown, one animation frame's "update"
+  // — or the page's one-time init_code run before the first send()).
+  // Mirrors the Python Runtime's _MAX_STEPS (rosh-lang/core/runtime.py)
+  // added earlier, but that only protects SERVER-side execution (the
+  // shared WS world's ROSH_COMMAND handler) — generated JS had no
+  // equivalent, so a program merely being opened by a visitor (web
+  // pages auto-dispatch "start") could still freeze their browser tab:
+  // each `repeat` is independently capped at 10,000 iterations
+  // (_MAX_REPEAT-equivalent in codegen), but nesting multiplies rather
+  // than adds, so repeat 10000 as i / repeat 10000 as j / ... is
+  // 100,000,000 loop iterations, not 20,000. Found by external review,
+  // 17-Aug-2026. Reset once per outermost send() (not on nested sends
+  // triggered from inside a handler, matching the sendDepth guard just
+  // above) so a long-lived page doesn't accumulate iterations across
+  // separate, legitimate events/ticks and eventually trip this for no
+  // reason — only genuinely-nested loops WITHIN one event can.
+  var stepCount = 0;
+  var MAX_STEPS = 200000;
+  function checkStepBudget() {
+    stepCount++;
+    if (stepCount > MAX_STEPS) {
+      throw new Error(
+        "Rosh programme exceeded the maximum of " + MAX_STEPS +
+        " loop iterations for one event (likely a runaway or deeply-nested loop) — execution stopped."
+      );
+    }
+  }
 
   // ── State manager ─────────────────────────────────────
   function get(key) {
@@ -269,6 +297,7 @@ var rosh = (function() {
 
   function send(event, payload) {
     if (sendDepth >= MAX_DEPTH) return;
+    if (sendDepth === 0) { stepCount = 0; }
     sendDepth++;
     try {
       // Inject payload into state
@@ -604,6 +633,7 @@ var rosh = (function() {
     interpolate: interpolate,
     on: on,
     send: send,
+    checkStepBudget: checkStepBudget,
     say: say,
     playAudio: playAudio,
     registerSound: registerSound,

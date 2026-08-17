@@ -1,3 +1,3 @@
 """Rosh language — parser, runtime, and composition engine."""
 
-__version__ = "0.9.9"
+__version__ = "0.9.10"

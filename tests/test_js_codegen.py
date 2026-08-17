@@ -422,6 +422,54 @@ class TestGeneratedJsExecution:
         assert "name" not in result["state"]
         assert result["output"] == ["Hello Grace"]
 
+    def test_nested_repeats_produce_the_same_total_as_the_python_runtime(self):
+        """Every generated loop reused the literal variable name `_ri`.
+        Harmless for two SIBLING repeats (they run sequentially, so
+        reusing the function-scoped `var` between them is fine), but a
+        genuine correctness bug for NESTED repeats: an inner loop
+        sharing `_ri` with its outer loop leaves `_ri` at the inner
+        loop's final value once the inner loop exits, corrupting the
+        outer loop's own `for` condition. A direct 3x4 nested repeat
+        returned 12 in the Python runtime but only 4 in generated JS.
+        Found by external review, 17-Aug-2026."""
+        result = _execute_js(
+            'create number total\n'
+            'repeat 3 as i\n'
+            '  repeat 4 as j\n'
+            '    set total to total + 1\n'
+            '  end\n'
+            'end'
+        )
+        assert result["state"]["total"] == 12
+
+    def test_nested_repeats_cannot_multiply_past_the_global_js_step_budget(self):
+        """The Python Runtime got a global execution-step budget (see
+        rosh-lang/tests/test_repeat.py) protecting SERVER-side execution
+        (the shared WS world's ROSH_COMMAND handler) — but generated JS
+        had no equivalent, so a program merely being opened by a
+        visitor (web pages auto-dispatch "start") could still freeze
+        their browser tab: repeat 10000 as i / repeat 10000 as j / ...
+        is 100,000,000 loop iterations, since each repeat's own 10,000
+        cap is per-loop, not total. Found by external review,
+        17-Aug-2026."""
+        node = shutil.which("node")
+        if node is None:
+            pytest.skip("node is required for generated JS execution tests")
+
+        compiled = compile_programme(parse_string(
+            'repeat 10000 as i\n'
+            '  repeat 10000 as j\n'
+            '    print "x"\n'
+            '  end\n'
+            'end'
+        ))
+        script = "\n".join([JS_RUNTIME_CORE, compiled.init_code])
+        result = subprocess.run(
+            [node], input=script, capture_output=True, text=True, check=False,
+        )
+        assert result.returncode != 0, "expected the step budget to throw, but the script ran to completion"
+        assert "exceeded the maximum" in result.stderr
+
 
 class TestCollectionCodegen:
     def test_add_remove_and_foreach_emit(self):

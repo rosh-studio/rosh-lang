@@ -8,6 +8,66 @@ that new keywords require discussion first. Undocumented internals (e.g.
 widget-specific properties like `.material`) may change without a version
 bump until they're promoted into the public spec.
 
+## 0.9.10 - 2026-08-17
+
+### Security
+
+This release closes every remaining gap from the `</script>`-breakout and
+code-injection bug class first found in 0.9.6/0.9.9 below, plus two new
+findings from a subsequent external review. **Anyone who installed
+`rosh-lang` between 0.9.9 and this release should upgrade immediately** —
+0.9.9 only contains the first two rounds of this fix (the CSS-attribute
+and JS-string-escaping sinks); everything below was fixed in source and
+on the live rosh.cloud portal (which vendors its own copy of this
+package) well before this release, but never previously published here.
+
+- **`</script>`-breakout XSS, two more sinks.** 0.9.9's `json.dumps()`
+  fix correctly escapes what's needed for valid JS-*string* syntax, but
+  that's not the same as "safe to embed inside an HTML
+  `<script>...</script>` block" — the HTML parser runs before the JS
+  parser and has no concept of JS string literals, so a literal
+  `</script>` anywhere in the JSON text closes the enclosing tag
+  regardless of how well-formed the JS string around it is. Fixed with a
+  new `_json_for_inline_script()` helper (escapes every literal `<` to
+  its Unicode escape) across two sinks: the sprite/audio data injected
+  into `web`/`phaser` targets, and a separate, previously-unfixed
+  `_threejs_asset_defaults()` sink in `threejs` reachable via an
+  object's own name.
+- **Raw JS code injection via `define`/`do` function names.**
+  `_safe_fn_name()` only replaced `-` and `.` before splicing a
+  `define <name>`/`do <name>` name directly into generated JS *source
+  code* — not a string context, so none of the above escaping applied.
+  A name like `x(){};(function(){...})();function y` closed the
+  function declaration early and ran arbitrary code immediately on
+  script load, no `do` call needed. Fixed by whitelisting the sanitised
+  identifier to `[A-Za-z0-9_]` only.
+- **The identical code-injection shape in `repeat N as <var>`'s
+  save-slot variable**, found by a follow-up review of the fix above —
+  same incomplete `-`/`.`-only sanitisation, same fix.
+- **Nested-loop DoS: no execution budget on generated JavaScript.** Each
+  `repeat` was independently capped at 10,000 iterations, but nesting
+  multiplies rather than adds — `repeat 10000 as i / repeat 10000 as j
+  / ...` is 100,000,000 loop iterations, not 20,000. Generated `web`
+  pages auto-dispatch a `start` event, so simply opening a malicious
+  published program could freeze a visitor's browser tab. Fixed with a
+  shared, per-event execution-step budget (`rosh.checkStepBudget()`,
+  200,000 iterations, reset once per outermost `send()` dispatch so a
+  long-lived page's legitimate cumulative work across many separate
+  events/ticks is never punished) — mirrors the equivalent budget
+  already added to the Python `Runtime` class for server-side execution
+  (e.g. a shared multiplayer world's live command handler), which
+  generated JS had no equivalent of until now.
+- **Nested `repeat` loops produced different, wrong results in
+  generated JavaScript versus the Python runtime.** Every generated
+  loop reused the literal variable name `_ri`; harmless for sibling
+  loops (they run sequentially) but a genuine correctness bug for
+  nested ones — `var` is function-scoped, not block-scoped, so an inner
+  loop's `_ri` overwrites its outer loop's, corrupting the outer loop's
+  own condition check the moment the inner loop exits. A direct 3×4
+  nested `repeat` returned 12 in the Python runtime but only 4 in
+  generated JS. Fixed by giving each `repeat` AST node its own loop
+  variable.
+
 ## 0.9.9 - 2026-08-16
 
 ### Security
