@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import io
 
+import pytest
+
 from rosh_lang.core.model import RepeatStatement, PrintStatement
 from rosh_lang.core.parser import parse_string
 from rosh_lang.core.runtime import Runtime
@@ -138,3 +140,34 @@ def test_runtime_repeat_max_guard():
         "repeat 99999\n  set n to n + 1\nend"
     ))
     assert rt.state["n"] == 10_000
+
+
+def test_nested_repeats_cannot_multiply_past_the_global_step_budget():
+    """Each repeat's own 10,000-iteration cap is a per-loop limit, not a
+    total one — nested loops multiply rather than add, so two levels of
+    "repeat 10000" is 100,000,000 executed statements, not 20,000. Found
+    exploitable as a same-process DoS against rosh-portal's shared,
+    single-worker, synchronous WS world-command loop (any guest's tiny
+    message could occupy the whole event loop for ~30s+, freezing every
+    connected user — see rosh-dev/BUGS.md's round-eight entry,
+    16-Aug-2026). Runtime._MAX_STEPS bounds the TOTAL statements executed
+    across one outermost run()/execute() call, regardless of nesting
+    depth, so this now aborts in well under a second instead of running
+    to completion.
+    """
+    import time
+
+    buf = io.StringIO()
+    rt = Runtime(output=buf)
+    programme = parse_string(
+        'repeat 10000 as i\n'
+        '  repeat 10000 as j\n'
+        '    print "x"\n'
+        '  end\n'
+        'end'
+    )
+    start = time.time()
+    with pytest.raises(RuntimeError, match="exceeded the maximum"):
+        rt.run(programme)
+    elapsed = time.time() - start
+    assert elapsed < 2.0, f"budget check took {elapsed:.2f}s — too slow to be a real DoS guard"

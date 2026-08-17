@@ -88,16 +88,43 @@ class Runtime:
         self._call_stack: set[str] = set()
         self._programme: Programme | None = None
         self._run_depth = 0
+        # Total-statement-execution budget for one outermost run()/execute()
+        # call, shared across however deep the call nests (repeat-in-repeat,
+        # send()-fired handlers, do-call bodies, ...). _MAX_REPEAT/
+        # _MAX_FOREACH below only cap a single loop's own iteration count —
+        # nested loops each get their own fresh budget, so they multiply
+        # rather than add (repeat 10000 as i / repeat 10000 as j / ... /
+        # end / end is 100,000,000 executed statements, not 20,000). That's
+        # cheap enough per-statement (~0.3µs) to be invisible for one
+        # request, but this Runtime also backs a live multiplayer world's
+        # shared, synchronous, single-worker WS command loop
+        # (rosh-portal/main.py's ROSH_COMMAND handler) — there, one small
+        # message from any connected guest can occupy the whole shared
+        # event loop for the extrapolated ~30s+ this multiplication allows,
+        # freezing every other user's every world, not just the sender's.
+        # Found by adversarial review, confirmed via direct interpreter
+        # benchmarking (16-Aug-2026). _exec_depth tracks whether an
+        # execute()/run() call is the outermost one (reset the budget) or a
+        # nested one (share the parent's budget, so the total across the
+        # whole call tree is what's actually bounded).
+        self._exec_depth = 0
+        self._step_count = 0
         # Tracks loaded components: namespace → {name, description, provides, exposes, alias}
         self.components: dict[str, dict[str, Any]] = {}
 
     # ── public API ────────────────────────────────────────────
+
+    _MAX_STEPS = 200_000
 
     def run(self, programme: Programme) -> None:
         """Execute a programme statement by statement."""
         if self._run_depth == 0:
             self._programme = programme
         self._run_depth += 1
+        fresh_budget = self._exec_depth == 0
+        if fresh_budget:
+            self._step_count = 0
+        self._exec_depth += 1
         try:
             stmts = programme.statements
             i = 0
@@ -116,9 +143,27 @@ class Runtime:
                 i += 1
         finally:
             self._run_depth -= 1
+            self._exec_depth -= 1
 
     def execute(self, stmt: Statement) -> Any:
         """Execute a single statement. Returns result for get."""
+        fresh_budget = self._exec_depth == 0
+        if fresh_budget:
+            self._step_count = 0
+        self._exec_depth += 1
+        try:
+            self._step_count += 1
+            if self._step_count > self._MAX_STEPS:
+                raise RuntimeError(
+                    f"Programme exceeded the maximum of {self._MAX_STEPS} executed "
+                    f"statements for one run (likely a runaway or deeply-nested "
+                    f"loop) — execution stopped."
+                )
+            return self._dispatch(stmt)
+        finally:
+            self._exec_depth -= 1
+
+    def _dispatch(self, stmt: Statement) -> Any:
         if isinstance(stmt, PrintStatement):
             self._exec_print(stmt)
         elif isinstance(stmt, CreateStatement):
