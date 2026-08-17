@@ -335,7 +335,10 @@ def _render_interactive(
     escaped_output = escape(text_output)
 
     # Build script block
-    script_parts = [JS_RUNTIME, "", "// ── Init ──", compiled.init_code]
+    script_parts = [
+        JS_RUNTIME, "", "// ── Budgeted bootstrap ──",
+        "rosh.runWithBudget(function() {", "// ── Init ──", compiled.init_code,
+    ]
 
     # Inject sprite data URIs for JS runtime syncAll(). Both key and value
     # go through _json_for_inline_script — sprite() lets a description that
@@ -405,6 +408,7 @@ def _render_interactive(
 
     if compiled.has_handlers:
         script_parts.extend(["", "// ── Handlers ──", compiled.handler_code])
+    script_parts.append("});")
     # Fire "start" event after all handlers are registered
     script_parts.append('rosh.send("start", {});')
     if compiled.needs_loop:

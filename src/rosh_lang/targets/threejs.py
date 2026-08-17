@@ -92,7 +92,10 @@ def render_threejs(
     compiled = compile_programme(programme, search_paths=search_paths, target="threejs")
 
     # Build script block
-    script_parts = [JS_RUNTIME_CORE, "", "// ── Init ──", compiled.init_code]
+    script_parts = [
+        JS_RUNTIME_CORE, "", "// ── Budgeted bootstrap ──",
+        "rosh.runWithBudget(function() {", "// ── Init ──", compiled.init_code,
+    ]
 
     # Inject audio data. Uses _json_for_inline_script for both key and
     # value, matching web.py/phaser.py's identical fix — not because this
@@ -115,6 +118,8 @@ def render_threejs(
 
     if compiled.has_handlers:
         script_parts.extend(["", "// ── Handlers ──", compiled.handler_code])
+
+    script_parts.append("});")
 
     # Three.js renderer layer (always included — it creates the scene)
     script_parts.extend(["", "// ── Three.js renderer ──", JS_RUNTIME_THREEJS])

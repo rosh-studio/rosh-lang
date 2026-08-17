@@ -8,6 +8,26 @@ that new keywords require discussion first. Undocumented internals (e.g.
 widget-specific properties like `.material`) may change without a version
 bump until they're promoted into the public spec.
 
+## 0.9.11 - 2026-08-17
+
+### Security
+
+- **Closed two bypasses in the generated-JavaScript execution budget.**
+  A `send` issued during top-level initialisation reset the counter on
+  every call, and `for each` iterations did not charge the counter at
+  all. Either path could still multiply nested 10,000-iteration loops
+  into 100 million synchronous operations on page load. Initialisation
+  and handler registration now run in one explicit budget scope, nested
+  sends inherit their caller's scope, and every `for each` item charges
+  the same 200,000-step total budget.
+
+### Fixed
+
+- Replaced process-specific `id(stmt)` loop identifiers with deterministic,
+  block-scoped `let` variables. Nested repeats — including repeats that reuse
+  the same loop-variable name — now restore their original state correctly,
+  including when the execution budget aborts a loop.
+
 ## 0.9.10 - 2026-08-17
 
 ### Security

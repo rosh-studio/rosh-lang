@@ -69,6 +69,13 @@ class TestThreejsPageStructure:
         html = render_threejs(parse_string('print "hello"'))
         assert 'document.getElementById("canvas")' not in html
 
+    def test_bootstrap_is_inside_one_execution_budget(self):
+        html = render_threejs(parse_string('print "hello"'))
+        start = html.index("rosh.runWithBudget(function() {")
+        init = html.index('rosh.appendOutput', start)
+        close = html.index("});\n\n// ── Three.js renderer", init)
+        assert start < init < close
+
 
 # ── JS runtime content ───────────────────────────────────────
 

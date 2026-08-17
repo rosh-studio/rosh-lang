@@ -61,6 +61,13 @@ class TestPhaserPageStructure:
         assert "GameScene" in html
         assert "Phaser.Game" in html
 
+    def test_bootstrap_is_inside_one_execution_budget(self):
+        html = render_phaser(parse_string('print "hello"'))
+        start = html.index("rosh.runWithBudget(function() {")
+        init = html.index('rosh.appendOutput', start)
+        close = html.index("});\n\n// ── Phaser renderer", init)
+        assert start < init < close
+
 
 # ── Static programmes ────────────────────────────────────────
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import textwrap
@@ -12,6 +13,16 @@ import pytest
 from rosh_lang.core.parser import parse_string
 from rosh_lang.targets._js_codegen import compile_programme, _escape_js
 from rosh_lang.targets._js_runtime import JS_RUNTIME_CORE
+
+
+def _budgeted_bootstrap(compiled) -> str:
+    """Execute generated init/handler registration as a target does."""
+    return "\n".join([
+        "rosh.runWithBudget(function() {",
+        compiled.init_code,
+        compiled.handler_code,
+        "});",
+    ])
 
 
 def _execute_js(source: str, interaction: str = "") -> dict:
@@ -24,9 +35,7 @@ def _execute_js(source: str, interaction: str = "") -> dict:
     script = "\n".join([
         JS_RUNTIME_CORE,
         "// -- generated init --",
-        compiled.init_code,
-        "// -- generated handlers --",
-        compiled.handler_code,
+        _budgeted_bootstrap(compiled),
         "// -- test interaction --",
         interaction,
         textwrap.dedent(
@@ -463,12 +472,98 @@ class TestGeneratedJsExecution:
             '  end\n'
             'end'
         ))
-        script = "\n".join([JS_RUNTIME_CORE, compiled.init_code])
+        script = "\n".join([JS_RUNTIME_CORE, _budgeted_bootstrap(compiled)])
         result = subprocess.run(
             [node], input=script, capture_output=True, text=True, check=False,
         )
         assert result.returncode != 0, "expected the step budget to throw, but the script ran to completion"
         assert "exceeded the maximum" in result.stderr
+
+    def test_top_level_send_cannot_reset_the_step_budget(self):
+        """A send from init must not reset its enclosing execution."""
+        node = shutil.which("node")
+        if node is None:
+            pytest.skip("node is required for generated JS execution tests")
+
+        compiled = compile_programme(parse_string(
+            "event ping\n"
+            "repeat 10000\n"
+            "  repeat 10000\n"
+            "    send ping\n"
+            "  end\n"
+            "end"
+        ))
+        result = subprocess.run(
+            [node],
+            input="\n".join([JS_RUNTIME_CORE, _budgeted_bootstrap(compiled)]),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode != 0, "send reset the enclosing init execution budget"
+        assert "exceeded the maximum" in result.stderr
+
+    def test_nested_foreach_charges_the_shared_step_budget(self):
+        """Nested per-list caps must not multiply past the total budget."""
+        node = shutil.which("node")
+        if node is None:
+            pytest.skip("node is required for generated JS execution tests")
+
+        compiled = compile_programme(parse_string(
+            "create list items\n"
+            "repeat 10000\n"
+            "  add 1 to items\n"
+            "end\n"
+            "for each outer in items\n"
+            "  for each inner in items\n"
+            "    set total to 1\n"
+            "  end\n"
+            "end"
+        ))
+        result = subprocess.run(
+            [node],
+            input="\n".join([JS_RUNTIME_CORE, _budgeted_bootstrap(compiled)]),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode != 0, "nested for-each loops bypassed the shared budget"
+        assert "exceeded the maximum" in result.stderr
+
+    def test_budget_resets_between_outermost_events(self):
+        result = _execute_js(
+            "create number ticks\n"
+            "when ping\n"
+            "  repeat 1000\n"
+            "    set ticks to ticks + 1\n"
+            "  end\n"
+            "end",
+            interaction="for (let i = 0; i < 500; i++) { rosh.send(\"ping\", {}); }",
+        )
+        assert result["state"]["ticks"] == 500_000
+
+    def test_nested_repeat_using_same_variable_restores_original_value(self):
+        result = _execute_js(
+            "create number i\n"
+            "set i to 99\n"
+            "repeat 2 as i\n"
+            "  repeat 2 as i\n"
+            "    set seen to i\n"
+            "  end\n"
+            "end"
+        )
+        assert result["state"]["i"] == 99
+
+    def test_repeat_loop_identifiers_are_deterministic_and_block_scoped(self):
+        compiled = compile_programme(parse_string(
+            "repeat 2\n"
+            "  repeat 2\n"
+            "    print x\n"
+            "  end\n"
+            "end"
+        ))
+        assert compiled.init_code.count("for (let _ri") == 2
+        assert not re.search(r"_ri_\d+", compiled.init_code)
 
 
 class TestCollectionCodegen:

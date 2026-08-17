@@ -23,9 +23,10 @@ var rosh = (function() {
   var handlers = {};
   var sendDepth = 0;
   var MAX_DEPTH = 10;
-  // Total-loop-iteration budget for one outermost send() dispatch (a
-  // single event/tick — click, keydown, one animation frame's "update"
-  // — or the page's one-time init_code run before the first send()).
+  var executionDepth = 0;
+  // Total-loop-iteration budget for one outermost synchronous execution
+  // (a single event/tick — click, keydown, one animation frame's "update"
+  // — or the page's one-time init/handler-registration bootstrap).
   // Mirrors the Python Runtime's _MAX_STEPS (rosh-lang/core/runtime.py)
   // added earlier, but that only protects SERVER-side execution (the
   // shared WS world's ROSH_COMMAND handler) — generated JS had no
@@ -35,11 +36,10 @@ var rosh = (function() {
   // (_MAX_REPEAT-equivalent in codegen), but nesting multiplies rather
   // than adds, so repeat 10000 as i / repeat 10000 as j / ... is
   // 100,000,000 loop iterations, not 20,000. Found by external review,
-  // 17-Aug-2026. Reset once per outermost send() (not on nested sends
-  // triggered from inside a handler, matching the sendDepth guard just
-  // above) so a long-lived page doesn't accumulate iterations across
-  // separate, legitimate events/ticks and eventually trip this for no
-  // reason — only genuinely-nested loops WITHIN one event can.
+  // 17-Aug-2026. runWithBudget() resets once per outermost execution,
+  // while nested sends inherit that execution's counter. This prevents
+  // top-level loops from erasing their own budget by sending an event,
+  // without accumulating work across separate legitimate events/ticks.
   var stepCount = 0;
   var MAX_STEPS = 200000;
   function checkStepBudget() {
@@ -49,6 +49,19 @@ var rosh = (function() {
         "Rosh programme exceeded the maximum of " + MAX_STEPS +
         " loop iterations for one event (likely a runaway or deeply-nested loop) — execution stopped."
       );
+    }
+  }
+
+  function runWithBudget(action) {
+    // Budget the complete synchronous execution, not just an individual
+    // send(). Top-level programme initialisation may itself send events;
+    // those nested sends must share the init budget rather than resetting it.
+    if (executionDepth === 0) { stepCount = 0; }
+    executionDepth++;
+    try {
+      return action();
+    } finally {
+      executionDepth--;
     }
   }
 
@@ -167,12 +180,16 @@ var rosh = (function() {
     if (!Array.isArray(list)) return;
     var had = has(variable);
     var previous = get(variable);
-    list.slice(0, 10000).forEach(function(value) {
-      set(variable, value);
-      action();
-    });
-    if (had) set(variable, previous);
-    else unset(variable);
+    try {
+      list.slice(0, 10000).forEach(function(value) {
+        checkStepBudget();
+        set(variable, value);
+        action();
+      });
+    } finally {
+      if (had) set(variable, previous);
+      else unset(variable);
+    }
   }
 
   // ── Expression evaluator ──────────────────────────────
@@ -297,36 +314,37 @@ var rosh = (function() {
 
   function send(event, payload) {
     if (sendDepth >= MAX_DEPTH) return;
-    if (sendDepth === 0) { stepCount = 0; }
-    sendDepth++;
-    try {
-      // Inject payload into state
-      var originals = {};
-      var missing = [];
-      if (payload) {
-        for (var k in payload) {
-          if (k in state) originals[k] = state[k];
-          else missing.push(k);
-          state[k] = payload[k];
-        }
-      }
+    return runWithBudget(function() {
+      sendDepth++;
       try {
-        var list = handlers[event] || [];
-        for (var i = 0; i < list.length; i++) {
-          list[i].fn(payload || {});
-        }
-      } finally {
-        // Restore originals
+        // Inject payload into state
+        var originals = {};
+        var missing = [];
         if (payload) {
           for (var k in payload) {
-            if (k in originals) state[k] = originals[k];
-            else delete state[k];
+            if (k in state) originals[k] = state[k];
+            else missing.push(k);
+            state[k] = payload[k];
           }
         }
+        try {
+          var list = handlers[event] || [];
+          for (var i = 0; i < list.length; i++) {
+            list[i].fn(payload || {});
+          }
+        } finally {
+          // Restore originals
+          if (payload) {
+            for (var k in payload) {
+              if (k in originals) state[k] = originals[k];
+              else delete state[k];
+            }
+          }
+        }
+      } finally {
+        sendDepth--;
       }
-    } finally {
-      sendDepth--;
-    }
+    });
   }
 
   // ── Audio engine ──────────────────────────────────────
@@ -633,6 +651,7 @@ var rosh = (function() {
     interpolate: interpolate,
     on: on,
     send: send,
+    runWithBudget: runWithBudget,
     checkStepBudget: checkStepBudget,
     say: say,
     playAudio: playAudio,

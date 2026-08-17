@@ -38,6 +38,16 @@ class TestPrintOutput:
         assert "<!DOCTYPE html>" in html
         assert "rosh" in html
 
+    def test_init_and_handlers_share_one_execution_budget(self):
+        html = render_html(parse_string(
+            "event ping\nsend ping\nwhen ping\n  print ok\nend"
+        ))
+        start = html.index("rosh.runWithBudget(function() {")
+        init = html.index('rosh.send("ping")', start)
+        handler = html.index('rosh.on("ping"', init)
+        close = html.index("});\nrosh.send(\"start\", {});", handler)
+        assert start < init < handler < close
+
 
 # ── Visual objects ────────────────────────────────────────────
 

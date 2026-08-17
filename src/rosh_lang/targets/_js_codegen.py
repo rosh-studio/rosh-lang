@@ -451,22 +451,6 @@ def _emit_do(stmt: DoStatement) -> str:
 def _emit_repeat(stmt: RepeatStatement, target: str = "web") -> str:
     """Emit a JS for loop from a repeat block."""
     body_js = _emit_body(stmt.body, target=target)
-    # Every generated loop used the literal name `_ri` — harmless for two
-    # SIBLING repeats (they run sequentially, so reusing the function-
-    # scoped `var` between them is fine), but a genuine correctness bug
-    # for NESTED repeats: `var` is function-scoped, not block-scoped, so
-    # an inner loop sharing `_ri` with its outer loop leaves `_ri` at the
-    # inner loop's final value once the inner loop exits, corrupting the
-    # outer loop's own `for (var _ri = ...; _ri <= N; _ri++)` condition
-    # check. Confirmed via a real Node execution: a 3x4 nested repeat
-    # gave 12 in the Python runtime but only 4 in generated JS (found by
-    # external review, 17-Aug-2026). Using `id(stmt)` gives each repeat
-    # AST node its own loop variable without threading a depth parameter
-    # through this file's whole mutually-recursive emitter call graph
-    # (_emit_body/_emit_if/_emit_repeat/_emit_foreach/_emit_define all
-    # call each other) — simplest fix that can't collide between two
-    # ACTUALLY-nested loops, which is the only case that mattered.
-    ri_var = f"_ri_{abs(id(stmt))}"
     count_expr = _escape_js(stmt.count)
     # If count is a literal int, use directly; otherwise resolve from state
     try:
@@ -477,7 +461,8 @@ def _emit_repeat(stmt: RepeatStatement, target: str = "web") -> str:
 
     if stmt.var:
         var = _escape_js(stmt.var)
-        # Use a name-scoped save slot so nested repeat-as loops don't clobber each other.
+        # Save slots and the iterator live in an explicit block scope, so
+        # nested repeats may safely reuse the same Rosh variable name.
         # `safe` is spliced unquoted into bare JS identifier positions below
         # (_had_{safe}, _prev_{safe}) — the same round-5 mistake
         # (_safe_fn_name replacing only "-"/"." before a code-generation
@@ -490,20 +475,30 @@ def _emit_repeat(stmt: RepeatStatement, target: str = "web") -> str:
         # the same way _safe_fn_name was fixed.
         safe = re.sub(r"[^A-Za-z0-9_]", "_", stmt.var)
         return (
-            f'var _had_{safe} = rosh.has("{var}"), _prev_{safe} = rosh.get("{var}");\n'
-            f"for (var {ri_var} = 1; {ri_var} <= Math.min({count_js}, 10000); {ri_var}++) {{\n"
-            f"  rosh.checkStepBudget();\n"
-            f'  rosh.set("{var}", {ri_var});\n'
+            "{\n"
+            f"  const _repeatCount = Math.min({count_js}, 10000);\n"
+            f'  const _had_{safe} = rosh.has("{var}");\n'
+            f'  const _prev_{safe} = rosh.get("{var}");\n'
+            "  try {\n"
+            "    for (let _ri = 1; _ri <= _repeatCount; _ri++) {\n"
+            "      rosh.checkStepBudget();\n"
+            f'      rosh.set("{var}", _ri);\n'
             f"{body_js}"
-            f"}}\n"
-            f'if (_had_{safe}) {{ rosh.set("{var}", _prev_{safe}); }} else {{ rosh.unset("{var}"); }}'
+            "    }\n"
+            "  } finally {\n"
+            f'    if (_had_{safe}) {{ rosh.set("{var}", _prev_{safe}); }} else {{ rosh.unset("{var}"); }}\n'
+            "  }\n"
+            "}"
         )
     else:
         return (
-            f"for (var {ri_var} = 0; {ri_var} < Math.min({count_js}, 10000); {ri_var}++) {{\n"
-            f"  rosh.checkStepBudget();\n"
+            "{\n"
+            f"  const _repeatCount = Math.min({count_js}, 10000);\n"
+            "  for (let _ri = 0; _ri < _repeatCount; _ri++) {\n"
+            "    rosh.checkStepBudget();\n"
             f"{body_js}"
-            f"}}"
+            "  }\n"
+            "}"
         )
 
 

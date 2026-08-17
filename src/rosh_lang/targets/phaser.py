@@ -73,7 +73,10 @@ def render_phaser(
     compiled = compile_programme(programme, search_paths=search_paths)
 
     # Build script block
-    script_parts = [JS_RUNTIME_CORE, "", "// ── Init ──", compiled.init_code]
+    script_parts = [
+        JS_RUNTIME_CORE, "", "// ── Budgeted bootstrap ──",
+        "rosh.runWithBudget(function() {", "// ── Init ──", compiled.init_code,
+    ]
 
     # Inject sprite data URIs. See web.py's _json_for_inline_script for why
     # plain json.dumps() alone is not enough — it escapes what's needed
@@ -126,6 +129,8 @@ def render_phaser(
 
     if compiled.has_handlers:
         script_parts.extend(["", "// ── Handlers ──", compiled.handler_code])
+
+    script_parts.append("});")
 
     # Phaser renderer layer (always included — it creates the game)
     script_parts.extend(["", "// ── Phaser renderer ──", JS_RUNTIME_PHASER])

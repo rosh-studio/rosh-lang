@@ -216,7 +216,7 @@ class TestPortableRepeat:
         assert rt.state["i"] == 99
 
     def test_js_emits_for_loop(self):
-        assert "for (var _ri" in _js("repeat 3\n  print \"x\"\nend")
+        assert "for (let _ri" in _js("repeat 3\n  print \"x\"\nend")
 
     def test_js_var_restores_prior(self):
         """JS emits save/restore pattern, not just unset."""
