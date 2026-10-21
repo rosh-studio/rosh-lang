@@ -1,0 +1,146 @@
+# demo: Whack-a-Mole
+# description: Timer widget auto-counts down and fires timer_done — click the moles!
+# badges: Click, Game Loop, Widgets
+
+# Limit console to 3 lines
+set _max_output to 3
+
+# === WIDGETS — timer auto-ticks, fires timer_done at zero ===
+use score text_color "#ffcc00" font_size "18px"
+use timer total 30 running 0 x 0.72 y 0.02 text_color "#ff6666" font_size "18px"
+
+# === EVENTS ===
+event show-mole1
+event show-mole2
+event hide-mole1
+event hide-mole2
+
+# === HOLES ===
+create object hole1
+set hole1.x to 0.10
+set hole1.y to 0.25
+set hole1.width to 0.22
+set hole1.height to 0.2
+set hole1.color to "#2a1a0a"
+
+create object hole2
+set hole2.x to 0.39
+set hole2.y to 0.25
+set hole2.width to 0.22
+set hole2.height to 0.2
+set hole2.color to "#2a1a0a"
+
+create object hole3
+set hole3.x to 0.68
+set hole3.y to 0.25
+set hole3.width to 0.22
+set hole3.height to 0.2
+set hole3.color to "#2a1a0a"
+
+create object hole4
+set hole4.x to 0.10
+set hole4.y to 0.55
+set hole4.width to 0.22
+set hole4.height to 0.2
+set hole4.color to "#2a1a0a"
+
+create object hole5
+set hole5.x to 0.39
+set hole5.y to 0.55
+set hole5.width to 0.22
+set hole5.height to 0.2
+set hole5.color to "#2a1a0a"
+
+create object hole6
+set hole6.x to 0.68
+set hole6.y to 0.55
+set hole6.width to 0.22
+set hole6.height to 0.2
+set hole6.color to "#2a1a0a"
+
+# === MOLES ===
+create object mole1
+set mole1.x to 0.14
+set mole1.y to 0.28
+set mole1.width to 0.14
+set mole1.height to 0.14
+set mole1.color to "#8b6914"
+set mole1.visible to 0
+sprite mole1 "brown ball"
+
+create object mole2
+set mole2.x to 0.43
+set mole2.y to 0.58
+set mole2.width to 0.14
+set mole2.height to 0.14
+set mole2.color to "#8b6914"
+set mole2.visible to 0
+sprite mole2 "brown ball"
+
+# === SOUNDS ===
+sound whack "hit impact"
+
+# === MOLE CYCLE ===
+when show-mole1
+  if timer.seconds > 0
+    set mole1.visible to 1
+    after 2 send hide-mole1
+  end
+end
+
+when hide-mole1
+  set mole1.visible to 0
+  if timer.seconds > 0
+    after 3 send show-mole1
+  end
+end
+
+when show-mole2
+  if timer.seconds > 0
+    set mole2.visible to 1
+    after 1 send hide-mole2
+  end
+end
+
+when hide-mole2
+  set mole2.visible to 0
+  if timer.seconds > 0
+    after 2 send show-mole2
+  end
+end
+
+# === CLICK TO WHACK ===
+when click mole1
+  if mole1.visible == 1
+    set score.value to score.value + 10
+    set mole1.visible to 0
+    play whack
+    print "Whack! +10"
+  end
+end
+
+when click mole2
+  if mole2.visible == 1
+    set score.value to score.value + 10
+    set mole2.visible to 0
+    play whack
+    print "Whack! +10"
+  end
+end
+
+# === TIMER DONE — auto-fires when seconds hits 0 ===
+when timer_done
+  set mole1.visible to 0
+  set mole2.visible to 0
+  print "TIME'S UP — Score: {score.value}"
+end
+
+# === START ===
+when start
+  set score.value to 0
+  set timer.seconds to 30
+  set timer._timer_running to 1
+  print "Click the moles! 30 seconds."
+  after 1 send show-mole1
+  after 2 send show-mole2
+end

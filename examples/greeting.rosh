@@ -1,0 +1,75 @@
+# Greeting Card — static display with sprites
+# Run: rosh examples/greeting.rosh --target web --run
+#
+# Pattern: create + set + sprite — no events, no game loop
+# Shows: object layout, colors, labels, procedural sprites
+
+print "You're invited!"
+
+# === HEADER ===
+create object banner
+set banner.x to 0.15
+set banner.y to 0.08
+set banner.width to 0.7
+set banner.height to 0.12
+set banner.color to "#e94560"
+set banner.label to "Party Time"
+
+# === DECORATIONS ===
+create object star1
+set star1.x to 0.1
+set star1.y to 0.28
+set star1.width to 0.08
+set star1.height to 0.08
+set star1.color to "#ffd700"
+sprite star1 "gold star"
+
+create object star2
+set star2.x to 0.82
+set star2.y to 0.28
+set star2.width to 0.08
+set star2.height to 0.08
+set star2.color to "#ffd700"
+sprite star2 "gold star"
+
+create object crystal1
+set crystal1.x to 0.25
+set crystal1.y to 0.30
+set crystal1.width to 0.06
+set crystal1.height to 0.06
+set crystal1.color to "#00d2ff"
+sprite crystal1 "blue crystal"
+
+create object crystal2
+set crystal2.x to 0.69
+set crystal2.y to 0.30
+set crystal2.width to 0.06
+set crystal2.height to 0.06
+set crystal2.color to "#00d2ff"
+sprite crystal2 "blue crystal"
+
+# === MESSAGE ===
+create object msg
+set msg.x to 0.2
+set msg.y to 0.45
+set msg.width to 0.6
+set msg.height to 0.08
+set msg.color to "#533483"
+set msg.label to "Saturday at 7pm"
+
+create object location
+set location.x to 0.2
+set location.y to 0.58
+set location.width to 0.6
+set location.height to 0.06
+set location.color to "#333"
+set location.label to "123 Rosh Street"
+
+# === FOOTER ===
+create object foot
+set foot.x to 0.25
+set foot.y to 0.78
+set foot.width to 0.5
+set foot.height to 0.05
+set foot.color to "#222"
+set foot.label to "RSVP to hello@rosh.cloud"

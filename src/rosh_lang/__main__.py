@@ -1,0 +1,293 @@
+"""Rosh CLI — run programmes or start the REPL."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+
+from rich.console import Console
+from rich.theme import Theme
+
+from rosh_lang import __version__
+from rosh_lang.core.parser import ParseError, parse_file
+from rosh_lang.repl import start_repl
+from rosh_lang.repl.runtime_adapter import RuntimeAdapter
+
+# ── Theme ──────────────────────────────────────────────────────
+
+_THEME = Theme({
+    "rosh.keyword": "bold cyan",
+    "rosh.value": "green",
+    "rosh.type": "dim",
+    "rosh.error": "bold red",
+    "rosh.warn": "yellow",
+    "rosh.prompt": "bold white",
+    "rosh.continuation": "dim white",
+    "rosh.brand": "bold magenta",
+    "rosh.muted": "dim",
+    "rosh.key": "cyan",
+    "rosh.heading": "bold underline",
+})
+
+console = Console(theme=_THEME)
+
+
+# ── CLI entry ──────────────────────────────────────────────────
+
+
+_SUBCOMMANDS_HELP = """\
+Subcommands (dispatched before the options above; run "rosh new --help"
+for help, where supported):
+  new <template> <name>    Scaffold a starter .rosh file (hello, game, app)
+  library ...              Inspect the bundled widget library
+  assets ...               Search/register semantic asset providers
+  create ...               Generate a programme from a prompt (needs [ai] extra)
+  register / login/logout  Manage a rosh.cloud account
+  publish <file>           Upload a compiled programme to rosh.cloud
+  config ...               Manage stored API keys
+"""
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the argparse parser for the rosh CLI."""
+    parser = argparse.ArgumentParser(
+        prog="rosh",
+        description="rosh — one script, many worlds",
+        epilog=_SUBCOMMANDS_HELP,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=True,
+    )
+    parser.add_argument(
+        "file",
+        nargs="?",
+        default=None,
+        help="Rosh programme file to run",
+    )
+    parser.add_argument(
+        "-c", "--command",
+        help="Execute inline Rosh code",
+    )
+    parser.add_argument(
+        "-i", "--interactive",
+        action="store_true",
+        help="Run file or command, then enter the REPL with state preserved",
+    )
+    parser.add_argument(
+        "--version", "-V",
+        action="version",
+        version=f"rosh {__version__}",
+    )
+    parser.add_argument(
+        "--target", "-t",
+        choices=["terminal", "web", "phaser", "threejs", "scratch", "world"],
+        default="terminal",
+        help="Output target (default: terminal)",
+    )
+    parser.add_argument(
+        "--run", "-r",
+        action="store_true",
+        help="Auto-open browser (web target only)",
+    )
+    parser.add_argument(
+        "--url",
+        help="rosh-world WS URL (world target only; overrides connect world ... in script)",
+    )
+    parser.add_argument(
+        "--world-key",
+        dest="world_key",
+        help="rosh-world API key (world target; overrides ROSH_WORLD_KEY env var)",
+    )
+    parser.add_argument(
+        "--actor",
+        default="rosh-agent",
+        help="Actor name to join as (world target only)",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+
+    # No args at all → REPL (skip argparse to avoid help/version intercept)
+    if not argv:
+        start_repl()
+        return 0
+
+    # "rosh library ..." — handle before argparse
+    if argv[0] == "library":
+        from rosh_lang.cli.library_cli import library_main
+        library_main(argv[1:])
+        return 0
+
+    # "rosh assets ..." — asset request/provider helpers
+    if argv[0] == "assets":
+        from rosh_lang.cli.assets_cli import assets_main
+        assets_main(argv[1:])
+        return 0
+
+    # "rosh new ..." — handle before argparse
+    if argv[0] == "new":
+        from rosh_lang.cli.scaffolder import scaffold
+        scaffold(argv[1:])
+        return 0
+
+    # "rosh register" — open registration page
+    if argv[0] == "register":
+        from rosh_lang.cli.cloud import cmd_register
+        cmd_register(argv[1:])
+        return 0
+
+    # "rosh login" — authenticate with rosh.cloud
+    if argv[0] == "login":
+        from rosh_lang.cli.cloud import cmd_login
+        cmd_login(argv[1:])
+        return 0
+
+    # "rosh logout" — clear local session
+    if argv[0] == "logout":
+        from rosh_lang.cli.cloud import cmd_logout
+        cmd_logout(argv[1:])
+        return 0
+
+    # "rosh create ..." — AI generation
+    if argv[0] == "create":
+        from rosh_lang.cli.cloud import cmd_create
+        cmd_create(argv[1:])
+        return 0
+
+    # "rosh publish ..." — upload to rosh.cloud
+    if argv[0] == "publish":
+        from rosh_lang.cli.cloud import cmd_publish
+        cmd_publish(argv[1:])
+        return 0
+
+    # "rosh config ..." — API key management
+    if argv[0] == "config":
+        from rosh_lang.cli.cloud import cmd_config
+        cmd_config(argv[1:])
+        return 0
+
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    if args.file and args.command:
+        console.print("[rosh.error]Error:[/] cannot use both a file and --command")
+        return 2
+
+    if args.interactive and args.target != "terminal":
+        console.print("[rosh.error]Error:[/] --interactive only works with --target terminal")
+        return 2
+
+    if args.command:
+        adapter = RuntimeAdapter()
+        try:
+            adapter.run_source(args.command, source="<command>")
+        except Exception as exc:
+            error = adapter.format_error(exc)
+            console.print(f"[rosh.error]{error.kind.title()}Error:[/] {error.message}")
+            return 1
+        if args.interactive:
+            start_repl(runtime=adapter.runtime)
+        return 0
+
+    if args.file is None:
+        start_repl()
+        return 0
+
+    from pathlib import Path
+
+    path = Path(args.file)
+    if not path.exists():
+        console.print(f"[rosh.error]Error:[/] file not found: {args.file}")
+        return 1
+
+    if args.interactive:
+        adapter = RuntimeAdapter()
+        try:
+            adapter.run_file(path)
+        except ParseError as e:
+            console.print(f"[rosh.error]ParseError:[/] {e}")
+            return 1
+        start_repl(runtime=adapter.runtime)
+        return 0
+
+    try:
+        programme = parse_file(path, allow_extensions=(args.target == "world"))
+    except ParseError as e:
+        console.print(f"[rosh.error]ParseError:[/] {e}")
+        return 1
+
+    if args.target == "world":
+        from rosh_lang.targets.world import run_world, WorldError
+        try:
+            run_world(
+                programme,
+                url=args.url or "",
+                api_key=args.world_key or "",
+                actor=args.actor,
+            )
+        except WorldError as exc:
+            console.print(f"[rosh.error]WorldError:[/] {exc}")
+            return 1
+        except ValueError as exc:
+            console.print(f"[rosh.error]Error:[/] {exc}")
+            return 1
+    elif args.target == "web":
+        from rosh_lang.targets.web import serve_web
+        serve_web(programme, auto_open=args.run)
+    elif args.target == "phaser":
+        from rosh_lang.targets.phaser import serve_phaser
+        serve_phaser(programme, auto_open=args.run)
+    elif args.target == "threejs":
+        from rosh_lang.targets.threejs import serve_threejs, render_threejs
+        from rosh_lang.targets._js_codegen import compile_programme
+        import json as _json
+        # Compile first so we can surface unknown-object requests before serving
+        compiled = compile_programme(programme, target="threejs")
+        if compiled.asset_requests:
+            names = ", ".join(r["object"] for r in compiled.asset_requests)
+            requests_path = path.with_suffix(".asset-requests.json")
+            requests_path.write_text(
+                _json.dumps(compiled.asset_requests, indent=2), encoding="utf-8"
+            )
+            console.print(
+                f"[rosh.warn]Unknown objects ({len(compiled.asset_requests)}):[/] {names}\n"
+                f"  Requests saved to [rosh.key]{requests_path}[/]\n"
+                f"  Run: [rosh.value]rosh assets search {requests_path} "
+                f"--provider sketchfab --save review.json[/]"
+            )
+        serve_threejs(programme, auto_open=args.run)
+    elif args.target == "scratch":
+        from rosh_lang.targets.scratch import render_scratch_sb3
+        import warnings as _warnings
+        out_path = path.with_suffix(".sb3")
+        # Both scratch.py's own warnings (e.g. "collision handler references
+        # unknown sprite") and zipfile's internal "Duplicate name" warning
+        # otherwise print as raw "file.py:188: UserWarning: ..." tracebacks
+        # with internal paths and line numbers — looks like a crash even
+        # though the export completes fine. Capture and reprint them
+        # through the same console the rest of the CLI uses.
+        with _warnings.catch_warnings(record=True) as caught:
+            _warnings.simplefilter("always")
+            out_path.write_bytes(render_scratch_sb3(programme))
+        for w in caught:
+            console.print(f"[rosh.warn]Warning:[/] {w.message}")
+        console.print(f"[rosh.brand]Wrote Scratch project:[/] {out_path}")
+    elif args.target == "hytopia":
+        from rosh_lang.targets.hytopia import serve_hytopia
+        serve_hytopia(programme, auto_open=args.run)
+    else:
+        from rosh_lang.targets.terminal import run_terminal
+        # A runtime refusal ("'a' already exists…") is a message for the
+        # person who wrote the file, not a Python traceback.
+        try:
+            run_terminal(programme)
+        except (KeyError, RuntimeError, ValueError) as exc:
+            message = exc.args[0] if exc.args else str(exc)
+            console.print(f"[rosh.error]Error:[/] {path}: {message}")
+            return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

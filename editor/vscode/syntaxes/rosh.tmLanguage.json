@@ -1,0 +1,104 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Rosh",
+  "scopeName": "source.rosh",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#constants" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.rosh",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.flow.rosh",
+          "match": "\\b(if|else|end|when|on|go|repeat|after|for|each)\\b"
+        },
+        {
+          "name": "keyword.declaration.rosh",
+          "match": "\\b(create|set|define|do|use|event)\\b"
+        },
+        {
+          "name": "keyword.type.rosh",
+          "match": "\\b(object|objects|number|string|list|scene)\\b"
+        },
+        {
+          "name": "keyword.operator.rosh",
+          "match": "\\b(to|from|in|as|with|and|or|not|is|where)\\b|==|!=|>=|<=|>|<|\\+|-|\\*|/"
+        },
+        {
+          "name": "keyword.other.io.rosh",
+          "match": "\\b(print|say|get|look)\\b"
+        },
+        {
+          "name": "keyword.other.event.rosh",
+          "match": "\\b(send|connect)\\b"
+        },
+        {
+          "name": "keyword.other.object.rosh",
+          "match": "\\b(add|remove|destroy|sprite|sound|play|animate|background)\\b"
+        },
+        {
+          "name": "keyword.other.math.rosh",
+          "match": "\\b(random|clamp|count\\s+of)\\b"
+        },
+        {
+          "name": "variable.other.event.rosh",
+          "match": "\\b(start|update|click|keydown|keyup|collision|game_over|game_start|game_restart|scene_enter|scene_exit|destroy|timer_done)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.rosh",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "variable.other.interpolation.rosh",
+              "match": "\\{[^}]+\\}"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.rosh",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "variable.other.interpolation.rosh",
+              "match": "\\{[^}]+\\}"
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.rosh",
+          "match": "\\b-?\\d+(\\.\\d+)?\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.rosh",
+          "match": "\\b(true|false|nothing)\\b"
+        }
+      ]
+    }
+  }
+}

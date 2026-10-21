@@ -1,0 +1,184 @@
+# demo: Museum Asset Library
+# description: A Pictish heritage room using the bundled asset registry — display cases, artefacts, lighting.
+# badges: 3D, assets, museum
+# target: threejs
+
+# ── Floor and walls (implied by background)
+background "#1a1a1e"
+
+# ── Display cases ────────────────────────────────────────────────────────────
+
+create object case_left
+set case_left.x to -3
+set case_left.y to 0
+set case_left.z to 0
+set case_left.width to 0.8
+set case_left.height to 1.2
+set case_left.depth to 0.8
+set case_left.color to "lightblue"
+set case_left.shape to "box"
+set case_left.label to "Case I"
+
+create object case_right
+set case_right.x to 3
+set case_right.y to 0
+set case_right.z to 0
+set case_right.width to 0.8
+set case_right.height to 1.2
+set case_right.depth to 0.8
+set case_right.color to "lightblue"
+set case_right.shape to "box"
+set case_right.label to "Case II"
+
+create object case_centre
+set case_centre.x to 0
+set case_centre.y to 0
+set case_centre.z to -2
+set case_centre.width to 1.0
+set case_centre.height to 0.9
+set case_centre.depth to 1.0
+set case_centre.color to "lightblue"
+set case_centre.shape to "box"
+set case_centre.label to "Featured"
+
+# ── Pedestals ────────────────────────────────────────────────────────────────
+
+create object pedestal_left
+set pedestal_left.x to -3
+set pedestal_left.y to 0
+set pedestal_left.z to 2
+set pedestal_left.width to 0.5
+set pedestal_left.height to 1.0
+set pedestal_left.depth to 0.5
+set pedestal_left.color to "white"
+set pedestal_left.shape to "box"
+
+create object pedestal_right
+set pedestal_right.x to 3
+set pedestal_right.y to 0
+set pedestal_right.z to 2
+set pedestal_right.width to 0.5
+set pedestal_right.height to 1.0
+set pedestal_right.depth to 0.5
+set pedestal_right.color to "white"
+set pedestal_right.shape to "box"
+
+# ── Artefacts ─────────────────────────────────────────────────────────────────
+
+create object stone
+set stone.x to -3
+set stone.y to 1.3
+set stone.z to 2
+set stone.width to 0.6
+set stone.height to 1.5
+set stone.depth to 0.2
+set stone.color to "grey"
+set stone.shape to "box"
+set stone.label to "Pictish Stone"
+
+create object brooch
+set brooch.x to 3
+set brooch.y to 1.4
+set brooch.z to 2
+set brooch.width to 0.3
+set brooch.height to 0.05
+set brooch.depth to 0.3
+set brooch.color to "silver"
+set brooch.shape to "torus"
+set brooch.label to "Rhynie Brooch"
+
+create object necklace
+set necklace.x to 0
+set necklace.y to 1.2
+set necklace.z to -2
+set necklace.width to 0.5
+set necklace.height to 0.05
+set necklace.depth to 0.5
+set necklace.color to "darkorange"
+set necklace.shape to "torus"
+set necklace.label to "Torc"
+
+# ── Wall carvings ─────────────────────────────────────────────────────────────
+
+create object relief_left
+set relief_left.x to -5
+set relief_left.y to 1.5
+set relief_left.z to 0
+set relief_left.width to 1.0
+set relief_left.height to 1.2
+set relief_left.depth to 0.1
+set relief_left.color to "grey"
+set relief_left.shape to "box"
+set relief_left.label to "Carved Relief"
+
+create object relief_right
+set relief_right.x to 5
+set relief_right.y to 1.5
+set relief_right.z to 0
+set relief_right.width to 1.0
+set relief_right.height to 1.2
+set relief_right.depth to 0.1
+set relief_right.color to "grey"
+set relief_right.shape to "box"
+set relief_right.label to "Carved Relief"
+
+# ── Lighting ──────────────────────────────────────────────────────────────────
+
+create object spot_l
+set spot_l.x to -3
+set spot_l.y to 4
+set spot_l.z to 2
+set spot_l.width to 0.3
+set spot_l.height to 0.5
+set spot_l.depth to 0.3
+set spot_l.color to "lightyellow"
+set spot_l.shape to "cone"
+
+create object spot_r
+set spot_r.x to 3
+set spot_r.y to 4
+set spot_r.z to 2
+set spot_r.width to 0.3
+set spot_r.height to 0.5
+set spot_r.depth to 0.3
+set spot_r.color to "lightyellow"
+set spot_r.shape to "cone"
+
+create object spot_c
+set spot_c.x to 0
+set spot_c.y to 4
+set spot_c.z to -2
+set spot_c.width to 0.3
+set spot_c.height to 0.5
+set spot_c.depth to 0.3
+set spot_c.color to "lightyellow"
+set spot_c.shape to "cone"
+
+# ── Labels ────────────────────────────────────────────────────────────────────
+
+create object label_left
+set label_left.x to -3
+set label_left.y to -0.2
+set label_left.z to 2.8
+set label_left.width to 0.5
+set label_left.height to 0.3
+set label_left.depth to 0.01
+set label_left.color to "white"
+set label_left.shape to "plane"
+set label_left.label to "Logierait Stone, c.700 CE"
+
+create object label_right
+set label_right.x to 3
+set label_right.y to -0.2
+set label_right.z to 2.8
+set label_right.width to 0.5
+set label_right.height to 0.3
+set label_right.depth to 0.01
+set label_right.color to "white"
+set label_right.shape to "plane"
+set label_right.label to "Rhynie Brooch, c.500 CE"
+
+# ── Slow drift on the necklace ────────────────────────────────────────────────
+on update set necklace.ry to necklace.ry + 0.005
+
+print "Pictish Heritage Gallery — use mouse to orbit"

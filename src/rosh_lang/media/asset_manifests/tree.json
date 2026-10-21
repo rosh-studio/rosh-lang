@@ -1,0 +1,36 @@
+{
+  "id": "tree",
+  "name": "Tree",
+  "version": "0.1",
+  "description": "A simple tree for outdoor scenes.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["tree", "wood", "forest", "plant", "nature"],
+  "aliases": ["oak tree", "green tree"],
+  "semantic": {
+    "kind": "tree",
+    "material": "wood",
+    "scale_hint": "large"
+  },
+  "defaults": {
+    "color": "green",
+    "shape": "tree",
+    "collision": "static"
+  },
+  "representations": {
+    "text": {
+      "description": "A tree grows here."
+    },
+    "threejs": {
+      "fallback_shape": "cone",
+      "scale": [1.2, 2.5, 1.2]
+    },
+    "phaser": {
+      "fallback_shape": "sprite"
+    }
+  }
+}

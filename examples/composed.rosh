@@ -1,0 +1,12 @@
+# Step 7 verification — widget composition
+# Run: rosh examples/composed.rosh --target web --run
+
+use score
+
+set score.value to 42
+print "Score: {score.value}"
+
+when click score.display
+  set score.value to score.value + 1
+  print "Score: {score.value}"
+end

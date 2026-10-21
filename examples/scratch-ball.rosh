@@ -1,0 +1,65 @@
+background "sky blue"
+sound pop "short pop"
+use score label "Score:"
+create object ball
+set ball.shape to circle
+set ball.color to red
+set ball.x to center
+set ball.y to middle
+set ball.draggable to true
+set ball.volume to 0.5
+use controller target ball keys arrows speed 0.03 move x fire on fire_key x fire_event scored help off
+create object gem
+set gem.shape to gem
+set gem.color to purple
+set gem.x to right
+set gem.y to top
+
+when start
+  set ball.layer to front
+  say "hello Scratch"
+end
+
+when click ball
+  say "you clicked the ball"
+  after 0.5 send scored
+  play pop
+end
+
+when collision ball gem
+  say "collected"
+  set score.value to score.value + 1
+  send scored
+  play pop
+  destroy gem
+end
+
+when scored
+  say "score up"
+  do pulse
+end
+
+define pulse
+  repeat 3
+    set ball.size to ball.size + 0.01
+  end
+end
+
+when update
+  if score.value > 0
+    set ball.ghost to 20
+  end
+end
+
+when keydown space
+  set ball.y to ball.y - 0.1
+  play pop
+end
+
+when keydown h
+  set ball.visible to false
+end
+
+when keydown s
+  set ball.visible to true
+end

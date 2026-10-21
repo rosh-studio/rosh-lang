@@ -1,0 +1,74 @@
+# demo: Scene Navigation
+# description: Multi-room exploration with if/else logic and visit counter
+# badges: Click, Scenes
+
+create scene lobby
+set lobby.description to "Grand entrance hall"
+set lobby.exits to "garden library"
+
+create scene garden
+set garden.description to "A peaceful garden"
+set garden.exits to "lobby"
+
+create scene library
+set library.description to "Shelves of ancient books"
+set library.exits to "lobby"
+
+create number visits
+set visits to 0
+
+create object sign
+set sign.x to 0.1
+set sign.y to 0.05
+set sign.width to 0.35
+set sign.height to 0.06
+set sign.color to "#2ecc71"
+set sign.label to "Room: lobby"
+
+create object btn-garden
+set btn-garden.x to 0.1
+set btn-garden.y to 0.85
+set btn-garden.width to 0.15
+set btn-garden.height to 0.06
+set btn-garden.color to "#3498db"
+set btn-garden.label to "Garden"
+
+create object btn-library
+set btn-library.x to 0.3
+set btn-library.y to 0.85
+set btn-library.width to 0.15
+set btn-library.height to 0.06
+set btn-library.color to "#9b59b6"
+set btn-library.label to "Library"
+
+create object btn-lobby
+set btn-lobby.x to 0.5
+set btn-lobby.y to 0.85
+set btn-lobby.width to 0.15
+set btn-lobby.height to 0.06
+set btn-lobby.color to "#e67e22"
+set btn-lobby.label to "Lobby"
+
+go lobby
+
+when click btn-garden
+  go garden
+end
+
+when click btn-library
+  go library
+end
+
+when click btn-lobby
+  go lobby
+end
+
+when scene_enter
+  set visits to visits + 1
+  if visits > 5
+    set sign.label to "Explorer! Visits: {visits}"
+    set sign.color to "#f1c40f"
+  else
+    set sign.label to "Room: {_scene}"
+  end
+end

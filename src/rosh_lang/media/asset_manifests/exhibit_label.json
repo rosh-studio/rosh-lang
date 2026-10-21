@@ -1,0 +1,37 @@
+{
+  "id": "exhibit_label",
+  "name": "Exhibit Label",
+  "version": "0.1",
+  "description": "A flat information panel for museum exhibits, gallery captions, and wayfinding.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["label", "sign", "information panel", "caption", "museum", "gallery", "exhibit", "text"],
+  "aliases": ["info panel", "caption panel", "wall label", "exhibit sign", "information sign"],
+  "semantic": {
+    "kind": "label",
+    "scale_hint": "wall_object",
+    "inspectable": true,
+    "readable": true
+  },
+  "defaults": {
+    "color": "white",
+    "shape": "plane",
+    "collision": "static"
+  },
+  "representations": {
+    "text": {
+      "description": "An exhibit label is mounted here."
+    },
+    "threejs": {
+      "fallback_shape": "plane",
+      "scale": [0.5, 0.3, 0.01]
+    },
+    "phaser": {
+      "fallback_shape": "rectangle"
+    }
+  }
+}

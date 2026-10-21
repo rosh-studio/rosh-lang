@@ -1,0 +1,60 @@
+# demo: Dodge
+# description: Hazard pool auto-spawns falling aliens — clamp keeps you in bounds
+# badges: Keyboard, Game Loop, Widgets
+
+# Limit console to 3 lines
+set _max_output to 3
+
+# === WIDGETS — hazard pool replaces 100+ lines of manual objects ===
+use score x 0.02 y 0.02 text_color "#00ff88" font_size "16px"
+use lives count 3 x 0.02 y 0.10 text_color "#ff6666" font_size "16px"
+use hazard count 5 vy 0.3 spawn_rate 0.8 color "#e94560" sprite "red alien"
+
+# === PLAYER ===
+create object ship
+set ship.x to 0.45
+set ship.y to 0.85
+set ship.width to 0.08
+set ship.height to 0.06
+set ship.color to "#00d2ff"
+sprite ship "blue spaceship"
+
+# === SOUNDS ===
+sound hit "explosion hit"
+
+# === CONTROLS ===
+when update
+  if _keys.ArrowLeft == 1
+    set ship.x to ship.x - 0.012
+  end
+  if _keys.ArrowRight == 1
+    set ship.x to ship.x + 0.012
+  end
+end
+
+# Clamp player (one line!)
+on update set ship.x to clamp ship.x 0.02 0.9
+
+# === COLLISION — wildcard matches all hazard pool members ===
+when collision hazard.* ship
+  set lives.count to lives.count - 1
+  play hit
+  print "Hit! Lives: {lives.count}"
+  send check-lives
+end
+
+# === GAME OVER (auto-fired by lives widget) ===
+when game-over
+  set hazard._spawn_rate to 0
+  print "GAME OVER — Score: {score.value}"
+end
+
+# === SCORE: survive longer = more points ===
+on update set score.value to score.value + 1
+
+# === START ===
+when start
+  set score.value to 0
+  set lives.count to 3
+  print "Arrow keys to dodge!"
+end

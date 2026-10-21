@@ -1,0 +1,58 @@
+[project]
+name = "rosh-lang"
+version = "0.9.13"
+description = "A readable language for shared worlds. One script, many worlds."
+requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Roger Dubar"}]
+keywords = ["control-language", "live-systems", "language", "plain-english", "transpiler", "phaser", "creative-coding"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Games/Entertainment",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: Software Development :: Interpreters",
+]
+dependencies = [
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+ai = ["anthropic>=0.84.0"]
+dev = ["pytest>=7.0"]
+world = ["websockets>=13.0"]
+
+[project.urls]
+Homepage = "https://rosh.cloud"
+Documentation = "https://rosh.cloud/docs"
+Repository = "https://github.com/rosh-studio/rosh-lang"
+
+[project.scripts]
+rosh = "rosh_lang.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rosh_lang"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.pytest_cache",
+    "/.uv-cache",
+    "/.venv",
+    "/dist",
+    "/test-verify.rosh",
+]
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

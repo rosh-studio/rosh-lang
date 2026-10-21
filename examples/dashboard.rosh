@@ -1,0 +1,112 @@
+# Dashboard — widget composition showcase
+# Run: rosh examples/dashboard.rosh --target web --run
+#
+# Pattern: compose multiple widgets + wire custom events
+# Shows: use keyword, widget config, event chaining, if/else
+
+# === WIDGETS ===
+use score label "Points"
+use lives count 5
+use health-bar max 100 current 100
+use fps
+
+# === CUSTOM EVENTS ===
+event take-damage
+event heal
+event check-health
+
+# === ACTION BUTTONS ===
+create object btn-hit
+set btn-hit.x to 0.05
+set btn-hit.y to 0.5
+set btn-hit.width to 0.25
+set btn-hit.height to 0.1
+set btn-hit.color to "#e94560"
+set btn-hit.label to "Take Damage"
+
+create object btn-heal
+set btn-heal.x to 0.37
+set btn-heal.y to 0.5
+set btn-heal.width to 0.25
+set btn-heal.height to 0.1
+set btn-heal.color to "#2ecc71"
+set btn-heal.label to "Heal"
+
+create object btn-score
+set btn-score.x to 0.68
+set btn-score.y to 0.5
+set btn-score.width to 0.25
+set btn-score.height to 0.1
+set btn-score.color to "#533483"
+set btn-score.label to "+10 Points"
+
+# === STATUS ===
+create object status
+set status.x to 0.1
+set status.y to 0.7
+set status.width to 0.8
+set status.height to 0.06
+set status.color to "#333"
+set status.label to "Click the buttons to interact"
+
+sound hit "hit impact"
+sound heal "powerup sparkle"
+sound ding "coin collect"
+
+# === CLICK HANDLERS ===
+when click btn-hit
+  send take-damage
+end
+
+when click btn-heal
+  send heal
+end
+
+when click btn-score
+  set score.value to score.value + 10
+  play ding
+  print "Score: {score.value}"
+end
+
+# === DAMAGE ===
+when take-damage
+  set health-bar.current to health-bar.current - 15
+  play hit
+  if health-bar.current <= 0
+    set health-bar.current to 0
+  end
+  set status.label to "HP: {health-bar.current}/{health-bar.max}"
+  print "Ouch! HP: {health-bar.current}"
+  send check-health
+end
+
+# === HEAL ===
+when heal
+  set health-bar.current to health-bar.current + 20
+  play heal
+  if health-bar.current > 100
+    set health-bar.current to 100
+  end
+  set status.label to "HP: {health-bar.current}/{health-bar.max}"
+  print "Healed! HP: {health-bar.current}"
+end
+
+# === GAME OVER CHECK ===
+when check-health
+  if health-bar.current <= 0
+    set lives.count to lives.count - 1
+    set health-bar.current to 100
+    set status.label to "Lost a life! Lives: {lives.count}"
+    print "Lost a life! {lives.count} remaining"
+    if lives.count <= 0
+      set status.label to "GAME OVER"
+      print "GAME OVER — Final Score: {score.value}"
+    end
+  end
+end
+
+# === START ===
+when start
+  print "Dashboard Demo — click buttons to change values"
+  print "HP, lives, and score are all widgets"
+end

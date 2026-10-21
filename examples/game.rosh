@@ -1,0 +1,16 @@
+# game.rosh — visual objects demo (Section 15)
+# Run: rosh examples/game.rosh --target web --run
+
+create object box
+set box.x to 0.5
+set box.y to 0.5
+set box.width to 0.1
+set box.height to 0.1
+set box.color to "red"
+set box.label to "box"
+
+create number score
+set score to 42
+
+print "Score: {score}"
+print "Game ready."

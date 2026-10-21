@@ -1,0 +1,90 @@
+# demo: Functions & Controller
+# description: Defines reusable functions + universal controller — arrows/WASD move, space fires
+# badges: Functions, Controller, HUD
+
+set _max_output to 3
+background "#0a0a1e"
+
+# Player ship
+create object ship
+set ship.x to 0.45
+set ship.y to 0.85
+set ship.width to 0.10
+set ship.height to 0.05
+set ship.color to "#00ff88"
+sprite ship "green spaceship"
+
+# Universal controller — works with arrows AND wasd, fire on space
+use controller target ship keys both speed 0.03 move x fire on fire_event shoot
+
+# HUD with anchors — no overlap
+use score anchor top-left theme dark label "Score:"
+use lives anchor top-right theme dark count 3
+
+# Target
+create object enemy
+set enemy.x to 0.45
+set enemy.y to 0.08
+set enemy.width to 0.08
+set enemy.height to 0.06
+set enemy.color to "#e94560"
+set enemy.vx to 0.003
+sprite enemy "red alien"
+
+# Bullets + explosions
+use bullet count 3 vy -0.5 color "#ffff00"
+use explosion count 3
+sound laser "laser shoot"
+sound boom "explosion hit"
+
+# Define reusable functions
+define fire_bullet
+  set bullet._x to ship.x + 0.03
+  set bullet._y to ship.y
+  set bullet._fire to 1
+  play laser
+end
+
+define reset_enemy
+  set enemy.x to 0.45
+  set enemy.y to 0.08
+end
+
+define take_hit
+  set lives.count to lives.count - 1
+  do reset_enemy
+  print "Hit! Lives: {lives.count}"
+end
+
+# Wire up fire event to function
+when shoot
+  do fire_bullet
+end
+
+# Enemy movement — bounce at edges
+when update
+  if enemy.x > 0.85
+    set enemy.vx to -0.003
+  end
+  if enemy.x < 0.05
+    set enemy.vx to 0.003
+  end
+  set enemy.x to enemy.x + enemy.vx
+  set enemy.y to enemy.y + 0.001
+end
+
+# Enemy reaches bottom
+on update when enemy.y > 0.9 do take_hit
+
+# Bullet hits enemy
+when collision bullet.* enemy
+  set explosion._x to enemy.x
+  set explosion._y to enemy.y
+  set explosion._fire to 1
+  play boom
+  set score.value to score.value + 10
+  do reset_enemy
+  print "Hit! +10 = {score.value}"
+end
+
+print "Arrows/WASD move, Space fires!"

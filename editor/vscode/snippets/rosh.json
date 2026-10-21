@@ -1,0 +1,100 @@
+{
+  "Hello World": {
+    "prefix": "hello",
+    "body": ["print \"hello world\""],
+    "description": "Print hello world"
+  },
+  "Create Object": {
+    "prefix": "create",
+    "body": [
+      "create object ${1:name}",
+      "set ${1:name}.x to ${2:0.5}",
+      "set ${1:name}.y to ${3:0.5}",
+      "set ${1:name}.color to \"${4:blue}\""
+    ],
+    "description": "Create a visual object"
+  },
+  "Event Handler": {
+    "prefix": "when",
+    "body": ["when ${1:event}", "  $0", "end"],
+    "description": "Create an event handler"
+  },
+  "Collision Handler": {
+    "prefix": "collision",
+    "body": ["when collision ${1:a} ${2:b}", "  $0", "end"],
+    "description": "Handle a collision"
+  },
+  "If Else": {
+    "prefix": "ifelse",
+    "body": ["if ${1:value} ${2|==,!=,>,<,>=,<=|} ${3:expected}", "  $4", "else", "  $0", "end"],
+    "description": "Create an if/else block"
+  },
+  "Use Widget": {
+    "prefix": "use",
+    "body": ["use ${1|score,lives,player,timer,bullet,explosion,controller,enemy-grid,health-bar,ball,hazard,starfield,fps,label,message,title-screen,game-lifecycle|} as ${2:instance} ${3:key} ${4:value}"],
+    "description": "Compose a named widget instance"
+  },
+  "Define Function": {
+    "prefix": "define",
+    "body": ["define ${1:name} with ${2:value}", "  $0", "end"],
+    "description": "Define a function with a named parameter"
+  },
+  "Call Function": {
+    "prefix": "do",
+    "body": ["do ${1:name} ${2:value}=${3:argument}"],
+    "description": "Call a function with a named argument"
+  },
+  "Repeat Loop": {
+    "prefix": "repeat",
+    "body": ["repeat ${1:5} as ${2:i}", "  $0", "end"],
+    "description": "Create a counted loop"
+  },
+  "For Each Loop": {
+    "prefix": "foreach",
+    "body": ["for each ${1:item} in ${2:items}", "  $0", "end"],
+    "description": "Iterate over a list"
+  },
+  "Add To List": {
+    "prefix": "add",
+    "body": ["add ${1:item} to ${2:items}"],
+    "description": "Add an item to a list"
+  },
+  "Remove From List": {
+    "prefix": "remove",
+    "body": ["remove ${1:item} from ${2:items}"],
+    "description": "Remove an item from a list"
+  },
+  "Sprite": {
+    "prefix": "sprite",
+    "body": ["sprite ${1:name} \"${2:blue spaceship}\""],
+    "description": "Generate a procedural sprite"
+  },
+  "Sound": {
+    "prefix": "sound",
+    "body": ["sound ${1:name} \"${2|laser,explosion,coin,jump,hit,powerup,gameover,click,win|}\""],
+    "description": "Generate a procedural sound"
+  },
+  "Scene": {
+    "prefix": "scene",
+    "body": ["create scene ${1:name}", "$0", "go ${1:name}"],
+    "description": "Create and navigate to a scene"
+  },
+  "Game Template": {
+    "prefix": "game",
+    "body": [
+      "# ${1:Game Name}",
+      "set _max_output to 3",
+      "background \"#0a0a1e\"",
+      "",
+      "use game-lifecycle",
+      "use player speed 0.03 move x",
+      "use score",
+      "use lives count 3",
+      "",
+      "when game_over",
+      "  print \"GAME OVER - Score: {score.value}\"",
+      "end"
+    ],
+    "description": "Create a game starter"
+  }
+}

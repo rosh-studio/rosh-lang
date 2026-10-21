@@ -1,0 +1,54 @@
+{
+  "id": "stone",
+  "name": "Standing Stone",
+  "version": "0.1",
+  "description": "A generic upright stone suitable for heritage and landscape worlds.",
+  "licence": "CC BY 4.0",
+  "source": "sketchfab",
+  "source_url": "https://sketchfab.com/3d-models/ea573a4e86544413bb8707690d5c778c",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Sketchfab community",
+  "copyright": "Logierait Pictish Stone via Sketchfab (CC BY 4.0) \u2014 attribution required",
+  "tags": [
+    "stone",
+    "standing stone",
+    "pictish",
+    "carved",
+    "museum",
+    "heritage"
+  ],
+  "aliases": [
+    "pictish stone",
+    "symbol stone",
+    "carved stone"
+  ],
+  "semantic": {
+    "kind": "standing_stone",
+    "material": "stone",
+    "scale_hint": "human_height",
+    "inspectable": true
+  },
+  "defaults": {
+    "color": "grey",
+    "shape": "slab",
+    "collision": "static"
+  },
+  "representations": {
+    "text": {
+      "description": "A tall standing stone rises from the ground."
+    },
+    "threejs": {
+      "fallback_shape": "box",
+      "model": "https://pub-c7093ab9cc87419b8595973f56666d68.r2.dev/3d/pictish_stone.glb",
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "phaser": {
+      "fallback_shape": "rectangle"
+    }
+  }
+}

@@ -1,0 +1,78 @@
+# URL Sprites Demo — use any image URL as a sprite
+# Run: rosh url-sprites-demo.rosh --target web --run
+#      rosh url-sprites-demo.rosh --target phaser --run
+
+background "#1a1a2e"
+set _max_output to 3
+
+# ── Player: rocket emoji (URL sprite) ──
+create object player
+set player.x to 0.45
+set player.y to 0.7
+set player.width to 0.1
+set player.height to 0.1
+sprite player "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f680.png"
+
+# ── Gems to collect (URL sprites) ──
+create object gem1
+set gem1.x to 0.25
+set gem1.y to 0.3
+set gem1.width to 0.08
+set gem1.height to 0.08
+sprite gem1 "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f48e.png"
+
+create object gem2
+set gem2.x to 0.65
+set gem2.y to 0.2
+set gem2.width to 0.08
+set gem2.height to 0.08
+sprite gem2 "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f48e.png"
+
+# ── Star (URL sprite) ──
+create object star
+set star.x to 0.5
+set star.y to 0.1
+set star.width to 0.1
+set star.height to 0.1
+sprite star "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2b50.png"
+
+# ── Enemies: procedural sprites (for contrast) ──
+create object alien1
+set alien1.x to 0.2
+set alien1.y to 0.5
+set alien1.width to 0.07
+set alien1.height to 0.09
+sprite alien1 "red alien"
+
+create object alien2
+set alien2.x to 0.75
+set alien2.y to 0.45
+set alien2.width to 0.07
+set alien2.height to 0.09
+sprite alien2 "purple invader"
+
+# ── Movement ──
+use controller target player speed 0.02 move x
+
+# ── Score ──
+use score
+
+# ── Collect gems ──
+when collision player gem1
+  set gem1.visible to 0
+  set score.value to score.value + 10
+end
+
+when collision player gem2
+  set gem2.visible to 0
+  set score.value to score.value + 10
+end
+
+when collision player star
+  set star.visible to 0
+  set score.value to score.value + 50
+end
+
+print "Rocket, gems, star = URL sprites (Twemoji)"
+print "Aliens = procedural sprites (Rosh pixel art)"
+print "Collect them all!"

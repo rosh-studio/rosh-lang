@@ -1,0 +1,37 @@
+{
+  "id": "door",
+  "name": "Door",
+  "version": "0.1",
+  "description": "A simple door for rooms, buildings, and exits.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["door", "wood", "wooden", "exit", "entrance", "portal"],
+  "aliases": ["wooden door", "old door"],
+  "semantic": {
+    "kind": "door",
+    "material": "wood",
+    "scale_hint": "human_height",
+    "inspectable": true
+  },
+  "defaults": {
+    "color": "brown",
+    "shape": "rectangle",
+    "collision": "static"
+  },
+  "representations": {
+    "text": {
+      "description": "A wooden door stands nearby."
+    },
+    "threejs": {
+      "fallback_shape": "box",
+      "scale": [0.9, 2.0, 0.12]
+    },
+    "phaser": {
+      "fallback_shape": "rectangle"
+    }
+  }
+}

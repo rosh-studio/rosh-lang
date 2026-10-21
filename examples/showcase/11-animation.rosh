@@ -1,0 +1,29 @@
+# demo: Spritesheet Animation
+# description: Animated player using a spritesheet — 4-frame walk cycle at 8 fps, controlled with arrow keys.
+# badges: keyboard, game loop
+
+create object player
+set player.x to 0.45
+set player.y to 0.7
+set player.width to 0.1
+set player.height to 0.13
+animate player sheet "player-sheet.png" frames 4 speed 8
+
+create number speed
+set speed to 0.02
+
+when keydown ArrowRight then
+  set player.x to player.x + speed
+end
+
+when keydown ArrowLeft then
+  set player.x to player.x - speed
+end
+
+when keydown ArrowUp then
+  set player.y to player.y - speed
+end
+
+when keydown ArrowDown then
+  set player.y to player.y + speed
+end

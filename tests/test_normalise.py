@@ -1,0 +1,370 @@
+"""Tests for rosh_lang.core.normalise."""
+
+from __future__ import annotations
+
+import pytest
+from rosh_lang.core.normalise import fuzzy_color, normalise, normalise_programme
+from rosh_lang.core.parser import parse_string
+from rosh_lang.core.model import DestroyStatement, IfStatement, SetStatement, WhenStatement
+
+
+# ---------------------------------------------------------------------------
+# fuzzy_color
+# ---------------------------------------------------------------------------
+
+class TestFuzzyColor:
+    def test_direct_named_color(self):
+        assert fuzzy_color("blue") == "blue"
+
+    def test_color_with_qualifier(self):
+        assert fuzzy_color("bright orange") == "orange"
+
+    def test_simile_phrase(self):
+        assert fuzzy_color("orange like autumn") == "orange"
+        assert fuzzy_color("blue like the sky") == "blue"
+
+    def test_semantic_noun(self):
+        assert fuzzy_color("molten obsidian") == "black"
+        assert fuzzy_color("cracked glacial permafrost") == "white"
+        assert fuzzy_color("perfectly reflective mercury") == "silver"
+        assert fuzzy_color("dark brown oak wood") == "brown"
+        assert fuzzy_color("tangled ancient roots and moss") == "brown"
+
+    def test_prose_sentence(self):
+        assert fuzzy_color("pitch black thunderstorm darkness") == "black"
+        assert fuzzy_color("blindingly bright white hot plasma") == "white"
+        assert fuzzy_color("neon electric purple") == "purple"
+
+    def test_two_word_shade_is_kept(self):
+        """"Dark blue" is a colour, not the word "dark" plus the colour blue.
+
+        The substring scan below used to find "blue" inside "darkblue" and
+        return the undarkened colour, so a pond asked to go dark blue came
+        back plain blue and nothing said so.
+        """
+        assert fuzzy_color("dark blue") == "darkblue"
+        assert fuzzy_color("darkblue") == "darkblue"
+        assert fuzzy_color("pale yellow") == "paleyellow"
+        assert fuzzy_color("light green") == "lightgreen"
+        assert fuzzy_color("deep red") == "deepred"
+
+    def test_intensifier_does_not_become_a_shade(self):
+        """Bright orange IS orange, so the stored name stays "orange"."""
+        assert fuzzy_color("bright orange") == "orange"
+        assert fuzzy_color("brightorange") == "orange"
+        assert fuzzy_color("vivid red") == "red"
+
+    def test_shade_fold_does_not_reach_into_prose(self):
+        """A material description still resolves to its base colour.
+
+        Only a bare two-word colour folds. "Dark brown oak wood" describes a
+        material, and the useful answer there is brown.
+        """
+        assert fuzzy_color("dark brown oak wood") == "brown"
+        assert fuzzy_color("a dark blue pond in the garden") == "blue"
+
+    def test_rainbow_passthrough(self):
+        assert fuzzy_color("rainbow") == "rainbow"
+
+    def test_no_match_returns_none(self):
+        assert fuzzy_color("xyzzy unknown stuff") is None
+        assert fuzzy_color("") is None
+
+    def test_ported_semantics(self):
+        assert fuzzy_color("thunderstorm") == "gray"
+        assert fuzzy_color("golden") == "gold"
+        assert fuzzy_color("straw") == "yellow"
+
+
+# ---------------------------------------------------------------------------
+# normalise — destroy aliases
+# ---------------------------------------------------------------------------
+
+class TestDestroyAliases:
+    def test_delete_becomes_destroy(self):
+        assert normalise("delete campfire") == "destroy campfire"
+
+    def test_remove_becomes_destroy(self):
+        assert normalise("remove campfire") == "destroy campfire"
+
+    def test_destroy_unchanged(self):
+        assert normalise("destroy campfire") == "destroy campfire"
+
+
+# ---------------------------------------------------------------------------
+# normalise — colour verb
+# ---------------------------------------------------------------------------
+
+class TestColourVerb:
+    def test_colour_simple(self):
+        assert normalise("colour campfire red") == "set campfire.color to red"
+
+    def test_color_us_spelling(self):
+        assert normalise("color campfire blue") == "set campfire.color to blue"
+
+    def test_paint_verb(self):
+        assert normalise("paint rock gray") == "set rock.color to gray"
+
+    def test_colour_prose_description(self):
+        result = normalise("colour campfire orange like autumn")
+        assert "set campfire.color to orange" in result
+        assert "set campfire.color_desc to orange like autumn" in result
+
+    def test_colour_semantic_noun(self):
+        result = normalise("colour rock molten obsidian")
+        assert "set rock.color to black" in result
+        assert "set rock.color_desc to molten obsidian" in result
+
+    def test_no_desc_preserved_when_exact_match(self):
+        # "colour campfire red" -> just one line, no _desc needed
+        result = normalise("colour campfire red")
+        assert "color_desc" not in result
+
+
+# ---------------------------------------------------------------------------
+# normalise — change X colour to
+# ---------------------------------------------------------------------------
+
+class TestChangeColour:
+    def test_change_colour_to(self):
+        result = normalise("change campfire colour to red")
+        assert "set campfire.color to red" in result
+
+    def test_change_color_prose(self):
+        result = normalise("change the rock color to dark obsidian darkness")
+        assert "set rock.color to black" in result
+        assert "color_desc" in result
+
+
+# ---------------------------------------------------------------------------
+# normalise — turn X
+# ---------------------------------------------------------------------------
+
+class TestTurnVerb:
+    def test_turn_colour(self):
+        result = normalise("turn campfire red")
+        assert "set campfire.color to red" in result
+
+    def test_turn_into_material(self):
+        assert normalise("turn campfire into stone") == "set campfire.material to stone"
+
+    def test_turn_into_multi_word_material(self):
+        result = normalise("turn ball into dark wood")
+        assert "set ball.material to wood" in result
+        assert "set ball.material_desc to dark wood" in result
+
+    def test_turn_invisible(self):
+        assert normalise("turn campfire invisible") == "set campfire.opacity to 0"
+
+    def test_turn_transparent(self):
+        assert normalise("turn campfire transparent") == "set campfire.opacity to 0.3"
+
+    def test_turn_visible(self):
+        assert normalise("turn campfire visible") == "set campfire.opacity to 1"
+
+    def test_turn_the_article_stripped(self):
+        result = normalise("turn the campfire red")
+        assert "set campfire.color to red" in result
+
+    def test_turn_into_quoted_multi_word_material(self):
+        # A quoted multi-word material must not leave a stray quote baked
+        # into the material noun (regression: was "wood'").
+        result = normalise("turn ball into 'dark wood'")
+        assert "set ball.material to wood" in result
+        assert "set ball.material_desc to dark wood" in result
+
+
+# ---------------------------------------------------------------------------
+# normalise — set X.color to <prose>
+# ---------------------------------------------------------------------------
+
+class TestSetColorProse:
+    def test_simple_color_unchanged(self):
+        # Exact named color: no expansion needed
+        result = normalise("set campfire.color to red")
+        assert result == "set campfire.color to red"
+
+    def test_prose_color_expands(self):
+        result = normalise("set campfire.color to molten obsidian")
+        assert "set campfire.color to black" in result
+        assert "set campfire.color_desc to molten obsidian" in result
+
+    def test_material_prose_expands(self):
+        result = normalise("set tree.material to cracked ancient bark wood")
+        # Last word is the material noun; adjectives are stored in _desc
+        assert "set tree.material to wood" in result
+        assert "set tree.material_desc to cracked ancient bark wood" in result
+
+    def test_quoted_multi_word_material_no_stray_quote(self):
+        # Regression: quoted material values used to leave a stray trailing
+        # quote baked into state, e.g. material == 'ivory"'.
+        result = normalise('set brooch.material to "walrus ivory"')
+        assert "set brooch.material to ivory" in result
+        assert "set brooch.material_desc to walrus ivory" in result
+        assert '"' not in result
+
+    def test_unterminated_quote_material_still_clean(self):
+        # A missing closing (or opening) quote from a typo must not leave a
+        # stray quote on either side — each edge is stripped independently.
+        assert '"' not in normalise('set brooch.material to "walrus ivory')
+        assert '"' not in normalise('set brooch.material to walrus ivory"')
+
+
+# ---------------------------------------------------------------------------
+# normalise — inline comments
+# ---------------------------------------------------------------------------
+
+class TestInlineComments:
+    def test_trailing_comment_stripped(self):
+        assert normalise("play laser # once") == "play laser"
+
+    def test_hex_colour_in_quotes_not_treated_as_comment(self):
+        assert normalise('background "#1a1a2e"') == 'background "#1a1a2e"'
+
+    def test_hash_inside_quoted_string_preserved(self):
+        assert normalise('print "score #1"') == 'print "score #1"'
+
+    def test_trailing_whitespace_before_comment_trimmed(self):
+        assert normalise("set x to 5   # inline note") == "set x to 5"
+
+    def test_possessive_apostrophe_not_mistaken_for_quote(self):
+        # Regression: a bare apostrophe glued to a word (possessive/
+        # contraction) was treated as opening a string, so the scanner
+        # stayed "inside a quote" for the rest of the line and never found
+        # the comment.
+        assert normalise("say Rosh's world # note") == "say Rosh's world"
+        assert normalise("say don't stop # note") == "say don't stop"
+
+    def test_quoted_string_after_contraction_still_recognised(self):
+        result = normalise("say can't 'do it' # note")
+        assert result == "say can't 'do it'"
+
+
+# ---------------------------------------------------------------------------
+# normalise — create aliases
+# ---------------------------------------------------------------------------
+
+class TestCreateAliases:
+    def test_build_becomes_create(self):
+        assert normalise("build campfire") == "create campfire"
+
+    def test_put_becomes_create(self):
+        assert normalise("put campfire") == "create campfire"
+
+    def test_place_becomes_create(self):
+        assert normalise("place campfire") == "create campfire"
+
+    def test_strict_create_object_unchanged(self):
+        # Already canonical — don't double-rewrite
+        line = "create object campfire"
+        assert normalise(line) == line
+
+
+# ---------------------------------------------------------------------------
+# normalise — if condition operator aliases
+# ---------------------------------------------------------------------------
+
+class TestIfConditionAliases:
+    def test_is_becomes_eq(self):
+        assert normalise("if score is 10") == "if score == 10"
+
+    def test_is_not_becomes_ne(self):
+        assert normalise("if score is not 0") == "if score != 0"
+
+    def test_equals_becomes_eq(self):
+        assert normalise("if score equals 10") == "if score == 10"
+
+    def test_is_with_quoted_value(self):
+        assert normalise('if phase is "playing"') == 'if phase == "playing"'
+
+    def test_is_not_with_quoted_value(self):
+        assert normalise('if phase is not "over"') == 'if phase != "over"'
+
+    def test_is_with_quoted_value_containing_is_not(self):
+        # Quoted string value "is not real" must not be corrupted
+        assert normalise('if phase is "is not real"') == 'if phase == "is not real"'
+
+    def test_is_with_dotted_field(self):
+        assert normalise('if game-lifecycle.phase is "playing"') == 'if game-lifecycle.phase == "playing"'
+
+    def test_canonical_ops_unchanged(self):
+        assert normalise("if score > 10") == "if score > 10"
+        assert normalise("if score == 10") == "if score == 10"
+        assert normalise("if score != 0") == "if score != 0"
+
+
+# ---------------------------------------------------------------------------
+# normalise — collision wildcard aliases
+# ---------------------------------------------------------------------------
+
+class TestCollisionWildcard:
+    def test_first_arg_wildcard(self):
+        assert normalise("when collision hazard all player") == "when collision hazard.* player"
+
+    def test_second_arg_wildcard(self):
+        assert normalise("when collision player hazard all") == "when collision player hazard.*"
+
+    def test_both_args_wildcard(self):
+        assert normalise("when collision bullet all hazard all") == "when collision bullet.* hazard.*"
+
+    def test_already_canonical_unchanged(self):
+        assert normalise("when collision bullet.* enemy") == "when collision bullet.* enemy"
+
+    def test_no_wildcard_unchanged(self):
+        assert normalise("when collision player enemy") == "when collision player enemy"
+
+    def test_hyphenated_widget_name(self):
+        assert normalise("when collision enemy-grid all player") == "when collision enemy-grid.* player"
+
+
+# ---------------------------------------------------------------------------
+# normalise — passthrough cases
+# ---------------------------------------------------------------------------
+
+class TestPassthrough:
+    def test_blank_line(self):
+        assert normalise("") == ""
+
+    def test_comment_unchanged(self):
+        assert normalise("# this is a comment") == "# this is a comment"
+
+    def test_strict_set_unchanged(self):
+        assert normalise("set campfire.x to 5") == "set campfire.x to 5"
+
+    def test_unknown_verb_unchanged(self):
+        assert normalise("xyzzyfoo campfire") == "xyzzyfoo campfire"
+
+
+# ---------------------------------------------------------------------------
+# Integration: normalise flows through parse_string
+# ---------------------------------------------------------------------------
+
+class TestParserIntegration:
+    def test_delete_parses_as_destroy(self):
+        prog = parse_string("delete campfire", allow_extensions=True)
+        stmts = [s for s in prog.statements if not hasattr(s, "text")]
+        assert any(isinstance(s, DestroyStatement) for s in prog.statements)
+
+    def test_colour_verb_parses_as_set(self):
+        prog = parse_string("colour campfire red", allow_extensions=True)
+        set_stmts = [s for s in prog.statements if isinstance(s, SetStatement)]
+        assert any("color" in s.target for s in set_stmts)
+
+    def test_prose_color_produces_two_set_statements(self):
+        prog = parse_string("set campfire.color to molten obsidian", allow_extensions=True)
+        set_stmts = [s for s in prog.statements if isinstance(s, SetStatement)]
+        targets = [s.target for s in set_stmts]
+        assert any("color" in t and "desc" not in t for t in targets)
+        assert any("color_desc" in t for t in targets)
+
+    def test_if_is_parses_as_eq_condition(self):
+        prog = parse_string('if score is 10\n  print "yes"\nend')
+        if_stmts = [s for s in prog.statements if isinstance(s, IfStatement)]
+        assert len(if_stmts) == 1
+        assert if_stmts[0].condition == "score == 10"
+
+    def test_collision_all_parses_as_wildcard(self):
+        prog = parse_string("when collision hazard all player\n  print hit\nend")
+        when_stmts = [s for s in prog.statements if isinstance(s, WhenStatement)]
+        assert len(when_stmts) == 1
+        assert "hazard.*" in when_stmts[0].args

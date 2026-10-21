@@ -1,0 +1,36 @@
+{
+  "id": "person",
+  "name": "Person",
+  "version": "0.1",
+  "description": "A simple person or character placeholder.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["person", "character", "human", "npc", "player"],
+  "aliases": ["player", "character", "npc"],
+  "semantic": {
+    "kind": "person",
+    "scale_hint": "human_height",
+    "inspectable": true
+  },
+  "defaults": {
+    "color": "blue",
+    "shape": "person",
+    "collision": "dynamic"
+  },
+  "representations": {
+    "text": {
+      "description": "A person is here."
+    },
+    "threejs": {
+      "fallback_shape": "capsule",
+      "scale": [0.7, 1.8, 0.7]
+    },
+    "phaser": {
+      "fallback_shape": "sprite"
+    }
+  }
+}

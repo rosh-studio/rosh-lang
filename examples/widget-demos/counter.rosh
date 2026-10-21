@@ -1,0 +1,11 @@
+# widget: counter
+# version: 0.1
+# config: start=0
+
+create number value
+set value to 0
+
+when click
+  set value to value + 1
+  print "Count: {value}"
+end

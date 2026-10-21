@@ -1,0 +1,37 @@
+{
+  "id": "carved_relief",
+  "name": "Carved Relief",
+  "version": "0.1",
+  "description": "A flat carved stone panel — Pictish, Celtic, or decorative. Suitable for walls and heritage displays.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["carved relief", "carving", "frieze", "panel", "stone", "pictish", "celtic", "heritage", "museum", "decoration"],
+  "aliases": ["relief panel", "stone carving", "wall carving", "decorative panel", "pictish panel", "frieze"],
+  "semantic": {
+    "kind": "relief_panel",
+    "material": "stone",
+    "scale_hint": "wall_object",
+    "inspectable": true
+  },
+  "defaults": {
+    "color": "grey",
+    "shape": "box",
+    "collision": "static"
+  },
+  "representations": {
+    "text": {
+      "description": "A carved stone relief panel, its surface marked with symbols."
+    },
+    "threejs": {
+      "fallback_shape": "box",
+      "scale": [1.0, 1.2, 0.1]
+    },
+    "phaser": {
+      "fallback_shape": "rectangle"
+    }
+  }
+}

@@ -1,0 +1,37 @@
+# demo: Event Wiring
+# description: Declarative event reactors — on, event, send — the spec's composition pattern
+# badges: Click, Events
+
+create object target
+set target.x to 0.35
+set target.y to 0.3
+set target.width to 0.3
+set target.height to 0.2
+set target.color to "#e94560"
+set target.label to "Hit me!"
+
+create number hits
+set hits to 0
+
+create object status
+set status.x to 0.3
+set status.y to 0.6
+set status.width to 0.4
+set status.height to 0.08
+set status.color to "#333"
+set status.label to "Waiting..."
+
+# Declare a custom event
+event target_hit
+
+# Declarative reactors — one-liners
+on target_hit set hits to hits + 1
+on target_hit set target.color to "#2ecc71"
+on target_hit set status.color to "#533483"
+on target_hit set status.label to "Hit registered!"
+on target_hit print "Hit #{hits}!"
+
+# Click fires the event
+when click target
+  send target_hit
+end

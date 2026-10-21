@@ -1,0 +1,37 @@
+{
+  "id": "spotlight",
+  "name": "Spotlight",
+  "version": "0.1",
+  "description": "A downward-pointing exhibit spotlight — the classic museum overhead light.",
+  "licence": "MIT",
+  "source": "bundled",
+  "visibility": "featured",
+  "review_status": "featured",
+  "author": "Rosh Studio",
+  "copyright": "Copyright (c) 2026 Rosh Studio",
+  "tags": ["spotlight", "light", "exhibit light", "gallery light", "museum", "gallery", "overhead", "lamp"],
+  "aliases": ["exhibit light", "gallery light", "museum light", "ceiling light", "track light"],
+  "semantic": {
+    "kind": "light_source",
+    "scale_hint": "overhead",
+    "inspectable": false,
+    "emits_light": true
+  },
+  "defaults": {
+    "color": "lightyellow",
+    "shape": "cone",
+    "collision": "none"
+  },
+  "representations": {
+    "text": {
+      "description": "A spotlight illuminates the exhibit from above."
+    },
+    "threejs": {
+      "fallback_shape": "cone",
+      "scale": [0.3, 0.5, 0.3]
+    },
+    "phaser": {
+      "fallback_shape": "circle"
+    }
+  }
+}
