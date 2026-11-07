@@ -1,0 +1,4 @@
+{
+ "rosh": "create object a\nset a.x to 1 + 2",
+ "error": "line 2"
+}

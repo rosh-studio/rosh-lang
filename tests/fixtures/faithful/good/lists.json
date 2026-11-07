@@ -1,0 +1,20 @@
+{
+ "objects": {
+  "a": {
+   "e": [],
+   "mixed": [
+    "p",
+    2,
+    2.5,
+    null,
+    true,
+    false
+   ],
+   "words": [
+    "null",
+    "true"
+   ]
+  }
+ },
+ "meta": {}
+}

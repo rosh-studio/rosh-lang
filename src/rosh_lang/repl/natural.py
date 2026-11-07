@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Callable
 
 _CREATE_VERBS = {"create", "make", "add", "draw", "spawn"}
 _STRICT_CREATE_KINDS = {"object", "objects", "number", "string", "list", "scene"}
@@ -23,6 +24,10 @@ _SIZE_WORDS = {
     "large": 0.16,
     "huge": 0.24,
 }
+
+# Where a thing with no size or position draws (targets/_js_runtime.py).
+_UNSET_SIZE = 0.1
+_UNSET_POSITION = 0.5
 
 _RELATIVE_SIZE_WORDS = {
     "smaller": 0.75,
@@ -82,8 +87,29 @@ class LoweredInput:
     subject: str | None = None
 
 
-def lower_shell_input(text: str, *, current_subject: str | None = None) -> LoweredInput:
-    """Lower a natural shell phrase into strict Rosh when it's safe to do so."""
+def _relative_set(path: str, op: str, amount: float, unset: float, read: Callable[[str], Any] | None) -> str:
+    """`set path to path op amount`, or a plain number if `path` has no value yet.
+
+    Rosh refuses an expression with an operand that has no value (#33), and
+    "make it bigger" on a thing with no width should still make it bigger.
+    """
+    if read is not None and not isinstance(read(path), (int, float)):
+        start = unset * amount if op == "*" else unset + amount if op == "+" else unset - amount
+        return f"set {path} to {round(start, 6)}"
+    return f"set {path} to {path} {op} {amount}"
+
+
+def lower_shell_input(
+    text: str,
+    *,
+    current_subject: str | None = None,
+    read: Callable[[str], Any] | None = None,
+) -> LoweredInput:
+    """Lower a natural shell phrase into strict Rosh when it's safe to do so.
+
+    `read` gives the current value of a dotted name, so a relative change to a
+    size or position that was never set can start from the renderer's default.
+    """
     stripped = text.strip()
     if not stripped:
         return LoweredInput(original=text, text=text, changed=False)
@@ -92,11 +118,11 @@ def lower_shell_input(text: str, *, current_subject: str | None = None) -> Lower
     if lowered is not None:
         return LoweredInput(original=text, text=lowered, changed=True, subject=_subject_from_lowered(lowered))
 
-    lowered = _lower_make_phrase(stripped, current_subject=current_subject)
+    lowered = _lower_make_phrase(stripped, current_subject=current_subject, read=read)
     if lowered is not None:
         return LoweredInput(original=text, text=lowered, changed=True, subject=_subject_from_lowered(lowered))
 
-    lowered = _lower_move_phrase(stripped, current_subject=current_subject)
+    lowered = _lower_move_phrase(stripped, current_subject=current_subject, read=read)
     if lowered is not None:
         return LoweredInput(original=text, text=lowered, changed=True, subject=_subject_from_lowered(lowered))
 
@@ -163,7 +189,7 @@ def _lower_create_phrase(text: str) -> str | None:
     return "\n".join(lines)
 
 
-def _lower_make_phrase(text: str, *, current_subject: str | None) -> str | None:
+def _lower_make_phrase(text: str, *, current_subject: str | None, read: Callable[[str], Any] | None = None) -> str | None:
     tokens = text.split()
     if len(tokens) < 3 or tokens[0].lower() != "make":
         return None
@@ -192,15 +218,14 @@ def _lower_make_phrase(text: str, *, current_subject: str | None) -> str | None:
     if modifier in _RELATIVE_SIZE_WORDS:
         factor = _RELATIVE_SIZE_WORDS[modifier]
         return "\n".join([
-            f"set {target}.width to {target}.width * {factor}",
-            f"set {target}.height to {target}.height * {factor}",
-            f"set {target}.depth to {target}.depth * {factor}",
+            _relative_set(f"{target}.{side}", "*", factor, _UNSET_SIZE, read)
+            for side in ("width", "height", "depth")
         ])
 
     return None
 
 
-def _lower_move_phrase(text: str, *, current_subject: str | None) -> str | None:
+def _lower_move_phrase(text: str, *, current_subject: str | None, read: Callable[[str], Any] | None = None) -> str | None:
     tokens = text.split()
     if len(tokens) < 3 or tokens[0].lower() not in {"move", "put", "place"}:
         return None
@@ -214,7 +239,7 @@ def _lower_move_phrase(text: str, *, current_subject: str | None) -> str | None:
         axis, delta = _DIRECTION_DELTAS[rest[0]]
         sign = "+" if delta > 0 else "-"
         amount = abs(delta)
-        return f"set {target}.{axis} to {target}.{axis} {sign} {amount}"
+        return _relative_set(f"{target}.{axis}", sign, amount, _UNSET_POSITION, read)
 
     if rest[0] not in {"to", "at"}:
         return None

@@ -251,29 +251,26 @@ class TestSetExecution:
         ])
         assert rt.state["name"] == "Alice1"
 
-    def test_set_multiply_on_string_is_noop(self) -> None:
-        """* on a string value is a no-op (arithmetic only) — target unchanged."""
-        rt = _run([
-            SetStatement(target="name", value='"Alice"'),
-            SetStatement(target="name", value="name * 2"),
-        ])
-        assert rt.state["name"] == "Alice"
+    def test_set_multiply_on_string_is_refused(self) -> None:
+        """* on text is refused."""
+        with pytest.raises(ValueError, match="can't work out"):
+            _run([
+                SetStatement(target="name", value='"Alice"'),
+                SetStatement(target="name", value="name * 2"),
+            ])
 
-    def test_set_arithmetic_undefined_left_is_noop(self) -> None:
-        """Left operand that doesn't resolve is a no-op — target unchanged.
+    def test_set_arithmetic_undefined_left_is_an_error(self) -> None:
+        """A left operand with no value is an error naming it (#33, 5 Nov).
 
-        Previously this silently stored the raw, un-evaluated expression
-        text ("b + 1") as the value — a real bug (silent state corruption)
-        found by a blind playtest of "make it bigger/smaller" corrupting
-        width/height/depth to literal unevaluated strings when those
-        properties had never been explicitly set.
+        It once stored the raw text "b + 1" (found by a blind playtest of
+        "make it bigger"), then quietly stored nothing. Neither says so.
         """
-        rt = _run([
-            CreateStatement(kind="number", name="a"),
-            SetStatement(target="a", value="5"),
-            SetStatement(target="a", value="b + 1"),
-        ])
-        assert rt.state["a"] == 5
+        with pytest.raises(ValueError, match="b has no value yet"):
+            _run([
+                CreateStatement(kind="number", name="a"),
+                SetStatement(target="a", value="5"),
+                SetStatement(target="a", value="b + 1"),
+            ])
 
     def test_set_arithmetic_variable_right_operand(self) -> None:
         """set x to x + drift — variable right operand."""
@@ -395,12 +392,10 @@ class TestPhase2aExpressions:
         ])
         assert rt.state["label"] == "Score: 42"
 
-    def test_string_concat_unknown_var_noop(self) -> None:
-        """Concatenation with unresolved variable is a no-op — target unchanged (never set)."""
-        rt = _run([
-            SetStatement(target="result", value='"Hello, " + unknown'),
-        ])
-        assert rt.state["result"] is None
+    def test_string_concat_unknown_var_is_an_error(self) -> None:
+        """Concatenation with a variable that has no value is an error (#33)."""
+        with pytest.raises(ValueError, match="unknown has no value yet"):
+            _run([SetStatement(target="result", value='"Hello, " + unknown')])
 
     # Comparison operators
     def test_comparison_gte_true(self) -> None:
@@ -476,29 +471,27 @@ class TestPhase2aExpressions:
         ])
         assert rt.state["active"] is True
 
-    def test_comparison_unresolved_noop(self) -> None:
-        """Comparison with unresolved variable leaves value unchanged (never set)."""
-        rt = _run([
-            SetStatement(target="result", value="unknown >= 18"),
-        ])
-        assert rt.state["result"] is None
+    def test_comparison_unresolved_is_an_error(self) -> None:
+        """Comparison with a variable that has no value is an error (#33)."""
+        with pytest.raises(ValueError, match="unknown has no value yet"):
+            _run([SetStatement(target="result", value="unknown >= 18")])
 
     # Type safety
-    def test_multiply_on_string_noop(self) -> None:
-        """* on a string value is a no-op (numeric operators only) — target unchanged."""
-        rt = _run([
-            SetStatement(target="name", value='"Alice"'),
-            SetStatement(target="name", value="name * 2"),
-        ])
-        assert rt.state["name"] == "Alice"
+    def test_multiply_on_string_is_refused(self) -> None:
+        """* on text is refused."""
+        with pytest.raises(ValueError, match="can't work out"):
+            _run([
+                SetStatement(target="name", value='"Alice"'),
+                SetStatement(target="name", value="name * 2"),
+            ])
 
-    def test_divide_on_string_noop(self) -> None:
-        """/ on a string value is a no-op — target unchanged."""
-        rt = _run([
-            SetStatement(target="name", value='"Alice"'),
-            SetStatement(target="name", value="name / 2"),
-        ])
-        assert rt.state["name"] == "Alice"
+    def test_divide_on_string_is_refused(self) -> None:
+        """/ on text is refused."""
+        with pytest.raises(ValueError, match="can't work out"):
+            _run([
+                SetStatement(target="name", value='"Alice"'),
+                SetStatement(target="name", value="name / 2"),
+            ])
 
 
 class TestWhenExecution:

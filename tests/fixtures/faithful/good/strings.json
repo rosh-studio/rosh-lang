@@ -1,0 +1,21 @@
+{
+ "objects": {
+  "a": {
+   "q": "say \"hi\"",
+   "hash": "a\" # note",
+   "apos": "it's",
+   "bs": "back\\slash",
+   "lone": "\\",
+   "quote": "\"",
+   "empty": "",
+   "spaces": "  padded  ",
+   "uni": "Ünïcödé ✓ 日本",
+   "in_list": [
+    "x\"y",
+    "a\\b",
+    "# not a comment"
+   ]
+  }
+ },
+ "meta": {}
+}

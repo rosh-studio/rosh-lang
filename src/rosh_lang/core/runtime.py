@@ -6,12 +6,14 @@ Implements 17 keywords per BUILDING-ROSH.md Sections 5 & 7.
 from __future__ import annotations
 
 import json
+import math
 import random
 import re
 import sys
 import warnings
 from typing import Any, TextIO
 
+from rosh_lang.core.model import RoshValueError, unquote
 from rosh_lang.core.model import (
     AddStatement,
     AfterStatement,
@@ -23,6 +25,7 @@ from rosh_lang.core.model import (
     CreateStatement,
     DefineStatement,
     DestroyStatement,
+    ForgetStatement,
     DoStatement,
     EndStatement,
     EventStatement,
@@ -61,6 +64,19 @@ UNIVERSAL_EVENTS = frozenset({
 _MAX_SEND_DEPTH = 10
 
 
+def _kind_of(value: Any) -> str:
+    """A value's kind, in the words a refusal uses."""
+    if isinstance(value, bool):
+        return "true or false"
+    if isinstance(value, (int, float)):
+        return "a number"
+    if isinstance(value, str):
+        return "text"
+    if isinstance(value, list):
+        return "a list"
+    return "a thing"
+
+
 class Runtime:
     """Execute a Rosh programme."""
 
@@ -76,8 +92,14 @@ class Runtime:
         self.state: dict[str, Any] = {}
         # Checked references: "a.parent" -> "b", from `set a.parent to object b`.
         self.references: dict[str, str] = {}
+        # Parameters, loop names and event fields in use just now. Such a name
+        # hides whatever it shadows, and that comes back; nothing it does touches it.
+        self._temporary_names: list[str] = []
         self.handlers: dict[str, list[list[Statement]]] = {}
         self.listeners: dict[str, list[OnStatement]] = {}
+        # What really fired, for whoever keeps a log of it; text can't tell.
+        self.events_fired: list[str] = []
+        self.functions_called: list[str] = []
         self.event_registry: dict[str, list[str]] = {}  # name → payload_fields
         self.scenes: dict[str, dict[str, Any]] = {}
         self.connections: dict[str, str] = {}
@@ -191,6 +213,8 @@ class Runtime:
             self._exec_connect(stmt)
         elif isinstance(stmt, DestroyStatement):
             self._exec_destroy(stmt)
+        elif isinstance(stmt, ForgetStatement):
+            self._exec_forget(stmt)
         elif isinstance(stmt, SpriteStatement):
             self._exec_sprite(stmt)
         elif isinstance(stmt, SoundStatement):
@@ -228,6 +252,8 @@ class Runtime:
 
     def send(self, event: str, **payload: Any) -> None:
         """Fire an event — runs all handlers and listeners."""
+        if len(self.events_fired) < 1000:
+            self.events_fired.append(event)
         has_handlers = event in self.handlers or event in self.listeners
         if event not in UNIVERSAL_EVENTS and event not in self.event_registry:
             if not has_handlers:
@@ -246,6 +272,7 @@ class Runtime:
         self._send_depth += 1
         try:
             # Payload injection: save originals, inject, execute, restore
+            kept = self._enter_temporary(list(payload))
             originals: dict[str, Any] = {}
             missing_keys: list[str] = []
             for k, v in payload.items():
@@ -271,6 +298,7 @@ class Runtime:
                         self.state[k] = originals[k]
                     elif k in self.state:
                         del self.state[k]
+                self._leave_temporary(list(payload), kept)
         finally:
             self._send_depth -= 1
 
@@ -337,17 +365,26 @@ class Runtime:
                     f"set {stmt.target}{where}: there's no object '{name}' to refer to. "
                     f"Create it first, or check the name."
                 )
-            self._set_path(stmt.target, name)
+            self._keep_kind(stmt, name)
+            scene_part = stmt.target.split(".", 1)
+            if len(scene_part) == 2 and scene_part[0] in self.scenes:
+                self.scenes[scene_part[0]][scene_part[1]] = name
+            else:
+                self._set_path(stmt.target, name)
             self.references[stmt.target] = name
             return
-        self.references.pop(stmt.target, None)
         try:
             value = self._eval_set_value(stmt.target, stmt.value)
         except ValueError as exc:
             where = f" (line {stmt.line})" if getattr(stmt, "line", 0) else ""
-            raise ValueError(f"set {stmt.target}{where}: {exc}") from None
-        # Check if target is a scene property (e.g. "corridor.description")
+            raise RoshValueError(f"set {stmt.target}{where}: {exc}") from None
         parts = stmt.target.split(".", 1)
+        if not (len(parts) == 2 and parts[0] in self.scenes):
+            self._keep_kind(stmt, value)
+            self._keep_references_good(stmt, value)
+        # Only now: a refused value leaves a checked reference standing.
+        self._let_go_of_references(stmt.target)
+        # Check if target is a scene property (e.g. "corridor.description")
         if len(parts) == 2 and parts[0] in self.scenes:
             scene_name, prop = parts
             if prop == "exits":
@@ -360,6 +397,100 @@ class Runtime:
                 self.scenes[scene_name][prop] = value
             return
         self._set_path(stmt.target, value)
+
+    def references_into(self, name: str) -> list[str]:
+        """What points at this name or at anything inside it, from outside it."""
+        if name.split(".")[0] in self._temporary_names:
+            return []
+        inside = name + "."
+        return sorted(
+            held for held, target in self.references.items()
+            if (target == name or target.startswith(inside))
+            and held != name and not held.startswith(inside)
+        )
+
+    def _let_go_of_references(self, name: str) -> None:
+        """This name and anything inside it stop pointing at anything."""
+        inside = name + "."
+        for held in [h for h in self.references if h == name or h.startswith(inside)]:
+            del self.references[held]
+
+    def _enter_temporary(self, names: list[str]) -> dict[str, str]:
+        kept = {held: target for held, target in self.references.items()
+                if any(held == name or held.startswith(name + ".") for name in names)}
+        self._temporary_names.extend(names)
+        return kept
+
+    def _leave_temporary(self, names: list[str], kept: dict[str, str]) -> None:
+        """After the values are back: what they held is theirs again, and a
+        reference made to the temporary name itself goes with it."""
+        for name in names:
+            self._temporary_names.remove(name)
+            self._let_go_of_references(name)
+        self.references.update(kept)
+        for name in names:
+            if name in self._temporary_names or isinstance(self._resolve(name), dict):
+                continue
+            for held, target in list(self.references.items()):
+                if target == name or target.startswith(name + "."):
+                    del self.references[held]
+
+    def _held_at(self, path: str) -> Any:
+        root, _, rest = path.partition(".")
+        return self.scenes[root].get(rest) if rest and root in self.scenes else self._resolve(path)
+
+    def prune_references(self) -> None:
+        """For a change made from outside the language (a reset, a raw message):
+        a reference that no longer holds is no longer one. The value stays, as text."""
+        for held, target in list(self.references.items()):
+            if self._held_at(held) != target or not isinstance(self._resolve(target), dict):
+                del self.references[held]
+
+    def _refuse_if_referred_to(self, name: str, what: str, line: int = 0, referrers: list[str] | None = None) -> None:
+        referrers = self.references_into(name) if referrers is None else referrers
+        if referrers:
+            where = f" (line {line})" if line else ""
+            raise KeyError(
+                f"can't {what}{where}: {', '.join(referrers)} still refer"
+                f"{'s' if len(referrers) == 1 else ''} to it. Change or remove "
+                f"{'that' if len(referrers) == 1 else 'those'} first."
+            )
+
+    def _keep_references_good(self, stmt: SetStatement, value: Any) -> None:
+        """`set b to nothing` must not take away what a reference points at, and
+        replacing b must not take away anything inside it that one points at."""
+        target, line = stmt.target, getattr(stmt, "line", 0)
+        if value is None:
+            self._refuse_if_referred_to(target, f"set {target} to nothing", line)
+            return
+        inside = target + "."
+        self._refuse_if_referred_to(target, f"replace {target}", line, [
+            r for r in self.references_into(target) if self.references[r].startswith(inside)])
+
+    def _keep_kind(self, stmt: SetStatement, value: Any) -> None:
+        """The first value fixes what kind of thing a name holds.
+
+        `set x to nothing` frees the name. Counting numbers and fractions are
+        one kind.
+        """
+        where = f" (line {stmt.line})" if getattr(stmt, "line", 0) else ""
+        # `set n.x to 1` would turn the number n into a thing.
+        parts = stmt.target.split(".")
+        for end in range(1, len(parts)):
+            above = ".".join(parts[:end])
+            held = self._resolve(above)
+            if held is not None and not isinstance(held, dict):
+                raise RoshValueError(
+                    f"set {stmt.target}{where}: {above} holds {_kind_of(held)}, so it can't have a "
+                    f".{parts[end]}. Use a new name, or set {above} to nothing first."
+                )
+        held = self._resolve(stmt.target)
+        if held is None or value is None or _kind_of(held) == _kind_of(value):
+            return
+        raise RoshValueError(
+            f"set {stmt.target}{where}: {stmt.target} holds {_kind_of(held)}, so it can't take "
+            f"{_kind_of(value)}. Use a new name, or set {stmt.target} to nothing first."
+        )
 
     def _set_path(self, key: str, value: Any) -> None:
         """Set a value at a dotted key path, creating parent dicts as needed."""
@@ -498,6 +629,11 @@ class Runtime:
         if current:
             self.send("scene_exit", scene=current)
 
+        # A scene sets names as it's entered: it mustn't take away what a reference needs.
+        for name, value in self.scenes[target].items():
+            if name != "exits" and not isinstance(value, dict):
+                self._refuse_if_referred_to(name, f"go to {target}, which changes {name}")
+
         # Update state
         self.state["_prev_scene"] = current
         self.state["_scene"] = target
@@ -506,6 +642,7 @@ class Runtime:
         scene_data = self.scenes[target]
         for k, v in scene_data.items():
             if k not in ("exits",):
+                self._let_go_of_references(k)
                 self.state[k] = v
 
         # Fire scene_enter
@@ -617,23 +754,21 @@ class Runtime:
             self.connections[stmt.name] = stmt.url
         # No url and not disconnect = list (name only, no-op for now)
 
+    def _exec_forget(self, stmt: ForgetStatement) -> None:
+        name, _, prop = stmt.target.rpartition(".")
+        if not isinstance(self._resolve(name), dict):
+            where = f" (line {stmt.line})" if getattr(stmt, "line", 0) else ""
+            raise KeyError(f"forget {stmt.target}{where}: there's no object '{name}'.")
+        self._refuse_if_referred_to(stmt.target, f"forget {stmt.target}", getattr(stmt, "line", 0))
+        self._let_go_of_references(stmt.target)
+        self._delete_path(stmt.target)
+
     def _exec_destroy(self, stmt: DestroyStatement) -> None:
         name = stmt.name
         # Something still points at it: destroying it would leave that
         # reference pointing at nothing, so refuse and say what refers to it.
-        referrers = sorted(
-            t for t, n in self.references.items()
-            if n == name and not t.startswith(name + ".")
-        )
-        if referrers:
-            where = f" (line {stmt.line})" if getattr(stmt, "line", 0) else ""
-            raise KeyError(
-                f"can't destroy '{name}'{where}: {', '.join(referrers)} still refer"
-                f"{'s' if len(referrers) == 1 else ''} to it. Change or remove "
-                f"{'that' if len(referrers) == 1 else 'those'} first."
-            )
-        for t in [t for t in self.references if t.startswith(name + ".")]:
-            del self.references[t]
+        self._refuse_if_referred_to(name, f"destroy '{name}'", getattr(stmt, "line", 0))
+        self._let_go_of_references(name)
         # Handle dotted paths (e.g. widget.object)
         parts = name.split(".")
         if len(parts) == 1:
@@ -681,7 +816,7 @@ class Runtime:
 
     def _exec_if(self, stmt: IfStatement) -> None:
         """Execute an if/else block."""
-        if self._eval_condition(stmt.condition):
+        if self._eval_condition(stmt.condition, strict=True):
             for s in stmt.then_body:
                 self.execute(s)
         else:
@@ -692,8 +827,8 @@ class Runtime:
         """Execute a user-defined function, binding named args as local state."""
         name = stmt.name
         if name not in self.functions:
-            warnings.warn(f"Function {name!r} not defined")
-            return
+            raise KeyError(f"do: nothing called {name!r} has been defined")
+        self.functions_called.append(name)
         if name in self._call_stack:
             raise RuntimeError(f"Recursive call to {name!r} is not allowed")
 
@@ -701,12 +836,14 @@ class Runtime:
         params = self._function_params.get(name, [])
         _MISSING = object()
         saved: dict[str, Any] = {}
+        # All worked out first, so one that fails has changed nothing, and none
+        # sees another's new value; the compiled code does the same.
+        values = {param: self._eval_set_value(param, stmt.args[param]) if param in stmt.args else None
+                  for param in params}
+        kept = self._enter_temporary(list(params))
         for param in params:
             saved[param] = self._resolve(param) if self._key_exists(param) else _MISSING
-            if param in stmt.args:
-                self._set_path(param, self._eval_set_value(param, stmt.args[param]))
-            else:
-                self._set_path(param, None)
+            self._set_path(param, values[param])
 
         self._call_stack.add(name)
         try:
@@ -720,6 +857,7 @@ class Runtime:
                     self._delete_path(param)
                 else:
                     self._set_path(param, prev)
+            self._leave_temporary(list(params), kept)
 
     _MAX_REPEAT = 10_000
 
@@ -730,18 +868,21 @@ class Runtime:
             count = int(stmt.count)
         except ValueError:
             val = self._resolve(stmt.count)
-            if isinstance(val, (int, float)):
+            if isinstance(val, (int, float)) and not isinstance(val, bool):
                 count = int(val)
             else:
-                return  # non-numeric count — skip silently
+                raise ValueError(f"repeat {stmt.count}: that isn't a number of times")
 
         if count <= 0:
             return
 
-        count = min(count, self._MAX_REPEAT)
+        # Stopping quietly at the limit looked like finishing (#38).
+        if count > self._MAX_REPEAT:
+            raise ValueError(f"repeat {count:,}: the most a loop can run is {self._MAX_REPEAT:,} times")
 
         had_var = stmt.var in self.state if stmt.var else False
         old_val = self.state.get(stmt.var) if stmt.var else None
+        kept = self._enter_temporary([stmt.var] if stmt.var else [])
 
         try:
             for i in range(1, count + 1):
@@ -755,16 +896,27 @@ class Runtime:
                     self.state[stmt.var] = old_val
                 else:
                     self.state.pop(stmt.var, None)
+            self._leave_temporary([stmt.var] if stmt.var else [], kept)
 
     _MAX_FOREACH = 10_000
 
     def _exec_add(self, stmt: AddStatement) -> None:
         """Append an item to a list."""
         item = self._eval_set_value(stmt.item, stmt.item)
+        if isinstance(item, (list, dict)):
+            # `add items to items` made a list inside itself, which then broke
+            # everything that reads the room.
+            raise ValueError(f"a list can hold text and numbers, not {stmt.item}, which isn't one value")
+        if isinstance(item, str) and len(item) > self._MAX_LIST_ITEM:
+            raise ValueError(f"a list item can be up to {self._MAX_LIST_ITEM:,} characters")
         lst = self._resolve(stmt.target)
+        if lst is None and "." not in stmt.target:
+            # The reference's own example: `add "Alice" to visitors` starts the list.
+            lst = self.state[stmt.target] = []
         if not isinstance(lst, list):
-            warnings.warn(f"add: {stmt.target!r} is not a list")
-            return
+            raise KeyError(f"add: {stmt.target!r} is not a list")
+        if len(lst) >= self._MAX_LIST:
+            raise ValueError(f"{stmt.target} already has {self._MAX_LIST:,} items, which is as many as a list can hold")
         lst.append(item)
 
     def _exec_remove(self, stmt: RemoveStatement) -> None:
@@ -782,10 +934,10 @@ class Runtime:
         """Iterate over a list, binding each item to var."""
         lst = self._resolve(stmt.target)
         if not isinstance(lst, list):
-            warnings.warn(f"for each: {stmt.target!r} is not a list")
-            return
+            raise KeyError(f"for each: {stmt.target!r} is not a list")
         _MISSING = object()
         saved = self.state.get(stmt.var, _MISSING)
+        kept = self._enter_temporary([stmt.var])
         try:
             for item in list(lst)[: self._MAX_FOREACH]:
                 self.state[stmt.var] = item
@@ -796,6 +948,7 @@ class Runtime:
                 self.state.pop(stmt.var, None)
             else:
                 self.state[stmt.var] = saved
+            self._leave_temporary([stmt.var], kept)
 
     def _exec_use(self, stmt: UseStatement) -> None:
         """Load a widget: find, namespace-prefix, apply config, execute."""
@@ -833,7 +986,7 @@ class Runtime:
         """Execute a single on-listener."""
         # Check condition if present
         if listener.condition:
-            if not self._eval_condition(listener.condition):
+            if not self._eval_condition(listener.condition, strict=True):
                 return
 
         action = listener.action
@@ -854,13 +1007,18 @@ class Runtime:
                     stmt = SetStatement(target=tokens[0], value=tokens[-1])
                     self._exec_set(stmt)
         elif action == "send":
-            event_name = args.strip().split()[0] if args.strip() else ""
-            if event_name:
-                self.send(event_name)
+            if args.strip():
+                # Read as `send` on its own line reads: the payload used to be lost.
+                from rosh_lang.core.parser import _parse_send
+                self._exec_send_stmt(_parse_send("send " + args.strip(), line=0, source="<on>"))
+        # Read as the parser reads `say` and `print` on their own line: in the
+        # one-line form, `on e say "hello"` said the quote marks too (BUGS.md 26 Oct).
         elif action == "say":
-            self._exec_say(SayStatement(text=args))
+            from rosh_lang.core.parser import _parse_say
+            self._exec_say(_parse_say("say " + args.strip(), line=0, source="<on>"))
         elif action == "print":
-            self._exec_print(PrintStatement(text=args))
+            from rosh_lang.core.parser import _parse_print
+            self._exec_print(_parse_print("print " + args.strip(), line=0, source="<on>"))
         elif action == "destroy":
             name = args.strip()
             if name:
@@ -874,13 +1032,21 @@ class Runtime:
             if sound:
                 self._exec_play(PlayStatement(sound=sound, mode=""))
 
-    def _eval_condition(self, condition: str) -> bool:
-        """Evaluate a simple condition: field op value."""
+    def _eval_condition(self, condition: str, strict: bool = False) -> bool:
+        """Evaluate a simple condition: field op value.
+
+        Strict for `if`: asking whether nothing is more than 1, or whether text
+        is more than a number, is an error. No value at all
+        is quietly false in a listener's condition or inside a handler, which may
+        be waiting for state not set yet. `==` and `!=` always have an answer.
+        """
         parts = condition.split(None, 2)
         if len(parts) != 3:
             return False
         field, op, raw_value = parts[0], parts[1], parts[2]
-        current = self._resolve(field)
+        # The left side may be a number or text too. `if 5 < v` looked up
+        # something called "5", found nothing, and was quietly false.
+        current = self._resolve_atom(field)
 
         # nothing comparisons: work whether or not field is in state.
         # A bare `null` means the same (JSON's word); the quoted "null" is text.
@@ -889,13 +1055,28 @@ class Runtime:
                 return current is None
             if op == "!=":
                 return current is not None
+            if strict and not self._send_depth:
+                raise ValueError(f"if {condition}: nothing has no order, so that can't be worked out")
             return False
 
-        # All other comparisons: missing field means condition fails
+        # All other comparisons: missing field means condition fails, and
+        # something with no value is different from 1, as == says it isn't 1.
         if current is None:
+            if op == "!=":
+                return True
+            if strict and not self._send_depth and op in (">", "<", ">=", "<="):
+                raise ValueError(
+                    f"{field} has no value yet, so if {condition} can't be worked out. Set it first."
+                )
             return False
 
         target_val = self._coerce(raw_value)
+        # `if a > b` compares with b's value when there is a b; a bare word
+        # with no value stays text, as in `if phase == playing`.
+        if isinstance(target_val, str) and raw_value == target_val:
+            known = self._resolve(raw_value)
+            if known is not None:
+                target_val = known
         try:
             if op == ">":
                 return current > target_val
@@ -910,12 +1091,27 @@ class Runtime:
             if op == "!=":
                 return current != target_val
         except TypeError:
+            if strict:
+                raise ValueError(
+                    f"if {condition}: can't compare {_kind_of(current)} with {_kind_of(target_val)}"
+                ) from None
             return False
         return False
 
     # ── set value evaluation ──────────────────────────────────
 
     def _eval_set_value(self, target: str, raw: str) -> Any:
+        """A set's value, within the limits everything held must fit."""
+        value = self._eval_unbounded_value(target, raw)
+        if isinstance(value, float) and not math.isfinite(value):
+            # `set m.name to nan` is a word; `set m.x to 1e309` is a number too big.
+            # Infinity can't cross the wire: browsers can't read that message.
+            if not any(c.isdigit() for c in raw) and " " not in raw.strip():
+                return raw
+            raise ValueError(f"{raw} is too big a number to keep")
+        return self._bounded(value)
+
+    def _eval_unbounded_value(self, target: str, raw: str) -> Any:
         """Evaluate the value for a set statement.
 
         Order: nothing → quoted string → count-of → random → clamp → arithmetic → int → float → raw string.
@@ -931,9 +1127,10 @@ class Runtime:
             lst = self._resolve(list_name)
             return len(lst) if isinstance(lst, list) else 0
 
-        # Quoted string
-        if (raw.startswith('"') and raw.endswith('"')) or \
-           (raw.startswith("'") and raw.endswith("'")):
+        # Quoted string; `"a" + "b"` starts and ends with a quote but is two.
+        if raw.startswith('"') and raw.endswith('"') and len(self._split_chain(raw)) == 1:
+            return unquote(raw[1:-1])
+        if raw.startswith("'") and raw.endswith("'"):
             return raw[1:-1]
 
         # A list written out: ["p", "q"], [1, 2.5, true, null]. It used to be
@@ -952,6 +1149,12 @@ class Runtime:
                     f"{raw}: a list can hold text, numbers, true, false and null, "
                     f"but not lists or objects inside it"
                 )
+            if len(items) > self._MAX_LIST:
+                raise ValueError(f"a list can hold up to {self._MAX_LIST:,} items")
+            if any(isinstance(i, float) and not math.isfinite(i) for i in items):
+                raise ValueError(f"{raw[:80]}: a number in that list is too big to keep")
+            if any(isinstance(i, str) and len(i) > self._MAX_LIST_ITEM for i in items):
+                raise ValueError(f"a list item can be up to {self._MAX_LIST_ITEM:,} characters")
             return items
 
         # Random: "random" or "random min max"
@@ -990,9 +1193,16 @@ class Runtime:
         # the raw-text fallback below would silently store the literal,
         # un-evaluated source ("ball.width * 1.25") as the property's
         # value instead of a number, with nothing signalling the failure.
-        # Leave the target unchanged instead of corrupting it.
+        # An operand with no value is an error that names it. So is anything
+        # else that can't be worked out, such as text times a number.
         if self._looks_like_expression(raw):
-            return self._resolve(target)
+            missing = self._operand_without_value(raw)
+            if missing is not None:
+                raise ValueError(
+                    f"{missing} has no value yet, so {raw} can't be worked out. "
+                    f"Set it first, or put text in quotes."
+                )
+            raise ValueError(f"can't work out {raw}: only numbers can use - * and /, and only + joins text")
 
         # Integer
         try:
@@ -1025,8 +1235,9 @@ class Runtime:
         Handles: quoted strings, booleans, integers, floats, state references.
         Returns None if the atom cannot be resolved (e.g. unknown state key).
         """
-        if (raw.startswith('"') and raw.endswith('"')) or \
-           (raw.startswith("'") and raw.endswith("'")):
+        if raw.startswith('"') and raw.endswith('"'):
+            return unquote(raw[1:-1])
+        if raw.startswith("'") and raw.endswith("'"):
             return raw[1:-1]
         if raw.lower() == "true":
             return True
@@ -1042,6 +1253,97 @@ class Runtime:
             pass
         return self._resolve(raw)
 
+    # A value can grow by itself in a loop, and one line can name any number of
+    # operands, so both are bounded: the step budget counts statements, not bytes.
+    _MAX_TEXT = 100_000
+    _MAX_NUMBER_BITS = 1024
+    _MAX_OPERANDS = 64
+    _MAX_LIST = 10_000
+    _MAX_LIST_ITEM = 1_000
+
+    @staticmethod
+    def _split_chain(raw: str) -> list[str]:
+        """[atom, op, atom, ...], split on ` + - * / ` outside double quotes.
+
+        One pass with no regex: a suffix-scanning pattern here took over a second
+        on one long line, on the shared server.
+        """
+        parts: list[str] = []
+        start, i, quoted = 0, 0, False
+        length = len(raw)
+        while i < length:
+            ch = raw[i]
+            if quoted and ch == "\\":
+                i += 2
+                continue
+            if ch == '"':
+                quoted = not quoted
+            elif (not quoted and ch == " " and i + 2 < length and raw[i + 1] in "+-*/" and raw[i + 2] == " "):
+                parts += [raw[start:i], raw[i + 1]]
+                i += 3
+                start = i
+                continue
+            i += 1
+        parts.append(raw[start:])
+        return parts
+
+    def _bounded(self, value: Any) -> Any:
+        """Refuse a value too big to hold, before it can take the server with it."""
+        if isinstance(value, str) and len(value) > self._MAX_TEXT:
+            raise ValueError(f"that text is over {self._MAX_TEXT:,} characters, which is too long to keep")
+        if isinstance(value, int) and not isinstance(value, bool) and value.bit_length() > self._MAX_NUMBER_BITS:
+            raise ValueError("that number is too big to keep")
+        return value
+
+    @staticmethod
+    def _as_text(value: Any) -> str:
+        """A value joined into text: 1.0 reads 1, as it does on every other surface."""
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        if isinstance(value, float) and value.is_integer() and abs(value) < 1e15:
+            return str(int(value))
+        return str(value)
+
+    def _eval_chain(self, raw: str, chain: list[str]) -> Any | None:
+        """`a + 1 + 2`, `2 + 3 * 4`: more than one operator, * and / first.
+
+        Taking one operator at a time left `set x to x + 1 + 1` quietly doing
+        nothing. None means it can't be worked out, as for one operator.
+        """
+        if (len(chain) + 1) // 2 > self._MAX_OPERANDS:
+            raise ValueError(f"that has over {self._MAX_OPERANDS} values to work out; split it over several lines")
+        values: list[Any] = []
+        for atom in chain[0::2]:
+            value = self._resolve_atom(atom.strip())
+            if value is None:
+                raise ValueError(
+                    f"{atom.strip()} has no value yet, so {raw} can't be worked out. "
+                    f"Set it first, or put text in quotes."
+                )
+            values.append(value)
+        ops = chain[1::2]
+        if any(isinstance(v, str) for v in values):
+            if set(ops) != {"+"}:
+                return None
+            return self._bounded("".join(self._as_text(v) for v in values))
+        if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values):
+            return None
+        reduced, pending = [values[0]], []
+        for op, value in zip(ops, values[1:]):
+            if op == "*":
+                reduced[-1] = self._bounded(reduced[-1] * value)
+            elif op == "/":
+                if value == 0:
+                    raise ValueError(f"can't work out {raw}: nothing can be divided by zero")
+                reduced[-1] /= value
+            else:
+                pending.append(op)
+                reduced.append(value)
+        total = reduced[0]
+        for op, value in zip(pending, reduced[1:]):
+            total = total + value if op == "+" else total - value
+        return self._bounded(total)
+
     def _try_arithmetic(self, raw: str) -> Any | None:
         """Evaluate a single binary expression: atom op atom.
 
@@ -1055,6 +1357,10 @@ class Runtime:
         String concatenation: if either operand is a string, + joins them.
         Comparisons return Python bool (True/False).
         """
+        chain = self._split_chain(raw)
+        if (len(chain) > 3 or (len(chain) == 3 and '"' in raw)) and not any(f" {c} " in raw for c in (">=", "<=", "==", "!=", ">", "<")):
+            return self._eval_chain(raw, chain)
+
         for op in self._ARITHMETIC_OPS:
             sep = f" {op} "
             if sep not in raw:
@@ -1071,10 +1377,10 @@ class Runtime:
                 if isinstance(left_val, str) or isinstance(right_val, str):
                     if left_val is None or right_val is None:
                         continue
-                    return str(left_val) + str(right_val)
+                    return self._bounded(self._as_text(left_val) + self._as_text(right_val))
                 # Numeric addition
                 if isinstance(left_val, (int, float)) and isinstance(right_val, (int, float)):
-                    return left_val + right_val
+                    return self._bounded(left_val + right_val)
                 continue
 
             if op in ("-", "*", "/"):
@@ -1082,11 +1388,13 @@ class Runtime:
                    not isinstance(right_val, (int, float)):
                     continue
                 if op == "-":
-                    return left_val - right_val
+                    return self._bounded(left_val - right_val)
                 if op == "*":
-                    return left_val * right_val
+                    return self._bounded(left_val * right_val)
                 if op == "/":
-                    return None if right_val == 0 else left_val / right_val
+                    if right_val == 0:
+                        raise ValueError(f"can't work out {raw}: nothing can be divided by zero")
+                    return left_val / right_val
 
             if op in ("==", "!=", "<", ">", "<=", ">="):
                 if left_val is None or right_val is None:
@@ -1119,6 +1427,22 @@ class Runtime:
         """
         return any(f" {op} " in raw for op in self._ARITHMETIC_OPS)
 
+    def _operand_without_value(self, raw: str) -> str | None:
+        """The first operand of `raw` that resolves to nothing, or None."""
+        for op in self._ARITHMETIC_OPS:
+            sep = f" {op} "
+            if sep in raw:
+                left, right = (part.strip() for part in raw.split(sep, 1))
+                for atom in (left, right):
+                    # `1 + 2 + 3`: one operator at a time, so `2 + 3` isn't a
+                    # value that's missing.
+                    if self._looks_like_expression(atom):
+                        return None
+                    if self._resolve_atom(atom) is None:
+                        return atom
+                return None
+        return None
+
     # ── helpers ────────────────────────────────────────────────
 
     def _interpolate(self, text: str) -> str:
@@ -1133,7 +1457,7 @@ class Runtime:
                 return "" if self._key_exists(key) else match.group(0)
             return str(val)
 
-        return _INTERP_RE.sub(_replace, text)
+        return self._bounded(_INTERP_RE.sub(_replace, text))
 
     def _key_exists(self, key: str) -> bool:
         """Return True if key exists in state (even if its value is None)."""
@@ -1162,9 +1486,9 @@ class Runtime:
     @staticmethod
     def _coerce(value: str) -> Any:
         """Coerce a raw value string to a Python type."""
-        if (value.startswith('"') and value.endswith('"')) or (
-            value.startswith("'") and value.endswith("'")
-        ):
+        if value.startswith('"') and value.endswith('"'):
+            return unquote(value[1:-1])
+        if value.startswith("'") and value.endswith("'"):
             return value[1:-1]
         try:
             return int(value)
@@ -1202,6 +1526,8 @@ def _stmt_to_dict(stmt: Statement) -> dict[str, Any]:
     """Convert a statement to an inspectable dict for look programme."""
     if isinstance(stmt, SetStatement):
         return {"type": "set", "target": stmt.target, "value": stmt.value}
+    if isinstance(stmt, ForgetStatement):
+        return {"type": "forget", "target": stmt.target}
     if isinstance(stmt, CreateStatement):
         d: dict[str, Any] = {"type": "create", "kind": stmt.kind, "name": stmt.name}
         if stmt.parent:
@@ -1312,6 +1638,8 @@ def _stmt_summary(d: dict[str, Any]) -> str:
     t = d.get("type", "")
     if t == "set":
         return f"{d['target']} → {d['value']}"
+    if t == "forget":
+        return f"{d['target']} → (forgotten)"
     if t == "create":
         s = f"{d['kind']} {d['name']}"
         if d.get("parent"):

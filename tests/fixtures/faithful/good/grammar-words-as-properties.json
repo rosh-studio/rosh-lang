@@ -1,0 +1,18 @@
+{
+ "objects": {
+  "a": {
+   "to": 1,
+   "from": "x",
+   "as": true,
+   "object": null,
+   "when": [
+    1
+   ],
+   "none": "none"
+  }
+ },
+ "meta": {
+  "to": "y",
+  "set": 2
+ }
+}

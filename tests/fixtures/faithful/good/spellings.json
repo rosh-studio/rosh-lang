@@ -1,0 +1,10 @@
+{
+ "objects": {
+  "a": {
+   "colour": "blue",
+   "color": "red",
+   "size": "big"
+  }
+ },
+ "meta": {}
+}

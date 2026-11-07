@@ -1,0 +1,4 @@
+{
+ "rosh": "set room.x to [\"a\\nb\"]",
+ "error": "line 1"
+}

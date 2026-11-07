@@ -1,0 +1,20 @@
+{
+ "objects": {
+  "a": {
+   "next": {
+    "$ref": "later"
+   }
+  },
+  "later": {
+   "back": {
+    "$ref": "a"
+   }
+  },
+  "self": {
+   "me": {
+    "$ref": "self"
+   }
+  }
+ },
+ "meta": {}
+}

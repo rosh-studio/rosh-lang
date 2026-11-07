@@ -187,7 +187,7 @@ class TestPortableIf:
         assert rt.state["result"] == "no"
 
     def test_js_emits_if(self):
-        assert "rosh.get(" in _js("if score > 10\n  print \"win\"\nend")
+        assert 'rosh.condition("score", ">", "10", true)' in _js("if score > 10\n  print \"win\"\nend")
 
 
 class TestPortableRepeat:
@@ -418,8 +418,8 @@ class TestOnConditionPayloadAccess:
     def test_js_on_condition_reads_via_get(self):
         """JS on-condition uses rosh.get() — payload is in state during dispatch."""
         code = _js('event keydown\non keydown when key == " " send shot')
-        assert 'rosh.get("key")' in code
-        assert '" "' in code or "' '" in code
+        assert 'rosh.condition("key"' in code
+        assert '\\" \\"' in code
 
     def test_js_when_key_filter_reads_payload_directly(self):
         """when keydown ArrowLeft uses payload.key directly (different mechanism, same result)."""

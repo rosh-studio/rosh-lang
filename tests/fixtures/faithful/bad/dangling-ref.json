@@ -1,0 +1,13 @@
+{
+ "doc": {
+  "objects": {
+   "a": {
+    "r": {
+     "$ref": "nobody"
+    }
+   }
+  },
+  "meta": {}
+ },
+ "error": "isn't in the document"
+}

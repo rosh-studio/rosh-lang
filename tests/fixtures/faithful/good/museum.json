@@ -1,0 +1,144 @@
+{
+ "objects": {
+  "door": {
+   "x": -16,
+   "z": 14,
+   "door_to": "/world/rosh/blocks",
+   "label": "Back to Blocks"
+  },
+  "nh_door": {
+   "x": 16,
+   "z": 14,
+   "door_to": "/world/rosh/natural-history",
+   "label": "Natural History"
+  },
+  "chess_set": {
+   "shape": "chess_set",
+   "x": -12.6,
+   "z": 2,
+   "label": "Lewis Chessmen (replica of 12th-century originals)",
+   "period": "the originals are 12th-century; this set is a modern replica",
+   "year": 1150,
+   "category": "game",
+   "aka": "chess pieces, chess, chessmen",
+   "description": "Lewis Chessmen (replica). A 3D scan of a modern replica set, on a modelled board. The originals, carved mostly from walrus ivory in the 12th century, were found on the Isle of Lewis in 1831.",
+   "credit": "3D model: 'Replica Lewis Chess Pieces on Chessboard' by Thomas Flynn (sketchfab.com), CC BY 4.0.",
+   "source": "https://sketchfab.com/3d-models/95a5545c8cd34042af8579d0cf972373"
+  },
+  "torc": {
+   "shape": "torc",
+   "x": 2.5,
+   "z": 2,
+   "label": "Torque de Burela, Galicia",
+   "period": "3rd–2nd century BC",
+   "year": -200,
+   "category": "jewellery",
+   "aka": "necklace, neck ring, gold ring, torque, burela torc",
+   "description": "The Torque de Burela, a gold neck ring from Burela in Galicia, Spain, made in the pre-Roman 'castro' culture and thought to date from the 3rd–2nd century BC. Not a Scottish find: torcs like it were worn across Iron Age Europe. Whether this 3D model is a scan or was modelled by hand, its maker doesn't say.",
+   "credit": "3D model: 'Torque de Burela - Celt Necklace from Burela' by aroperezzz (sketchfab.com), CC BY 4.0.",
+   "source": "https://sketchfab.com/3d-models/082e38963740463d9877f796058a0963"
+  },
+  "pictish_stone": {
+   "shape": "pictish_stone",
+   "x": -7.8,
+   "z": -8,
+   "label": "Logierait Pictish Stone, Perthshire (scan)",
+   "label_lift": 3.0,
+   "category": "carved stone",
+   "aka": "standing stone, logierait stone",
+   "description": "A Pictish stone in Logierait churchyard, Perthshire. One side has a cross filled with knotwork. The other has a horse, its rider mostly lost where the stone has flaked away, above a serpent and Z-rod. What the symbols meant is still debated.",
+   "credit": "3D model: 'Pictish Stone, Logierait Churchyard, Perthshire' by Dundee Howff Conservation Group (sketchfab.com), CC BY 4.0.",
+   "source": "https://sketchfab.com/3d-models/ea573a4e86544413bb8707690d5c778c"
+  },
+  "torch_wall": {
+   "shape": "torch_wall",
+   "x": -7.6,
+   "z": 2,
+   "label": "Wall Torch (artist's model)",
+   "category": "lighting",
+   "aka": "torch, lamp",
+   "description": "An artist's model of a medieval-style wall torch, made for games. Not a recorded object.",
+   "credit": "3D model: 'Medieval Wall Torch' by Kigha (sketchfab.com), CC BY 4.0.",
+   "source": "https://sketchfab.com/3d-models/77db436da2844cbfb4dde0bb9b396835"
+  },
+  "sword": {
+   "shape": "sword",
+   "x": 12.6,
+   "z": 2,
+   "label": "Sword (artist's model)",
+   "category": "weapon",
+   "aka": "blade",
+   "description": "An artist's model of a fantasy sword in a medieval style. Not a recorded object.",
+   "credit": "3D model: 'Medieval fantasy sword' by Joan LP (sketchfab.com), CC BY 4.0.",
+   "source": "https://sketchfab.com/3d-models/24a359770f7e47618c6e37ccd5a77612"
+  },
+  "cauldron": {
+   "shape": "cauldron",
+   "x": -2.5,
+   "z": 2,
+   "label": "Cauldron (artist's model)",
+   "category": "vessel",
+   "aka": "pot, cooking pot, big pot, iron pot",
+   "description": "An artist's model, 'Dagda's cauldron', inspired by the Gundestrup cauldron. Not a recorded object.",
+   "credit": "3D model: 'Dagda's cauldron' by DragonJojo (sketchfab.com), CC BY 4.0.",
+   "source": "https://sketchfab.com/3d-models/02a5748af09c491780997e4af41fe316"
+  },
+  "amphora": {
+   "shape": "amphora",
+   "x": -15.7,
+   "z": -8,
+   "label": "Greek Amphora (artist's model)",
+   "label_lift": 3.2,
+   "category": "vessel",
+   "aka": "vase, jar, red pot, pot",
+   "description": "An artist's model of an ancient Greek amphora, painted with wear and damage. Not a recorded object.",
+   "credit": "3D model: 'Ancient Greek Amphora' by alexi.smnd (sketchfab.com), CC BY 4.0.",
+   "source": "https://sketchfab.com/3d-models/77603e342d1b4bafba7679c5483af280"
+  },
+  "brooch_pictish": {
+   "shape": "brooch_pictish",
+   "x": 7.6,
+   "z": 2,
+   "label": "Rhynie Brooch (reconstruction)",
+   "category": "jewellery",
+   "aka": "pin, brooch",
+   "description": "The Rhynie Brooch: a 3D visualisation of a small penannular brooch (Fowler's type H), reconstructed from a clay mould found at Rhynie, Aberdeenshire. A reconstruction, not a scan.",
+   "credit": "3D model: 'Rhynie Brooch' by rsh537 (sketchfab.com), CC BY 4.0.",
+   "source": "https://sketchfab.com/3d-models/e87aa7fc0e274d3da500d0355281c0e7"
+  },
+  "flemington_stone": {
+   "shape": "flemington_stone",
+   "x": 7.8,
+   "z": -8,
+   "label": "Flemington Pictish Stone",
+   "label_lift": 3.1,
+   "category": "carved stone",
+   "description": "The Flemington Pictish Stone, Aberlemno, Angus: a carved symbol stone. The 3D model is published by University of Aberdeen Archaeology, which doesn't say how it was made. What its symbols meant is still debated.",
+   "credit": "3D model: 'Flemington Pictish Stone' by University of Aberdeen Archaeology (sketchfab.com), CC BY 4.0.",
+   "source": "https://sketchfab.com/3d-models/f66392476f134693ab9621c0df454078"
+  },
+  "conan_stone": {
+   "shape": "conan_stone",
+   "x": 15.7,
+   "z": -8,
+   "label": "Conan Stone, Pictish cross-slab (scan)",
+   "period": "thought to have been carved about 1,200 years ago",
+   "year": 800,
+   "label_lift": 3.6,
+   "category": "carved stone",
+   "aka": "cross slab, cross-slab, pictish stone",
+   "description": "The Conan Stone, a Pictish cross-slab found in 2019 at an early Christian church site near Dingwall, thought to have been carved about 1,200 years ago and reused as a grave marker in the 1790s. This scan shows one broad face: lettering cut when it was reused, and below it worn Pictish carvings, faint but visible, including a large ring. Sources describe this face as carrying a double disc and Z-rod, beasts, oxen and an animal-headed warrior with sword and shield. The large cross is on the other face, which this scan does not show. Interlace runs along the edges. What the symbols meant is still debated.",
+   "credit": "3D model: 'Conan Stone - Pictish Cross Slab' by jamesmcc (sketchfab.com), CC BY 4.0. Simplified and compressed for the web.",
+   "source": "https://sketchfab.com/3d-models/conan-stone-pictish-cross-slab-d1cc8ce594b543ac835dc5592be55de3"
+  }
+ },
+ "meta": {
+  "title": "Rosh Museum",
+  "intro": "A small museum about telling the real thing from a copy. Each label says what it is, where that's known: a scan, a replica, a reconstruction or an artist's model.",
+  "guide_1": "Type arrange by date in a line to see the collection as a timeline.",
+  "guide_2": "Tap or click any object for its story, who made the 3D model, and where it came from.",
+  "guide_3": "Ask a question: what is the oldest thing here?",
+  "guide_4": "Change the light: set the room to dusk.",
+  "curated": "true"
+ }
+}

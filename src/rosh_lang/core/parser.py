@@ -12,6 +12,7 @@ import re
 import shlex
 from pathlib import Path
 
+from rosh_lang.core.model import unquote
 from rosh_lang.core.model import (
     AddStatement,
     AfterStatement,
@@ -23,6 +24,7 @@ from rosh_lang.core.model import (
     CreateStatement,
     DefineStatement,
     DestroyStatement,
+    ForgetStatement,
     DoStatement,
     ElseStatement,
     EndStatement,
@@ -103,14 +105,20 @@ def parse_string(
     source: str = "<string>",
     *,
     allow_extensions: bool = False,
-    strict_blocks: bool = False,
+    strict_blocks: bool = True,
+    normalise: bool = True,
 ) -> Programme:
-    """Parse a string of Rosh code into a Programme."""
-    from rosh_lang.core.normalise import normalise
+    """Parse a string of Rosh code into a Programme.
+
+    `normalise=False` parses each line as written. The plain-English
+    normaliser is for people; on canonical data it changes values (a string
+    holding `" #` lost its end, `colour` became `color`: Task 19, 1 Nov).
+    """
+    from rosh_lang.core.normalise import normalise as _normalise
     # Normalise each line; a single line may expand to multiple canonical lines
     expanded_lines: list[tuple[int, str]] = []
     for i, raw_line in enumerate(text.splitlines(), start=1):
-        result = normalise(raw_line)
+        result = _normalise(raw_line) if normalise else raw_line
         parts = result.splitlines()
         if parts:
             for expanded in parts:
@@ -132,6 +140,9 @@ def parse_string(
     # Collect structured blocks in one recursive pass so different block types
     # can nest without an order-dependent post-pass losing their bodies.
     statements = _collect_structured_blocks(statements, source=source)
+    # An `else` or `end` belonging to nothing, or a `when` never closed, used to
+    # be accepted, and the lines after it just ran. strict_blocks=False is for
+    # looking at a fragment of a block, never for running one.
     if strict_blocks:
         _validate_when_blocks(statements, source=source)
     return Programme(statements=statements, source=source, source_text=text)
@@ -270,6 +281,11 @@ def _parse_line(raw: str, line: int, source: str, *, allow_extensions: bool = Fa
     if stripped.startswith("#"):
         return CommentStatement(text=stripped[1:].strip(), line=line)
 
+    # `# note` after code is a comment in canonical Rosh too, not part of a
+    # name (`create object chair  # note` made `chair_#_note`).
+    from rosh_lang.core.normalise import _strip_inline_comment
+    stripped = _strip_inline_comment(stripped)
+
     keyword = stripped.split()[0].lower()
 
     dispatch = {
@@ -289,6 +305,7 @@ def _parse_line(raw: str, line: int, source: str, *, allow_extensions: bool = Fa
         "look": _parse_look,
         "connect": _parse_connect,
         "destroy": _parse_destroy,
+        "forget": _parse_forget,
         "sprite": _parse_sprite,
         "sound": _parse_sound,
         "play": _parse_play,
@@ -332,7 +349,7 @@ def _parse_print(line_text: str, line: int, source: str) -> PrintStatement:
                 f"unterminated string literal in print — missing closing {quote}",
                 line=line, source=source,
             )
-        text = rest[1:-1]
+        text = unquote(rest[1:-1]) if quote == '"' else rest[1:-1]
     else:
         text = rest
     return PrintStatement(text=text, line=line)
@@ -397,6 +414,14 @@ def _parse_set(line_text: str, line: int, source: str) -> SetStatement:
     rest = line_text[len("set"):].strip()
     if not rest:
         raise ParseError("set requires target and value", line=line, source=source)
+    # `set m.y to` once set m.y to the word "to", through the older `set a b`
+    # form below. Nothing after `to` is a missing value, never a value.
+    if rest.split()[-1].lower() == "to":
+        target_name = " ".join(rest.split()[:-1])
+        raise ParseError(
+            f"set {target_name} to what? There is nothing after 'to'",
+            line=line, source=source,
+        )
     if " to " in rest:
         parts = rest.split(" to ", 1)
         target_str = parts[0].strip()
@@ -462,7 +487,7 @@ def _parse_get(line_text: str, line: int, source: str) -> GetStatement:
 def _parse_say(line_text: str, line: int, source: str) -> SayStatement:
     rest = line_text[len("say"):].strip()
     if rest.startswith('"') and rest.endswith('"'):
-        text = rest[1:-1]
+        text = unquote(rest[1:-1])
     elif rest.startswith("'") and rest.endswith("'"):
         text = rest[1:-1]
     else:
@@ -480,9 +505,14 @@ def _parse_send(line_text: str, line: int, source: str) -> SendStatement:
     event = tokens[0]
     payload: dict[str, str] = {}
     for tok in tokens[1:]:
-        if "=" in tok:
-            k, v = tok.split("=", 1)
-            payload[k] = v
+        if "=" not in tok:
+            # `send scored 8` used to drop the 8 without a word.
+            raise ParseError(
+                f"send can't tell what '{tok}' is; name it, like: send {event} value={tok}",
+                line=line, source=source,
+            )
+        k, v = tok.split("=", 1)
+        payload[k] = v
     return SendStatement(event=event, payload=payload, line=line)
 
 
@@ -496,7 +526,11 @@ def _parse_event(line_text: str, line: int, source: str) -> EventStatement:
     return EventStatement(name=name, payload_fields=payload_fields, line=line)
 
 
-_ON_ACTION_WORDS = {"when", "set", "send", "say", "print", "destroy", "do", "play"}
+# What the one-line `on` form can do (Runtime._fire_listener runs each); an
+# event's name ends at the first of these, so adding one renames events that
+# contain it (`on ready go say hi` is the event ready_go).
+ON_ACTIONS = ("set", "send", "say", "print", "destroy", "do", "play")
+_ON_ACTION_WORDS = {"when", *ON_ACTIONS}
 
 
 def _parse_on(line_text: str, line: int, source: str) -> OnStatement:
@@ -509,6 +543,11 @@ def _parse_on(line_text: str, line: int, source: str) -> OnStatement:
         raise ParseError("on requires an event and action", line=line, source=source)
     remaining = tokens[idx:]
 
+    # `on ping if t > 1 ...` was read as an event called ping_if_t_>_1, which never fires.
+    if any(token.lower() == "if" for token in tokens[1:idx + 1]):
+        raise ParseError(
+            f"a one-line rule uses when, not if: on {tokens[0]} when ...", line=line, source=source
+        )
     # Check for conditional form: on <event> when <field> <op> <value> <action...>
     condition = ""
     if remaining and remaining[0].lower() == "when":
@@ -544,7 +583,7 @@ def _parse_on(line_text: str, line: int, source: str) -> OnStatement:
         condition = f"{cond_field} {cond_op} {cond_value}"
 
     if not remaining:
-        raise ParseError("on requires an action (set, send, say, print)", line=line, source=source)
+        raise ParseError("on requires an action (" + ", ".join(ON_ACTIONS) + ")", line=line, source=source)
 
     action = remaining[0].lower()
     args = " ".join(remaining[1:])
@@ -582,6 +621,19 @@ def _parse_destroy(line_text: str, line: int, source: str) -> DestroyStatement:
     return DestroyStatement(name=rest, line=line)
 
 
+def _parse_forget(line_text: str, line: int, source: str) -> ForgetStatement:
+    rest = line_text[len("forget"):].strip()
+    # No space either side of the dot: the server's guards read `torc.locked`
+    # as written, so `forget torc. locked` must not mean the same.
+    m = re.fullmatch(r"(.*\S)\.([A-Za-z_][\w-]*)", rest)
+    if not m:
+        raise ParseError(
+            "forget needs a thing and one property, like: forget torc.color",
+            line=line, source=source,
+        )
+    return ForgetStatement(target=f"{'_'.join(m.group(1).split())}.{m.group(2)}", line=line)
+
+
 def _parse_sprite(line_text: str, line: int, source: str) -> SpriteStatement:
     rest = line_text[len("sprite"):].strip()
     if not rest:
@@ -592,7 +644,7 @@ def _parse_sprite(line_text: str, line: int, source: str) -> SpriteStatement:
     if len(tokens) > 1:
         desc = tokens[1]
         if desc.startswith('"') and desc.endswith('"'):
-            desc = desc[1:-1]
+            desc = unquote(desc[1:-1])
         elif desc.startswith("'") and desc.endswith("'"):
             desc = desc[1:-1]
     return SpriteStatement(name=name, description=desc, line=line)
@@ -608,7 +660,7 @@ def _parse_sound(line_text: str, line: int, source: str) -> SoundStatement:
     if len(tokens) > 1:
         desc = tokens[1]
         if desc.startswith('"') and desc.endswith('"'):
-            desc = desc[1:-1]
+            desc = unquote(desc[1:-1])
         elif desc.startswith("'") and desc.endswith("'"):
             desc = desc[1:-1]
     return SoundStatement(name=name, description=desc, line=line)
@@ -729,7 +781,7 @@ def _parse_background(line_text: str, line: int, source: str) -> BackgroundState
     if not rest:
         raise ParseError("background requires a colour or image path", line=line, source=source)
     if rest.startswith('"') and rest.endswith('"'):
-        value = rest[1:-1]
+        value = unquote(rest[1:-1])
     elif rest.startswith("'") and rest.endswith("'"):
         value = rest[1:-1]
     else:
@@ -753,8 +805,25 @@ def _parse_if(line_text: str, line: int, source: str) -> IfStatement:
             "if condition must be: field op value",
             line=line, source=source,
         )
-    condition = " ".join(tokens[:3])
+    # Any other word here was a condition that could never be true, with no
+    # error at all: `if visits = 5`, `if visits is 5` (BUGS.md 27 Oct).
+    op = tokens[1]
+    if op not in _IF_OPERATORS:
+        hint = {"=": "==", "is": "==", "equals": "==", "<>": "!=", "=>": ">=", "=<": "<="}.get(op.lower())
+        if op.lower() == "is" and tokens[2].lower() == "not":
+            hint = "!="
+        raise ParseError(
+            f"if doesn't know {op!r}; it compares with one of: " + " ".join(_IF_OPERATORS)
+            + (f" (did you mean {hint}?)" if hint else ""),
+            line=line, source=source,
+        )
+    # The whole value, not its first word: `if t.label == "big box"` compared
+    # with `"big` and was never true.
+    condition = " ".join([tokens[0], op, rest.split(None, 2)[2]])
     return IfStatement(condition=condition, line=line)
+
+
+_IF_OPERATORS = ("==", "!=", ">", "<", ">=", "<=")
 
 
 def _collect_if_blocks(

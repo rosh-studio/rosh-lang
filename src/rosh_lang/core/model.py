@@ -9,6 +9,8 @@ the runtime consumes them.
 
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass, field
 
 
@@ -140,6 +142,18 @@ class DestroyStatement:
 
 
 @dataclass
+class ForgetStatement:
+    """forget torc.color — the object no longer has that property.
+
+    `set` can only add or change, so undoing a colour on something that had
+    none could only write a colour nobody chose (31 Oct).
+    """
+
+    target: str
+    line: int = 0
+
+
+@dataclass
 class SpriteStatement:
     """sprite player "pixel art spaceship" """
 
@@ -221,6 +235,20 @@ class BackgroundStatement:
 
     value: str  # colour string or image path/URL
     line: int = 0
+
+
+class RoshValueError(ValueError):
+    """A `set` whose value can't be worked out: said to whoever wrote it."""
+
+
+_ESCAPE_RE = re.compile(r'\\(["\\])')
+
+
+def unquote(text: str) -> str:
+    """What a double-quoted string holds: backslash-quote is a quote, two
+    backslashes are one. Any other backslash stays as written, so a Windows
+    path keeps its meaning."""
+    return _ESCAPE_RE.sub(r"\1", text)
 
 
 @dataclass
@@ -325,6 +353,7 @@ Statement = (
     | LookStatement
     | ConnectStatement
     | DestroyStatement
+    | ForgetStatement
     | SpriteStatement
     | SoundStatement
     | PlayStatement

@@ -1,0 +1,11 @@
+{
+ "doc": {
+  "objects": {
+   "a": {
+    "s": "two lines"
+   }
+  },
+  "meta": {}
+ },
+ "error": "line break"
+}

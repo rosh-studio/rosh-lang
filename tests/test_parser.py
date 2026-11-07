@@ -249,26 +249,26 @@ class TestSet:
 
 class TestWhen:
     def test_when_simple(self) -> None:
-        prog = parse_string("when update then")
+        prog = parse_string("when update then", strict_blocks=False)
         stmt = prog.statements[0]
         assert isinstance(stmt, WhenStatement)
         assert stmt.event == "update"
         assert stmt.args == []
 
     def test_when_without_then(self) -> None:
-        prog = parse_string("when start")
+        prog = parse_string("when start", strict_blocks=False)
         stmt = prog.statements[0]
         assert isinstance(stmt, WhenStatement)
         assert stmt.event == "start"
 
     def test_when_collision(self) -> None:
-        prog = parse_string("when collision hero enemy then")
+        prog = parse_string("when collision hero enemy then", strict_blocks=False)
         stmt = prog.statements[0]
         assert stmt.event == "collision"
         assert stmt.args == ["hero", "enemy"]
 
     def test_when_key_event(self) -> None:
-        prog = parse_string("when space_pressed then")
+        prog = parse_string("when space_pressed then", strict_blocks=False)
         stmt = prog.statements[0]
         assert stmt.event == "space_pressed"
 
@@ -277,7 +277,7 @@ class TestWhen:
             parse_string("when then")
 
     def test_end(self) -> None:
-        prog = parse_string("end")
+        prog = parse_string("end", strict_blocks=False)
         assert isinstance(prog.statements[0], EndStatement)
 
 

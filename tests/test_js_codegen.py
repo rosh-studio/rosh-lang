@@ -583,13 +583,13 @@ class TestCollectionCodegen:
         result = compile_programme(parse_string(
             "if value == nothing\n  print absent\nend"
         ))
-        assert 'rosh.get("value") == null' in result.init_code
+        assert 'rosh.condition("value", "==", "nothing")' in result.init_code
 
     def test_nothing_inequality_emits_null(self):
         result = compile_programme(parse_string(
             "if value != nothing\n  print present\nend"
         ))
-        assert 'rosh.get("value") != null' in result.init_code
+        assert 'rosh.condition("value", "!=", "nothing")' in result.init_code
 
 
 # ── Per-key event filtering ──────────────────────────────────────
@@ -707,8 +707,7 @@ class TestOnStatement:
             'event check\non check when level > 3 set message to "high"'
         )
         result = compile_programme(prog)
-        assert 'rosh.get("level")' in result.handler_code
-        assert "> 3" in result.handler_code
+        assert 'rosh.condition("level", ">", "3", true)' in result.handler_code
 
     def test_on_condition_with_invalid_operator_raises(self):
         """16-Aug-2026 regression: 'on update when collision ball player1
@@ -866,13 +865,13 @@ class TestJSVariableArithmetic:
     def test_if_with_invalid_operator_raises(self):
         """Same class of bug as OnStatement's condition handling (see
         test_on_condition_with_invalid_operator_raises) reached via the
-        block "if" form instead — the parser doesn't validate the operator
-        token either, so this must be caught at codegen time."""
+        block "if" form instead. Since 3 Nov the parser refuses it, with its
+        line, before codegen is reached (BUGS.md 27 Oct)."""
         import pytest
 
-        prog = parse_string('if score bogus 10\n  print "x"\nend')
-        with pytest.raises(ValueError, match="not a valid comparison operator"):
-            compile_programme(prog)
+        from rosh_lang.core.parser import ParseError
+        with pytest.raises(ParseError, match="if doesn't know 'bogus'"):
+            parse_string('if score bogus 10\n  print "x"\nend')
 
 
 class TestIfCodegen:
@@ -887,7 +886,7 @@ class TestIfCodegen:
             'end\n'
         )
         result = compile_programme(prog)
-        assert 'if (rosh.get("score") > 10)' in result.init_code
+        assert 'if (rosh.condition("score", ">", "10", true))' in result.init_code
         assert 'rosh.appendOutput' in result.init_code
 
     def test_if_else(self):
@@ -900,7 +899,7 @@ class TestIfCodegen:
         )
         result = compile_programme(prog)
         assert '} else {' in result.init_code
-        assert 'rosh.get("lives") === 0' in result.init_code
+        assert 'rosh.condition("lives", "==", "0")' in result.init_code
 
     def test_if_in_handler(self):
         prog = parse_string(
@@ -911,7 +910,7 @@ class TestIfCodegen:
             'end\n'
         )
         result = compile_programme(prog)
-        assert 'if (rosh.get("score") > 10)' in result.handler_code
+        assert 'if (rosh.condition("score", ">", "10", true))' in result.handler_code
 
     def test_if_string_comparison(self):
         prog = parse_string(
@@ -920,7 +919,7 @@ class TestIfCodegen:
             'end\n'
         )
         result = compile_programme(prog)
-        assert 'rosh.get("status") === "ready"' in result.init_code
+        assert 'rosh.condition("status", "==", "ready")' in result.init_code
 
     def test_if_quoted_string_comparison_strips_source_quotes(self):
         """Quoted RHS values must not become strings containing literal quote characters."""
@@ -930,8 +929,7 @@ class TestIfCodegen:
             'end\n'
         )
         result = compile_programme(prog)
-        assert 'rosh.get("phase") === "playing"' in result.init_code
-        assert '\\"playing\\"' not in result.init_code
+        assert _execute_js('set phase to "playing"\nif phase == "playing"\nprint "go"\nend')["output"] == ["go"]
 
     def test_else_if_chain(self):
         prog = parse_string(
@@ -944,9 +942,9 @@ class TestIfCodegen:
             'end\n'
         )
         result = compile_programme(prog)
-        assert 'rosh.get("x") > 5' in result.init_code
+        assert 'rosh.condition("x", ">", "5", true)' in result.init_code
         assert '} else {' in result.init_code
-        assert 'rosh.get("x") > 3' in result.init_code
+        assert 'rosh.condition("x", ">", "3", true)' in result.init_code
 
 
 class TestSceneCodegen:
@@ -1023,7 +1021,7 @@ class TestEmitAfter:
     def test_payload_emitted(self):
         prog = parse_string("after 0.5 send scored value=5")
         result = compile_programme(prog)
-        assert 'rosh.send("scored", {"value": "5"});' in result.init_code
+        assert 'rosh.send("scored", {"value": rosh.coerce("5")});' in result.init_code
 
 
 class TestEmitBackground:

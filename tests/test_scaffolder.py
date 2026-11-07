@@ -22,7 +22,7 @@ def _assert_safe_lives_handler(source: str) -> None:
     assert "send lives.check-lives" not in source
 
     compiled = compile_programme(parse_string(source))
-    assert 'rosh.get("game-lifecycle.phase") === "playing"' in compiled.handler_code
+    assert 'rosh.condition("game-lifecycle.phase", "==", ' in compiled.handler_code
     assert 'rosh.set("lives.count"' in compiled.handler_code
     assert 'rosh.send("check-lives")' in compiled.handler_code
 

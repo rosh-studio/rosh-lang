@@ -1,6 +1,6 @@
 [project]
 name = "rosh-lang"
-version = "0.9.13"
+version = "0.10.0"
 description = "A readable language for shared worlds. One script, many worlds."
 requires-python = ">=3.10"
 readme = "README.md"

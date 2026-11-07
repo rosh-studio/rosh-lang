@@ -119,6 +119,13 @@ get all into items             # all visible state as a structured list
 get count of visitors into n   # list length as an integer
 ```
 
+The first value fixes what kind of thing a name holds: a number, text, true or
+false, a list, or a thing. Giving it another kind is an error; `set x to nothing`
+frees the name. So are text times a number and dividing by zero.
+
+`set a.parent to object b` is a checked reference: `b` must exist, and while
+`a.parent` points at it `b` can't be destroyed, set to nothing or forgotten.
+
 ### Look (inspection)
 
 ```rosh
@@ -306,6 +313,10 @@ end
 do fire_bullet                          # call it
 on keydown when key == " " do fire_bullet   # call from event
 ```
+
+A function must be defined above the line that first calls it; a handler only needs
+it defined by the time it runs. A later `define` replaces it from that line on, and a
+function can't call itself.
 
 Functions share the global state space — they read and write the same variables as the main programme.
 

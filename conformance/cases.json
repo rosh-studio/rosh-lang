@@ -1,0 +1,939 @@
+{
+ "version": 1,
+ "note": "Language-neutral cases. expect.state: object.prop or variable must hold this value afterwards. expect.output: text must have been produced. expect.refused: a clear error, and nothing else changed.",
+ "cases": [
+  {
+   "id": "create-object",
+   "kw": "create",
+   "code": "create object m",
+   "expect": {
+    "exists": "m"
+   }
+  },
+  {
+   "id": "set-prop",
+   "kw": "set",
+   "code": "create object m\nset m.x to 2",
+   "expect": {
+    "state": {
+     "m.x": 2
+    }
+   }
+  },
+  {
+   "id": "set-string",
+   "kw": "set",
+   "code": "create object m\nset m.color to \"red\"",
+   "expect": {
+    "state": {
+     "m.color": "red"
+    }
+   }
+  },
+  {
+   "id": "set-arith",
+   "kw": "set",
+   "code": "create object m\nset m.x to 2\nset m.x to m.x + 3",
+   "expect": {
+    "state": {
+     "m.x": 5
+    }
+   }
+  },
+  {
+   "id": "set-var",
+   "kw": "set",
+   "code": "create object m\nset n to 4\nset m.x to n",
+   "expect": {
+    "state": {
+     "m.x": 4
+    }
+   },
+   "open_typed": true
+  },
+  {
+   "id": "destroy",
+   "kw": "destroy",
+   "code": "create object m\ncreate object k\ndestroy k",
+   "expect": {
+    "exists": "m",
+    "absent": "k"
+   }
+  },
+  {
+   "id": "print",
+   "kw": "print",
+   "code": "print \"hello\"",
+   "expect": {
+    "output": "hello"
+   },
+   "surfaces_open": [
+    "room_code"
+   ]
+  },
+  {
+   "id": "print-interp",
+   "kw": "print",
+   "code": "set n to 3\nprint \"n is {n}\"",
+   "expect": {
+    "output": "n is 3"
+   },
+   "surfaces_open": [
+    "room_code"
+   ]
+  },
+  {
+   "id": "say",
+   "kw": "say",
+   "code": "say hello",
+   "expect": {
+    "output": "hello"
+   },
+   "surfaces_open": [
+    "room_code"
+   ]
+  },
+  {
+   "id": "get",
+   "kw": "get",
+   "code": "create object m\nset m.x to 2\nget m",
+   "expect": {
+    "accepted": true
+   },
+   "note": "what get and look display is the surface's job"
+  },
+  {
+   "id": "look",
+   "kw": "look",
+   "code": "create object m\nlook",
+   "expect": {
+    "accepted": true
+   },
+   "note": "what get and look display is the surface's job"
+  },
+  {
+   "id": "if-true",
+   "kw": "if",
+   "code": "create object m\nset m.x to 6\nif m.x > 5\nset m.y to 1\nend",
+   "expect": {
+    "state": {
+     "m.y": 1
+    }
+   }
+  },
+  {
+   "id": "if-false",
+   "kw": "if",
+   "code": "create object m\nset m.y to 9\nset m.x to 2\nif m.x > 5\nset m.y to 1\nend",
+   "expect": {
+    "state": {
+     "m.y": 9
+    }
+   }
+  },
+  {
+   "id": "if-else",
+   "kw": "else",
+   "code": "create object m\nset m.x to 2\nif m.x > 5\nset m.y to 1\nelse\nset m.y to 2\nend",
+   "expect": {
+    "state": {
+     "m.y": 2
+    }
+   }
+  },
+  {
+   "id": "if-elseif",
+   "kw": "else",
+   "code": "create object m\nset m.x to 6\nif m.x > 10\nset m.y to 1\nelse if m.x > 5\nset m.y to 2\nelse\nset m.y to 3\nend",
+   "expect": {
+    "state": {
+     "m.y": 2
+    }
+   }
+  },
+  {
+   "id": "repeat",
+   "kw": "repeat",
+   "code": "create object m\nset m.x to 0\nrepeat 3\nset m.x to m.x + 1\nend",
+   "expect": {
+    "state": {
+     "m.x": 3
+    }
+   }
+  },
+  {
+   "id": "repeat-as",
+   "kw": "repeat",
+   "code": "create object m\nrepeat 3 as i\nset m.x to i\nend",
+   "expect": {
+    "state": {
+     "m.x": 3
+    }
+   },
+   "note": "repeat counts from 1"
+  },
+  {
+   "id": "define-do",
+   "kw": "define",
+   "code": "create object m\ndefine go_up\nset m.y to 7\nend\ndo go_up",
+   "expect": {
+    "state": {
+     "m.y": 7
+    }
+   }
+  },
+  {
+   "id": "when-send",
+   "kw": "when",
+   "code": "create object m\nwhen ping\nset m.y to 3\nend\nsend ping",
+   "expect": {
+    "state": {
+     "m.y": 3
+    }
+   }
+  },
+  {
+   "id": "on-send",
+   "kw": "on",
+   "code": "create object m\non ping set m.y to 4\nsend ping",
+   "expect": {
+    "state": {
+     "m.y": 4
+    }
+   }
+  },
+  {
+   "id": "event-payload",
+   "kw": "event",
+   "code": "create object m\nevent scored value\nwhen scored\nset m.y to value\nend\nsend scored value=8",
+   "expect": {
+    "state": {
+     "m.y": 8
+    }
+   }
+  },
+  {
+   "id": "list-add-each",
+   "kw": "add",
+   "code": "create object m\nset m.x to 0\nadd 1 to items\nadd 2 to items\nfor each v in items\nset m.x to m.x + v\nend",
+   "expect": {
+    "state": {
+     "m.x": 3
+    }
+   }
+  },
+  {
+   "id": "list-remove",
+   "kw": "remove",
+   "code": "create object m\nset m.x to 0\nadd 1 to items\nadd 2 to items\nremove 1 from items\nfor each v in items\nset m.x to m.x + v\nend",
+   "expect": {
+    "state": {
+     "m.x": 2
+    }
+   }
+  },
+  {
+   "id": "background",
+   "kw": "background",
+   "code": "background \"#0a0a1e\"",
+   "expect": {
+    "accepted": true
+   }
+  },
+  {
+   "id": "create-scene",
+   "kw": "create scene",
+   "code": "create scene level1",
+   "expect": {
+    "accepted": true,
+    "absent": "level1"
+   }
+  },
+  {
+   "id": "go",
+   "kw": "go",
+   "code": "create scene level1\ngo level1",
+   "expect": {
+    "accepted": true
+   }
+  },
+  {
+   "id": "use",
+   "kw": "use",
+   "code": "use score label \"Points\"",
+   "expect": {
+    "accepted": true
+   }
+  },
+  {
+   "id": "connect",
+   "kw": "connect",
+   "code": "connect server wss://example.org/x",
+   "expect": {
+    "accepted": true
+   }
+  },
+  {
+   "id": "sprite",
+   "kw": "sprite",
+   "code": "sprite ship \"blue spaceship\"",
+   "expect": {
+    "accepted": true
+   }
+  },
+  {
+   "id": "sound-play",
+   "kw": "sound",
+   "code": "sound laser \"laser shoot\"\nplay laser",
+   "expect": {
+    "accepted": true
+   }
+  },
+  {
+   "id": "animate",
+   "kw": "animate",
+   "code": "create object m\nanimate m sheet \"run.png\" frames 4",
+   "expect": {
+    "accepted": true
+   }
+  },
+  {
+   "id": "after",
+   "kw": "after",
+   "code": "after 3 send timeout",
+   "expect": {
+    "accepted": true
+   }
+  },
+  {
+   "id": "bad-unknown-word",
+   "kw": "(errors)",
+   "code": "frobnicate the widget",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "bad-if-operator",
+   "kw": "(errors)",
+   "code": "create object m\nset m.y to 9\nif m.x = 5\nset m.y to 1\nend",
+   "expect": {
+    "refused": true,
+    "state": {
+     "m.y": 9
+    }
+   }
+  },
+  {
+   "id": "bad-unterminated",
+   "kw": "(errors)",
+   "code": "create object m\nset m.y to 9\nrepeat 3\nset m.y to 1",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "bad-missing-value",
+   "kw": "(errors)",
+   "code": "create object m\nset m.y to",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "bad-unknown-name",
+   "kw": "(errors)",
+   "code": "set nosuch.x to 1",
+   "expect": {
+    "refused": true,
+    "absent": "nosuch"
+   },
+   "open": "decision: does set on an unknown object make it?"
+  },
+  {
+   "id": "when-waits",
+   "kw": "when",
+   "code": "create object m\nset m.y to 1\nwhen ping\nset m.y to 3\nend",
+   "expect": {
+    "state": {
+     "m.y": 1
+    }
+   }
+  },
+  {
+   "id": "on-waits",
+   "kw": "on",
+   "code": "create object m\nset m.y to 1\non ping set m.y to 3",
+   "expect": {
+    "state": {
+     "m.y": 1
+    }
+   }
+  },
+  {
+   "id": "define-waits",
+   "kw": "define",
+   "code": "create object m\nset m.y to 1\ndefine up\nset m.y to 7\nend",
+   "expect": {
+    "state": {
+     "m.y": 1
+    }
+   }
+  },
+  {
+   "id": "foreach-waits-empty",
+   "kw": "for each",
+   "code": "create object m\nset m.y to 1\nfor each v in nothing_here\nset m.y to 2\nend",
+   "expect": {
+    "refused": true,
+    "state": {
+     "m.y": 1
+    }
+   }
+  },
+  {
+   "id": "do-undefined",
+   "kw": "(errors)",
+   "code": "do nothing_here",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "send-positional",
+   "kw": "(errors)",
+   "code": "send scored 8",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "block-bad-line-costs-block",
+   "kw": "(errors)",
+   "code": "create object m\nset m.y to 1\nrepeat 2\nset m.y to 5\nfrobnicate\nend",
+   "expect": {
+    "refused": true,
+    "state": {
+     "m.y": 1
+    }
+   }
+  },
+  {
+   "id": "nested",
+   "kw": "repeat",
+   "code": "create object m\nset m.x to 0\nrepeat 2\nif m.x < 5\nrepeat 2\nset m.x to m.x + 1\nend\nend\nend",
+   "expect": {
+    "state": {
+     "m.x": 4
+    }
+   }
+  },
+  {
+   "id": "if-number-on-left",
+   "kw": "if",
+   "code": "create object m\nset m.x to 7\nif 5 < m.x\nset m.y to 1\nend",
+   "expect": {
+    "state": {
+     "m.y": 1
+    }
+   }
+  },
+  {
+   "id": "if-value-on-right",
+   "kw": "if",
+   "code": "create object m\nset m.x to 7\nset n to 5\nif m.x > n\nset m.y to 1\nend",
+   "expect": {
+    "state": {
+     "m.y": 1
+    }
+   }
+  },
+  {
+   "id": "arith-chain",
+   "kw": "set",
+   "code": "create object m\nset m.x to 1\nset m.x to m.x + 1 + 1",
+   "expect": {
+    "state": {
+     "m.x": 3
+    }
+   }
+  },
+  {
+   "id": "arith-precedence",
+   "kw": "set",
+   "code": "create object m\nset m.x to 2 + 3 * 4",
+   "expect": {
+    "state": {
+     "m.x": 14
+    }
+   }
+  },
+  {
+   "id": "text-join-chain",
+   "kw": "set",
+   "code": "create object m\nset m.label to \"a\" + \"b\" + \"c\"",
+   "expect": {
+    "state": {
+     "m.label": "abc"
+    }
+   }
+  },
+  {
+   "id": "bad-stray-else",
+   "kw": "(errors)",
+   "code": "create object m\nset m.y to 1\nelse\nset m.y to 2",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "bad-stray-end",
+   "kw": "(errors)",
+   "code": "create object m\nend",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "bad-unclosed-when",
+   "kw": "(errors)",
+   "code": "create object m\nset m.y to 1\nwhen ping\nset m.y to 2",
+   "expect": {
+    "refused": true,
+    "state": {
+     "m.y": 1
+    }
+   }
+  },
+  {
+   "id": "bad-list-in-itself",
+   "kw": "(errors)",
+   "code": "add 1 to items\nadd items to items",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "text-with-escaped-quote",
+   "kw": "set",
+   "code": "create object m\nset m.label to \"a + b \\\" c\"",
+   "expect": {
+    "state": {
+     "m.label": "a + b \" c"
+    }
+   }
+  },
+  {
+   "id": "arith-signed",
+   "kw": "set",
+   "code": "create object m\nset m.x to -1 + 2 + 3",
+   "expect": {
+    "state": {
+     "m.x": 4
+    }
+   }
+  },
+  {
+   "id": "count-of-written-list",
+   "kw": "set",
+   "code": "create object m\nset items to [1, 2]\nset m.x to count of items",
+   "expect": {
+    "state": {
+     "m.x": 2
+    }
+   }
+  },
+  {
+   "id": "block-stops-keeps-nothing",
+   "kw": "(errors)",
+   "code": "create object m\nset m.y to 1\nif 1 == 1\nset m.y to 2\ndo missing\nend",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "text-too-long",
+   "kw": "(errors)",
+   "code": "set s to \"xxxxxxxxxx\"\nrepeat 25\nset s to s + s + s\nend",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "number-too-big",
+   "kw": "(errors)",
+   "code": "set n to 3\nrepeat 40\nset n to n * n\nend",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "number-spellings",
+   "kw": "set",
+   "code": "create object m\nset n to 1e3\nset m.x to n + 1\nset m.y to .5 + 1",
+   "expect": {
+    "state": {
+     "m.x": 1001,
+     "m.y": 1.5
+    }
+   }
+  },
+  {
+   "id": "kind-stays-number",
+   "kw": "set",
+   "code": "set n to 5\nset n to \"hi\"",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "kind-stays-text",
+   "kw": "set",
+   "code": "create object m\nset m.label to \"hi\"\nset m.label to 5",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "kind-stays-list",
+   "kw": "set",
+   "code": "set xs to [1]\nset xs to 2",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "kind-same-is-fine",
+   "kw": "set",
+   "code": "set n to 5\nset n to 2.5",
+   "expect": {
+    "state": {
+     "n": 2.5
+    }
+   }
+  },
+  {
+   "id": "kind-nothing-frees",
+   "kw": "set",
+   "code": "set n to 5\nset n to nothing\nset n to \"hi\"",
+   "expect": {
+    "state": {
+     "n": "hi"
+    }
+   }
+  },
+  {
+   "id": "kind-computed-counts",
+   "kw": "set",
+   "code": "set n to 5\nset n to n + \"a\"",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "impossible-text-times",
+   "kw": "arith",
+   "code": "set t to \"a\"\nset t to t * 2",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "impossible-divide-zero",
+   "kw": "arith",
+   "code": "set x to 8\nset x to x / 0",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "impossible-chain-divide-zero",
+   "kw": "arith",
+   "code": "set x to 8\nset x to 1 + x / 0",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "impossible-repeat-over",
+   "kw": "repeat",
+   "code": "set n to 0\nrepeat 20000\nset n to n + 1\nend",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "repeat-at-limit-runs",
+   "kw": "repeat",
+   "code": "set n to 0\nrepeat 10000\nset n to n + 1\nend",
+   "expect": {
+    "state": {
+     "n": 10000
+    }
+   }
+  },
+  {
+   "id": "impossible-repeat-text",
+   "kw": "repeat",
+   "code": "set t to \"a\"\nrepeat t\nset n to 1\nend",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "impossible-if-no-value",
+   "kw": "if",
+   "code": "if nosuch > 1\nset n to 1\nend",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "impossible-if-compare-kinds",
+   "kw": "if",
+   "code": "set t to \"a\"\nif t > 1\nset n to 1\nend",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "if-equal-no-value-is-false",
+   "kw": "if",
+   "code": "set n to 0\nif nosuch == 1\nset n to 1\nend",
+   "expect": {
+    "state": {
+     "n": 0
+    }
+   }
+  },
+  {
+   "id": "join-text-in-room",
+   "kw": "set",
+   "code": "create object m\nset m.label to \"a\" + 1",
+   "expect": {
+    "state": {
+     "m.label": "a1"
+    }
+   }
+  },
+  {
+   "id": "join-text-last-in-room",
+   "kw": "set",
+   "code": "create object m\nset m.label to 1 + \"a\"",
+   "expect": {
+    "state": {
+     "m.label": "1a"
+    }
+   }
+  },
+  {
+   "id": "signed-sum-on-number-property",
+   "kw": "set",
+   "code": "create object m\nset m.x to +1 + 2",
+   "expect": {
+    "state": {
+     "m.x": 3
+    }
+   }
+  },
+  {
+   "id": "add-to-property-list",
+   "kw": "add",
+   "code": "create object m\nset m.items to []\nadd 1 to m.items",
+   "expect": {
+    "state": {
+     "m.items": [
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": "define-parameter-on-number-property",
+   "kw": "define",
+   "code": "create object m\ndefine up with n\nset m.x to n\nend\ndo up n=4",
+   "expect": {
+    "state": {
+     "m.x": 4
+    }
+   }
+  },
+  {
+   "id": "one-line-send-keeps-payload",
+   "kw": "on",
+   "code": "set result to 0\nevent ping\nevent pong value\nwhen pong\nset result to value\nend\non ping send pong value=8\nsend ping",
+   "expect": {
+    "state": {
+     "result": 8
+    }
+   }
+  },
+  {
+   "id": "set-from-list-is-a-list",
+   "kw": "set",
+   "code": "set xs to []\nset ys to xs\nadd 1 to xs\nset n to count of ys",
+   "expect": {
+    "state": {
+     "n": 1
+    }
+   }
+  },
+  {
+   "id": "set-compare-number-text",
+   "kw": "set",
+   "code": "set n to 1\nset same to n == \"1\"",
+   "expect": {
+    "state": {
+     "same": false
+    }
+   }
+  },
+  {
+   "id": "overflow-computed-refused",
+   "kw": "arith",
+   "code": "set n to 1e308\nset n to n * n",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "overflow-in-list-refused",
+   "kw": "set",
+   "code": "set xs to [1e309]",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "if-handler-waits-for-value",
+   "kw": "if",
+   "code": "set hits to 0\nwhen ping\nif score > 1\nset hits to 1\nend\nend\nsend ping",
+   "expect": {
+    "state": {
+     "hits": 0
+    }
+   }
+  },
+  {
+   "id": "kind-child-of-value",
+   "kw": "set",
+   "code": "set n to 4\nset n.x to 1",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "kind-reference-too",
+   "kw": "set",
+   "code": "create object ball\nset n to 4\nset n to object ball",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "if-no-value-not-equal",
+   "kw": "if",
+   "code": "set n to 0\nif nosuch != 1\nset n to 1\nend",
+   "expect": {
+    "state": {
+     "n": 1
+    }
+   }
+  },
+  {
+   "id": "if-nothing-no-order",
+   "kw": "if",
+   "code": "if 1 > nothing\nset n to 1\nend",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "if-equal-lists",
+   "kw": "if",
+   "code": "set a to [1]\nset b to [1]\nset n to 0\nif a == b\nset n to 1\nend",
+   "expect": {
+    "state": {
+     "n": 1
+    }
+   }
+  },
+  {
+   "id": "listener-compare-kinds",
+   "kw": "on",
+   "code": "set t to \"a\"\nevent ping\non ping when t > 1 set hits to 1\nsend ping",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "bad-on-if",
+   "kw": "on",
+   "code": "on ping if t > 1 set hits to 1",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "ref-holds-name",
+   "kw": "set",
+   "code": "create object lamp\ncreate object table\nset lamp.parent to object table",
+   "expect": {
+    "state": {
+     "lamp.parent": "table"
+    }
+   }
+  },
+  {
+   "id": "bad-ref-missing",
+   "kw": "set",
+   "code": "create object lamp\nset lamp.parent to object nowhere",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "bad-ref-destroy",
+   "kw": "destroy",
+   "code": "create object lamp\ncreate object table\nset lamp.parent to object table\ndestroy table",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "bad-ref-nothing",
+   "kw": "set",
+   "code": "create object lamp\ncreate object table\nset lamp.parent to object table\nset table to nothing",
+   "expect": {
+    "refused": true
+   }
+  },
+  {
+   "id": "ref-released",
+   "kw": "destroy",
+   "code": "create object lamp\ncreate object table\nset lamp.parent to object table\nset lamp.parent to nothing\ndestroy table",
+   "expect": {
+    "absent": "table"
+   }
+  },
+  {
+   "id": "ref-holder-gone",
+   "kw": "destroy",
+   "code": "create object lamp\ncreate object table\nset lamp.parent to object table\ndestroy lamp\ndestroy table",
+   "expect": {
+    "absent": "table"
+   }
+  },
+  {
+   "id": "do-arg-sees-old-value",
+   "kw": "do",
+   "code": "set a to 1\nset seen to 0\ndefine f with a b\nset seen to b\nend\ndo f a=5 b=a",
+   "expect": {
+    "state": {
+     "seen": 1,
+     "a": 1
+    }
+   }
+  }
+ ]
+}

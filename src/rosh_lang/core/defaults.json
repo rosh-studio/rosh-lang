@@ -1,0 +1,31 @@
+{
+  "format": "rosh.policy/1",
+  "levels": {"look": 0, "build": 3, "edit": 5, "own": 9},
+  "actions": {
+    "build": "Change anything in the room at all: move, colour, size, make, say",
+    "create_visible": "Make a new thing visitors would see (typed)",
+    "create_raw": "Make a new thing with a raw CREATE message",
+    "edit_record": "Change a thing's record: label, date, description, category and the rest",
+    "change_others": "Change or remove a thing someone else made",
+    "remove_room_things": "Remove a thing the room's own code made",
+    "remove_locked": "Remove a locked thing",
+    "lock": "Lock or unlock a thing",
+    "appears_as": "Change what is real and what merely appears; name a thing that only appears",
+    "room_words": "Change the room's own words: title, intro, arrival, guide, suggestions, help",
+    "reset_room": "Reset the whole room",
+    "save_code": "Save the room's code"
+  },
+  "floors": {"lock": 5, "remove_locked": 5},
+  "presets": {
+    "shared": {
+      "build": 3, "create_visible": 3, "create_raw": 3, "edit_record": 3,
+      "change_others": 9, "remove_room_things": 9, "remove_locked": 9, "lock": 9, "appears_as": 9,
+      "room_words": 5, "reset_room": 9, "save_code": 5
+    },
+    "museum": {
+      "build": 3, "create_visible": 9, "create_raw": 9, "edit_record": 9,
+      "change_others": 9, "remove_room_things": 9, "remove_locked": 9, "lock": 9, "appears_as": 9,
+      "room_words": 5, "reset_room": 9, "save_code": 5
+    }
+  }
+}

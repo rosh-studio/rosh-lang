@@ -1,0 +1,13 @@
+{
+ "doc": {
+  "objects": {
+   "a": {}
+  },
+  "meta": {
+   "r": {
+    "$ref": "a"
+   }
+  }
+ },
+ "error": "can't be a reference"
+}

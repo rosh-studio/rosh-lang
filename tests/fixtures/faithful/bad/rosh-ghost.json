@@ -1,0 +1,4 @@
+{
+ "rosh": "create object a\nset ghost.p to 3",
+ "error": "line 2"
+}

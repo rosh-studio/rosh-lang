@@ -61,7 +61,7 @@ Full docs at [rosh.cloud/docs](https://rosh.cloud/docs) · [Syntax reference](ht
 | `when` | `when <event> [then]` ... `end` | `when click` ... `end` |
 | `on` | `on <event> <action>` | `on click set count to count + 1` |
 | `event` | `event <name> [fields]` | `event score_changed value` |
-| `send` | `send <event> [payload]` | `send score_changed 10` |
+| `send` | `send <event> [name=value ...]` | `send score_changed value=10` |
 | `if` | `if <field> <op> <value>` | `if score > 10` |
 | `else` | `else` | `else` |
 | `end` | `end` | `end` |

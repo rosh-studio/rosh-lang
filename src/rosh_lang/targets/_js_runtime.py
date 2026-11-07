@@ -52,6 +52,14 @@ var rosh = (function() {
     }
   }
 
+  function withLine(error, line) {
+    if (!error.roshLine && line) {
+      error.roshLine = line;
+      error.message = "line " + line + ": " + error.message;
+    }
+    return error;
+  }
+
   function runWithBudget(action) {
     // Budget the complete synchronous execution, not just an individual
     // send(). Top-level programme initialisation may itself send events;
@@ -60,6 +68,9 @@ var rosh = (function() {
     executionDepth++;
     try {
       return action();
+    } catch (error) {
+      if (executionDepth === 1) mod.appendOutput("Rosh error: " + error.message);
+      throw error;
     } finally {
       executionDepth--;
     }
@@ -145,7 +156,76 @@ var rosh = (function() {
     }
   }
 
+  // Procedures, by name, from the line that defines them on.
+  var procedures = Object.create(null);
+  var calling = [];
+
+  function define(name, body) { procedures[name] = body; }
+
+  function call(name, args) {
+    if (!procedures[name]) throw new Error("Rosh do: nothing called '" + name + "' has been defined");
+    if (calling.indexOf(name) !== -1) throw new Error("Rosh recursive call to '" + name + "' is not allowed");
+    calling.push(name);
+    try { procedures[name](args); } finally { calling.pop(); }
+  }
+
+  // Checked references, as in the Python runtime: "a.parent" -> "b".
+  var references = {};
+
+  // Parameters, loop names and event fields in use: such a name hides what it
+  // shadows, and that comes back. Nothing it does touches it.
+  var temporaryNames = [];
+
+  function enterTemporary(names) {
+    var kept = {};
+    Object.keys(references).forEach(function(held) {
+      if (names.some(function(n) { return held === n || held.indexOf(n + ".") === 0; })) kept[held] = references[held];
+    });
+    temporaryNames = temporaryNames.concat(names);
+    return kept;
+  }
+
+  function leaveTemporary(names, kept) {
+    names.forEach(function(n) {
+      temporaryNames.splice(temporaryNames.indexOf(n), 1);
+      letGoOfReferences(n);
+    });
+    Object.keys(kept).forEach(function(held) { references[held] = kept[held]; });
+    names.forEach(function(n) {
+      var value = get(n);
+      if (temporaryNames.indexOf(n) !== -1 || (value != null && typeof value === "object" && !Array.isArray(value))) return;
+      Object.keys(references).forEach(function(held) {
+        if (references[held] === n || references[held].indexOf(n + ".") === 0) delete references[held];
+      });
+    });
+  }
+
+  function referencesInto(name) {
+    if (temporaryNames.indexOf(name.split(".")[0]) !== -1) return [];
+    var inside = name + ".";
+    return Object.keys(references).filter(function(held) {
+      var target = references[held];
+      return (target === name || target.indexOf(inside) === 0) && held !== name && held.indexOf(inside) !== 0;
+    }).sort();
+  }
+
+  function letGoOfReferences(name) {
+    var inside = name + ".";
+    Object.keys(references).forEach(function(held) {
+      if (held === name || held.indexOf(inside) === 0) delete references[held];
+    });
+  }
+
+  function refuseIfReferredTo(referrers, what) {
+    if (!referrers.length) return;
+    var many = referrers.length !== 1;
+    throw new Error("Rosh can't " + what + ": " + referrers.join(", ") + " still refer" + (many ? "" : "s") +
+      " to it. Change or remove " + (many ? "those" : "that") + " first.");
+  }
+
   function destroy(name) {
+    refuseIfReferredTo(referencesInto(name), "destroy '" + name + "'");
+    letGoOfReferences(name);
     var existed = get(name) != null;
     // Navigate dots to delete: "player.ship" → delete state.player.ship
     var parts = name.split(".");
@@ -163,9 +243,18 @@ var rosh = (function() {
     if (existed) send("destroy", {name: name});
   }
 
-  function addToList(name, value) {
+  function addToList(name, value, raw) {
+    if (Array.isArray(value) || (typeof raw === "string" && raw[0] !== '"' && raw[0] !== "'" && Array.isArray(get(raw))))
+      throw new Error("Rosh a list can hold text and numbers, not another list");
+    if (typeof value === "string" && value.length > 1000) throw new Error("Rosh a list item can be up to 1,000 characters");
+    if (Array.isArray(get(name)) && get(name).length >= 10000) throw new Error("Rosh " + name + " already has 10,000 items, which is as many as a list can hold");
     var list = get(name);
-    if (Array.isArray(list)) list.push(value);
+    if (list == null && name.indexOf(".") === -1) {
+      list = [];
+      set(name, list);
+    }
+    if (!Array.isArray(list)) throw new Error("Rosh add: '" + name + "' is not a list");
+    list.push(value);
   }
 
   function removeFromList(name, value) {
@@ -177,9 +266,10 @@ var rosh = (function() {
 
   function forEach(name, variable, action) {
     var list = get(name);
-    if (!Array.isArray(list)) return;
+    if (!Array.isArray(list)) throw new Error("Rosh for each: '" + name + "' is not a list");
     var had = has(variable);
     var previous = get(variable);
+    var kept = enterTemporary([variable]);
     try {
       list.slice(0, 10000).forEach(function(value) {
         checkStepBudget();
@@ -189,16 +279,187 @@ var rosh = (function() {
     } finally {
       if (had) set(variable, previous);
       else unset(variable);
+      leaveTemporary([variable], kept);
     }
   }
 
   // ── Expression evaluator ──────────────────────────────
   // Mirrors runtime.py _eval_set_value: nothing → quoted → random → clamp → arithmetic → int → float → raw
+  function unquote(text) {
+    return text.replace(/\\\\(["\\\\])/g, "$1");
+  }
+
+  // Python's _coerce does not look up event payload values in state.
+  function coerce(raw) {
+    if (raw[0] === '"' && raw[raw.length - 1] === '"') return unquote(raw.slice(1, -1));
+    if (raw[0] === "'" && raw[raw.length - 1] === "'") return raw.slice(1, -1);
+    if (raw.trim() !== "" && Number.isFinite(Number(raw))) return Number(raw);
+    if (raw.toLowerCase() === "true") return true;
+    if (raw.toLowerCase() === "false") return false;
+    return raw;
+  }
+
+  function resolveAtom(raw) {
+    var value = coerce(raw);
+    return value !== raw || /^["']/.test(raw) ? value : get(raw);
+  }
+
+  function condition(left, op, right, strict) {
+    var a = resolveAtom(left);
+    if (["nothing", "none", "null"].indexOf(right.toLowerCase()) !== -1) {
+      if (op === "==" || op === "=") return a == null;
+      if (op === "!=") return a != null;
+      if (strict && !sendDepth) throw new Error("Rosh if " + left + " " + op + " " + right + ": nothing has no order, so that can't be worked out");
+      return false;
+    }
+    if (a == null) {
+      if (op === "!=") return true;
+      if (strict && !sendDepth && op !== "==" && op !== "=" && op !== "!=")
+        throw new Error("Rosh " + left + " has no value yet, so if " + left + " " + op + " " + right + " can't be worked out. Set it first.");
+      return false;
+    }
+    var b = coerce(right);
+    if (typeof b === "string" && b === right && get(right) != null) b = get(right);
+    // Python permits numeric booleans, but refuses ordering mixed text/numbers.
+    var numeric = function(v) { return typeof v === "number" || typeof v === "boolean"; };
+    var sameType = typeof a === typeof b || (numeric(a) && numeric(b));
+    if (op === "==" || op === "=") return sameType && sameValue(a, b);
+    if (op === "!=") return !sameType || !sameValue(a, b);
+    if (!sameType || (typeof a !== "string" && !numeric(a))) {
+      if (strict) throw new Error("Rosh if " + left + " " + op + " " + right + ": can't compare " + kindOf(a) + " with " + kindOf(b));
+      return false;
+    }
+    if (op === "<") return a < b;
+    if (op === ">") return a > b;
+    if (op === "<=") return a <= b;
+    if (op === ">=") return a >= b;
+    return false;
+  }
+
+  // Same quote-aware split as Python's _CHAIN_SPLIT (double quotes only).
+  function splitChain(raw) {
+    var parts = [], start = 0, i = 0, quoted = false;
+    while (i < raw.length) {
+      var ch = raw[i];
+      if (quoted && ch === "\\\\") { i += 2; continue; }
+      if (ch === '"') quoted = !quoted;
+      else if (!quoted && ch === " " && i + 2 < raw.length && "+-*/".indexOf(raw[i + 1]) !== -1 && raw[i + 2] === " ") {
+        parts.push(raw.slice(start, i), raw[i + 1]);
+        i += 3;
+        start = i;
+        continue;
+      }
+      i++;
+    }
+    parts.push(raw.slice(start));
+    return parts;
+  }
+
+  // As in Python, two lists with the same items are equal.
+  function sameValue(a, b) {
+    if (Array.isArray(a) && Array.isArray(b)) return JSON.stringify(a) === JSON.stringify(b);
+    return a == b;
+  }
+
+  // Same words as runtime.py's _kind_of.
+  function kindOf(value) {
+    if (typeof value === "boolean") return "true or false";
+    if (typeof value === "number") return "a number";
+    if (typeof value === "string") return "text";
+    if (Array.isArray(value)) return "a list";
+    return "a thing";
+  }
+
+  // A `set`'s value. The first value fixes what kind of thing a name holds (#38);
+  // `nothing` frees it. A procedure's parameters and list items aren't a `set`: evalValue.
   function evalSetValue(target, raw) {
+    var checked = /^object\\s+([A-Za-z_][\\w.-]*)$/.exec(String(raw).trim());
+    if (checked) {
+      var named = get(checked[1]);
+      if (named == null || typeof named !== "object" || Array.isArray(named))
+        throw new Error("Rosh set " + target + ": there's no object '" + checked[1] + "' to refer to. Create it first, or check the name.");
+    }
+    var value = checked ? checked[1] : evalValue(target, raw), held = get(target), parts = target.split(".");
+    // `set n.x to 1` would turn the number n into a thing.
+    if (!scenes[parts[0]]) for (var end = 1; end < parts.length; end++) {
+      var above = parts.slice(0, end).join("."), holds = get(above);
+      if (holds != null && (typeof holds !== "object" || Array.isArray(holds)))
+        throw new Error("Rosh set " + target + ": " + above + " holds " + kindOf(holds) + ", so it can't have a ." +
+          parts[end] + ". Use a new name, or set " + above + " to nothing first.");
+    }
+    if (held != null && value != null && !(parts.length >= 2 && scenes[parts[0]]) && kindOf(held) !== kindOf(value))
+      throw new Error("Rosh set " + target + ": " + target + " holds " + kindOf(held) + ", so it can't take " +
+        kindOf(value) + ". Use a new name, or set " + target + " to nothing first.");
+    if (checked) {
+      references[target] = checked[1];
+      return value;
+    }
+    if (!(parts.length >= 2 && scenes[parts[0]])) {
+      var into = referencesInto(target);
+      if (value == null) refuseIfReferredTo(into, "set " + target + " to nothing");
+      else refuseIfReferredTo(into.filter(function(r) { return references[r].indexOf(target + ".") === 0; }), "replace " + target);
+    }
+    letGoOfReferences(target);
+    return value;
+  }
+
+  function repeatCount(count, written) {
+    if (typeof count !== "number") throw new Error("Rosh repeat " + written + ": that isn't a number of times");
+    if (count > 10000) throw new Error("Rosh repeat " + count + ": the most a loop can run is 10,000 times");
+    return Math.trunc(count);
+  }
+
+  function cantWorkOut(raw) {
+    throw new Error("Rosh can't work out " + raw + ": only numbers can use - * and /, and only + joins text");
+  }
+
+  function cantDivide(raw) {
+    throw new Error("Rosh can't work out " + raw + ": nothing can be divided by zero");
+  }
+
+  function evalChain(target, raw, chain) {
+    if ((chain.length + 1) / 2 > 64) throw new Error("Rosh that has over 64 values to work out; split it over several lines");
+    var values = [], ops = [];
+    for (var i = 0; i < chain.length; i += 2) {
+      var atom = chain[i].trim(), value = resolveAtom(atom);
+      if (value == null) throw new Error(atom + " has no value yet, so " + raw +
+        " can't be worked out. Set it first, or put text in quotes.");
+      values.push(value);
+      if (i + 1 < chain.length) ops.push(chain[i + 1]);
+    }
+    if (values.some(function(v) { return typeof v === "string"; })) {
+      if (!ops.every(function(op) { return op === "+"; })) cantWorkOut(raw);
+      return values.map(function(v) { return String(v); }).join("");
+    }
+    if (!values.every(function(v) { return typeof v === "number"; })) cantWorkOut(raw);
+    var reduced = [values[0]], pending = [];
+    for (var i = 0; i < ops.length; i++) {
+      var value = values[i + 1], last = reduced.length - 1;
+      if (ops[i] === "*") reduced[last] *= value;
+      else if (ops[i] === "/") {
+        if (value === 0) cantDivide(raw);
+        reduced[last] /= value;
+      } else { pending.push(ops[i]); reduced.push(value); }
+    }
+    var total = reduced[0];
+    for (var i = 0; i < pending.length; i++) total += pending[i] === "+" ? reduced[i + 1] : -reduced[i + 1];
+    return total;
+  }
+
+  // Bounded as in Python: a value can grow by itself in a loop.
+  function evalValue(target, raw) {
+    var value = evalUnbounded(target, raw);
+    if (typeof value === "string" && value.length > 100000)
+      throw new Error("Rosh that text is over 100,000 characters, which is too long to keep");
+    if (typeof value === "number" && !isFinite(value)) throw new Error("Rosh that number is too big to keep");
+    return value;
+  }
+
+  function evalUnbounded(target, raw) {
     if (typeof raw !== "string") return raw;
 
     // nothing: explicit absence
-    if (raw.toLowerCase() === "nothing" || raw.toLowerCase() === "none") return null;
+    if (raw.toLowerCase() === "nothing" || raw.toLowerCase() === "none" || raw.toLowerCase() === "null") return null;
 
     // count of <list>
     if (raw.indexOf("count of ") === 0) {
@@ -207,9 +468,23 @@ var rosh = (function() {
     }
 
     // Quoted string
-    if ((raw[0] === '"' && raw[raw.length-1] === '"') ||
-        (raw[0] === "'" && raw[raw.length-1] === "'")) {
-      return raw.slice(1, -1);
+    if (raw[0] === '"' && raw[raw.length-1] === '"' && splitChain(raw).length === 1) return unquote(raw.slice(1, -1));
+    if (raw[0] === "'" && raw[raw.length-1] === "'") return raw.slice(1, -1);
+
+    // A list written out, as in Python: refused if it can't be read.
+    if (raw[0] === "[" && raw[raw.length-1] === "]") {
+      var listed;
+      try { listed = JSON.parse(raw); } catch (listError) {
+        throw new Error("Rosh can't read " + raw + " as a list: write it like [\\"a\\", \\"b\\", 3]");
+      }
+      if (!Array.isArray(listed) || listed.some(function(v) { return v !== null && typeof v === "object"; }))
+        throw new Error("Rosh " + raw + ": a list can hold text, numbers, true, false and null, but not lists or objects inside it");
+      if (listed.length > 10000) throw new Error("Rosh a list can hold up to 10,000 items");
+      if (listed.some(function(i) { return typeof i === "number" && !isFinite(i); }))
+        throw new Error("Rosh a number in that list is too big to keep");
+      if (listed.some(function(v) { return typeof v === "string" && v.length > 1000; }))
+        throw new Error("Rosh a list item can be up to 1,000 characters");
+      return listed;
     }
 
     // Random: "random" or "random min max"
@@ -237,14 +512,16 @@ var rosh = (function() {
     // Expression: atom op atom — mirrors runtime.py _try_arithmetic
     // Multi-char ops tried before single-char to avoid ambiguous splits.
     function resolveAtom(s) {
-      if ((s[0] === '"' && s[s.length-1] === '"') ||
-          (s[0] === "'" && s[s.length-1] === "'")) return s.slice(1, -1);
+      if (s[0] === '"' && s[s.length-1] === '"') return unquote(s.slice(1, -1));
+      if (s[0] === "'" && s[s.length-1] === "'") return s.slice(1, -1);
       if (s.toLowerCase() === "true") return true;
       if (s.toLowerCase() === "false") return false;
-      if (/^-?\\d+$/.test(s)) return parseInt(s, 10);
-      if (/^-?\\d+\\.\\d+$/.test(s)) return parseFloat(s);
+      if (/^[-+]?(\\d+\\.?\\d*|\\.\\d+)([eE][-+]?\\d+)?$/.test(s)) return parseFloat(s);
       return get(s);
     }
+    var chain = splitChain(raw);
+    if ((chain.length > 3 || (chain.length === 3 && raw.indexOf('"') !== -1)) &&
+        !/ (>=|<=|==|!=|>|<) /.test(raw)) return evalChain(target, raw, chain);
     var ops = [">=", "<=", "==", "!=", ">", "<", "+", "-", "*", "/"];
     for (var oi = 0; oi < ops.length; oi++) {
       var op = ops[oi];
@@ -267,24 +544,51 @@ var rosh = (function() {
         if (typeof lval !== "number" || typeof rval !== "number") continue;
         if (op === "-") return lval - rval;
         if (op === "*") return lval * rval;
-        if (op === "/" && rval !== 0) return lval / rval;
+        if (op === "/") {
+          if (rval === 0) cantDivide(raw);
+          return lval / rval;
+        }
         continue;
       }
       // Comparison operators
       if (lval == null || rval == null) continue;
-      if (op === "==") return lval == rval;
-      if (op === "!=") return lval != rval;
+      // As in `if` and in Python: 1 is not the text "1", and text has no order against a number.
+      var bothNumeric = (typeof lval === "number" || typeof lval === "boolean") &&
+                        (typeof rval === "number" || typeof rval === "boolean");
+      var comparable = typeof lval === typeof rval || bothNumeric;
+      if (op === "==") return comparable && sameValue(lval, rval);
+      if (op === "!=") return !comparable || !sameValue(lval, rval);
+      if (!comparable) continue;
       if (op === "<") return lval < rval;
       if (op === ">") return lval > rval;
       if (op === "<=") return lval <= rval;
       if (op === ">=") return lval >= rval;
     }
 
-    // Integer
-    if (/^-?\\d+$/.test(raw)) return parseInt(raw, 10);
+    // An operand with no value is an error that names it, as in runtime.py;
+    // so is anything else that can't be worked out.
+    for (var ei = 0; ei < ops.length; ei++) {
+      var esep = " " + ops[ei] + " ";
+      var eidx = raw.indexOf(esep);
+      if (eidx === -1) continue;
+      var eatoms = [raw.substring(0, eidx).trim(), raw.substring(eidx + esep.length).trim()];
+      for (var ea = 0; ea < 2; ea++) {
+        // "1 + 2 + 3": one operator at a time, so "2 + 3" isn't a missing value.
+        var ecompound = false;
+        for (var ec = 0; ec < ops.length; ec++) {
+          if (eatoms[ea].indexOf(" " + ops[ec] + " ") !== -1) ecompound = true;
+        }
+        if (ecompound) break;
+        if (resolveAtom(eatoms[ea]) == null) {
+          throw new Error(eatoms[ea] + " has no value yet, so " + raw +
+            " can't be worked out. Set it first, or put text in quotes.");
+        }
+      }
+      cantWorkOut(raw);
+    }
 
-    // Float
-    if (/^-?\\d+\\.\\d+$/.test(raw)) return parseFloat(raw);
+    // A number, in every spelling Python reads: 5, -5, .5, +1, 1e3
+    if (/^[-+]?(\\d+\\.?\\d*|\\.\\d+)([eE][-+]?\\d+)?$/.test(raw)) return parseFloat(raw);
 
     // Boolean
     if (raw.toLowerCase() === "true") return true;
@@ -292,18 +596,20 @@ var rosh = (function() {
 
     // Variable reference: resolve dotted name to its current value
     var resolved = get(raw);
-    if (resolved != null && typeof resolved !== "object") return resolved;
+    if (resolved != null && (typeof resolved !== "object" || Array.isArray(resolved))) return resolved;
 
     return raw;
   }
 
   // ── Interpolation ─────────────────────────────────────
   function interpolate(template) {
-    return template.replace(/\\{([^}]+)\\}/g, function(match, key) {
+    var text = template.replace(/\\{([^}]+)\\}/g, function(match, key) {
       var val = get(key);
       if (val != null) return String(val);
       return has(key) ? "" : match;
     });
+    if (text.length > 100000) throw new Error("Rosh that text is over 100,000 characters, which is too long to keep");
+    return text;
   }
 
   // ── Event dispatcher ──────────────────────────────────
@@ -318,6 +624,8 @@ var rosh = (function() {
       sendDepth++;
       try {
         // Inject payload into state
+        var temporary = payload ? Object.keys(payload) : [];
+        var kept = enterTemporary(temporary);
         var originals = {};
         var missing = [];
         if (payload) {
@@ -340,6 +648,7 @@ var rosh = (function() {
               else delete state[k];
             }
           }
+          leaveTemporary(temporary, kept);
         }
       } finally {
         sendDepth--;
@@ -612,13 +921,19 @@ var rosh = (function() {
     }
     if (!scenes[target]) return;
     var current = get("_scene") || "";
+    // A scene sets names as it's entered: it mustn't take away what a reference needs.
+    for (var name in scenes[target]) {
+      var becomes = scenes[target][name];
+      if (name !== "exits" && (becomes == null || typeof becomes !== "object"))
+        refuseIfReferredTo(referencesInto(name), "go to " + target + ", which changes " + name);
+    }
     if (current) send("scene_exit", {scene: current});
     set("_prev_scene", current);
     set("_scene", target);
     // Apply scene overrides
     var sd = scenes[target];
     for (var k in sd) {
-      if (k !== "exits") state[k] = sd[k];
+      if (k !== "exits") { letGoOfReferences(k); state[k] = sd[k]; }
     }
     send("scene_enter", {scene: target});
   }
@@ -648,10 +963,19 @@ var rosh = (function() {
     removeFromList: removeFromList,
     forEach: forEach,
     evalSetValue: evalSetValue,
+    define: define,
+    call: call,
+    enterTemporary: enterTemporary,
+    leaveTemporary: leaveTemporary,
+    evalValue: evalValue,
+    repeatCount: repeatCount,
+    coerce: coerce,
+    condition: condition,
     interpolate: interpolate,
     on: on,
     send: send,
     runWithBudget: runWithBudget,
+    withLine: withLine,
     checkStepBudget: checkStepBudget,
     say: say,
     playAudio: playAudio,

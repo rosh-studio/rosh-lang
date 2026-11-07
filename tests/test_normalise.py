@@ -368,3 +368,21 @@ class TestParserIntegration:
         when_stmts = [s for s in prog.statements if isinstance(s, WhenStatement)]
         assert len(when_stmts) == 1
         assert "hazard.*" in when_stmts[0].args
+
+
+# Ways people point at things (gate playtest, 31 Oct).
+
+@pytest.mark.parametrize("said, rosh", [
+    ("make the windmill spin", "set windmill.spin to 0.5"),
+    ("make the drum turn around", "set drum.spin to 0.5"),
+    ("make the ball bounce", "set ball.bounce to 0.5"),
+    ("make the beacon pulse", "set beacon.pulse to 0.5"),
+    ("get rid of the tree", "destroy tree"),
+    ("take away the box", "destroy box"),
+])
+def test_motion_and_get_rid_of(said, rosh):
+    assert normalise(said) == rosh
+
+
+def test_make_the_tree_red_is_still_a_colour():
+    assert normalise("make the tree red") == "set tree.color to red"

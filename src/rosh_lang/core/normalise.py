@@ -101,6 +101,16 @@ _OPACITY_WORDS: dict[str, str] = {
     "visible": "1", "opaque": "1",
 }
 
+# "make the windmill spin": the motions a thing can have, at a gentle rate
+# ("make it spin" wasn't understood though help lists spin; gate, 31 Oct).
+_MOTION_WORDS: dict[str, tuple[str, str]] = {
+    "spin": ("spin", "0.5"), "rotate": ("spin", "0.5"), "turn round": ("spin", "0.5"),
+    "turn around": ("spin", "0.5"), "bounce": ("bounce", "0.5"), "pulse": ("pulse", "0.5"),
+    "throb": ("pulse", "0.5"),
+}
+_MOTION_SPEEDS = {"slowly": "0.2", "slow": "0.2", "gently": "0.2",
+                  "fast": "1.5", "quickly": "1.5", "quick": "1.5", "faster": "1.5", "wildly": "1.5"}
+
 
 def fuzzy_color(text: str) -> Optional[str]:
     """Extract the best colour name from a natural-language description.
@@ -158,11 +168,19 @@ def _strip_inline_comment(text: str) -> str:
     success. The portal's own help suggests exactly that syntax, so the
     commonest way to write a colour was the one that silently corrupted the
     object.
+
+    Inside double quotes a backslash escapes the next character, so an escaped
+    quote doesn't end the string.
     """
     in_quote: str = ""
+    escaped = False
     for i, ch in enumerate(text):
         if in_quote:
-            if ch == in_quote:
+            if escaped:
+                escaped = False
+            elif ch == "\\" and in_quote == '"':
+                escaped = True
+            elif ch == in_quote:
                 in_quote = ""
         elif ch == '"':
             in_quote = ch
@@ -241,8 +259,10 @@ _LEADING_RE = re.compile(
     r"^\s*(?:" + "|".join(POLITENESS_LEADING) + r")\s*[,:]?\s+",
     re.IGNORECASE,
 )
+# A courtesy is a whole word: "qwerty" ends in "ty" and is not a thank-you
+# (playtest, 31 Oct). Hence a separator before it, not optional space.
 _TRAILING_RE = re.compile(
-    r"\s*[,;]?\s*(?:" + "|".join(POLITENESS_TRAILING) + r")\s*[.!?]*\s*$",
+    r"(?:\s*[,;]\s*|\s+)(?:" + "|".join(POLITENESS_TRAILING) + r")\s*[.!?]*\s*$",
     re.IGNORECASE,
 )
 
@@ -362,6 +382,13 @@ def normalise(line: str) -> str:
         if candidate != rest:
             return "when collision " + candidate
 
+    # -- "get rid of the tree", "take away the box" -> destroy --------------
+    phrase = re.match(r"(?:get\s+rid\s+of|take\s+away)\s+(.+)", stripped, flags=re.IGNORECASE)
+    if phrase:
+        rest = [t for t in phrase.group(1).split() if t.lower() not in _ARTICLES]
+        if rest:
+            return "destroy " + " ".join(rest)
+
     # -- destroy aliases: delete/remove -> destroy -------------------------
     # BUT: "remove X from Y" is a collection operation — leave it alone.
     if head in _DESTROY_VERBS and head != "destroy":
@@ -420,6 +447,19 @@ def normalise(line: str) -> str:
             col = fuzzy_color(last)
             if col:
                 return f"set {obj}.color to {col}"
+        # "make the windmill spin", "make the drum turn round", and "spin
+        # slowly": help says slow is fine, and "spin slowly" was refused
+        # (gate playtest, 31 Oct).
+        words = [t.lower() for t in tokens[2:]]
+        end = len(tokens)
+        speed = _MOTION_SPEEDS.get(words[-1]) if words else None
+        if speed:
+            words, end = words[:-1], end - 1
+        for size in (2, 1):
+            if len(words) > size and " ".join(words[-size:]) in _MOTION_WORDS:
+                prop, rate = _MOTION_WORDS[" ".join(words[-size:])]
+                obj = "_".join(t for t in tokens[2:end - size] if t.lower() not in _ARTICLES)
+                return f"set {obj}.{prop} to {speed or rate}"
 
     # -- turn X <colour|invisible|into Y> ----------------------------------
     if head == "turn":

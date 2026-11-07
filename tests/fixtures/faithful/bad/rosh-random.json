@@ -1,0 +1,4 @@
+{
+ "rosh": "create object a\nset a.x to random",
+ "error": "line 2"
+}

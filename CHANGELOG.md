@@ -8,6 +8,42 @@ that new keywords require discussion first. Undocumented internals (e.g.
 widget-specific properties like `.material`) may change without a version
 bump until they're promoted into the public spec.
 
+## 0.10.0 - 2026-11-07
+
+Rosh now has a written definition, `conformance/THE-LANGUAGE.md`, with test cases
+in `conformance/cases.json`: the same line gives the same result everywhere, or a
+clear refusal that names the line.
+
+### Changed: programs that relied on these will now get an error
+- **The first value fixes what kind of thing a name holds:** a number, text, true
+  or false, a list, or a thing. `set x to nothing` frees the name.
+- Impossible values are errors instead of leaving things as they were: text times
+  a number, dividing by zero, ordering a number against text, and arithmetic on a
+  value that was never set. Inside a handler, a value not set yet is quietly false.
+- `repeat` over 10,000, or of something that isn't a number, is refused.
+- An `if` that can never be true, and `on x if ...`, are errors naming the line.
+- **A procedure must be defined before it's called, in compiled programmes too.** A
+  later `define` replaces it from that line on. A procedure can't call itself.
+- While something refers to it, a checked reference's target can't be set to
+  nothing or forgotten either, nor can anything inside it be destroyed.
+
+### Added
+- `forget thing.property`.
+- Data documents to Rosh and back, exactly, for the flat subset (`rosh_lang.data`).
+- Who may do what in a room is data (`core/policy.py`), and a room can state its own rules.
+- `# note` after code on a line is a comment. Double-quoted text escapes `\\"` and `\\\\`.
+- `on e say "hello"` says hello; `on e go b` goes; an `on` action it can't do is an
+  error naming the ones it can.
+
+### Fixed
+- Compiled programmes and the Python runtime now agree on: checked references, list
+  values, comparisons in expressions, `send` values in one-line handlers, text and
+  number limits.
+- Parameters, loop names and event values are put back after any failure, in both
+  engines, and arguments are worked out before any of them is bound.
+- Rooms understand computed values, `add` to a list property, and procedure
+  parameters used as numbers, as scripts do.
+
 ## 0.9.13 - 2026-10-21
 
 ### Changed

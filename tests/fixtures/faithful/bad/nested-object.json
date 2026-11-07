@@ -1,0 +1,13 @@
+{
+ "doc": {
+  "objects": {
+   "a": {
+    "o": {
+     "x": 1
+    }
+   }
+  },
+  "meta": {}
+ },
+ "error": "an object inside an object"
+}

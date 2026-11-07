@@ -153,9 +153,13 @@ class TestRuntimeAdd:
         rt, _ = _run('create list tags\nadd "hello" to tags')
         assert rt.state["tags"] == ["hello"]
 
-    def test_add_to_non_list_warns(self):
-        with pytest.warns(UserWarning, match="not a list"):
-            rt, _ = _run("create number x\nadd 1 to x")
+    def test_add_to_non_list_is_an_error(self):
+        with pytest.raises(KeyError, match="not a list"):
+            _run("create number x\nadd 1 to x")
+
+    def test_add_starts_a_list_that_does_not_exist_yet(self):
+        rt, _ = _run('add "Alice" to visitors')
+        assert rt.state["visitors"] == ["Alice"]
 
     def test_add_multiple_items(self):
         rt, _ = _run(
@@ -242,8 +246,8 @@ class TestRuntimeForEach:
         )
         assert output == "1\n2\n3\n"
 
-    def test_foreach_on_non_list_warns(self):
-        with pytest.warns(UserWarning, match="not a list"):
+    def test_foreach_on_non_list_is_an_error(self):
+        with pytest.raises(KeyError, match="not a list"):
             _run("create number x\nfor each n in x\n  print {n}\nend")
 
     def test_foreach_can_mutate_state(self):

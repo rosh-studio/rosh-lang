@@ -1,0 +1,16 @@
+{
+ "objects": {
+  "a": {
+   "s": "text",
+   "i": 7,
+   "f": 2.5,
+   "neg": -3,
+   "t": true,
+   "fa": false,
+   "n": null,
+   "zero": 0,
+   "fz": 0.0
+  }
+ },
+ "meta": {}
+}

@@ -104,9 +104,9 @@ class TestRuntimeFunctions:
         rt, _ = self._run(code)
         assert rt.state["score"] == 20
 
-    def test_do_undefined_warns(self):
+    def test_do_undefined_is_an_error(self):
         code = "do nonexistent"
-        with pytest.warns(UserWarning, match="not defined"):
+        with pytest.raises(KeyError, match="nonexistent"):
             self._run(code)
 
     def test_define_not_executed_immediately(self):
@@ -195,28 +195,28 @@ class TestJSCodegenFunctions:
     def test_define_emits_function(self):
         code = "define greet\n  print hello\nend"
         result = compile_programme(parse_string(code))
-        assert "function rosh_fn_greet()" in result.init_code
+        assert 'rosh.define("greet", function()' in result.init_code
         assert 'rosh.appendOutput(rosh.interpolate("hello"))' in result.init_code
 
     def test_do_emits_call(self):
         code = "define greet\n  print hello\nend\ndo greet"
         result = compile_programme(parse_string(code))
-        assert "rosh_fn_greet();" in result.init_code
+        assert 'rosh.call("greet");' in result.init_code
 
     def test_do_in_handler(self):
         code = "define fire\n  print bang\nend\nwhen click\n  do fire\nend"
         result = compile_programme(parse_string(code))
-        assert "rosh_fn_fire();" in result.handler_code
+        assert 'rosh.call("fire");' in result.handler_code
 
     def test_on_do_emits_call(self):
         code = "define fire\n  print bang\nend\non click do fire"
         result = compile_programme(parse_string(code))
-        assert "rosh_fn_fire();" in result.handler_code
+        assert 'rosh.call("fire");' in result.handler_code
 
     def test_hyphenated_name(self):
         code = "define fire-bullet\n  print fire\nend\ndo fire-bullet"
         result = compile_programme(parse_string(code))
-        assert "rosh_fn_fire_bullet()" in result.init_code
+        assert 'rosh.define("fire-bullet", function()' in result.init_code
 
 
 # ── Phase 2b: Parameterised functions ────────────────────────
@@ -361,7 +361,7 @@ class TestJSCodegenParameterisedFunctions:
     def test_define_with_params_emits_arg_binding(self):
         code = "define multiply with a b\n  set result to a * b\nend"
         result = compile_programme(parse_string(code))
-        assert "function rosh_fn_multiply(_a)" in result.init_code
+        assert 'rosh.define("multiply", function(_a)' in result.init_code
         assert '"a"' in result.init_code
         assert '"b"' in result.init_code
 
@@ -371,11 +371,11 @@ class TestJSCodegenParameterisedFunctions:
             "do multiply a=6 b=7"
         )
         result = compile_programme(parse_string(code))
-        assert "rosh_fn_multiply({" in result.init_code
+        assert 'rosh.call("multiply", {' in result.init_code
         assert '"a"' in result.init_code
         assert '"b"' in result.init_code
 
     def test_no_arg_define_unchanged(self):
         code = "define fire\n  print bang\nend"
         result = compile_programme(parse_string(code))
-        assert "function rosh_fn_fire()" in result.init_code
+        assert 'rosh.define("fire", function()' in result.init_code

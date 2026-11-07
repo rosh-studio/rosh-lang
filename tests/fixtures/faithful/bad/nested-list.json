@@ -1,0 +1,15 @@
+{
+ "doc": {
+  "objects": {
+   "a": {
+    "l": [
+     [
+      1
+     ]
+    ]
+   }
+  },
+  "meta": {}
+ },
+ "error": "can't hold a list"
+}

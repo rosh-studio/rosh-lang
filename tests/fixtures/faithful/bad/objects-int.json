@@ -1,0 +1,7 @@
+{
+ "doc": {
+  "objects": 1,
+  "meta": {}
+ },
+ "error": "must each be a mapping"
+}

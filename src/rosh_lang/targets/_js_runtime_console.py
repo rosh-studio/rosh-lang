@@ -533,6 +533,14 @@ JS_RUNTIME_CONSOLE = """\
     return {text: lines.join("\\n"), subject: noun};
   }
 
+  // Rosh refuses an expression whose operand has no value, so a size or
+  // position never set starts from what the console draws it with.
+  function relativeSet(path, op, amount, unset) {
+    if (typeof rosh.get(path) === "number") return "set " + path + " to " + path + " " + op + " " + amount;
+    var start = op === "*" ? unset * amount : op === "+" ? unset + amount : unset - amount;
+    return "set " + path + " to " + Math.round(start * 1e6) / 1e6;
+  }
+
   function lowerMakePhrase(cmd) {
     var tokens = cmd.trim().split(/\\s+/);
     if (tokens.length < 3 || tokens[0].toLowerCase() !== "make") return null;
@@ -560,9 +568,9 @@ JS_RUNTIME_CONSOLE = """\
       var factor = RELATIVE_SIZE_WORDS[modifier];
       return {
         text: [
-          "set " + resolved.target + ".width to " + resolved.target + ".width * " + factor,
-          "set " + resolved.target + ".height to " + resolved.target + ".height * " + factor,
-          "set " + resolved.target + ".depth to " + resolved.target + ".depth * " + factor
+          relativeSet(resolved.target + ".width", "*", factor, 1),
+          relativeSet(resolved.target + ".height", "*", factor, 1),
+          relativeSet(resolved.target + ".depth", "*", factor, 1)
         ].join("\\n"),
         subject: resolved.target
       };
@@ -585,7 +593,7 @@ JS_RUNTIME_CONSOLE = """\
       var delta = DIRECTION_DELTAS[rest[0]];
       var sign = delta[1] > 0 ? "+" : "-";
       return {
-        text: "set " + resolved.target + "." + delta[0] + " to " + resolved.target + "." + delta[0] + " " + sign + " " + Math.abs(delta[1]),
+        text: relativeSet(resolved.target + "." + delta[0], sign, Math.abs(delta[1]), 0),
         subject: resolved.target
       };
     }

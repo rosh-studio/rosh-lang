@@ -51,7 +51,7 @@ class CompiledProgramme:
     """Result of compiling a Rosh programme to JS."""
 
     init_code: str  # Top-level statements (create, set, print)
-    handler_code: str  # rosh.on() registrations
+    handler_code: str  # Hoisted registration functions, called by init in source order
     needs_loop: bool  # True if when update / when collision
     has_handlers: bool  # True if any when blocks
     asset_requests: list[dict] = None  # Unknown objects queued for asset search
@@ -61,8 +61,11 @@ def compile_programme(
     programme: Programme,
     search_paths: list | None = None,
     target: str = "web",
+    _handler_ids: list | None = None,
 ) -> CompiledProgramme:
     """Compile a full Rosh programme into JS code segments."""
+    if _handler_ids is None:
+        _handler_ids = []
     init_lines: list[str] = []
     handler_lines: list[str] = []
     needs_loop = False
@@ -93,6 +96,7 @@ def compile_programme(
                     Programme(statements=widget_stmts),
                     search_paths=search_paths,
                     target=target,
+                    _handler_ids=_handler_ids,
                 )
                 if sub.init_code:
                     init_lines.append(sub.init_code)
@@ -139,11 +143,15 @@ def compile_programme(
                 js_event = event
 
             args_js = _emit_args_array(args)
-            handler_lines.append(
+            registration = (
                 f'rosh.on("{_escape_js(js_event)}", {args_js}, function(payload) {{\n'
                 f"{body_js}"
                 f"}});"
             )
+            name = f"_rosh_register_{len(_handler_ids)}"
+            _handler_ids.append(name)
+            handler_lines.append(f"function {name}() {{\n{registration}\n}}")
+            init_lines.append(f"{name}();")
         elif isinstance(stmt, OnStatement):
             # One-line event reactor: on <event> <action> <args>
             has_handlers = True
@@ -160,7 +168,10 @@ def compile_programme(
                 needs_loop = True
             on_js = _emit_on(stmt)
             if on_js:
-                handler_lines.append(on_js)
+                name = f"_rosh_register_{len(_handler_ids)}"
+                _handler_ids.append(name)
+                handler_lines.append(f"function {name}() {{\n{on_js}\n}}")
+                init_lines.append(f"{name}();")
             i += 1
             continue
         elif isinstance(stmt, DefineStatement):
@@ -199,6 +210,14 @@ def compile_programme(
 
 
 def _emit_statement(stmt: Statement, target: str = "web") -> str:
+    code = _emit_statement_code(stmt, target=target)
+    if not code or isinstance(stmt, DefineStatement):
+        return code
+    return (f"try {{\n{code}\n}} catch (_roshError) {{\n"
+            f"  throw rosh.withLine(_roshError, {stmt.line});\n}}")
+
+
+def _emit_statement_code(stmt: Statement, target: str = "web") -> str:
     """Emit JS for a single top-level statement."""
     if isinstance(stmt, PrintStatement):
         return _emit_print(stmt)
@@ -346,7 +365,7 @@ def _emit_destroy(stmt: DestroyStatement) -> str:
 def _emit_send(stmt: SendStatement) -> str:
     if stmt.payload:
         pairs = ", ".join(
-            f'"{_escape_js(k)}": "{_escape_js(v)}"'
+            f'"{_escape_js(k)}": rosh.coerce("{_escape_js(v)}")'
             for k, v in stmt.payload.items()
         )
         return f'rosh.send("{_escape_js(stmt.event)}", {{{pairs}}});'
@@ -394,7 +413,7 @@ def _emit_after(stmt: AfterStatement) -> str:
     delay_ms = int(stmt.delay * 1000)
     if stmt.payload:
         pairs = ", ".join(
-            f'"{_escape_js(k)}": "{_escape_js(v)}"'
+            f'"{_escape_js(k)}": rosh.coerce("{_escape_js(v)}")'
             for k, v in stmt.payload.items()
         )
         payload_js = f"{{{pairs}}}"
@@ -411,11 +430,13 @@ def _emit_background(stmt: BackgroundStatement) -> str:
 
 
 def _emit_define(stmt: DefineStatement, target: str = "web") -> str:
-    """Emit a JS function declaration from a define block."""
+    """Register the procedure where the line stands, not a hoisted function: it
+    can't be called above its definition, and a later `define` replaces it from
+    there on, as everywhere else."""
     body_js = _emit_body(stmt.body, target=target)
-    name = _safe_fn_name(stmt.name)
+    name = _escape_js(stmt.name)
     if not stmt.params:
-        return f"function {name}() {{\n{body_js}}}"
+        return f'rosh.define("{name}", function() {{\n{body_js}}});'
     # Parameterised function: save/bind/restore state around body
     param_keys = [_escape_js(p) for p in stmt.params]
     save_lines = "\n".join(
@@ -425,27 +446,31 @@ def _emit_define(stmt: DefineStatement, target: str = "web") -> str:
     )
     restore_expr = ", ".join(f'"{k}"' for k in param_keys)
     return (
-        f"function {name}(_a) {{\n"
-        f"  _a = _a || {{}}; var _sv = {{}};\n"
+        f'rosh.define("{name}", function(_a) {{\n'
+        f"  _a = _a || {{}}; var _sv = {{}}; var _kept = rosh.enterTemporary([{restore_expr}]);\n"
         f"{save_lines}\n"
+        f"  try {{\n"
         f"{body_js}"
+        f"  }} finally {{\n"
         f"  [{restore_expr}].forEach(function(k) {{\n"
         f"    var p = _sv[k]; if (p.had) {{ rosh.set(k, p.value); }} else {{ rosh.unset(k); }}\n"
         f"  }});\n"
-        f"}}"
+        f"  rosh.leaveTemporary([{restore_expr}], _kept);\n"
+        f"  }}\n"
+        f"}});"
     )
 
 
 def _emit_do(stmt: DoStatement) -> str:
-    """Emit a JS function call, passing resolved arg values."""
-    name = _safe_fn_name(stmt.name)
+    """Emit a JS procedure call, passing resolved arg values."""
+    name = _escape_js(stmt.name)
     if not stmt.args:
-        return f"{name}();"
+        return f'rosh.call("{name}");'
     arg_pairs = ", ".join(
-        f'"{_escape_js(k)}": rosh.evalSetValue("{_escape_js(k)}", "{_escape_js(v)}")'
+        f'"{_escape_js(k)}": rosh.evalValue("{_escape_js(k)}", "{_escape_js(v)}")'
         for k, v in stmt.args.items()
     )
-    return f"{name}({{{arg_pairs}}});"
+    return f'rosh.call("{name}", {{{arg_pairs}}});'
 
 
 def _emit_repeat(stmt: RepeatStatement, target: str = "web") -> str:
@@ -457,7 +482,7 @@ def _emit_repeat(stmt: RepeatStatement, target: str = "web") -> str:
         int(stmt.count)
         count_js = count_expr
     except ValueError:
-        count_js = f'(rosh.get("{count_expr}") || 0)'
+        count_js = f'rosh.get("{count_expr}")'
 
     if stmt.var:
         var = _escape_js(stmt.var)
@@ -476,9 +501,10 @@ def _emit_repeat(stmt: RepeatStatement, target: str = "web") -> str:
         safe = re.sub(r"[^A-Za-z0-9_]", "_", stmt.var)
         return (
             "{\n"
-            f"  const _repeatCount = Math.min({count_js}, 10000);\n"
+            f'  const _repeatCount = rosh.repeatCount({count_js}, "{count_expr}");\n'
             f'  const _had_{safe} = rosh.has("{var}");\n'
             f'  const _prev_{safe} = rosh.get("{var}");\n'
+            f'  const _kept_{safe} = rosh.enterTemporary(["{var}"]);\n'
             "  try {\n"
             "    for (let _ri = 1; _ri <= _repeatCount; _ri++) {\n"
             "      rosh.checkStepBudget();\n"
@@ -487,13 +513,14 @@ def _emit_repeat(stmt: RepeatStatement, target: str = "web") -> str:
             "    }\n"
             "  } finally {\n"
             f'    if (_had_{safe}) {{ rosh.set("{var}", _prev_{safe}); }} else {{ rosh.unset("{var}"); }}\n'
+            f'    rosh.leaveTemporary(["{var}"], _kept_{safe});\n'
             "  }\n"
             "}"
         )
     else:
         return (
             "{\n"
-            f"  const _repeatCount = Math.min({count_js}, 10000);\n"
+            f'  const _repeatCount = rosh.repeatCount({count_js}, "{count_expr}");\n'
             "  for (let _ri = 0; _ri < _repeatCount; _ri++) {\n"
             "    rosh.checkStepBudget();\n"
             f"{body_js}"
@@ -505,14 +532,14 @@ def _emit_repeat(stmt: RepeatStatement, target: str = "web") -> str:
 def _emit_add(stmt: AddStatement) -> str:
     return (
         f'rosh.addToList("{_escape_js(stmt.target)}", '
-        f'rosh.evalSetValue("{_escape_js(stmt.item)}", "{_escape_js(stmt.item)}"));'
+        f'rosh.evalValue("{_escape_js(stmt.item)}", "{_escape_js(stmt.item)}"), "{_escape_js(stmt.item)}");'
     )
 
 
 def _emit_remove(stmt: RemoveStatement) -> str:
     return (
         f'rosh.removeFromList("{_escape_js(stmt.target)}", '
-        f'rosh.evalSetValue("{_escape_js(stmt.item)}", "{_escape_js(stmt.item)}"));'
+        f'rosh.evalValue("{_escape_js(stmt.item)}", "{_escape_js(stmt.item)}"));'
     )
 
 
@@ -574,7 +601,8 @@ def _emit_on(stmt: OnStatement) -> str:
             f'rosh.evalSetValue("{_escape_js(target)}", "{_escape_js(value)}"));'
         )
     elif action == "send":
-        body = f'rosh.send("{_escape_js(args.strip())}");'
+        from rosh_lang.core.parser import _parse_send
+        body = _emit_send(_parse_send("send " + args.strip(), line=0, source="<on>"))
     elif action == "say":
         text = args.strip()
         if (text.startswith('"') and text.endswith('"')) or \
@@ -593,7 +621,7 @@ def _emit_on(stmt: OnStatement) -> str:
         func_name = args.strip().split()[0] if args.strip() else ""
         if not func_name:
             return ""
-        body = f"{_safe_fn_name(func_name)}();"
+        body = _emit_do(DoStatement(name=func_name))
     elif action == "play":
         # on <event> play <sound> [mode] — same as a top-level "play" line,
         # e.g. "on click ball play boom". Previously silently produced no
@@ -610,17 +638,10 @@ def _emit_on(stmt: OnStatement) -> str:
 
     # Wrap in condition check if present
     if stmt.condition:
-        field, op, val = _parse_condition(stmt.condition)
-        if field:
-            if val.lower() in ("nothing", "none") and op in ("=", "==", "!="):
-                condition_js = f"_v {'!=' if op == '!=' else '=='} null"
-            else:
-                condition_js = f"_v {_js_comparison_op(op)} {val}"
-            body = (
-                f'var _v = rosh.get("{_escape_js(field)}"); '
-                f"if ({condition_js}) {{ {body} }}"
-            )
+        body = f"if ({_condition_js(stmt.condition, strict=True)}) {{ {body} }}"
 
+    body = (f"try {{ {body} }} catch (_roshError) {{ "
+            f"throw rosh.withLine(_roshError, {stmt.line}); }}")
     return (
         f'rosh.on("{_escape_js(event)}", [], function(payload) {{\n'
         f"  {body}\n"
@@ -678,37 +699,16 @@ def _parse_condition(condition: str) -> tuple[str, str, str]:
     return (field, op, val)
 
 
+def _condition_js(condition: str, strict: bool = False) -> str:
+    field, op, val = _parse_condition(condition)
+    _js_comparison_op(op)  # Refuse invalid operators at compile time.
+    return (f'rosh.condition("{_escape_js(field)}", "{_escape_js(op)}", '
+            f'"{_escape_js(val)}"{", true" if strict and op not in ("==", "=", "!=") else ""})')
+
+
 def _emit_if(stmt: IfStatement, indent: str = "", target: str = "web") -> str:
     """Emit JS for an if/else block."""
-    field, op, val = _parse_condition(stmt.condition)
-    if not field:
-        return ""
-    if val.lower() in ("nothing", "none") and op in ("=", "==", "!="):
-        js_op = "!=" if op == "!=" else "=="
-    else:
-        js_op = _js_comparison_op(op)
-
-    # Coerce value: try number first, then string comparison
-    try:
-        float(val)
-        js_val = val
-    except ValueError:
-        if val.lower() in ("nothing", "none"):
-            js_val = "null"
-        elif val.lower() == "true":
-            js_val = "true"
-        elif val.lower() == "false":
-            js_val = "false"
-        elif (val.startswith('"') and val.endswith('"')) or \
-             (val.startswith("'") and val.endswith("'")):
-            # Already a quoted string literal — use the inner value escaped,
-            # matching _emit_on which passes val directly without re-wrapping.
-            js_val = f'"{_escape_js(val[1:-1])}"'
-        else:
-            # Unquoted identifier or literal — treat as string
-            js_val = f'"{_escape_js(val)}"'
-
-    lines = [f'{indent}if (rosh.get("{_escape_js(field)}") {js_op} {js_val}) {{']
+    lines = [f'{indent}if ({_condition_js(stmt.condition, strict=True)}) {{']
     for s in stmt.then_body:
         line = _emit_statement(s, target=target)
         if line:

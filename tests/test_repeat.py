@@ -132,14 +132,15 @@ def test_runtime_repeat_nested():
 
 
 def test_runtime_repeat_max_guard():
-    """Repeat count is capped at 10,000."""
+    """Over 10,000 is refused; stopping quietly looked like finishing (#38)."""
     buf = io.StringIO()
     rt = Runtime(output=buf)
-    rt.run(parse_string(
-        "create number n\nset n to 0\n"
-        "repeat 99999\n  set n to n + 1\nend"
-    ))
-    assert rt.state["n"] == 10_000
+    with pytest.raises(ValueError, match="most a loop can run"):
+        rt.run(parse_string(
+            "create number n\nset n to 0\n"
+            "repeat 99999\n  set n to n + 1\nend"
+        ))
+    assert rt.state["n"] == 0
 
 
 def test_nested_repeats_cannot_multiply_past_the_global_step_budget():

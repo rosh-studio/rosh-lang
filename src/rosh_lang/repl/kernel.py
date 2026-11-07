@@ -219,7 +219,11 @@ class ReplKernel:
         if not stripped or stripped.startswith("#"):
             return KernelResponse(status="noop")
 
-        lowered = lower_shell_input(stripped, current_subject=self.current_subject)
+        lowered = lower_shell_input(
+            stripped,
+            current_subject=self.current_subject,
+            read=self.adapter.runtime._resolve,
+        )
         stripped = lowered.text
 
         stripped = _apply_aliases(stripped)
